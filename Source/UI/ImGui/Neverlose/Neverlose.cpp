@@ -220,6 +220,7 @@ enum class Page
 {
     Rage,
     Legit,
+    Movement,
     PlayerInfo,
     Glow,
     Viewmodel,
@@ -263,6 +264,7 @@ constexpr ImWchar kIconCodepoints[] = {
     0xf0d0, // magic           (Effects)
     0xf108, // desktop         (Hud)
     0xf1fc, // paint-brush     (Model Glow)
+    0xf54b, // shoe-prints     (Movement)
     0xf519, // broadcast-tower (Radio)
     0xf6cb, // dagger          (Inventory)
     0xf8cc, // mouse           (Legit)
@@ -403,7 +405,7 @@ int searchOpenedFrame = -1;
 char searchQuery[64] = "";
 
 constexpr const char* kPageNames[] = {
-    "Rage", "Legit", "Player Info", "Glow",
+    "Rage", "Legit", "Movement", "Player Info", "Glow",
     "Viewmodel", "Effects", "Hud", "Sound", "Inventory", "Radio", "Misc"
 };
 
@@ -1939,6 +1941,26 @@ void pageSound() noexcept
     });
 }
 
+// --- movement (dedicated tab): automation + the edge/speed suite ---------------------
+
+void pageMovement() noexcept
+{
+    addCard("AUTOMATION", 4, [] {
+        toggleVar<BlockbotEnabled>("Blockbot", ++controlId);
+        toggleVar<BunnyhopEnabled>("Bunnyhop", ++controlId);
+        toggleVar<AutoStrafeEnabled>("Auto Strafe", ++controlId);
+        toggleVar<TestStraferEnabled>("Test Strafer", ++controlId);
+    });
+    addCard("EDGE & SPEED", 6, [] {
+        toggleVar<movement_vars::EdgeJump>("Edge Jump", ++controlId);
+        toggleVar<movement_vars::EdgeStop>("Edge Stop", ++controlId);
+        toggleVar<movement_vars::SlowWalk>("Slow Walk", ++controlId);
+        sliderVar<movement_vars::SlowWalkSpeed>("Slow Walk Speed", ++controlId, "%");
+        toggleVar<movement_vars::FastLadder>("Fast Ladder", ++controlId);
+        toggleVar<movement_vars::JumpBug>("Jump Bug", ++controlId);
+    });
+}
+
 void pageMisc() noexcept
 {
     addCard("LOGGING", 4, [] {
@@ -1947,18 +1969,7 @@ void pageMisc() noexcept
         toggleVar<VoteRevealerEnabled>("Vote Revealer", ++controlId);
         toggleVar<CooldownRevealerEnabled>("Cooldown Revealer", ++controlId);
     });
-    addCard("MOVEMENT", 10, [] {
-        toggleVar<BlockbotEnabled>("Blockbot", ++controlId);
-        toggleVar<BunnyhopEnabled>("Bunnyhop", ++controlId);
-        toggleVar<AutoStrafeEnabled>("Auto Strafe", ++controlId);
-        toggleVar<TestStraferEnabled>("Test Strafer", ++controlId);
-        toggleVar<movement_vars::EdgeJump>("Edge Jump", ++controlId);
-        toggleVar<movement_vars::EdgeStop>("Edge Stop", ++controlId);
-        toggleVar<movement_vars::SlowWalk>("Slow Walk", ++controlId);
-        sliderVar<movement_vars::SlowWalkSpeed>("Slow Walk Speed", ++controlId, "%");
-        toggleVar<movement_vars::FastLadder>("Fast Ladder", ++controlId);
-        toggleVar<movement_vars::JumpBug>("Jump Bug", ++controlId);
-    });
+
     addCard("ACCOUNT", 4, [] {
         toggleVar<FakePrimeEnabled>("Fake Prime", ++controlId);
         toggleVar<FakeLevelEnabled>("Fake Level", ++controlId);
@@ -2572,6 +2583,7 @@ void indexNextSearchPage() noexcept
         switch (static_cast<Page>(searchIndexPageCursor)) {
         case Page::Rage: pageRage(); break;
         case Page::Legit: pageLegit(); break;
+        case Page::Movement: pageMovement(); break;
         case Page::PlayerInfo: pagePlayerInfo(); break;
         case Page::Glow: pageGlow(); break;
         case Page::Viewmodel: pageViewmodel(); break;
@@ -2808,6 +2820,7 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
     eyebrow("AIMBOT");
     nav("\xEF\x81\x9B", "Rage", Page::Rage);   // crosshairs
     nav("\xEF\xA3\x8C", "Legit", Page::Legit); // mouse
+    nav("\xEF\x95\x8B", "Movement", Page::Movement); // shoe-prints
     y_nav += 2.0f;
 
     eyebrow("FEATURES");
@@ -3503,6 +3516,7 @@ void neverlose::render() noexcept
         switch (state.page) {
         case Page::Rage: pageRage(); break;
         case Page::Legit: pageLegit(); break;
+        case Page::Movement: pageMovement(); break;
         case Page::PlayerInfo: pagePlayerInfo(); break;
         case Page::Glow: pageGlow(); break;
         case Page::Viewmodel: pageViewmodel(); break;
