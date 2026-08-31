@@ -1868,7 +1868,7 @@ void pageEffects() noexcept
         toggleVar<RemoveFlashOverlay>("Remove Flash Overlay", ++controlId);
         toggleVar<RemoveMenuAds>("Remove Main Menu Ads", ++controlId);
     });
-    addCard("WORLD COLORS", 13, [] {
+    addCard("WORLD COLORS", 15, [] {
         toggleVar<WorldColorsInfernoEnabled>("Recolor Fire", ++controlId);
         colorVar<MolotovColor>("Molotov Color", ++controlId);
         colorVar<IncendiaryColor>("Incendiary Color", ++controlId);
@@ -1882,6 +1882,8 @@ void pageEffects() noexcept
         colorVar<WorldColorsFogColor>("Fog Color", ++controlId);
         sliderVar<WorldColorsFogDensity>("Fog Density", ++controlId, "%");
         floatSliderVar<WorldColorsFogDistance>("Fog Distance", ++controlId);
+        toggleVar<WorldColorsBloomEnabled>("Sky Bloom", ++controlId);
+        sliderVar<WorldColorsBloomStrength>("Bloom Strength", ++controlId, "%");
     });
     addCard("PLAYER LIST", 1, [] {
         toggleVar<PlayerListEnabled>("Player List", ++controlId);
@@ -3823,6 +3825,7 @@ void registerFeatureBinds() noexcept
     feature_binds::registerToggle<::WorldColorsSkyEnabled>("Recolor Sky");
     feature_binds::registerToggle<::WorldColorsWorldEnabled>("Recolor World");
     feature_binds::registerToggle<::WorldColorsFogEnabled>("Gradient Fog");
+    feature_binds::registerToggle<::WorldColorsBloomEnabled>("Sky Bloom");
     feature_binds::registerToggle<::PlayerListEnabled>("Player List");
     feature_binds::registerToggle<player_info_vars::PlayerPositionArrowEnabled>("Show Player Position Arrow");
     feature_binds::registerToggle<player_info_vars::PlayerHealthEnabled>("Player Health");

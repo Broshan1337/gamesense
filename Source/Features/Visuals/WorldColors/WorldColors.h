@@ -9,6 +9,7 @@
 #include <Config/ConfigVariable.h>
 #include <Features/Visuals/WorldColors/WorldColorsConfigVariables.h>
 #include <Features/Visuals/WorldColors/WorldColorsState.h>
+#include <GameClient/ConVars/CvarSystem.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
 #include <GameClient/GameEvents/GameEventFields.h>
 #include <HookContext/HookContextMacros.h>
@@ -111,7 +112,7 @@ public:
     }
 
     // Per-frame tick: restores cached light colors once the feature is disabled, drives the
-    // gradient-fog override.
+    // gradient-fog override, and forces the post-process bloom strength while Sky Bloom is on.
     void run() const noexcept
     {
         if (!GET_CONFIG_VAR(WorldColorsLightsEnabled))
@@ -120,6 +121,41 @@ public:
             restoreFogs();
         else
             updateFog();
+        updateBloom();
+    }
+
+    // Sky Bloom: scale the game's own post-process bloom (r_csgo_render_post_bloom_strength,
+    // written through CvarSystem::forceFloatConVar) while enabled. Bright pixels - the recolored
+    // sky and its clouds above all - then glow into the frame; paired with Recolor Sky this is
+    // the full "sunrise bloom" look. The original value is cached on first enable and restored
+    // exactly once on disable (bloomWasEnabled edge). Forcing per-frame like the FVA cvar
+    // suppression: if the game ever resets the cvar, the next frame rewrites it.
+    void updateBloom() const noexcept
+    {
+        auto& state = hookContext.featuresStates().visualFeaturesStates.worldColorsState;
+        const bool enabled = GET_CONFIG_VAR(WorldColorsBloomEnabled);
+
+        if (!enabled) {
+            if (state.bloomWasEnabled && state.bloomOriginalValid) {
+                static_cast<void>(hookContext.template make<CvarSystem>().forceFloatConVar(kBloomCvarName, state.bloomOriginal));
+                state.bloomOriginalValid = false;
+            }
+            state.bloomWasEnabled = false;
+            return;
+        }
+
+        if (!state.bloomOriginalValid) {
+            if (const auto original = hookContext.template make<CvarSystem>().readFloatConVar(kBloomCvarName); original.has_value()) {
+                state.bloomOriginal = original.value();
+                state.bloomOriginalValid = true;
+            }
+            // Fails closed: without the cached original, disabling simply leaves the last forced
+            // value - the game's own default comes back on the next map load.
+        }
+
+        const float strength = static_cast<float>(GET_CONFIG_VAR(WorldColorsBloomStrength)) * 0.05f;
+        static_cast<void>(hookContext.template make<CvarSystem>().forceFloatConVar(kBloomCvarName, strength));
+        state.bloomWasEnabled = true;
     }
 
     // World-geometry recolor, DrawArray pass-through style (hooked CBaseSceneObjectDesc /
@@ -155,6 +191,10 @@ public:
     // restores. recolorSky() fills the save buffer and returns how many entries it touched;
     // restoreSky() puts the originals back. Both fail closed per element.
     static constexpr auto kSkyTintOffset = 0xD8; // r/g/b floats on the sky scene object
+
+    // The post-process bloom strength knob the Sky Bloom feature forces (the game's only
+    // user-facing bloom amount control on this build - verified present in libclient strings).
+    static constexpr const char* kBloomCvarName = "r_csgo_render_post_bloom_strength";
 
     struct SavedSkyTint {
         void* object;

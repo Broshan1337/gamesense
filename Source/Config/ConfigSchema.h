@@ -379,6 +379,8 @@ private:
         configConversion.uint(u8"FogColor", loadVariable<WorldColorsFogColor>(), saveVariable<WorldColorsFogColor>());
         configConversion.uint(u8"FogDensity", loadVariable<WorldColorsFogDensity>(), saveVariable<WorldColorsFogDensity>());
         configConversion.floating(u8"FogDistance", loadVariable<WorldColorsFogDistance>(), saveVariable<WorldColorsFogDistance>());
+        configConversion.boolean(u8"Bloom", loadVariable<WorldColorsBloomEnabled>(), saveVariable<WorldColorsBloomEnabled>());
+        configConversion.uint(u8"BloomStrength", loadVariable<WorldColorsBloomStrength>(), saveVariable<WorldColorsBloomStrength>());
         configConversion.endObject();
 
         configConversion.beginObject(u8"PlayerList");

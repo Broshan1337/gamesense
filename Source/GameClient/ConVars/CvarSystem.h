@@ -78,6 +78,27 @@ public:
         return true;
     }
 
+    // The float counterpart of forceBoolConVar, for post-process knobs a visual feature owns
+    // (r_csgo_render_post_bloom_strength for the Sky Bloom look). Same contract: find by name,
+    // verify the type slot through the resolved pattern, write through the resolved value
+    // pointer. False = not found / not a float32 / value pointer unresolved - nothing touched.
+    [[nodiscard]] bool forceFloatConVar(const char* name, float value) const noexcept
+    {
+        const auto conVar = findConVar(name);
+        if (!conVar)
+            return false;
+        if (!hookContext.patternSearchResults().template get<OffsetToConVarValueType>().of(conVar).toOptional().equal(cs2::ConVarValueType::float32).valueOr(false))
+            return false;
+
+        const auto pointerToValue = hookContext.patternSearchResults().template get<OffsetToConVarValue>().of(conVar).get();
+        if (!pointerToValue)
+            return false;
+
+        const float written = value;
+        std::memcpy(pointerToValue, &written, sizeof(written));
+        return true;
+    }
+
     template <typename ConVarType>
     [[nodiscard]] auto getConVarValue() const
     {

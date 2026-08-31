@@ -33,4 +33,10 @@ struct WorldColorsState {
 
     CachedFog cachedFogs[kMaxCachedFogs]{};
     int cachedFogCount = 0;
+
+    // Sky Bloom (r_csgo_render_post_bloom_strength): the game's original value cached on first
+    // enable so disabling restores it exactly. bloomWasEnabled drives the disable transition.
+    bool bloomWasEnabled = false;
+    bool bloomOriginalValid = false;
+    float bloomOriginal = 0.0f;
 };

@@ -257,6 +257,8 @@ using ConfigVariableTypes = TypeList<
     WorldColorsFogColor,
     WorldColorsFogDensity,
     WorldColorsFogDistance,
+    WorldColorsBloomEnabled,
+    WorldColorsBloomStrength,
     PlayerListEnabled,
     MenuAccentColor,
     MenuButtonColor,
