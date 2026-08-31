@@ -1598,9 +1598,10 @@ void pageRage() noexcept
         static constexpr const char* const kHitboxNames[]{ "Head", "Chest", "Stomach", "Arms", "Legs" };
         multiSelectVar<HitHead, HitChest, HitStomach, HitArms, HitLegs>("Hitboxes", ++controlId, kHitboxNames);
     });
-    addCard("ACCURACY", 3, [] {
+    addCard("ACCURACY", 4, [] {
         toggleVar<SpreadCompensation>("Compensate Spread", ++controlId);
         toggleVar<SpreadGate>("Hold Fire Until Exact", ++controlId);
+        toggleVar<SeedFallback>("Fire Lucky Seeds", ++controlId);
         toggleVar<RecoilCompensation>("Compensate Recoil", ++controlId);
     });
     addCard("AUTO SHOOT", 6, [] {
@@ -1635,7 +1636,7 @@ void pageLegit() noexcept
         toggleVar<HitArms>("Target Arms", ++controlId);
         toggleVar<HitLegs>("Target Legs", ++controlId);
     });
-    addCard("TRIGGERBOT", 12, [] {
+    addCard("TRIGGERBOT", 13, [] {
         toggleVar<triggerbot_vars::Enabled>("Triggerbot", ++controlId);
         keybindVar<triggerbot_vars::HoldKey>("Hold Key", ++controlId);
         sliderVar<triggerbot_vars::DelayMilliseconds>("Min Reaction Delay", ++controlId, " ms");
@@ -1648,6 +1649,7 @@ void pageLegit() noexcept
         toggleVar<triggerbot_vars::WallCheck>("Shoot Visible", ++controlId);
         toggleVar<triggerbot_vars::Autowall>("Shoot Walls", ++controlId);
         sliderVar<triggerbot_vars::AutowallMaxThickness>("Max Wall Thickness", ++controlId, " u");
+        toggleVar<triggerbot_vars::SeededFire>("Seeded Fire", ++controlId);
     });
     addCard("RECOIL & SCOPES", 4, [] {
         toggleVar<rcs_vars::Enabled>("Control Recoil", ++controlId);

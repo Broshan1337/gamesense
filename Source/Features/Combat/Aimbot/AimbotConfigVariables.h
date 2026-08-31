@@ -112,6 +112,14 @@ CONFIG_VARIABLE(AutoStop, bool, false);
 // "almost as good as a no-spread server" behavior. Off by default (raw shots leave as before).
 CONFIG_VARIABLE(SpreadGate, bool, false);
 
+// Seed-mode arm FOR the spread gate (needs SpreadGate + SpreadCompensation on to matter): when
+// the solver cannot produce an exact correction for this tick (wide cone), the gate normally
+// holds fire. With this on, a held tick still fires when the shot's PREDICTED seed - known in
+// advance, derived from the angles we are about to write - happens to deflect the bullet onto
+// the aimed hitbox anyway. The rage bot then takes exact-corrected shots, lucky-seed shots, and
+// nothing else. Off by default.
+CONFIG_VARIABLE(SeedFallback, bool, false);
+
 
 // NOTE: still to come - the Silent-vs-visible toggle. Its config var is added when built.
 

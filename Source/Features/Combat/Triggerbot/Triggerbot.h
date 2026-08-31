@@ -116,7 +116,7 @@ public:
         // geometric cone check (AccuracyCheck), the head-only check, and the Monte-Carlo hitchance,
         // each a no-op unless its config is on. Stays armed so it fires the instant the shot becomes
         // worth taking.
-        if (!wouldShotLand(target) || !passesMaxAccuracyGate() || !passesVisibility(target) || !passesAimGates(target, cmd))
+        if (!wouldShotLand(target) || !passesMaxAccuracyGate() || !passesVisibility(target) || !passesAimGates(target, cmd) || !passesSeededFire(target, cmd))
             return;
 
         // On target, past the delay, accurate enough: fire THIS command. Stops again the moment the
@@ -311,8 +311,70 @@ private:
         return true;
     }
 
-    // "Only fire at minimum inaccuracy" gate (velocity-cs2's is_max_accuracy). A no-op (returns true)
-    // unless the MaxAccuracyOnly config is on. Unlike the other gates this one fails CLOSED: it is an
+    // SEED-MODE gate (velocity's give_me_your_seed, triggerbot form). The shot's spread seed is
+    // hash(round0.5(written angles), tick) - both known on THIS command before it leaves, and the
+    // tick rolls every command, so the deflection is a new dice roll per tick. With SpreadCompensation
+    // OFF (the bullet leaves on the raw cone) this gate samples the one seed the shot will actually
+    // use and holds fire on ticks whose predicted deflection carries the bullet off the crosshair
+    // impact point - the trigger only eats the lucky ticks. A no-op unless SeededFire is on, and a
+    // no-op while SpreadCompensation is on (the writer already cancels the cone exactly - there is
+    // no luck left to wait for). The written angles mirror the writer's convention (aim minus the
+    // CURRENT punch), and the seed tick is the same predicted server tick the writer stamps.
+    // Fails OPEN on unreadable inputs: a resolve failure never silently disables the triggerbot.
+    [[nodiscard]] bool passesSeededFire(auto&& target, cs2::CUserCmd* cmd) const noexcept
+    {
+        if (!GET_CONFIG_VAR(triggerbot_vars::SeededFire) || GET_CONFIG_VAR(triggerbot_vars::SpreadCompensation))
+            return true;
+
+        auto&& localPawn = hookContext.activeLocalPlayerPawn();
+        auto solver = hookContext.template make<SpreadSolver>();
+        const auto params = solver.weaponParams(localPawn.getActiveWeapon());
+        const auto tick = hookContext.localPlayerController().tickBase();
+        const UserCmd userCmd{cmd};
+        const auto pitch = userCmd.viewPitch();
+        const auto yaw = userCmd.viewYaw();
+        const auto punch = localPawn.aimPunchAngle();
+        const auto eye = localPawn.eyePosition();
+        if (!params.hasValue() || !tick.hasValue() || !pitch.hasValue() || !yaw.hasValue() || !eye.hasValue())
+            return true;
+
+        float punchPitch = 0.0f, punchYaw = 0.0f;
+        if (punch.hasValue()) {
+            punchPitch = punch.value().x;
+            punchYaw = punch.value().y;
+        }
+        const float writtenPitch = pitch.value() - punchPitch;
+        const float writtenYaw = yaw.value() - punchYaw;
+
+        const auto seed = solver.seed(typename SpreadSolver<HookContext>::Angles{writtenPitch, writtenYaw, 0.0f}, tick.value());
+        if (!seed.hasValue())
+            return true;
+        const auto offset = solver.spreadOffset(seed.value(), params.value());
+
+        // Deflected direction: the shot's forward plus the tangent-plane offset in the (left, up)
+        // basis of the written angles - the same composition hitchanceFraction uses, but for the
+        // ONE deterministic seed this command carries instead of a Monte-Carlo sample.
+        const auto basis = shot_geometry::angleVectors(writtenPitch, writtenYaw);
+        const cs2::Vector direction = shot_geometry::normalized(cs2::Vector{
+            basis.forward.x + basis.left.x * offset.x + basis.up.x * offset.y,
+            basis.forward.y + basis.left.y * offset.x + basis.up.y * offset.y,
+            basis.forward.z + basis.left.z * offset.x + basis.up.z * offset.y,
+        });
+
+        // Target point = the crosshair impact on the enemy (the shot is a crosshair shot; the
+        // deflected one must still land on that spot for the tick to be worth firing).
+        constexpr float kTraceRange = 8192.0f;
+        const cs2::Vector end{eye.value().x + basis.forward.x * kTraceRange,
+                              eye.value().y + basis.forward.y * kTraceRange,
+                              eye.value().z + basis.forward.z * kTraceRange};
+        const auto trace = Tracing::traceLine(eye.value(), end, static_cast<void*>(static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity())));
+        if (!trace.didHit)
+            return true;
+
+        return shot_geometry::rayReachesSphere(eye.value(), direction, trace.endPos, kSeededFireRadius);
+    }
+
+    // "Only fire at minimum inaccuracy" gate (velocity-cs2's is_max_accuracy). A no-op (returns true)    // unless the MaxAccuracyOnly config is on. Unlike the other gates this one fails CLOSED: it is an
     // opt-in restriction, so if the weapon/pawn state can't be read we hold fire rather than silently
     // firing while not actually at max accuracy (a gate that silently does nothing is worse than one
     // that is briefly over-strict, and the user can simply turn it off). See BaseWeapon::isMaxAccuracy.
@@ -504,6 +566,11 @@ private:
     // will fire. This is what stops head-only from spraying while moving: it holds until the movement
     // inaccuracy has decayed enough (counter-strafe / slow down) that the head is genuinely hittable.
     static constexpr int kHeadOnlyMinHitchance = 40;
+
+    // Seed mode: how close (units) the predicted deflected shot must land to the crosshair impact
+    // point for the tick to fire - a head-sized sphere, so a "lucky" tick is one whose bullet
+    // actually lands on what the crosshair is touching.
+    static constexpr float kSeededFireRadius = 6.0f;
 
     // Clears the pending shot, so a disabled feature or a crosshair that has moved off the target
     // can never leave a shot queued to go off later.

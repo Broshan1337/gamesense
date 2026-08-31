@@ -54,4 +54,14 @@ CONFIG_VARIABLE_RANGE(AutowallMaxThickness, triggerbot_params::kAutowallMaxThick
 // ON by default.
 CONFIG_VARIABLE(SpreadCompensation, bool, true);
 
+// Seed mode (velocity's give_me_your_seed, triggerbot form): the shot's spread seed is derived
+// from THIS command's angles + tick - so it is known before firing, and it is different every
+// tick. With SpreadCompensation OFF (the bullet leaves on the raw cone), this gate samples the
+// one seed the shot will actually use and holds fire on ticks whose predicted deflection would
+// carry the bullet off the crosshair impact point - firing only the lucky ticks. Result: fewer
+// shots, but the ones that leave are the ones that land; fully silent (no angle writes at all).
+// No-op while SpreadCompensation is on (the correction already cancels the cone exactly, so
+// there is no luck left to wait for). Off by default.
+CONFIG_VARIABLE(SeededFire, bool, false);
+
 }

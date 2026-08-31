@@ -49,6 +49,7 @@ private:
         configConversion.uint(u8"AutowallMaxThickness", loadVariable<triggerbot_vars::AutowallMaxThickness>(), saveVariable<triggerbot_vars::AutowallMaxThickness>());
         configConversion.boolean(u8"SpreadCompensation", loadVariable<triggerbot_vars::SpreadCompensation>(), saveVariable<triggerbot_vars::SpreadCompensation>());
         configConversion.uint(u8"HoldKey", loadVariable<triggerbot_vars::HoldKey>(), saveVariable<triggerbot_vars::HoldKey>());
+        configConversion.boolean(u8"SeededFire", loadVariable<triggerbot_vars::SeededFire>(), saveVariable<triggerbot_vars::SeededFire>());
         configConversion.endObject();
 
         configConversion.beginObject(u8"Aimbot");
@@ -91,6 +92,7 @@ private:
         configConversion.boolean(u8"Autowall", loadVariable<aimbot_vars::Autowall>(), saveVariable<aimbot_vars::Autowall>());
         configConversion.boolean(u8"AutoStop", loadVariable<aimbot_vars::AutoStop>(), saveVariable<aimbot_vars::AutoStop>());
         configConversion.boolean(u8"SpreadGate", loadVariable<aimbot_vars::SpreadGate>(), saveVariable<aimbot_vars::SpreadGate>());
+        configConversion.boolean(u8"SeedFallback", loadVariable<aimbot_vars::SeedFallback>(), saveVariable<aimbot_vars::SeedFallback>());
         configConversion.endObject();
 
         configConversion.beginObject(u8"LegitAimbot");

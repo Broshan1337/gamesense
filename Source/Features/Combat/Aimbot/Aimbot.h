@@ -218,6 +218,8 @@ public:
         stagedPunchYaw = punchYaw;
         stagedBacktrackSimTime = backtrackSimTime;
         stagedSpreadCompensation = GET_CONFIG_VAR(aimbot_vars::SpreadCompensation);
+        stagedEye = eye.value();
+        stagedAimPoint = chosen.aimPoint;
         shotStagedThisTick = true;
         lastTargetHandleValue = hookContext.template make<BaseEntity>(chosen.entity).handle().value;
 
@@ -272,7 +274,18 @@ public:
                 // entry makes the same click resolve along the silent entry instead. Guarded by the
                 // setter (only writes over -1), so a real game-written index always wins, and the
                 // force-shot press below is a no-op after us. Only when the shot is not gate-held.
-                if (!lands && GET_CONFIG_VAR(aimbot_vars::SpreadGate)) {
+                // Seed-mode arm (velocity's give_me_your_seed, rage form): when the exact spread
+                // correction is missing (wide cone), the gate normally holds fire - but the shot's
+                // seed is derived from the angles THIS command is about to carry, so it can be
+                // sampled first. A tick whose predicted deflection still lands on the aimed hitbox
+                // fires even without a correction: exact-corrected shots, lucky-seed shots, and
+                // nothing else. Only for live shots (the backtrack stamp resolves a different tick).
+                const bool seedLucky = !lands
+                    && GET_CONFIG_VAR(aimbot_vars::SeedFallback)
+                    && stagedBacktrackSimTime <= 0.0f
+                    && seedLandsOnTarget(localPawn);
+
+                if (!lands && !seedLucky && GET_CONFIG_VAR(aimbot_vars::SpreadGate)) {
                     gateHeldFire = true;
                     const UserCmd userCmd{cmd};
                     userCmd.suppressAttack(cs2::CCSGOInput::Buttons::kAttack);
@@ -313,6 +326,37 @@ public:
         }
         forceShotThisTick = false;
         hookContext.template make<AttackCommand>().press(cmd);
+    }
+
+    // Seed-mode check for the spread gate's fallback arm: would the RAW shot (no correction - the
+    // entry carries the aim minus the current punch) still land on the aimed hitbox with the seed
+    // THIS command will produce? Mirrors the writer's angle convention exactly: entry angles =
+    // aim - punch, seed tick = the predicted server tick, deflection applied in the written
+    // angles' tangent basis. False on any unreadable input - a resolve failure must not wave a
+    // bad shot through the gate.
+    [[nodiscard]] bool seedLandsOnTarget(auto&& localPawn) const noexcept
+    {
+        const float writtenPitch = stagedAimPitch - stagedPunchPitch;
+        const float writtenYaw = stagedAimYaw - stagedPunchYaw;
+
+        auto solver = hookContext.template make<SpreadSolver>();
+        const auto params = solver.weaponParams(localPawn.getActiveWeapon());
+        const auto tick = hookContext.localPlayerController().tickBase();
+        if (!params.hasValue() || !tick.hasValue())
+            return false;
+
+        const auto seed = solver.seed(typename SpreadSolver<HookContext>::Angles{writtenPitch, writtenYaw, 0.0f}, tick.value());
+        if (!seed.hasValue())
+            return false;
+        const auto offset = solver.spreadOffset(seed.value(), params.value());
+
+        const auto basis = shot_geometry::angleVectors(writtenPitch, writtenYaw);
+        const cs2::Vector direction = shot_geometry::normalized(cs2::Vector{
+            basis.forward.x + basis.left.x * offset.x + basis.up.x * offset.y,
+            basis.forward.y + basis.left.y * offset.x + basis.up.y * offset.y,
+            basis.forward.z + basis.left.z * offset.x + basis.up.z * offset.y,
+        });
+        return shot_geometry::rayReachesSphere(stagedEye, direction, stagedAimPoint, kSeedFallbackRadius);
     }
 
     // No persistent input state exists any more (each command carries its own complete press/release),
@@ -696,6 +740,14 @@ private:
     inline static float stagedPunchYaw{0.0f};
     inline static float stagedBacktrackSimTime{0.0f};
     inline static bool stagedSpreadCompensation{false};
+    // Seed-mode fallback inputs: where the staged shot's eye and aimed hitbox point are, so the
+    // WriteMoveCrc-side luck check can test the deflected ray against the real target geometry.
+    inline static cs2::Vector stagedEye{};
+    inline static cs2::Vector stagedAimPoint{};
+
+    // Seed fallback: how close (units) the predicted deflected shot must land to the aimed
+    // hitbox point for a held tick to fire anyway - head-sized.
+    static constexpr float kSeedFallbackRadius = 6.0f;
 
     HookContext& hookContext;
 };
