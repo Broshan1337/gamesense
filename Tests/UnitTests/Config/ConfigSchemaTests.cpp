@@ -46,6 +46,7 @@ protected:
         "Combat.Aimbot.FovCircleHue",
         "Combat.LegitAimbot.FovCircleHue",
         "Combat.Aimbot.SeedCorrectionMode",
+        "Visuals.ViewmodelMod.Enabled",
         "Sound.Visualizations.Chams.Enabled",
         "Sound.Visualizations.ImpactMarkers.Enabled",
         "Sound.Visualizations.BulletTracers.Enabled",

@@ -17,33 +17,6 @@ protected:
     ViewmodelMod<MockHookContext> viewmodelMod{mockHookContext};
 };
 
-struct ViewmodelModIsFovModificationActiveTestParam {
-    bool viewmodelModEnabled{};
-    bool fovModificationEnabled{};
-    bool expectedFovModificationActive{};
-};
-
-class ViewmodelModIsFovModificationActiveTest
-    : public ViewmodelModTest,
-      public testing::WithParamInterface<ViewmodelModIsFovModificationActiveTestParam> {
-};
-
-TEST_P(ViewmodelModIsFovModificationActiveTest, FovModificationIsActiveWhenExpected) {
-    EXPECT_CALL(mockHookContext, config()).WillRepeatedly(testing::ReturnRef(mockConfig));
-    mockConfig.expectGetVariable<viewmodel_mod_vars::Enabled>().WillRepeatedly(testing::Return(GetParam().viewmodelModEnabled));
-    mockConfig.expectGetVariable<viewmodel_mod_vars::ModifyFov>().WillRepeatedly(testing::Return(GetParam().fovModificationEnabled));
-    EXPECT_EQ(viewmodelMod.fovModificationActive(), GetParam().expectedFovModificationActive);
-}
-
-INSTANTIATE_TEST_SUITE_P(, ViewmodelModIsFovModificationActiveTest, testing::ValuesIn(
-    std::to_array<ViewmodelModIsFovModificationActiveTestParam>({
-        {.viewmodelModEnabled = false, .fovModificationEnabled = false, .expectedFovModificationActive = false},
-        {.viewmodelModEnabled = false, .fovModificationEnabled = true, .expectedFovModificationActive = false},
-        {.viewmodelModEnabled = true, .fovModificationEnabled = false, .expectedFovModificationActive = false},
-        {.viewmodelModEnabled = true, .fovModificationEnabled = true, .expectedFovModificationActive = true}
-    })
-));
-
 struct ViewmodelModShouldModifyFovTestParam {
     bool hasLocalPlayerPawn{};
     Optional<bool> isLocalPlayerScoped{};
