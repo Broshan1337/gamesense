@@ -1890,8 +1890,10 @@ void pageEffects() noexcept
         toggleVar<WorldColorsBloomEnabled>("Sky Bloom", ++controlId);
         sliderVar<WorldColorsBloomStrength>("Bloom Strength", ++controlId, "%");
     });
-    addCard("PLAYER LIST", 1, [] {
+    addCard("PLAYER LIST", 3, [] {
         toggleVar<PlayerListEnabled>("Player List", ++controlId);
+        sliderVar<PlayerListOffsetX>("X Offset", ++controlId);
+        sliderVar<PlayerListOffsetY>("Y Offset", ++controlId);
     });
     addCard("GRENADE TIMERS", 3, [] {
         toggleVar<grenade_timers_vars::Enabled>("Master Switch", ++controlId);
@@ -4060,9 +4062,11 @@ void drawPlayerListWindow() noexcept
         | ImGuiWindowFlags_AlwaysAutoResize;
     constexpr ImGuiWindowFlags menuOpenFlags = menuClosedFlags | ImGuiWindowFlags_NoMove;
 
-    const float posX = ui_config::get<PlayerListPosX>();
-    const float posY = ui_config::get<PlayerListPosY>();
-    ImGui::SetNextWindowPos(ImVec2(posX, posY), ImGuiCond_FirstUseEver);
+    // Pinned to anchor + offsets every frame (the watermark's model): position truth lives in
+    // the two sliders/config, never in a drag.
+    const float posX = s(10.0f) + static_cast<float>(ui_config::get<PlayerListOffsetX>());
+    const float posY = s(64.0f) + static_cast<float>(ui_config::get<PlayerListOffsetY>());
+    ImGui::SetNextWindowPos(ImVec2(posX, posY), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(520.0f, 0.0f), ImGuiCond_Always);
 
     // Same shell palette as the menu: dark panel, hairline borders, theme accent, muted text.
@@ -4080,16 +4084,6 @@ void drawPlayerListWindow() noexcept
     ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt, C(255, 255, 255, 7));
 
     if (ImGui::Begin("Player list", nullptr, GUI::isMenuOpen() ? menuOpenFlags : menuClosedFlags)) {
-        // Position persistence: while the menu is open the window is drag-movable; commit the
-        // new position to the config the moment it differs (autosave defers the file write).
-        if (GUI::isMenuOpen()) {
-            const ImVec2 moved = ImGui::GetWindowPos();
-            if (moved.x != posX || moved.y != posY) {
-                static_cast<void>(ui_config::set<PlayerListPosX>(typename PlayerListPosX::ValueType{moved.x}));
-                static_cast<void>(ui_config::set<PlayerListPosY>(typename PlayerListPosY::ValueType{moved.y}));
-            }
-        }
-
         const auto snap = player_list::snapshot();
 
         // Muted header text; a theme-accent underline sits under the header row.

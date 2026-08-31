@@ -396,8 +396,12 @@ private:
 
         configConversion.beginObject(u8"PlayerList");
         configConversion.boolean(u8"Enabled", loadVariable<PlayerListEnabled>(), saveVariable<PlayerListEnabled>());
-        configConversion.floating(u8"PosX", loadVariable<PlayerListPosX>(), saveVariable<PlayerListPosX>());
-        configConversion.floating(u8"PosY", loadVariable<PlayerListPosY>(), saveVariable<PlayerListPosY>());
+        // absolute PosX/PosY replaced by OffsetX/Y (the watermark slider pattern) - the old keys
+        // stay as parse-and-discard placeholders per the config-loader ordering rule
+        configConversion.floating(u8"PosX", [](float) {}, [] { return 0.0f; });
+        configConversion.floating(u8"PosY", [](float) {}, [] { return 0.0f; });
+        configConversion.uint(u8"OffsetX", loadVariable<PlayerListOffsetX>(), saveVariable<PlayerListOffsetX>());
+        configConversion.uint(u8"OffsetY", loadVariable<PlayerListOffsetY>(), saveVariable<PlayerListOffsetY>());
         configConversion.endObject();
 
         // NEW keys go LAST in an object - appending keeps old config files parsing.
