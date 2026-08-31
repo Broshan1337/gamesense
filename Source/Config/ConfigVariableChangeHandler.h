@@ -175,20 +175,9 @@ public:
             hookContext.featuresStates().visualFeaturesStates.playerInfoInWorldState.playerStateIconsToShow.template unset<BlindedIconPanel>();
     }
 
-    ON_CHANGE(viewmodel_mod_vars::Enabled)
-    {
-        if (newValue == true && GET_CONFIG_VAR(viewmodel_mod_vars::ModifyFov))
-            hookContext.template make<ClientModeHooks>().hookGetViewmodelFov();
-        else
-            hookContext.template make<ClientModeHooks>().hookGetViewmodelFov(); // viewmodel hook body self-gates on the config now
-    }
-
     ON_CHANGE(viewmodel_mod_vars::ModifyFov)
     {
-        if (newValue == true && GET_CONFIG_VAR(viewmodel_mod_vars::Enabled))
-            hookContext.template make<ClientModeHooks>().hookGetViewmodelFov();
-        else
-            hookContext.template make<ClientModeHooks>().hookGetViewmodelFov(); // viewmodel hook body self-gates on the config now
+        hookContext.template make<ClientModeHooks>().hookGetViewmodelFov(); // the hook body self-gates on the config
     }
 
     ON_CHANGE(no_scope_inaccuracy_vis_vars::Enabled)

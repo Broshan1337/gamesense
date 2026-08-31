@@ -1840,12 +1840,15 @@ void pageModelGlow() noexcept
 void pageViewmodel() noexcept
 {
     using namespace viewmodel_mod_vars;
-    addCard("VIEWMODEL MODIFICATION", 1, [] {
-        toggleVar<Enabled>("Master Switch", ++controlId);
-    });
     addCard("VIEWMODEL FOV", 2, [] {
         toggleVar<ModifyFov>("Modify Viewmodel Fov", ++controlId);
         sliderVar<Fov>("Fov", ++controlId);
+    });
+    addCard("VIEWMODEL POSITION", 4, [] {
+        toggleVar<ModifyPosition>("Modify Position", ++controlId);
+        floatSliderVar<OffsetX>("Offset X", ++controlId, " u");
+        floatSliderVar<OffsetY>("Offset Y", ++controlId, " u");
+        floatSliderVar<OffsetZ>("Offset Z", ++controlId, " u");
     });
 }
 

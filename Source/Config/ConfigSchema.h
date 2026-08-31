@@ -342,9 +342,15 @@ private:
         configConversion.endObject();
 
         configConversion.beginObject(u8"ViewmodelMod");
-        configConversion.boolean(u8"Enabled", loadVariable<viewmodel_mod_vars::Enabled>(), saveVariable<viewmodel_mod_vars::Enabled>());
+        // MasterSwitch removed (the FOV toggle gates its own feature now) - kept as a
+        // parse-and-discard placeholder per the config-loader ordering rule.
+        configConversion.boolean(u8"Enabled", [](bool) {}, [] { return false; });
         configConversion.boolean(u8"ModifyFov", loadVariable<viewmodel_mod_vars::ModifyFov>(), saveVariable<viewmodel_mod_vars::ModifyFov>());
         configConversion.uint(u8"Fov", loadVariable<viewmodel_mod_vars::Fov>(), saveVariable<viewmodel_mod_vars::Fov>());
+        configConversion.boolean(u8"ModifyPosition", loadVariable<viewmodel_mod_vars::ModifyPosition>(), saveVariable<viewmodel_mod_vars::ModifyPosition>());
+        configConversion.floating(u8"OffsetX", loadVariable<viewmodel_mod_vars::OffsetX>(), saveVariable<viewmodel_mod_vars::OffsetX>());
+        configConversion.floating(u8"OffsetY", loadVariable<viewmodel_mod_vars::OffsetY>(), saveVariable<viewmodel_mod_vars::OffsetY>());
+        configConversion.floating(u8"OffsetZ", loadVariable<viewmodel_mod_vars::OffsetZ>(), saveVariable<viewmodel_mod_vars::OffsetZ>());
         configConversion.endObject();
 
         // FrameworkCS2 port batch (appended LAST - the loader is an order-sensitive streaming

@@ -4,6 +4,7 @@
 
 #include <CS2/Classes/CCvar.h>
 #include <CS2/Classes/ConVar.h>
+#include <MemoryPatterns/PatternTypes/CvarPatternTypes.h>
 #include <MemoryPatterns/PatternTypes/ConVarPatternTypes.h>
 
 template <typename HookContext>

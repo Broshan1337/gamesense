@@ -426,6 +426,8 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     hookContext.template make<Hitmarker>().run();
     hookContext.template make<PlayerList>().run();
     hookContext.template make<WorldColors>().run();
+    // Viewmodel position: forces the viewmodel_offset_x/y/z cvars while enabled.
+    hookContext.template make<ViewmodelMod>().run();
     hookContext.template make<Removals>().run();
 
     hookContext.template make<SpawnProtectionSound>().run();
