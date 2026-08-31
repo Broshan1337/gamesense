@@ -5,24 +5,29 @@
 
 #include <CS2/Classes/Entities/C_BaseEntity.h>
 #include <Features/Hud/SpectatorList/SpectatorListParams.h>
-#include <Features/Hud/SpectatorList/SpectatorListState.h>
+#include <Features/Hud/SpectatorList/SpectatorSnapshot.h>
 #include <GameClient/Entities/BaseEntity.h>
 #include <GameClient/Entities/PlayerPawn.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
-#include <GameClient/Panorama/PanoramaLabel.h>
-#include <GameClient/Panorama/PanoramaUiEngine.h>
-#include <Platform/Linux/LinuxPlatformApi.h>
-#include <Utils/StringBuilder.h>
+#include <HookContext/HookContextMacros.h>
+#include <Utils/Optional.h>
 #include <Utils/VerifyConsole.h>
 
-// Who is watching my POV right now? Under the watermark, top-right, only visible while the list
-// is non-empty.
+// Who is watching my POV right now? Velocity-style spectator list (the friend-client port):
 //
-// Detection: every player pawn carries an observer-services component (null while alive) whose
-// m_hObserverTarget is the entity handle currently being spectated. A pawn whose target handle
-// equals the LOCAL pawn's handle is watching us - the handle is index+serial, so no recycled
-// pointer confusion. Both offsets are schema-resolved; the component is a POINTER field on the
-// pawn (m_pObserverServices), the target handle an in-component CHandle.
+//   * POV resolution - normally the LOCAL pawn; when we are DEAD and spectating someone, the
+//     pawn we watch becomes the POV (m_pObserverServices->m_hObserverTarget), and the list
+//     shows who is watching THEM. This is the part the old list missed: while dead, its
+//     handle comparison kept targeting our own corpse's handle.
+//   * detection - every player pawn carries an observer-services component (null while alive)
+//     whose m_hObserverTarget is the entity handle currently being spectated. A pawn whose
+//     target handle equals the POV handle is watching the POV - the handle is index+serial,
+//     so no recycled-pointer confusion. Both offsets are schema-resolved; the component is a
+//     POINTER field on the pawn (declared on C_BasePlayerPawn, not C_CSPlayerPawn - the
+//     schema iterator does not walk parents).
+//
+// The names are published to SpectatorSnapshot for the present thread (Neverlose render pass
+// draws the box) - entity iteration stays on the game thread, exactly like the player list.
 template <typename HookContext>
 class SpectatorList {
 public:
@@ -33,65 +38,21 @@ public:
 
     void run() const noexcept
     {
-        const double now = monotonicSeconds();
+        char names[spectator_list::kMaxNames][40]{};
+        int count = 0;
+        bool spectatingOthers = false;
 
-        auto&& boxPanel = uiEngine().getPanelFromHandle(state().boxPanelHandle);
-        if (!boxPanel) {
-            if (now - lastCreateAttempt < 1.0)
-                return;
-            lastCreateAttempt = now;
-            createPanel();
-            return;
-        }
+        if (GET_CONFIG_VAR(spectator_list_params::SpectatorListEnabled))
+            collectSpectators(names, count, spectatingOthers);
 
-        if (now - lastUpdate < 0.3)
-            return;
-        lastUpdate = now;
-
-        std::size_t spectatorCount = 0;
-        collectSpectators(spectatorCount);
-
-        auto&& updatedBox = uiEngine().getPanelFromHandle(state().boxPanelHandle);
-        if (spectatorCount == 0) {
-            if (updatedBox)
-                updatedBox.setVisible(false);
-            return;
-        }
-
-        if (!updatedBox)
-            return;
-        updatedBox.setVisible(true);
-        for (std::size_t i = 0; i < lineCount(); ++i) {
-            auto&& line = uiEngine().getPanelFromHandle(state().lineHandles[i]);
-            if (!line)
-                continue;
-            if (i < spectatorCount) {
-                line.clientPanel().template as<PanoramaLabel>().setText(lineTexts[i]);
-                line.setVisible(true);
-            } else {
-                line.setVisible(false);
-            }
-        }
-    }
-
-    void onUnload() const noexcept
-    {
-        hookContext.template make<PanoramaUiEngine>().deletePanelByHandle(state().boxPanelHandle);
+        spectator_list::publish(names, count, spectatingOthers);
     }
 
 private:
-    static constexpr std::size_t lineCount() noexcept
+    void collectSpectators(char (&names)[spectator_list::kMaxNames][40], int& count, bool& spectatingOthers) const noexcept
     {
-        return sizeof(lineTexts) / sizeof(lineTexts[0]);
-    }
-
-    void collectSpectators(std::size_t& spectatorCount) const noexcept
-    {
-        spectatorCount = 0;
-
-        const auto localHandle = localPawnHandleValue();
-        if (localHandle == 0)
-            return;
+        count = 0;
+        spectatingOthers = false;
 
         // NOTE the declaring class: m_pObserverServices is declared on C_BasePlayerPawn (the
         // pawn's base), NOT C_CSPlayerPawn - the schema iterator only reads the requested
@@ -99,13 +60,40 @@ private:
         const auto servicesOffset = hookContext.schemaSystem().getFieldOffset("C_BasePlayerPawn", "m_pObserverServices");
         const auto targetOffset = hookContext.schemaSystem().getFieldOffset("CPlayer_ObserverServices", "m_hObserverTarget");
         const auto nameOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayerController", "m_iszPlayerName");
-        if (!servicesOffset.has_value() || !targetOffset.has_value() || !nameOffset.has_value()) {
+        const auto healthOffset = hookContext.schemaSystem().getFieldOffset("C_BaseEntity", "m_iHealth");
+        if (!servicesOffset.has_value() || !targetOffset.has_value() || !nameOffset.has_value() || !healthOffset.has_value()) {
             VerifyConsole::write(30.0f, "spec", "schema offsets unresolved - spectator detection inactive");
             return;
         }
 
+        auto&& localPawn = hookContext.activeLocalPlayerPawn();
+        if (!localPawn)
+            return;
+
+        std::uint32_t povHandle = localPawn.baseEntity().handle().value;
+        if (povHandle == 0)
+            return;
+
+        // DEAD + spectating someone: the POV is the pawn we watch, not our corpse. Their
+        // spectators are the ones watching the view we are actually seeing.
+        const auto* const localEntity = reinterpret_cast<const std::byte*>(static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity()));
+        int localHealth{};
+        std::memcpy(&localHealth, localEntity + *healthOffset, sizeof(localHealth));
+        if (localHealth <= 0) {
+            void* localServices{};
+            std::memcpy(&localServices, localEntity + *servicesOffset, sizeof(localServices));
+            if (localServices) {
+                std::uint32_t watchedHandle{};
+                std::memcpy(&watchedHandle, reinterpret_cast<const std::byte*>(localServices) + *targetOffset, sizeof(watchedHandle));
+                if (watchedHandle != 0 && watchedHandle != povHandle) {
+                    povHandle = watchedHandle;
+                    spectatingOthers = true;
+                }
+            }
+        }
+
         hookContext.template make<EntitySystem>().forEachNetworkableEntityIdentity([&](const auto& identity) {
-            if (spectatorCount >= lineCount())
+            if (count >= spectator_list::kMaxNames)
                 return;
             auto&& baseEntity = hookContext.template make<BaseEntity>(static_cast<cs2::C_BaseEntity*>(identity.entity));
             if (!baseEntity.classify().template is<cs2::C_CSPlayerPawn>())
@@ -120,66 +108,30 @@ private:
 
             void* observerServices{};
             std::memcpy(&observerServices, reinterpret_cast<const std::byte*>(pawnEntity) + *servicesOffset, sizeof(observerServices));
-
-            // Diagnostic: what do the other pawns' observer services actually hold? This is the
-            // one place the detection can silently disagree with reality (handle encoding, bot
-            // deathcam behavior), so measure instead of guess. Throttled hard - only while we
-            // believe NOBODY is spectating, once per ~10s.
-            if (debugLoggingEnabled()) {
-                char debugLine[96];
-                StringBuilder debugBuilder{debugLine};
-                debugBuilder.put("local=", localHandle, ' ');
-                if (!observerServices) {
-                    debugBuilder.put("entity", identity.handle.index().value, ": services=null");
-                } else {
-                    std::uint32_t debugTarget{};
-                    std::memcpy(&debugTarget, reinterpret_cast<const std::byte*>(observerServices) + *targetOffset, sizeof(debugTarget));
-                    debugBuilder.put("entity", identity.handle.index().value, ": target=", debugTarget);
-                }
-                VerifyConsole::write(10.0f, "spec", "%s", debugBuilder.cstring());
-            }
-
             if (!observerServices)
                 return;   // alive - alive players do not spectate
 
             std::uint32_t targetHandleValue{};
             std::memcpy(&targetHandleValue, reinterpret_cast<const std::byte*>(observerServices) + *targetOffset, sizeof(targetHandleValue));
-            if (targetHandleValue != localHandle)
+            if (targetHandleValue != povHandle)
                 return;
 
             auto&& controller = pawn.playerController().baseEntity();
+            if (!controller)
+                return;
             const char* name = "?";
-            if (auto* const controllerEntity = static_cast<cs2::C_BaseEntity*>(controller)) {
-                const auto controllerName = reinterpret_cast<const char*>(reinterpret_cast<const std::byte*>(controllerEntity) + *nameOffset);
-                if (looksLikeName(controllerName))
-                    name = controllerName;
-            }
+            const auto controllerName = reinterpret_cast<const char*>(reinterpret_cast<const std::byte*>(static_cast<cs2::C_BaseEntity*>(controller)) + *nameOffset);
+            if (looksLikeName(controllerName))
+                name = controllerName;
 
-            StringBuilder builder{lineTexts[spectatorCount]};
-            builder.put(name);
-            ++spectatorCount;
+            // Player names are attacker-controlled bytes; bounded copy with the same sanity
+            // check the old Panorama list used.
+            std::size_t i = 0;
+            for (; name[i] != '\0' && i < sizeof(names[0]) - 1; ++i)
+                names[count][i] = name[i];
+            names[count][i] = '\0';
+            ++count;
         });
-    }
-
-    // The debug dump runs only while the toggle file exists - create it with
-    //   touch /tmp/osiris_spec_debug
-    // and remove it when done.
-    [[nodiscard]] static bool debugLoggingEnabled() noexcept
-    {
-        const int fd = LinuxPlatformApi::open("/tmp/osiris_spec_debug", 0 /* O_RDONLY */);
-        if (fd >= 0) {
-            LinuxPlatformApi::close(fd);
-            return true;
-        }
-        return false;
-    }
-
-    [[nodiscard]] std::uint32_t localPawnHandleValue() const noexcept
-    {
-        auto&& localPawn = hookContext.activeLocalPlayerPawn();
-        if (!localPawn)
-            return 0;
-        return localPawn.baseEntity().handle().value;
     }
 
     // Player names are attacker-controlled bytes; same sanity idea as PlayerSlotLookup's check.
@@ -194,56 +146,6 @@ private:
         }
         return true;
     }
-
-    void createPanel() const noexcept
-    {
-        using namespace spectator_list_params;
-
-        auto&& panel = hookContext.panelFactory().createPanel(hookContext.hud().rootPanel()).uiPanel();
-        if (!panel)
-            return;
-
-        panel.setFlowChildren(cs2::k_EFlowDown);
-        panel.setBackgroundColor(kBoxColor);
-        panel.setBorderRadius(kBoxBorderRadius);
-        panel.setAlign(kAlignment);
-        panel.setMargin(kBoxMargin);
-        // Hidden until someone actually spectates; runtime show/hide is fine, only CREATION
-        // hidden is the panorama trap (see the radio lessons).
-        panel.setVisible(false);
-        state().boxPanelHandle = panel.getHandle();
-
-        for (std::size_t i = 0; i < lineCount(); ++i) {
-            auto&& line = hookContext.panelFactory().createLabelPanel(panel).uiPanel();
-            if (!line)
-                continue;
-            line.setFont(kFont);
-            line.setColor(kTextColor);
-            line.setMargin(kLineMargin);
-            state().lineHandles[i] = line.getHandle();
-        }
-    }
-
-    [[nodiscard]] auto& state() const noexcept
-    {
-        return hookContext.featuresStates().hudFeaturesStates.spectatorListState;
-    }
-
-    [[nodiscard]] decltype(auto) uiEngine() const noexcept
-    {
-        return hookContext.template make<PanoramaUiEngine>();
-    }
-
-    [[nodiscard]] static double monotonicSeconds() noexcept
-    {
-        timespec ts{};
-        clock_gettime(CLOCK_MONOTONIC, &ts);
-        return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) * 1.0e-9;
-    }
-
-    inline static char lineTexts[6][64]{};
-    inline static double lastUpdate{-1.0e9};
-    inline static double lastCreateAttempt{-1.0e9};
 
     HookContext& hookContext;
 };

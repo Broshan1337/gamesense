@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Config/ConfigVariable.h>
 #include <CS2/Constants/ColorConstants.h>
 #include <CS2/Classes/Color.h>
 #include <CS2/Panorama/CUILength.h>
@@ -32,4 +33,11 @@ namespace spectator_list_params
         .marginTop = cs2::CUILength::pixels(1),
         .marginRight = cs2::CUILength::pixels(10),
         .marginBottom = cs2::CUILength::pixels(1)};
+}
+
+namespace spectator_list_params
+{
+// Hud > Spectators: the right-side box listing who is watching the POV (ours when alive,
+// the spectated player's when we are dead and following someone).
+CONFIG_VARIABLE(SpectatorListEnabled, bool, true);
 }

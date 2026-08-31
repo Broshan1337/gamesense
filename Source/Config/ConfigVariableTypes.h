@@ -12,6 +12,7 @@
 #include <Features/Game/CooldownRevealerConfigVariables.h>
 #include <Features/Game/FakeLevelConfigVariables.h>
 #include <Features/Game/MovementConfigVariables.h>
+#include <Features/Hud/SpectatorList/SpectatorListParams.h>
 #include <Features/Game/FakePrimeConfigVariables.h>
 #include <Features/Game/FvaConfigVariables.h>
 #include <Features/Game/MatchAutoAcceptConfigVariables.h>
@@ -174,6 +175,9 @@ using ConfigVariableTypes = TypeList<
     movement_vars::SlowWalkSpeed,
     movement_vars::FastLadder,
     movement_vars::JumpBug,
+    spectator_list_params::SpectatorListEnabled,
+    PlayerListPosX,
+    PlayerListPosY,
     legit_aimbot_vars::Enabled,
     legit_aimbot_vars::AimKey,
     legit_aimbot_vars::Fov,

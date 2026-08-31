@@ -5,7 +5,6 @@
 #include "CombatStats/CombatStatsState.h"
 #include "DefusingAlert/DefusingAlertState.h"
 #include "PostRoundTimer/PostRoundTimerState.h"
-#include "SpectatorList/SpectatorListState.h"
 #include "StatusPanel/StatusPanelState.h"
 #include "Watermark/WatermarkState.h"
 
@@ -17,5 +16,4 @@ struct HudFeaturesStates {
     WatermarkState watermarkState;
     StatusPanelState statusPanelState;
     CombatStatsState combatStatsState;
-    SpectatorListState spectatorListState;
 };

@@ -22,6 +22,7 @@
 
 #include <GameClient/Bind.h>
 #include "FeatureBinds.h"
+#include <Features/Hud/SpectatorList/SpectatorSnapshot.h>
 #include <Features/Game/MovementConfigVariables.h>
 #include <Utils/ColorUtils.h>
 #include <Utils/StatusReport.h>
@@ -1918,6 +1919,9 @@ void pageHud() noexcept
     addCard("KEYBIND LIST", 1, [] {
         toggleVar<binds_list_vars::Enabled>("Keybind List", ++controlId);
     });
+    addCard("SPECTATORS", 1, [] {
+        toggleVar<spectator_list_params::SpectatorListEnabled>("Spectator List", ++controlId);
+    });
     addCard("TIME", 1, [] {
         toggleVar<PostRoundTimerEnabled>("Post-round Timer", ++controlId);
     });
@@ -3687,7 +3691,8 @@ void neverlose::render() noexcept
 // Game-anchored overlay pass: runs EVERY frame from GUI::render (independent of menu alpha),
 // because the hitmarker and the player list are gameplay HUD, not menu.
 void drawPlayerListWindow() noexcept; // defined below
-void drawBindsListWindow() noexcept; // defined below
+void drawBindsListWindow(float extraYOffset) noexcept; // defined below
+void drawSpectatorListWindow(float& yOffsetForBindsList) noexcept; // defined below
 
 // Outer menu glow, drawn on the FOREGROUND draw list: the menu window clips its own draw list to
 // the shell rect, which is why the in-window version was invisible (only leaked out during the
@@ -3846,6 +3851,7 @@ void registerFeatureBinds() noexcept
     feature_binds::registerToggle<::KillfeedPreserverEnabled>("Preserve Killfeed");
     feature_binds::registerToggle<watermark_vars::Enabled>("Watermark");
     feature_binds::registerToggle<binds_list_vars::Enabled>("Keybind List");
+    feature_binds::registerToggle<spectator_list_params::SpectatorListEnabled>("Spectator List");
 }
 
 void neverlose::renderGameOverlay() noexcept
@@ -3897,7 +3903,58 @@ void neverlose::renderGameOverlay() noexcept
     }
 
     drawPlayerListWindow();
-    drawBindsListWindow();
+    float bindsListOffset = 0.0f;
+    drawSpectatorListWindow(bindsListOffset);
+    drawBindsListWindow(bindsListOffset);
+}
+
+// --- spectator list (in-game HUD overlay) ------------------------------------------------
+// The friend-client port: boxed list of who is watching the POV - ours when alive, the
+// spectated player's when dead. Names come from SpectatorSnapshot (game thread collects,
+// this pass draws); hidden while nobody is spectating.
+
+void drawSpectatorListWindow(float& yOffsetForBindsList) noexcept
+{
+    const auto snap = spectator_list::snapshot();
+    if (!ui_config::get<spectator_list_params::SpectatorListEnabled>() || snap.count <= 0)
+        return;
+
+    constexpr ImGuiWindowFlags menuClosedFlags = ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove
+        | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse
+        | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_AlwaysAutoResize;
+    constexpr ImGuiWindowFlags menuOpenFlags = (ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav
+        | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing
+        | ImGuiWindowFlags_AlwaysAutoResize);
+
+    const float displayWidth = ImGui::GetIO().DisplaySize.x;
+    const float windowWidth = s(170.0f);
+    // top-right, under the watermark (above the keybind list, which shifts down while we render)
+    ImGui::SetNextWindowPos(ImVec2(displayWidth - windowWidth - s(12.0f), s(44.0f)), ImGuiCond_FirstUseEver);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(10.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(s(12), s(8)));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, C(12, 12, 13, 248));
+    ImGui::PushStyleColor(ImGuiCol_Border, C(30, 30, 33, 210));
+
+    if (ImGui::Begin("Spectator list", nullptr, GUI::isMenuOpen() ? menuOpenFlags : menuClosedFlags)) {
+        ImDrawList* d = ImGui::GetWindowDrawList();
+        const ImVec2 winPos = ImGui::GetWindowPos();
+        const float winWidth = ImGui::GetWindowWidth();
+
+        textY(d, winPos.x, winPos.y + s(6), s(16), C(137, 142, 153), snap.spectatingOthers ? "SPECTATORS OF THEM" : "SPECTATORS", kTextCaption, nullptr);
+        d->AddLine(ImVec2(winPos.x + s(3), winPos.y + s(26)), ImVec2(winPos.x + winWidth - s(3), winPos.y + s(26)), (g_accent & 0x00FFFFFFu) | (200u << IM_COL32_A_SHIFT), 1.2f);
+
+        float y = winPos.y + s(32.0f);
+        const float rowHeight = s(24.0f);
+        for (int i = 0; i < snap.count; ++i) {
+            textY(d, winPos.x + s(12), y, rowHeight, C(207, 209, 218), snap.names[i], kTextControl, nullptr);
+            y += rowHeight;
+        }
+        yOffsetForBindsList = (y + s(6.0f)) - s(52.0f);
+    }
+    ImGui::End();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
 }
 
 // --- keybind list (in-game HUD overlay) -------------------------------------------------
@@ -3911,7 +3968,7 @@ struct BindListEntry {
     int value; // Bind encoding (Bind.h)
 };
 
-void drawBindsListWindow() noexcept
+void drawBindsListWindow(float extraYOffset) noexcept
 {
     if (!ui_config::get<binds_list_vars::Enabled>())
         return;
@@ -3932,7 +3989,7 @@ void drawBindsListWindow() noexcept
     const float displayWidth = ImGui::GetIO().DisplaySize.x;
     const float windowWidth = s(190.0f);
     // top-right, below the watermark band (the watermark itself is user-movable via Hud offsets)
-    ImGui::SetNextWindowPos(ImVec2(displayWidth - windowWidth - s(12.0f), s(52.0f)), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(displayWidth - windowWidth - s(12.0f), s(52.0f) + extraYOffset), ImGuiCond_FirstUseEver);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(10.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(s(12), s(8)));
@@ -3988,15 +4045,21 @@ void drawPlayerListWindow() noexcept
     if (!ui_config::get<PlayerListEnabled>())
         return;
 
+    // ALWAYS auto-resize: the window fits its rows every frame - growing with the player count
+    // and shrinking back - while the width stays pinned by the SetNextWindowSize below (a 0
+    // height with Cond_Always is the auto-fit-height trick). The config stores the position:
+    // seeded on first use, written back while the menu drag moves the window (no ini file in
+    // the embedded ImGui, so the config is the only persistence).
     constexpr ImGuiWindowFlags menuClosedFlags = ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove
         | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse
-        | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing;
-    constexpr ImGuiWindowFlags menuOpenFlags = (ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav
-        | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing)
-        & ~ImGuiWindowFlags_NoResize; // NoDecoration includes NoResize, which is undesirable here
+        | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing
+        | ImGuiWindowFlags_AlwaysAutoResize;
+    constexpr ImGuiWindowFlags menuOpenFlags = menuClosedFlags | ImGuiWindowFlags_NoMove;
 
-    ImGui::SetNextWindowPos(ImVec2(s(10), s(64)), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(520.0f, 0.0f), ImGuiCond_FirstUseEver);
+    const float posX = ui_config::get<PlayerListPosX>();
+    const float posY = ui_config::get<PlayerListPosY>();
+    ImGui::SetNextWindowPos(ImVec2(posX, posY), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(520.0f, 0.0f), ImGuiCond_Always);
 
     // Same shell palette as the menu: dark panel, hairline borders, theme accent, muted text.
     // WindowBg/Border/CellPadding shape the window; the table colors mirror the shell's rows.
@@ -4013,6 +4076,16 @@ void drawPlayerListWindow() noexcept
     ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt, C(255, 255, 255, 7));
 
     if (ImGui::Begin("Player list", nullptr, GUI::isMenuOpen() ? menuOpenFlags : menuClosedFlags)) {
+        // Position persistence: while the menu is open the window is drag-movable; commit the
+        // new position to the config the moment it differs (autosave defers the file write).
+        if (GUI::isMenuOpen()) {
+            const ImVec2 moved = ImGui::GetWindowPos();
+            if (moved.x != posX || moved.y != posY) {
+                static_cast<void>(ui_config::set<PlayerListPosX>(typename PlayerListPosX::ValueType{moved.x}));
+                static_cast<void>(ui_config::set<PlayerListPosY>(typename PlayerListPosY::ValueType{moved.y}));
+            }
+        }
+
         const auto snap = player_list::snapshot();
 
         // Muted header text; a theme-accent underline sits under the header row.

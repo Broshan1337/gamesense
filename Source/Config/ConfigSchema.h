@@ -215,6 +215,10 @@ private:
         configConversion.boolean(u8"Enabled", loadVariable<binds_list_vars::Enabled>(), saveVariable<binds_list_vars::Enabled>());
         configConversion.endObject();
 
+        configConversion.beginObject(u8"SpectatorList");
+        configConversion.boolean(u8"Enabled", loadVariable<spectator_list_params::SpectatorListEnabled>(), saveVariable<spectator_list_params::SpectatorListEnabled>());
+        configConversion.endObject();
+
         configConversion.endObject();
     }
 
@@ -385,6 +389,8 @@ private:
 
         configConversion.beginObject(u8"PlayerList");
         configConversion.boolean(u8"Enabled", loadVariable<PlayerListEnabled>(), saveVariable<PlayerListEnabled>());
+        configConversion.floating(u8"PosX", loadVariable<PlayerListPosX>(), saveVariable<PlayerListPosX>());
+        configConversion.floating(u8"PosY", loadVariable<PlayerListPosY>(), saveVariable<PlayerListPosY>());
         configConversion.endObject();
 
         // NEW keys go LAST in an object - appending keeps old config files parsing.

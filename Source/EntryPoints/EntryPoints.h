@@ -124,7 +124,6 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     hookContext.template make<Watermark>().onUnload();
     hookContext.template make<StatusPanel>().onUnload();
     hookContext.template make<CombatStats>().onUnload();
-    hookContext.template make<SpectatorList>().onUnload();
     hookContext.template make<Blockbot>().onUnload();
     hookContext.template make<Bunnyhop>().onUnload();
     hookContext.template make<Movement>().onUnload();
