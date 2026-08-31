@@ -1,0 +1,31 @@
+# Build trees (regenerable; the inject tree is root build/)
+build/
+build-dbg/
+build-tests/
+build-steam/
+Source/build/
+
+# Compiled artifacts
+*.so
+*.o
+*.a
+inject_memfd
+
+# Third-party reference trees (not our code, huge)
+FORFUTURETESTS/
+
+# Python scratch caches
+scratchpad/__pycache__/
+__pycache__/
+*.pyc
+
+# IDA databases / dumps
+*.i64
+*.id0
+*.id1
+*.id2
+*.nam
+*.til
+
+# Logs & temp
+*.log

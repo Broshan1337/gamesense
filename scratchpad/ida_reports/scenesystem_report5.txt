@@ -1,0 +1,1409 @@
+candidate funcs: 425
+=== FUNC 0x1e1bb0 __int64 __fastcall sub_1E1BB0(__int64 a1, _DWORD *a2, _DWORD *a3)
+    (*(void (__fastcall **)(_QWORD *, _DWORD *, _DWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, a2, a3);
+=== FUNC 0x1f61c0 __int64 __fastcall sub_1F61C0(__int64 a1)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x1fc8c0 __int64 __fastcall sub_1FC8C0(__int64 a1, unsigned __int64 *a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x1ff240 __int64 __fastcall sub_1FF240(__int64 a1, unsigned int a2)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x1ff520 __int64 __fastcall sub_1FF520(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)a1 + 1));
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v39, v13);
+=== FUNC 0x2044b0 __int64 __fastcall sub_2044B0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x204600 __int64 __fastcall sub_204600(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2051c0 __int64 __fastcall sub_2051C0(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x208dc0 __int64 __fastcall sub_208DC0(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x209420 __int64 __fastcall sub_209420(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x20a7e0 __int64 __fastcall sub_20A7E0(__int64 a1)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v16);
+=== FUNC 0x20b210 __int64 __fastcall sub_20B210(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x20b310 __int64 __fastcall sub_20B310(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 272));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v2 + 88));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v2 + 72));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x20ba10 __int64 __fastcall sub_20BA10(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 272));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v2 + 88));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v2 + 72));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x20c6b0 void __fastcall sub_20C6B0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x20cd80 __int64 __fastcall sub_20CD80(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v14, v10);
+    result = (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v20, v16);
+=== FUNC 0x20d0e0 __int64 __fastcall sub_20D0E0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v45, v40);
+=== FUNC 0x20dd00 __int64 __fastcall sub_20DD00(__m128i *a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v17, v13);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x20fb80 _DWORD *__fastcall sub_20FB80(_DWORD *a1, const __m128i *a2, __int64 a3, __int64 a4)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64, _BYTE *))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, char *, __int64, __int64, _BYTE *))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x212340 __int64 __fastcall sub_212340(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x212940 __int64 __fastcall sub_212940(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x212f40 __int64 __fastcall sub_212F40(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x214940 __int64 __fastcall sub_214940(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x215d20 __int64 __fastcall sub_215D20(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x216360 __int64 __fastcall sub_216360(int *n0x7FFFFFFF_5, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(
+    return (*(__int64 (__fastcall **)(_QWORD *, _DWORD **))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, p_n0x7FFFFFFF_3);
+=== FUNC 0x21a700 _BYTE *__fastcall sub_21A700(__int64 a1, __int64 a2)
+    result = (_BYTE *)(*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x21bec0 void __fastcall sub_21BEC0(_QWORD *g_pMemAlloc, unsigned __int64 g_pMemAlloc_1, __int64 a3)
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x227860 __int64 __fastcall sub_227860(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 24));
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 8));
+=== FUNC 0x227b80 __int64 __fastcall sub_227B80(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 88));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 72));
+=== FUNC 0x227ca0 __int64 __fastcall sub_227CA0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 8));
+=== FUNC 0x227d70 __int64 __fastcall sub_227D70(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 8));
+=== FUNC 0x228540 __int64 __fastcall sub_228540(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 8));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 72));
+=== FUNC 0x22a180 __int64 __fastcall sub_22A180(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x22de20 __int64 __fastcall sub_22DE20(__int64 a1)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x22e6a0 __int64 __fastcall sub_22E6A0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x230720 __int64 __fastcall sub_230720(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v28, v15);
+=== FUNC 0x2311f0 __int64 __fastcall sub_2311F0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v7, v2);
+=== FUNC 0x231570 __int64 __fastcall sub_231570(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v7, v3);
+=== FUNC 0x231660 __int64 __fastcall sub_231660(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v8, v4);
+=== FUNC 0x231770 __int64 __fastcall sub_231770(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v8, v4);
+=== FUNC 0x231880 __int64 __fastcall sub_231880(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v8, v4);
+=== FUNC 0x231990 __int64 __fastcall sub_231990(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v8, v4);
+=== FUNC 0x231aa0 __int64 __fastcall sub_231AA0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v7, v3);
+=== FUNC 0x231ba0 __int64 __fastcall sub_231BA0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v8, v4);
+=== FUNC 0x231cc0 __int64 __fastcall sub_231CC0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v8, v4);
+=== FUNC 0x231de0 __int64 __fastcall sub_231DE0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v8, v4);
+=== FUNC 0x231f00 __int64 __fastcall sub_231F00(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v8, v4);
+=== FUNC 0x232020 __int64 __fastcall sub_232020(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v8, v4);
+=== FUNC 0x232140 __int64 __fastcall sub_232140(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v8, v4);
+=== FUNC 0x232270 __int64 __fastcall sub_232270(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v7, v3);
+=== FUNC 0x2323b0 __int64 __fastcall sub_2323B0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v7, v3);
+=== FUNC 0x2324f0 __int64 __fastcall sub_2324F0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v7, v3);
+=== FUNC 0x232640 __int64 __fastcall sub_232640(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v7, v3);
+=== FUNC 0x232790 __int64 __fastcall sub_232790(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v15, v11);
+=== FUNC 0x2329a0 __int64 __fastcall sub_2329A0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v14, v10);
+=== FUNC 0x232b90 __int64 __fastcall sub_232B90(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 1328));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 1312));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v15, v11);
+=== FUNC 0x232e00 __int64 __fastcall sub_232E00(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 256));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 240));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v16, v12);
+=== FUNC 0x233040 __int64 __fastcall sub_233040(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 1328));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 1312));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v15, v11);
+=== FUNC 0x2332b0 __int64 __fastcall sub_2332B0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 256));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 240));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v17, v13);
+=== FUNC 0x233a80 __int64 __fastcall sub_233A80(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x233c10 __int64 __fastcall sub_233C10(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v9, v5);
+=== FUNC 0x233dc0 __int64 __fastcall sub_233DC0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v9, v5);
+=== FUNC 0x234150 __int64 __fastcall sub_234150(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2342e0 __int64 __fastcall sub_2342E0(__int64 a1, __int64 n152)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, n152);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x234940 __int64 __fastcall sub_234940(__int64 a1, __int64 a2, __int64 a3)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2349a0 __int64 __fastcall sub_2349A0(__int64 a1, __int64 a2, __int64 a3)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x239960 void __fastcall sub_239960(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x23dac0 __int64 __fastcall sub_23DAC0(_QWORD **a1, __int64 a2, __int64 a3, unsigned int a4)
+    v7 = (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64, _QWORD))(*a1[4] + 32LL))(a1[4], a2, a3, a4);
+=== FUNC 0x241a80 __int64 __fastcall sub_241A80(__int64 a1, __int64 a2)
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *, _QWORD, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *, _QWORD, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *, _QWORD, __int64, __int64))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x245ce0 __int64 __fastcall sub_245CE0(int *a1, __int64 n0x3FFF_1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD *, _DWORD *))(*::g_pMemAlloc + 32LL))(
+=== FUNC 0x246440 __int64 __fastcall sub_246440(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x24a9c0 __int64 __fastcall sub_24A9C0(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x24ad80 __int64 __fastcall sub_24AD80(__int64 a1, double a2, double a3, double a4, double a5, __int64 a6, __int64 *a7)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v163);
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v153);
+=== FUNC 0x24eae0 __int64 __fastcall sub_24EAE0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64, __int64, __int64, __int64, __int64, __int64, _QWORD, _QWORD, _QWORD, _QWORD, _QWORD, _QWORD, _QWORD, __int64, int, __in
+=== FUNC 0x24f100 __int64 __fastcall sub_24F100(__int64 a1)
+    result = (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64, __int64, __int64, __int64, __int64, __int64, __int64, _QWORD, _QWORD, _QWORD, _QWORD, _QWORD, _QWORD, _QWORD, __int6
+=== FUNC 0x253e30 _QWORD *__fastcall sub_253E30(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x253f00 __int64 (__fastcall **__fastcall sub_253F00(__int64 a1))()
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (__int64 (__fastcall **)())(*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2540c0 __int64 __fastcall sub_2540C0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2546d0 __int64 __fastcall sub_2546D0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v4 - 16));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 80));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 40));
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 8));
+=== FUNC 0x254b00 __int64 __fastcall sub_254B00(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x256900 __int64 __fastcall sub_256900(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, a2, v2);
+=== FUNC 0x256a00 __int64 __fastcall sub_256A00(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, a2, v2);
+=== FUNC 0x256b00 void __fastcall sub_256B00(__int64 a1, _DWORD *a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _DWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, a2, v4);
+=== FUNC 0x257260 __int64 __fastcall sub_257260(__int64 a1, int a2, int a3, int a4, float *a5, char a6, char a7, char a8)
+    (*(void (__fastcall **)(_QWORD *, _QWORD, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, s[12], v75);
+    (*(void (__fastcall **)(_QWORD *, float *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v15, v49);
+=== FUNC 0x259690 __int64 __fastcall sub_259690(
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)v30);
+=== FUNC 0x25b050 void __fastcall sub_25B050(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x25b440 __int64 __fastcall sub_25B440(unsigned __int16 a1, int a2, int a3, __int64 *a4, __int64 a5, __int64 a6, __int64 *a7)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x25c220 void __fastcall sub_25C220(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, qword_A37088, v26);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, qword_A37068, v26);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, qword_A37048, v29);
+=== FUNC 0x25d510 __int64 sub_25D510()
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v62, v25);
+=== FUNC 0x25e050 void __fastcall sub_25E050(__int64 a1, int a2, int n2, __int64 a4, int a5, int a6)
+    v9 = *(char *)((*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*qword_AD20F8 + 32LL))(
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x25f1f0 __int64 __fastcall sub_25F1F0(int a1)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x25f820 __int64 __fastcall sub_25F820(
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v82, v26);
+=== FUNC 0x260400 __int64 __fastcall sub_260400(unsigned int a1, char *RenderPipelineAliases, double a3, double a4, double a5, double a6)
+    n2 = (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)v49 - 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, unsigned __int8 *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v56);
+=== FUNC 0x265d40 __int64 __fastcall sub_265D40(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v45[0]);
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v47[0]);
+=== FUNC 0x267890 __int64 __fastcall sub_267890(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, a2, v5);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, a2, v5);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, a2, v5);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 8200));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x26e940 __int64 __fastcall sub_26E940(
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, n4_12);
+=== FUNC 0x271750 __int64 __fastcall sub_271750(__int64 a1, __int64 a2, __int64 a3)
+    v15 = (*(__int64 (__fastcall **)(_QWORD))(**(_QWORD **)(a1 + 10320) + 32LL))(*(_QWORD *)(a1 + 10320));
+=== FUNC 0x2882b0 _QWORD *__fastcall sub_2882B0(__int64 a1, __int64 a2, __int64 a3, __int64 a4, __int64 a5, __int64 a6, char a7)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)a5);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a5 + 8));
+=== FUNC 0x288d00 unsigned __int64 __fastcall sub_288D00(__int64 a1)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x28a590 __int64 __fastcall sub_28A590(__int64 a1, unsigned int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x28b780 __int64 (__fastcall *__fastcall sub_28B780(__int64 a1, const char *a2, signed __int64 a3))()
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v5);
+=== FUNC 0x28bbb0 __int64 __fastcall sub_28BBB0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x28c040 __int64 __fastcall sub_28C040(volatile signed __int32 *a1, __int64 a2, __int64 a3, __int64 a4)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x28c740 __int64 __fastcall sub_28C740(volatile signed __int32 *g_pMemAlloc, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _BYTE *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v47);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x28cd70 const char *__fastcall sub_28CD70(_QWORD *g_pMemAlloc, __int64 a2, __int64 a3, __int64 a4, __int64 a5, __int64 a6)
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x28e7c0 __int64 __fastcall sub_28E7C0(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v21);
+=== FUNC 0x290cc0 __int64 *__fastcall sub_290CC0(__int64 a1, signed int a2, int a3, char a4, char a5, __int64 a6)
+    result = (__int64 *)(*(__int64 (__fastcall **)(_QWORD *))(*qword_AD20F8 + 32LL))(qword_AD20F8);
+=== FUNC 0x291170 __int64 __fastcall sub_291170(__int64 a1, __int64 a2)
+    v3 = *(_BYTE *)((*(__int64 (__fastcall **)(_QWORD *, __int64))(*qword_AD20F8 + 32LL))(qword_AD20F8, a2) + 36);
+=== FUNC 0x292330 __int64 __fastcall sub_292330(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v6, v1);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v7, v1);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x293610 __int64 __fastcall sub_293610(double a1, float a2, __int64 a3, __int64 a4)
+    result = (*(__int64 (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v62);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2940c0 __int64 __fastcall sub_2940C0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v7 + 32));
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 8));
+=== FUNC 0x294690 __int64 __fastcall sub_294690(__int64 a1, __int64 a2, char a3, __int64 a4)
+    v5 = (*(__int64 (__fastcall **)(_QWORD *))(*qword_AD20F8 + 32LL))(qword_AD20F8);
+    v8 = (__int64 *)(*(__int64 (__fastcall **)(_QWORD *))(*qword_AD20F8 + 32LL))(qword_AD20F8);
+=== FUNC 0x294900 __int64 __fastcall sub_294900(__int64 a1, __int64 a2)
+    result = (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v23, v5);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x296300 __int64 __fastcall sub_296300(__int64 a1, const __m128i *a2, __int64 a3, __int64 a4)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 14016));
+=== FUNC 0x298d40 __int64 __fastcall sub_298D40(__int64 a1, __int64 n4_2, double a3, __m128 si128, double a5, double a6)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v44);
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v44);
+=== FUNC 0x299840 __int64 __fastcall sub_299840(unsigned int a1)
+    n2_1 = (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v3 + 32));
+=== FUNC 0x29aa90 __int64 __fastcall sub_29AA90(__int64 *g_pMemAlloc_1)
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x29b000 __int64 __fastcall sub_29B000(__int64 g_pMemAlloc)
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x29b260 __int64 __fastcall sub_29B260(const __m128i **a1)
+    v46 = (__m128i *)(v37 + 32LL * *(int *)(v45 + 36));
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v37);
+=== FUNC 0x29c620 __int64 __fastcall sub_29C620(int a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *v33);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, qword_A37CC8);
+    n2_3 = (*(__int64 (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *v21);
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, _DWORD *, __int64 *))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x29d680 __int64 __fastcall sub_29D680(__int64 a1, unsigned int *a2, unsigned int *a3, unsigned int *a4)
+    v11 = (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*qword_AD20F8 + 32LL))(qword_AD20F8, *((_QWORD *)a2 + 2));
+=== FUNC 0x29f620 void __fastcall sub_29F620(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x29f6e0 __int64 __fastcall sub_29F6E0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2a1300 __int64 __fastcall sub_2A1300(__int64 g_pMemAlloc)
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x2a1ce0 __int64 __fastcall sub_2A1CE0(__int64 a1, __int64 a2, __int64 a3)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2a3000 __int64 __fastcall sub_2A3000(__int64 a1, __int64 a2, __m128i *a3, double a4, double a5)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, n0x7FFFFFFF_9);
+=== FUNC 0x2a3560 __int64 sub_2A3560()
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2a3c10 __int64 __fastcall sub_2A3C10(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 8));
+=== FUNC 0x2a8830 __int64 __fastcall sub_2A8830(__int64 a1, __int64 a2, unsigned __int8 a3, unsigned __int8 a4, int a5, int a6)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v193);
+=== FUNC 0x2ac7c0 __int64 __fastcall sub_2AC7C0(__int64 a1, __int64 a2, double a3, double a4, double a5, double a6)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _DWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x2ad900 void __fastcall sub_2AD900(int *a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2ada60 __int64 __fastcall sub_2ADA60(int *a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v9, v1);
+=== FUNC 0x2adb80 __int64 __fastcall sub_2ADB80(__int64 a1)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2adca0 void __fastcall sub_2ADCA0(int *a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2ade00 __int64 __fastcall sub_2ADE00(int *a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v9, v1);
+=== FUNC 0x2adf20 __int64 __fastcall sub_2ADF20(__int64 a1, int a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2ae030 int *__fastcall sub_2AE030(int *a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2ae1d0 void __fastcall sub_2AE1D0(__int64 a1, __int64 a2, _DWORD *a3)
+    (*(void (__fastcall **)(_QWORD *, _QWORD, _DWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 8), a3);
+=== FUNC 0x2b1480 __int64 __fastcall sub_2B1480(__int64 a1, __int64 a2, __int64 a3, const __m128i *a4)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2b1e80 __int64 __fastcall sub_2B1E80(__int64 *a1, __int64 *a2, int a3)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2b2140 __int64 __fastcall sub_2B2140(__int64 a1, __int64 a2, __int64 a3, __int64 a4, __int64 a5, int *a6)
+    (*(void (__fastcall **)(__int64, __int64, __int64, __int64 *))(*(_QWORD *)v12 + 32LL))(v12, v6, a5, &v67);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v72);
+=== FUNC 0x2b3ee0 __int64 __fastcall sub_2B3EE0(__int64 a1, int a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    v29 = *(_QWORD *)(*(_QWORD *)(*(_QWORD *)(*(_QWORD *)(v26 + 24) + 32LL * i) + 40LL) + 16LL);
+=== FUNC 0x2b8860 __int64 __fastcall sub_2B8860(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v111.m128i_i64[1], v46);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v2 + 7056));
+    if ( (*(_BYTE *)((*(__int64 (__fastcall **)(_QWORD *, __int64))(*qword_AD20F8 + 32LL))(qword_AD20F8, a2) + 38) & 0x20) != 0 )
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2ba0a0 __int64 __fastcall sub_2BA0A0(__int64 a1, __m128i *a2, float a3, double a4, double a5, double a6)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v73);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v88);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2babc0 __int64 __fastcall sub_2BABC0(__int64 g_pMemAlloc, __m128i a2, double a3, double a4, __m128i a5)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, n16_5);
+=== FUNC 0x2bb780 __int64 __fastcall sub_2BB780(__int64 a1, _QWORD *a2, char a3)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2bcf40 __int64 __fastcall sub_2BCF40(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x2bd300 __int64 __fastcall sub_2BD300(__int64 a1, __int64 a2, int *a3, __int64 a4)
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v80);
+=== FUNC 0x2bdda0 __int64 __fastcall sub_2BDDA0(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x2beae0 __int64 __fastcall sub_2BEAE0(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x2befe0 __int64 __fastcall sub_2BEFE0(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x2c0010 __int64 __fastcall sub_2C0010(__int64 a1)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, __int128 *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, &v145);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2c1100 void __fastcall sub_2C1100(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2c13c0 void __fastcall sub_2C13C0(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2c1500 __int64 __fastcall sub_2C1500(__int64 a1, __int64 a2, __int64 *a3, double a4)
+    v39 = *(_QWORD *)(*(_QWORD *)(*(_QWORD *)(*(_QWORD *)(v34 + 24) + 32LL * n) + 40LL) + 16LL);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v69, v63);
+    result = (*(__int64 (__fastcall **)(_QWORD *, _QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v92, v63);
+    result = (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v89, v63);
+=== FUNC 0x2c8490 __int64 __fastcall sub_2C8490(__int64 a1, int ***a2, __int64 a3, __int64 a4, unsigned int a5, int *a6)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2cbfb0 __int64 __fastcall sub_2CBFB0(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v12);
+=== FUNC 0x2cc540 void __fastcall sub_2CC540(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2cc7c0 void __fastcall sub_2CC7C0(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2cf780 void __fastcall sub_2CF780(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *(_QWORD *)(v5 + 4928));
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x2d33f0 __int64 __fastcall sub_2D33F0(__int64 a1, __int64 a2, __int64 a3, __int64 a4, __int64 a5)
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v35);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2d3780 __int64 __fastcall sub_2D3780(__int64 a1, __int64 a2, __int64 a3, __int64 a4, __int64 a5)
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v38);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2d3b10 __int64 __fastcall sub_2D3B10(__int64 a1, __int64 a2, __int64 a3, __int64 a4, __int64 a5)
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v38);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2d3ea0 __int64 __fastcall sub_2D3EA0(__int64 a1, __int64 a2, __int64 a3, __int64 a4, __int64 a5)
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v38);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2d4240 __int64 __fastcall sub_2D4240(
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v47);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v43, v21);
+=== FUNC 0x2d4840 __int64 __fastcall sub_2D4840(__int64 a1, __int64 (__fastcall ***a2)(), __int64 a3)
+    result = (*(__int64 (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v16);
+=== FUNC 0x2d52c0 __int64 __fastcall sub_2D52C0(__int64 a1, __int64 (__fastcall ***a2)(), __int64 a3)
+    result = (*(__int64 (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v24);
+=== FUNC 0x2d55f0 __int64 __fastcall sub_2D55F0(__int64 a1, int a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2d6f90 __int64 __fastcall sub_2D6F90(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v60);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v60);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v24, v17);
+=== FUNC 0x2daca0 __int64 __fastcall sub_2DACA0(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v48);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2de3a0 __int64 __fastcall sub_2DE3A0(__int64 a1)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2dfd40 _QWORD *__fastcall sub_2DFD40(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2e0f70 __int64 __fastcall sub_2E0F70(int *a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2e6b60 __int64 __fastcall sub_2E6B60(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 1352));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2e91f0 __int64 __fastcall sub_2E91F0(unsigned int *a1, unsigned int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x2e9290 __int64 __fastcall sub_2E9290(unsigned int *a1, unsigned int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x2e9320 __int64 __fastcall sub_2E9320(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
+    (*(void (__fastcall **)(_QWORD *, _QWORD, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v18 + 24));
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v22);
+=== FUNC 0x2e97a0 __int64 __fastcall sub_2E97A0(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v41 + 24));
+    (*(void (__fastcall **)(_QWORD *, _QWORD, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v53 + 24));
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v136);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v141 + 24));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v141 + 24));
+=== FUNC 0x2ea840 __int64 __fastcall sub_2EA840(__int64 a1, __int64 *a2, __int64 a3)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v22);
+=== FUNC 0x2ee320 __int64 __fastcall sub_2EE320(__int64 a1, __int64 *a2, __int64 a3, __int64 a4, __int64 a5, char a6)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2ef3f0 __int64 __fastcall sub_2EF3F0(__int64 a1, __int64 a2, __int64 a3, __int64 a4, __int64 a5, char a6)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2f0620 __int64 __fastcall sub_2F0620(
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2f12c0 __int64 __fastcall sub_2F12C0(__int64 a1, __int64 *a2, __int64 *a3, int *a4, int a5, char a6, double a7)
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x2f1a30 __int64 __fastcall sub_2F1A30(__int64 a1, __int64 *a2, __int64 *a3, int *a4, int a5, char a6, double a7, double a8)
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x2f2df0 __int64 __fastcall sub_2F2DF0(
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2f4860 __int64 __fastcall sub_2F4860(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
+    (*(void (__fastcall **)(_QWORD *, double, double))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, double, double))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, double, double))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, double, double))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, double, double))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x2f52f0 __int64 __fastcall sub_2F52F0(
+    (*(void (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x2f6470 __int64 __fastcall sub_2F6470(
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2f6e80 __int64 __fastcall sub_2F6E80(__int64 a1, __int128 *a2, __int128 *a3, int *a4, unsigned __int8 a5, float a6, double a7)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2fa7c0 void __fastcall sub_2FA7C0(__int64 a1, __int64 a2, __int64 a3)
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v34);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v29, v21);
+=== FUNC 0x2fafc0 __int64 __fastcall sub_2FAFC0(__int64 a1, const __m128i *a2, int *a3, __int64 a4, __m128 a5, double a6)
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x2fb7e0 __int64 __fastcall sub_2FB7E0(__int64 a1, const __m128i *a2, int *a3, __int64 a4, __m128 a5, double a6)
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x2ff0c0 __int64 __fastcall sub_2FF0C0(
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x2ff500 _QWORD *__fastcall sub_2FF500(
+    (*(void (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x2ff860 __int64 __fastcall sub_2FF860(
+    (*(void (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x2ffcc0 __int64 __fastcall sub_2FFCC0(
+    (*(void (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x300cf0 __int64 __fastcall sub_300CF0(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x301970 __int64 __fastcall sub_301970(
+    (*(void (__fastcall **)(_QWORD *, double, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x301f00 __int64 __fastcall sub_301F00(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x302a80 __int64 __fastcall sub_302A80(__int64 *a1, __int64 a2, unsigned int *a3, __int64 a4, double a5)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1[75] + 4088));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1[75] + 4088));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3042b0 __int64 __fastcall sub_3042B0(int a1, int a2, __int64 a3, int a4, int *a5, unsigned __int8 a6, int a7)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v46);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v42);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v38);
+=== FUNC 0x304800 __int64 __fastcall sub_304800(__int64 a1, __int64 a2, __int64 a3, __int64 a4, double a5, double a6, __m128 a7)
+    result = (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64, float, double, double, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x305b50 __int64 __fastcall sub_305B50(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    return (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x306b80 __int64 __fastcall sub_306B80(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v26);
+=== FUNC 0x30ba60 void __fastcall sub_30BA60(__int64 g_pMemAlloc, _QWORD *n16, double a3, double a4, __m128 a5, double a6)
+    (*(void (__fastcall **)(__int64, __int64, __int64, __int64))(*(_QWORD *)v36 + 32LL))(v36, n16_1, v30, v31);
+=== FUNC 0x30c1b0 __int64 __fastcall sub_30C1B0(__int64 a1)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x30c970 __int64 __fastcall sub_30C970(__int64 a1)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x30db20 __int64 __fastcall sub_30DB20(__m128i *a1)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x312710 __int64 __fastcall sub_312710(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x312b00 __int64 __fastcall sub_312B00(__int64 a1, int a2, int a3, int a4, char a5, int a6, char a7)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3130e0 __int64 __fastcall sub_3130E0(
+    (*(void (__fastcall **)(_QWORD *, int *, int **, unsigned __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, int *, int **, unsigned __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, unsigned int *, _QWORD, unsigned __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, unsigned int *, _QWORD, unsigned __int64, __int64))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x313980 __int64 __fastcall sub_313980(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x316f40 unsigned __int64 __fastcall sub_316F40(
+    (*(void (__fastcall **)(_QWORD *, char *, __int64, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v86, v84, v85);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3182e0 void __fastcall sub_3182E0(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x321d40 __int64 __fastcall sub_321D40(__int64 a1, int *a2, double a3, double a4, double a5)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x322980 __int64 __fastcall sub_322980(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v8, v4);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v13, v9);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v14, v9);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v15, v9);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v16, v9);
+=== FUNC 0x322cc0 __int64 __fastcall sub_322CC0(__int64 a1)
+    i_1 = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x326050 __int64 __fastcall sub_326050(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x326110 __int64 __fastcall sub_326110(__int64 a1)
+    sub_325230 = (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(
+    sub_325230 = (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(
+    sub_325230 = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x32a0f0 __int64 __fastcall sub_32A0F0(__int64 a1)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x32a380 __int64 __fastcall sub_32A380(__int64 *a1, __int64 a2, __int64 a3, __int64 a4, int a5, int a6)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x32a7c0 __int64 __fastcall sub_32A7C0(unsigned int a1)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x32f3c0 __int64 __fastcall sub_32F3C0(__int64 a1, unsigned int *a2, __int64 a3, __int64 a4, __m128 a5, double a6, __m128 a7)
+    (*(void (__fastcall **)(_QWORD *, unsigned __int64, unsigned __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, const __m128i *, unsigned __int64, __int64))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x331980 __int64 __fastcall sub_331980(__int64 a1, unsigned int *a2, __int64 a3)
+    v25 = *(float *)(*(_QWORD *)(a3 + 8) + 32LL);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v85);
+    (*(void (__fastcall **)(_QWORD *, float *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x3328d0 __int64 __fastcall sub_3328D0(__int64 a1, __int64 a2, unsigned int *a3, int a4, unsigned int a5, int a6)
+    (*(void (__fastcall **)(_QWORD *, __m128i *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v21);
+=== FUNC 0x332dc0 __int64 __fastcall sub_332DC0(
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v25);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v57);
+=== FUNC 0x334800 __int64 __fastcall sub_334800(__int64 a1, __int64 a2, __int64 a3, int n3_1, double a5, float a6, double a7, float a8)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3372d0 __int64 __fastcall sub_3372D0(_QWORD *a1, __int64 n64)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    result = (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v12, v7);
+    result = (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v13, v7);
+=== FUNC 0x3380c0 void __fastcall sub_3380C0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x33a780 __int64 __fastcall sub_33A780(__int64 n35, __int64 (__fastcall ***a2)(), double a3, double a4, double a5, double a6)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x33b440 __int64 __fastcall sub_33B440(__int64 a1, __int64 a2, _DWORD *a3)
+    (*(void (__fastcall **)(_QWORD *, _QWORD, _DWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 56), a3);
+=== FUNC 0x33e340 __int64 __fastcall sub_33E340(__int64 *a1, __int64 a2, __m128i a3, double a4, double a5, double a6)
+    (*(void (__fastcall **)(_QWORD *, _BYTE *, _QWORD, unsigned __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v82);
+=== FUNC 0x33f400 __int64 __fastcall sub_33F400(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x3443a0 __int64 __fastcall sub_3443A0(__int64 a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *(_QWORD *)(a1 + 8));
+    result = v14 + 32LL * (int)sub_3442B0(a1, v22, 0);
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v28, v15);
+=== FUNC 0x344740 __int64 __fastcall sub_344740(__int64 g_pMemAlloc, int *n16)
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *(_QWORD *)(v55 + 24));
+    return (*(__int64 (__fastcall **)(_QWORD *, int *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v89);
+=== FUNC 0x34f4e0 __int64 __fastcall sub_34F4E0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3536c0 __int64 __fastcall sub_3536C0(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
+    _InterlockedSub((volatile signed __int32 *)(*((_QWORD *)&xmmword_A3DA70 + 1) + 32LL), 1u);
+    (*(void (__fastcall **)(_QWORD *, const char *))(*g_pMemAlloc + 32LL))(
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x354330 __int64 __fastcall sub_354330(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x35c7b0 __int64 __fastcall sub_35C7B0(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x362060 void __fastcall sub_362060(_QWORD *a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _QWORD, __int64, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x363a90 __int64 __fastcall sub_363A90(__m128i *a1, __int64 a2)
+    *(double *)v3.m128i_i64 = (*(double (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x365940 __int64 __fastcall sub_365940(__int64 a1, _QWORD *a2, __m128i *a3)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x369fa0 __int64 __fastcall sub_369FA0(__int64 a1, __int64 a2, __int64 a3)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v31);
+=== FUNC 0x36a6c0 void __fastcall sub_36A6C0(_QWORD *g_pMemAlloc, unsigned __int64 g_pMemAlloc_1, __int64 a3)
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x375aa0 __int64 __fastcall sub_375AA0(__int64 a1, __int64 a2, __int64 *a3, int a4, _DWORD *n16)
+    kk_5 = (*(__int64 (__fastcall **)(_QWORD *, _OWORD *, __int64, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    kk_5 = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    kk_5 = (*(__int64 (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v18);
+    kk_5 = (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x3777f0 __int64 __fastcall sub_3777F0(__m128i *a1)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x379120 __int64 __fastcall sub_379120(__int64 a1, float a2)
+    (*(void (__fastcall **)(_QWORD, _QWORD, __int64, double, double, double))(**(_QWORD **)(v9 + 8) + 32LL))(
+=== FUNC 0x379840 __int64 (*__fastcall sub_379840(_QWORD *a1, double a2, float a3))(void)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x37a270 void __fastcall sub_37A270(_QWORD *a1, __int64 *a2, __int64 *a3, __int64 a4, __int64 a5, double a6, float a7)
+    sub_1FD9C0 = *(__int64 (__fastcall **)())(*(_QWORD *)v16 + 32LL);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x37b0c0 void __fastcall sub_37B0C0(__int64 *a1, float a2, __m128 a3)
+    (*(void (__fastcall **)(_QWORD *, unsigned __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v24);
+    (*(void (__fastcall **)(_QWORD *, unsigned __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v20);
+=== FUNC 0x37bdc0 __int64 __fastcall sub_37BDC0(__int64 a1, __int64 a2, __int64 a3, __int64 a4, __int64 a5)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *(_QWORD *)(v10 + 24));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *(_QWORD *)v12);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *(_QWORD *)(v17 + 24));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc_1 + 32LL))(g_pMemAlloc_1, *(_QWORD *)v19);
+=== FUNC 0x386770 __int64 __fastcall sub_386770(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 96));
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 24));
+=== FUNC 0x3867f0 __int64 __fastcall sub_3867F0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 96));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 24));
+=== FUNC 0x398b80 __int64 __fastcall sub_398B80(__int64 a1)
+    nullsub = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x398f80 __int64 __fastcall sub_398F80(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD, _QWORD **, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3a09a0 __int64 __fastcall sub_3A09A0(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x3a4270 __int64 __fastcall sub_3A4270(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD, __int64, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3a84f0 __int64 __fastcall sub_3A84F0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3a9060 __int64 __fastcall sub_3A9060(
+    + 32LL * _InterlockedExchangeAdd(*(volatile signed __int32 **)(n0x7FFFFFFF_7 + 80), n0x7FFFFFFF_5));
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, n0x7FFFFFFF_6);
+=== FUNC 0x3a97a0 __int64 __fastcall sub_3A97A0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 576));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3ab640 unsigned __int64 __fastcall sub_3AB640(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
+    (*(void (__fastcall **)(_QWORD *, _QWORD, __int64))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x3b0c40 __int64 __fastcall sub_3B0C40(
+    (*(void (__fastcall **)(_QWORD *, _BYTE *, __int64, unsigned __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v128);
+    (*(void (__fastcall **)(_QWORD *, _BYTE *, __int64, unsigned __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, _BYTE *, _QWORD, unsigned __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v132);
+=== FUNC 0x3b5b80 __int64 __fastcall sub_3B5B80(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *(_QWORD *)(a1 + 8));
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x3b6160 __int64 __fastcall sub_3B6160(__int64 a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *(_QWORD *)(a1 + 8));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v28, v15);
+=== FUNC 0x3b7a50 __int64 __fastcall sub_3B7A50(__int64 a1, __m128i a2, double a3, __m128i inserted, __m128 a5)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v22);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3b8ba0 __int64 __fastcall sub_3B8BA0(const __m128i *j_16, double a2, double a3, double a4, double a5)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v74);
+=== FUNC 0x3ba700 __int64 __fastcall sub_3BA700(__int64 a1, unsigned int *n16, __int64 a3)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x3c54d0 __int64 __fastcall sub_3C54D0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3c8b30 __int64 __fastcall sub_3C8B30(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3c8ca0 __int64 __fastcall sub_3C8CA0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3c8e00 void __fastcall sub_3C8E00(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3ce2a0 __int64 __fastcall sub_3CE2A0(__int64 a1, __int64 a2, __int64 a3, __int64 a4, __int64 a5)
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v38);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3d2570 __int64 __fastcall sub_3D2570(__int64 a1, int a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3d2880 __int64 __fastcall sub_3D2880(__int64 a1, const __m128i *a2, double a3, double a4, double a5, double a6)
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v36);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v64, v16);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v61, v19);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v58, v22);
+    result = (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v55, v26);
+    result = (*(__int64 (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v50, v26);
+=== FUNC 0x3d34e0 __int64 __fastcall sub_3D34E0(
+    (*(void (__fastcall **)(_QWORD *, __int64, __m128i *, unsigned __int64))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x3d64c0 __int64 __fastcall sub_3D64C0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 416));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3d6b80 __int64 *__fastcall sub_3D6B80(__int64 a1, __int64 a2, __int64 a3, __int64 a4)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 416));
+=== FUNC 0x3d8a80 __int64 __fastcall sub_3D8A80(__int64 a1, __int64 a2, const __m128i *a3, __int64 *a4)
+    (*(void (__fastcall **)(__int64, _QWORD, _OWORD *, __int64 *))(*(_QWORD *)v20 + 32LL))(
+=== FUNC 0x3d8f00 __int64 __fastcall sub_3D8F00(
+    (*(void (__fastcall **)(__int64, __int64, _QWORD, __int64, _QWORD))(*(_QWORD *)v45 + 32LL))(
+=== FUNC 0x3db2f0 __int64 __fastcall sub_3DB2F0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 531904));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v13);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3dd030 __int64 __fastcall sub_3DD030(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v7, v3);
+=== FUNC 0x3e5940 __int64 __fastcall sub_3E5940(__int64 a1)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x3e8240 __int64 __fastcall sub_3E8240(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v32, v18);
+=== FUNC 0x3e8f60 __int64 __fastcall sub_3E8F60(__int64 a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *(_QWORD *)(a1 + 8));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v28, v15);
+=== FUNC 0x3e9300 int *__fastcall sub_3E9300(int *a1, __int64 a2, __m128 a3, double a4, double a5, double a6)
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v70);
+=== FUNC 0x3e9ea0 __int64 __fastcall sub_3E9EA0(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x3ea540 __int64 __fastcall sub_3EA540(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v32, v18);
+=== FUNC 0x3f1ec0 unsigned __int64 __fastcall sub_3F1EC0(unsigned int *a1, signed int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v28, v15);
+=== FUNC 0x3f9990 __int64 __fastcall sub_3F9990(__int64 a1, __int64 n232, __int64 a3)
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, n232);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v7 + 120));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v7 + 88));
+=== FUNC 0x3fdc40 __int64 __fastcall sub_3FDC40(volatile signed __int32 *a1, __int64 a2, __int64 a3)
+    (*(void (__fastcall **)(_QWORD *, _QWORD, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v30 + 120));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v30 + 88));
+=== FUNC 0x4028a0 __int64 __fastcall sub_4028A0(int *a1, int *a2, double a3, double a4, double a5, double a6)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x402c00 __int64 __fastcall sub_402C00(int *a1, int *a2, double a3, double a4, double a5, double a6)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x402f80 __int64 __fastcall sub_402F80(
+    v19 = (*(__int64 (__fastcall **)(__int64))(*(_QWORD *)a5 + 32LL))(a5);
+=== FUNC 0x4039c0 __int64 __fastcall sub_4039C0(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x404120 __int64 __fastcall sub_404120(__int64 a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *(_QWORD *)(a1 + 8));
+    result = v14 + 32LL * (int)sub_404030(a1, v22, 0);
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v28, v15);
+=== FUNC 0x4083c0 void __fastcall sub_4083C0(_QWORD *g_pMemAlloc, unsigned __int64 g_pMemAlloc_1, __int64 a3)
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x40fa10 _QWORD *__fastcall sub_40FA10(int a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v31, v8);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x410070 _QWORD *__fastcall sub_410070(int a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v58, v12);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v57, v17);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v56, v21);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v29, v25);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v30, v25);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v31, v25);
+=== FUNC 0x410990 _QWORD *__fastcall sub_410990(int a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v50, v10);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v49, v15);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v48, v19);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v27, v23);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v32, v28);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v37, v33);
+=== FUNC 0x4110a0 _QWORD *__fastcall sub_4110A0(int a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v50, v4);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v49, v9);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v48, v13);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v21, v17);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v22, v17);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v23, v17);
+=== FUNC 0x412020 void *sub_412020()
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v30, v4);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v27, v7);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v24, v10);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v21, v13);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v49, v13);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x412ae0 void *sub_412AE0()
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v28);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x413a10 void *sub_413A10()
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v41, v4);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v38, v7);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v35, v10);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v32, v13);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v28, v13);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v25, v13);
+=== FUNC 0x4143d0 void *sub_4143D0()
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v41, v4);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v38, v7);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v35, v10);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v32, v13);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v28, v13);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v25, v13);
+=== FUNC 0x415160 void __fastcall sub_415160(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x4154b0 __int64 __fastcall sub_4154B0(int a1, int *a2, int a3, int a4)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v109, v52);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v106, v55);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v103, v58);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v100, v61);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x416890 int *__fastcall sub_416890(int a1, int *a2)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v14, v8);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v20, v15);
+=== FUNC 0x416ad0 _QWORD *__fastcall sub_416AD0(int a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v13, v8);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v18, v14);
+=== FUNC 0x417300 void *sub_417300()
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v25);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x417910 void *sub_417910()
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v24);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x417fd0 void *sub_417FD0()
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v25);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x4189a0 void *sub_4189A0()
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v26);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x4196a0 void *sub_4196A0()
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v24);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x419fc0 void *sub_419FC0()
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v12, v4);
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v31, v4);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x41a4b0 void *sub_41A4B0()
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v26);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x41a930 void *sub_41A930()
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v26);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x41b020 void *sub_41B020()
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v27);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x422cc0 __int64 __fastcall sub_422CC0(
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x423ba0 __int64 sub_423BA0()
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v2);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v5);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v61);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v15);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v62);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v63);
+=== FUNC 0x428840 __int64 __fastcall sub_428840(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v32, v18);
+=== FUNC 0x43df40 __int64 __fastcall sub_43DF40(__int64 a1, __int64 a2, double a3, double a4, double a5, double a6)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v27);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x43e5e0 __int64 __fastcall sub_43E5E0(__m128i *a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x43f6d0 __int64 __fastcall sub_43F6D0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x443180 __int64 __fastcall sub_443180(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x443220 __int64 __fastcall sub_443220(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x44d180 __int64 __fastcall sub_44D180(__int64 a1, __int64 *a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v2);
+=== FUNC 0x44da50 __int64 __fastcall sub_44DA50(__int64 a1, float a2, double a3, __m128 a4)
+    return (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    return (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x44ddc0 __int64 __fastcall sub_44DDC0(__int64 a1, float a2, double a3, __m128 a4)
+    return (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    return (*(__int64 (__fastcall **)(_QWORD *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+    return (*(__int64 (__fastcall **)(_QWORD *, _BYTE *, double, double, double, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x457840 __int64 __fastcall sub_457840(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64, __int64, __int64, double, double, double, double))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x4585c0 __int64 __fastcall sub_4585C0(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x458bc0 __int64 __fastcall sub_458BC0(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x4591e0 __int64 __fastcall sub_4591E0(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *(_QWORD *)(a1 + 8));
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v41, v15);
+=== FUNC 0x459ec0 __int64 __fastcall sub_459EC0(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x45a4c0 __int64 __fastcall sub_45A4C0(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x45aaa0 __int64 __fastcall sub_45AAA0(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x45c010 __int64 __fastcall sub_45C010(int *a1, int *a2)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v48, v19);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x45f440 __int64 __fastcall sub_45F440(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x475800 __int64 __fastcall sub_475800(__int64 a1, __int64 a2)
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    return (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x478900 void __fastcall sub_478900(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v1 + 16));
+=== FUNC 0x479c20 unsigned __int64 __fastcall sub_479C20(__int64 a1, int *a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)a2 + 2));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)a2 + 2));
+=== FUNC 0x479e50 void __fastcall sub_479E50(__int64 a1, int *a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)a2 + 3));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)a2 + 3));
+=== FUNC 0x47a650 void __fastcall sub_47A650(_QWORD *a1, _BYTE *n0x2F)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)v26 + 5));
+=== FUNC 0x47a960 __int64 __fastcall sub_47A960(__int64 a1, __int64 a2, _BYTE *a3, int a4)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v21 + 16));
+=== FUNC 0x47abf0 void __fastcall sub_47ABF0(unsigned __int16 *a1, unsigned int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)a1 + 1));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v10 + 8));
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v10);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v6 + 24));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v6 + 24));
+=== FUNC 0x47b160 void __fastcall sub_47B160(char *a1, unsigned __int64 a2, int a3)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a2 + 16));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a2 + 16));
+=== FUNC 0x47b340 __int64 __fastcall sub_47B340(__int64 *a1, __int64 *a2, int a3)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)v17 + 5));
+=== FUNC 0x47c540 bool __fastcall sub_47C540(__int64 a1, int a2, __int64 a3, __int64 a4)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x47ca00 bool __fastcall sub_47CA00(__int64 a1, int n2_1, unsigned __int64 a3, __int64 a4)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x47d600 void __fastcall sub_47D600(__int64 a1, int a2, unsigned __int8 a3, char a4, unsigned __int8 a5)
+    (*(void (__fastcall **)(_QWORD *, _DWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v14);
+=== FUNC 0x47d9d0 __int64 __fastcall sub_47D9D0(__int64 a1)
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)&s[0] + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)&s[0] + 1));
+=== FUNC 0x47dba0 __int64 *__fastcall sub_47DBA0(__int64 a1, __int64 *a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)v9 + 1));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)v13 + 5));
+=== FUNC 0x47dde0 __int64 __fastcall sub_47DDE0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(i_2 + 16));
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)&s[0] + 1));
+=== FUNC 0x47e000 __int64 __fastcall sub_47E000(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(i_2 + 24));
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)&s[0] + 1));
+=== FUNC 0x47e250 __int64 __fastcall sub_47E250(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 16));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v16 + 24));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 4256));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v21 + 32));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 4304));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 4320));
+=== FUNC 0x47e8c0 __int64 __fastcall sub_47E8C0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)v3 + 5));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v8 - 16));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 4384));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 4352));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 4320));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 4304));
+=== FUNC 0x47f260 __int64 __fastcall sub_47F260(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x47ffb0 __int64 __fastcall sub_47FFB0(__int64 a1, _BYTE *a2, unsigned int n0x7F)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(v20 + 16));
+=== FUNC 0x480400 __int64 __fastcall sub_480400(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64, __int64, __int64))(*g_pMemAlloc + 32LL))(
+=== FUNC 0x4821d0 __int64 __fastcall sub_4821D0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 336));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 312));
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x483520 __int64 __fastcall sub_483520(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x483750 __int64 __fastcall sub_483750(__int64 a1, char *_)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x483820 __int64 __fastcall sub_483820(__int64 a1, char a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x484520 __int64 __fastcall sub_484520(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x48fa72 __int64 __fastcall sub_48FA72(_QWORD *a1, __int64 a2, unsigned __int8 a3, __int64 a4, __int64 a5)
+    return (*(__int64 (__fastcall **)(_QWORD, __int64, _QWORD))(*(_QWORD *)*v9 + 32LL))(*v9, a4, *a1);
+=== FUNC 0x4936ec __int64 __fastcall sub_4936EC(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)a1 + 32LL))(a1);
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)a2 + 32LL))(a2);
+=== FUNC 0x493fe6 char __fastcall sub_493FE6(__int64 a1, int a2, int a3)
+    v3 = (*(__int64 (__fastcall **)(_QWORD, _QWORD))(**(_QWORD **)(a1 + 16) + 32LL))(
+    (*(void (__fastcall **)(_QWORD))(**(_QWORD **)(a1 + 16) + 32LL))(*(_QWORD *)(a1 + 16));
+=== FUNC 0x494fc4 __int64 __fastcall sub_494FC4(__int64 a1, int a2)
+    return (*(__int64 (__fastcall **)(_QWORD))(**(_QWORD **)(a1 + 48) + 32LL))(*(_QWORD *)(a1 + 48)) - v2;
+=== FUNC 0x495d80 __int64 __fastcall sub_495D80(__int64 a1, int a2)
+    result = (*(__int64 (__fastcall **)(_QWORD, _QWORD))(***(_QWORD ***)(a1 + 8) + 32LL))(**(_QWORD **)(a1 + 8), a2);
+=== FUNC 0x4968ce __int64 __fastcall sub_4968CE(__int64 a1, int a2)
+    (*(void (__fastcall **)(_QWORD, _QWORD))(**(_QWORD **)(a1 + 8) + 32LL))(*(_QWORD *)(a1 + 8), (unsigned int)v2);
+    result = (*(__int64 (__fastcall **)(_QWORD))(**(_QWORD **)(a1 + 8) + 32LL))(*(_QWORD *)(a1 + 8));
+=== FUNC 0x497bf8 __int64 __fastcall sub_497BF8(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)a1 + 32LL))(a1);
+=== FUNC 0x497c22 __int64 __fastcall sub_497C22(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)a1 + 32LL))(a1);
+=== FUNC 0x497c7a __int64 __fastcall sub_497C7A(__int64 a1, __int64 a2, unsigned int a3)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)a1 + 32LL))(a1);
+=== FUNC 0x497ca4 __int64 __fastcall sub_497CA4(__int64 a1, __int64 a2, unsigned int a3)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)a1 + 32LL))(a1);
+=== FUNC 0x497cce __int64 __fastcall sub_497CCE(__int64 a1, __int64 a2, int a3)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)a1 + 32LL))(a1);
+=== FUNC 0x497d10 __int64 __fastcall sub_497D10(__int64 a1, __int64 a2, int a3)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)a1 + 32LL))(a1);
+=== FUNC 0x49895a __int64 __fastcall sub_49895A(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)a1 + 32LL))(a1);
+=== FUNC 0x49899a __int64 __fastcall sub_49899A(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)a1 + 32LL))(a1);
+=== FUNC 0x49950a __int64 __fastcall sub_49950A(__int64 a1, _QWORD *a2)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)a1 + 32LL))(a1);
+=== FUNC 0x49952e __int64 __fastcall sub_49952E(__int64 a1, _QWORD *a2)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)a1 + 32LL))(a1);
+=== FUNC 0x4c7376 bool __fastcall sub_4C7376(__int64 a1, __int64 a2, unsigned int a3)
+    v5 = (*(unsigned __int8 (__fastcall **)(_QWORD, __int64, _QWORD, _BYTE *))(**(_QWORD **)(a1 + 8) + 32LL))(
+=== FUNC 0x4e4500 char __fastcall sub_4E4500(__int64 a1, __int64 a2, unsigned int a3, __int64 a4)
+    v9 = (*(__int64 (__fastcall **)(_QWORD, __int64, _QWORD, __int64))(**(_QWORD **)(v8 + 8 * i) + 32LL))(
+=== FUNC 0x4f1644 char __fastcall sub_4F1644(__int64 a1, char *a2)
+    if ( (*(unsigned __int8 (__fastcall **)(__int64, char *, char *))(*(_QWORD *)v25 + 32LL))(v25, v24, v16) )
+=== FUNC 0x4fc15a void __fastcall sub_4FC15A(__int64 a1)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)v6 + 32LL))(v6);
+=== FUNC 0x4fe910 __int64 __fastcall sub_4FE910(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)a1 + 32LL))(a1);
+=== FUNC 0x500f75 __int64 __fastcall sub_500F75(__int64 a1, __int64 a2)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)v5 + 32LL))(v5);
+=== FUNC 0x502067 __int64 __fastcall sub_502067(__int64 a1, __int64 a2)
+    return (*(unsigned int (__fastcall **)(_QWORD, __int64, __int64))(**(_QWORD **)(a1 + 8) + 32LL))(
+=== FUNC 0x50349a void __fastcall sub_50349A(__int64 a1, unsigned int a2, __int64 a3)
+    (*(void (__fastcall **)(_BYTE *, _QWORD, _QWORD))(**(_QWORD **)(a1 + 8) + 32LL))(v4, *(_QWORD *)(a1 + 8), a2);
+=== FUNC 0x504db0 char __fastcall sub_504DB0(__int64 a1, __int64 a2, __int64 a3, _QWORD *a4)
+    v13 = (*(__int64 (__fastcall **)(__int64, _BYTE *, _BYTE *))(*(_QWORD *)v31 + 32LL))(v31, v30, v34);
+=== FUNC 0x505156 char __fastcall sub_505156(__int64 *a1, __int64 a2, __int64 a3)
+    (*(void (__fastcall **)(__int64))(*(_QWORD *)a3 + 32LL))(a3);
+=== FUNC 0x505872 char __fastcall sub_505872(__int64 a1, __int64 a2, _BYTE *a3)
+    v11 = (*(__int64 (__fastcall **)(__int64, __int64, void **, void **))(*(_QWORD *)v10 + 32LL))(
+=== FUNC 0x5072fa void __fastcall sub_5072FA(__int64 a1)
+    n_1 = (*(__int64 (__fastcall **)(__int64))(*(_QWORD *)a1 + 32LL))(a1);
+=== FUNC 0x50ac28 char __fastcall sub_50AC28(__int64 a1, char *a2)
+    v11 = (*(__int64 (__fastcall **)(__int64, char *, _QWORD **, _QWORD **))(*(_QWORD *)v10 + 32LL))(
+=== FUNC 0x5157d0 __int64 __fastcall sub_5157D0(__int64 a1, _BYTE *a2, char a3, _QWORD *a4)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v40, v14);
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x516c00 __int64 __fastcall sub_516C00(__int64 a1, __int64 a2, int *a3, double a4, double a5, double a6, double a7)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x519320 bool __fastcall std::_Function_handler<bool ()(char),std::__detail::_CharMatcher<std::regex_traits<char>,true,false>>::_M_invoke(
+    return v3 == (*(char (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v5 + 32LL))(v5, (unsigned int)v4);
+=== FUNC 0x519380 bool __fastcall std::_Function_handler<bool ()(char),std::__detail::_CharMatcher<std::regex_traits<char>,true,true>>::_M_invoke(
+    return v3 == (*(char (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v5 + 32LL))(v5, (unsigned int)v4);
+=== FUNC 0x519760 __int64 __fastcall std::_Function_handler<bool ()(char),std::__detail::_AnyMatcher<std::regex_traits<char>,true,true,true>>::_M_invoke(
+    v6 = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v5 + 32LL))(v5, (unsigned int)v4);
+    || (v10 = (*(__int64 (__fastcall **)(__int64, __int64))(*(_QWORD *)v9 + 32LL))(v9, 10),
+    v14 = (*(__int64 (__fastcall **)(__int64, __int64))(*(_QWORD *)v13 + 32LL))(v13, 13);
+=== FUNC 0x519820 __int64 __fastcall std::_Function_handler<bool ()(char),std::__detail::_AnyMatcher<std::regex_traits<char>,true,true,false>>::_M_invoke(
+    v6 = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v5 + 32LL))(v5, (unsigned int)v4);
+    || (v10 = (*(__int64 (__fastcall **)(__int64, __int64))(*(_QWORD *)v9 + 32LL))(v9, 10),
+    v14 = (*(__int64 (__fastcall **)(__int64, __int64))(*(_QWORD *)v13 + 32LL))(v13, 13);
+=== FUNC 0x51a160 bool __fastcall std::_Function_handler<bool ()(char),std::__detail::_AnyMatcher<std::regex_traits<char>,false,true,false>>::_M_invoke(
+    std::__detail::_AnyMatcher<std::regex_traits<char>,false,true,false>::operator()(char)const::__nul = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v8 + 32LL))(v8, 0);
+    return std::__detail::_AnyMatcher<std::regex_traits<char>,false,true,false>::operator()(char)const::__nul != (*(unsigned __int8 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v5 + 32
+=== FUNC 0x51a230 bool __fastcall std::_Function_handler<bool ()(char),std::__detail::_AnyMatcher<std::regex_traits<char>,false,true,true>>::_M_invoke(
+    std::__detail::_AnyMatcher<std::regex_traits<char>,false,true,true>::operator()(char)const::__nul = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v8 + 32LL))(v8, 0);
+    return std::__detail::_AnyMatcher<std::regex_traits<char>,false,true,true>::operator()(char)const::__nul != (*(unsigned __int8 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v5 + 32L
+=== FUNC 0x51e5c0 __int64 __fastcall std::__detail::_BracketMatcher<std::regex_traits<char>,true,false>::_M_ready(char **a1)
+    v26 = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v24 + 32LL))(v24, (unsigned int)(char)n256);
+    v34 = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v33 + 32LL))(v33, n256_5);
+=== FUNC 0x51ef60 __int64 __fastcall std::__detail::_BracketMatcher<std::regex_traits<char>,true,true>::_M_ready(char **i_1)
+    v23 = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v22 + 32LL))(v22, (unsigned int)(char)j);
+    v55 = (*(__int64 (__fastcall **)(__int64))(*(_QWORD *)v91 + 32LL))(v91);
+=== FUNC 0x51fda0 __int64 __fastcall std::regex_traits<char>::lookup_classname<char const*>(__int64 a1, char *a2, char *a3, char a4)
+    v10 = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v6 + 32LL))(v6, (unsigned int)*v5);
+=== FUNC 0x520700 __int64 __fastcall std::__detail::_Executor<char const*,std::allocator<std::sub_match<char const*>>,std::regex_traits<char>,true>::_M_handle_backref(
+    v19 = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v16 + 32LL))(v16, (unsigned int)*v17);
+    result = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v16 + 32LL))(v16, (unsigned int)v23);
+=== FUNC 0x521c50 __int64 __fastcall std::__detail::_Executor<char const*,std::allocator<std::sub_match<char const*>>,std::regex_traits<char>,false>::_M_handle_backref(
+    v19 = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v16 + 32LL))(v16, (unsigned int)*v17);
+    result = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v16 + 32LL))(v16, (unsigned int)v23);
+=== FUNC 0x523430 __int64 __fastcall std::__detail::_Compiler<std::regex_traits<char>>::_M_insert_char_matcher<true,true>(
+    v8 = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v7 + 32LL))(v7, (unsigned int)v6);
+=== FUNC 0x523590 __int64 __fastcall std::__detail::_Compiler<std::regex_traits<char>>::_M_insert_char_matcher<true,false>(
+    v8 = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v7 + 32LL))(v7, (unsigned int)v6);
+=== FUNC 0x5269b0 __int64 __fastcall std::__detail::_Compiler<std::regex_traits<char>>::_M_expression_term<true,true>(
+    LOBYTE(v21) = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v17 + 32LL))(v17, (unsigned int)v20);
+    LOBYTE(v22[0]) = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v17 + 32LL))(v17, (unsigned int)v19);
+=== FUNC 0x5271f0 __int64 __fastcall std::__detail::_Compiler<std::regex_traits<char>>::_M_expression_term<true,false>(
+    LOBYTE(v22) = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v17 + 32LL))(v17, (unsigned int)v21);
+    LOBYTE(v23[0]) = (*(__int64 (__fastcall **)(__int64, _QWORD))(*(_QWORD *)v17 + 32LL))(v17, (unsigned int)v20);
+=== FUNC 0x5ec730 __int64 __fastcall sub_5EC730(__int64 a1)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x5ec780 void __fastcall sub_5EC780(__int64 a1, int n4096, __int64 a3, __int64 n40, __int64 n0x2000)
+    (*(void (__fastcall **)(_QWORD *, __int64, __int64, __int64, __int64))(*::g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc);
+=== FUNC 0x5ed2d0 __int64 __fastcall sub_5ED2D0(__int64 *a1)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x5ed4a0 void __fastcall sub_5ED4A0(__int64 a1, volatile signed __int32 *a2)
+    (*(void (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x5ed670 __int64 __fastcall sub_5ED670(__int64 *a1)
+    result = (*(__int64 (__fastcall **)(_QWORD *))(*g_pMemAlloc + 32LL))(g_pMemAlloc);
+=== FUNC 0x5efdc0 __int64 __fastcall sub_5EFDC0(__int64 a1)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 128));
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 64));
+    return (*(__int64 (__fastcall **)(_QWORD *, _QWORD))(*g_pMemAlloc + 32LL))(g_pMemAlloc, *(_QWORD *)(a1 + 48));
+=== FUNC 0x5f2680 __int64 __fastcall sub_5F2680(int *a1, int a2)
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *((_QWORD *)a1 + 1));
+    return (*(__int64 (__fastcall **)(_QWORD *, __int64 *, __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, v29, v16);
+=== FUNC 0x5f2c00 __int64 __fastcall sub_5F2C00(
+    v29 = *((_QWORD *)a4 + 1) + 32LL * (n0x7FFFFFFF_1 - 1);
+    (*(void (__fastcall **)(_QWORD *, __int64))(*g_pMemAlloc + 32LL))(g_pMemAlloc, v118);
+=== FUNC 0x5f6bd0 // write access to const memory has been detected, the output may be wrong!
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, *(_QWORD *)(v33 - 16));
+    (*(void (__fastcall **)(_QWORD *, unsigned __int64))(*::g_pMemAlloc + 32LL))(::g_pMemAlloc, p_g_pMemAlloc_12);
+    (*(void (__fastcall **)(_QWORD *, _QWORD))(*::g_pMemAlloc + 32LL))(
+    (*(void (__fastcall **)(_QWORD *, unsigned __int64))(*::g_pMemAlloc + 32LL))(

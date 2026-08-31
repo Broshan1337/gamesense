@@ -1,0 +1,35 @@
+#pragma once
+
+#include <cstddef>
+
+#include <MemoryPatterns/PatternTypes/MemAllocPatternTypes.h>
+#include <Platform/Macros/FunctionAttributes.h>
+#include <Utils/RetAddrSpoofer.h>
+
+template <typename HookContext>
+class MemAlloc {
+public:
+    explicit MemAlloc(HookContext& hookContext) noexcept
+        : hookContext{hookContext}
+    {
+    }
+    
+    [[nodiscard]] [[NOINLINE]] void* allocate(std::size_t size) const noexcept
+    {
+        if (!deps().thisptr || !*deps().thisptr)
+            return nullptr;
+
+        if (const auto fn = hookContext.patternSearchResults().template get<OffsetAllocVirtualMethod>().of((*deps().thisptr)->vmt).get())
+            return RetAddrSpoofer::spoof(*fn)(*deps().thisptr, size); // spoofed VMT-slot call into libclient.so
+
+        return nullptr;
+    }
+
+private:
+    [[nodiscard]] const auto& deps() const noexcept
+    {
+        return hookContext.memAllocState();
+    }
+
+    HookContext& hookContext;
+};

@@ -1,0 +1,9 @@
+== 16CSceneObjectDesc: str 0x174e40 typeinfo 0xa0d030
+== 20CBaseSceneObjectDesc: str 0x174e60 typeinfo 0xa0d048
+== 25CAggregateSceneObjectDesc: str 0x174490 typeinfo 0xa0c408
+== 29CInstancedMeshSceneObjectDesc: str 0x174900 typeinfo 0xa0cb90
+== 27CMeshBuilderSceneObjectDesc: str 0x174bb0 typeinfo 0xa0cdb0
+== 30CProjectedDecalSceneObjectDesc: str 0x174c40 typeinfo 0xa0cf18
+== 23CClutterSceneObjectDesc: str 0x174870 typeinfo 0xa0ca48
+29CAggregateRTProxySceneObjectDesc STRING NOT FOUND
+== 32CAggregateRTProxySceneObjectDesc: str 0x174740 typeinfo 0xa0c680

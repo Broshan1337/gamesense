@@ -1,0 +1,11 @@
+import ida_auto, ida_hexrays, idc
+ida_auto.auto_wait()
+ida_hexrays.init_hexrays_plugin()
+out = open('/tmp/scenesystem_report6.txt', 'w')
+cf = str(ida_hexrays.decompile(0x30ba60))
+out.write(cf)
+out.write('\n\n===== BASE GeneratePrimitives 0x40c600 =====\n')
+out.write(str(ida_hexrays.decompile(0x40c600))[:12000])
+out.close()
+print('[q6] done', flush=True)
+idc.qexit(0)

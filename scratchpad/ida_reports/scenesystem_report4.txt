@@ -1,0 +1,25 @@
+== 16CSceneObjectDesc
+   vtbl 0xa08280 addrpoint 0xa08288 slot+0x20: [] all: []
+   vtbl 0xa0b780 addrpoint 0xa0b788 slot+0x20: [] all: []
+   vtbl 0xa0c418 addrpoint 0xa0c420 slot+0x20: [] all: []
+   vtbl 0xa0c688 addrpoint 0xa0c690 slot+0x20: [] all: []
+   vtbl 0xa0c900 addrpoint 0xa0c908 slot+0x20: [] all: []
+   vtbl 0xa0ca50 addrpoint 0xa0ca58 slot+0x20: [] all: []
+   vtbl 0xa0cb98 addrpoint 0xa0cba0 slot+0x20: [] all: []
+   vtbl 0xa0cdb8 addrpoint 0xa0cdc0 slot+0x20: [] all: []
+   vtbl 0xa0d050 addrpoint 0xa0d058 slot+0x20: [] all: []
+== 20CBaseSceneObjectDesc
+   vtbl 0xa0d0b0 addrpoint 0xa0d0b8 slot+0x20: [(32, '0x40c600')] all: [(0, '0x3f92c0'), (8, '0x40f730'), (16, '0x3fa740'), (24, '0x1f4b30'), (32, '0x40c600'), (40, '0x1f4b40'), (48, '0x3f95f0'), (56, '0x1f4b70'), (64, '0x3fda80'), (72, '0x3fe4f0'), (80, '0x4019c0'), (88, '0x3fe2e0'), (96, '0x1f4bc0'), (104, '0x1f4bd0')]
+== 25CAggregateSceneObjectDesc
+   vtbl 0xa0c4d0 addrpoint 0xa0c4d8 slot+0x20: [(32, '0x3bfae0')] all: [(0, '0x3a71c0'), (8, '0x3c2c80'), (16, '0x3a77f0'), (24, '0x1f4b30'), (32, '0x3bfae0'), (40, '0x3a9bb0'), (48, '0x3abaa0'), (56, '0x3ba700'), (64, '0x3b7a50'), (72, '0x1f4b90'), (80, '0x3aeb10'), (88, '0x3a82c0'), (96, '0x3a74b0'), (104, '0x1f4bd0')]
+   vtbl 0xa0c5b8 addrpoint 0xa0c5c0 slot+0x20: [] all: [(0, '0x3a8600'), (8, '0x3a8640'), (16, '0x324bb0'), (24, '0x3a83b0')]
+== 29CInstancedMeshSceneObjectDesc
+   vtbl 0xa0cc48 addrpoint 0xa0cc50 slot+0x20: [(32, '0x3f4690')] all: [(0, '0x3d9910'), (8, '0x3e2460'), (16, '0x3d9a10'), (24, '0x1f4b30'), (32, '0x3f4690'), (40, '0x3e6710'), (48, '0x3f40e0'), (56, '0x3df4c0'), (64, '0x3e8660'), (72, '0x3da090'), (80, '0x3e68a0'), (88, '0x3d9920'), (96, '0x1f4bc0'), (104, '0x1f4bd0')]
+== 27CMeshBuilderSceneObjectDesc
+   vtbl 0xa0cdf8 addrpoint 0xa0ce00 slot+0x20: [(32, '0x3f5610')] all: [(0, '0x3f50b0'), (8, '0x3f68a0'), (16, '0x3fa740'), (24, '0x1f4b30'), (32, '0x3f5610'), (40, '0x1f4b40'), (48, '0x3f95f0'), (56, '0x1f4b70'), (64, '0x1f4b80'), (72, '0x1f4b90'), (80, '0x1f4ba0'), (88, '0x1f4bb0'), (96, '0x1f4bc0'), (104, '0x1f4bd0')]
+== 30CProjectedDecalSceneObjectDesc
+   vtbl 0xa0cf60 addrpoint 0xa0cf68 slot+0x20: [(32, '0x3f8c50')] all: [(0, '0x3f6950'), (8, '0x3f7150'), (16, '0x1f4b20'), (24, '0x1f4b30'), (32, '0x3f8c50'), (40, '0x3f6960'), (48, '0x1f4b60'), (56, '0x1f4b70'), (64, '0x1f4b80'), (72, '0x1f4b90'), (80, '0x1f4ba0'), (88, '0x1f4bb0'), (96, '0x1f4bc0'), (104, '0x1f4bd0')]
+== 23CClutterSceneObjectDesc
+   vtbl 0xa0ca98 addrpoint 0xa0caa0 slot+0x20: [(32, '0x3d8a80')] all: [(0, '0x3d6050'), (8, '0x3d60a0'), (16, '0x3d7cb0'), (24, '0x1f4b30'), (32, '0x3d8a80'), (40, '0x3d6720'), (48, '0x3d6fd0'), (56, '0x3d7040'), (64, '0x1f4b80'), (72, '0x1f4b90'), (80, '0x1f4ba0'), (88, '0x1f4bb0'), (96, '0x1f4bc0'), (104, '0x1f4bd0')]
+== 32CAggregateRTProxySceneObjectDesc
+   vtbl 0xa0c6d0 addrpoint 0xa0c6d8 slot+0x20: [(32, '0x3c5b00')] all: [(0, '0x3c5010'), (8, '0x3c8160'), (16, '0x3c5120'), (24, '0x1f4b30'), (32, '0x3c5b00'), (40, '0x3c5690'), (48, '0x3f95f0'), (56, '0x1f4b70'), (64, '0x1f4b80'), (72, '0x1f4b90'), (80, '0x1f4ba0'), (88, '0x1f4bb0'), (96, '0x1f4bc0'), (104, '0x1f4bd0')]

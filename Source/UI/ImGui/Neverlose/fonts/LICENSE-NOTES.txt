@@ -1,0 +1,4 @@
+Copyright 2020 The Space Grotesk Project Authors (https://github.com/floriankarsten/space-grotesk)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+fa-solid-900.ttf: Font Awesome 5 Free Solid, licensed CC BY 4.0 (https://fontawesome.com/license/free). Inter-Medium.ttf / Inter-SemiBold.ttf: Inter, licensed SIL OFL 1.1.
