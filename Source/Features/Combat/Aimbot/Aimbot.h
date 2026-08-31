@@ -212,6 +212,26 @@ public:
         // the command's base angles, aimed at the target with spread+punch canceled. NON-SILENT
         // (velocity's silent=off equivalent): the camera visibly snaps onto the target while
         // firing - the accepted tradeoff until history-entry creation at slot 7 is implemented.
+        // Spread correction computed HERE (CreateMove), not in the slot-7 writer: the FVA chains
+        // staged this tick rotate toward the armed target, and the server blends the shot ACROSS
+        // history entries - a chain rotating toward the raw angle dilutes an entry carrying a
+        // corrected one (the ONE-ENTRY-RULE blend). Arming the chains with the SAME corrected
+        // angle the entry will carry makes every sample agree. Backtracking keeps the old flow:
+        // its correction belongs to the rewind tick and is solved in the writer.
+        stagedCorrectionValid = false;
+        if (GET_CONFIG_VAR(aimbot_vars::SpreadCompensation)) {
+            auto solver = hookContext.template make<SpreadSolver>();
+            const auto tick = hookContext.localPlayerController().tickBase();
+            if (tick.hasValue() && tick.value() > 0) {
+                if (const auto params = solver.weaponParams(localPawn.getActiveWeapon()); params.hasValue()) {
+                    if (const auto corrected = solver.findSpreadCorrection(typename SpreadSolver<HookContext>::Angles{chosen.angles.pitch, chosen.angles.yaw, 0.0f}, tick.value(), params.value()); corrected.hasValue()) {
+                        stagedCorrectionAngles = corrected.value();
+                        stagedCorrectionValid = true;
+                    }
+                }
+            }
+        }
+
         stagedAimPitch = chosen.angles.pitch;
         stagedAimYaw = chosen.angles.yaw;
         stagedPunchPitch = punchPitch;
@@ -229,7 +249,10 @@ public:
         // rewind walk finds a smooth rotation INTO the aim instead of a teleport onto it. The arm
         // is one-shot per published chain; consecutive spray ticks re-arm here like a heartbeat,
         // and the endpoint never touches the base message - rendering stays authoritative.
-        fva::setTargetAngle(chosen.angles.pitch, chosen.angles.yaw);
+        if (stagedCorrectionValid)
+            fva::setTargetAngle(stagedCorrectionAngles.pitch, stagedCorrectionAngles.yaw);
+        else
+            fva::setTargetAngle(chosen.angles.pitch, chosen.angles.yaw);
 
         // Force shot: with a target in FOV and the shot redirected onto it, auto-fire the instant the
         // weapon is at minimum inaccuracy for the allowed stance. Only the DECISION happens here - it
@@ -260,10 +283,13 @@ public:
             auto&& localPawn = hookContext.activeLocalPlayerPawn();
             if (localPawn) {
                 int redirectedEntry = -1;
+                const bool backtrackShot = stagedBacktrackSimTime > 0.0f;
+                const typename SpreadSolver<HookContext>::Angles* precomputed =
+                    (!backtrackShot && stagedCorrectionValid) ? &stagedCorrectionAngles : nullptr;
                 const bool lands = hookContext.template make<SubtickShotWriter>().run(cmd, localPawn, stagedAimPitch, stagedAimYaw,
                                                                                       stagedPunchPitch, stagedPunchYaw,
                                                                                       stagedBacktrackSimTime, stagedSpreadCompensation,
-                                                                                      &redirectedEntry);
+                                                                                      &redirectedEntry, precomputed);
                 // THE ATTACK MARKER. attack1_start_history_index is what makes the server resolve a
                 // shot along a history entry at all - and on this build it reaches us as -1 (slot 6
                 // rebuilds the history empty, so the game clamps the index it wrote at CreateMove).
@@ -744,6 +770,12 @@ private:
     // WriteMoveCrc-side luck check can test the deflected ray against the real target geometry.
     inline static cs2::Vector stagedEye{};
     inline static cs2::Vector stagedAimPoint{};
+    // The CreateMove-time spread correction (see the staging comment): consumed by the writer
+    // for live shots and by the FVA chain arm. Validity flag matters - a failed solve must
+    // reach the gate as "lands = false", not as "no correction requested".
+    using SolverAngles = typename SpreadSolver<HookContext>::Angles;
+    inline static bool stagedCorrectionValid{false};
+    inline static SolverAngles stagedCorrectionAngles{};
 
     // Seed fallback: how close (units) the predicted deflected shot must land to the aimed
     // hitbox point for a held tick to fire anyway - head-sized.

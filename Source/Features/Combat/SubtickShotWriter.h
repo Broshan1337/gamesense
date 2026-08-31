@@ -55,6 +55,12 @@ public:
     // raw angle). Callers that hold fire on an unpredictable shot use this to suppress the attack
     // - the triggerbot ignores the value on purpose (its hitchance gates already decided to fire).
     //
+    // `precomputedCorrection` (optional): a correction already computed for THIS tick at the
+    // predicted server tick (the rage aimbot computes it at CreateMove so the FVA chains arm
+    // with the SAME corrected angle the entry will carry - the server blends the shot across
+    // history entries, and a chain aimed at the raw angle dilutes a corrected entry). Used only
+    // for live shots; backtracking still solves at the rewind tick. Null = solve internally.
+    //
     // `redirectedEntry` (optional out): when the shot went through an input_history ENTRY (the
     // silent path), receives that entry's index so the caller can point
     // attack1_start_history_index at it - without that marker the server never consults the entry
@@ -66,7 +72,8 @@ public:
               float punchPitch, float punchYaw,
               float backtrackSimTime,
               bool compensateSpread,
-              int* redirectedEntry = nullptr) const noexcept
+              int* redirectedEntry = nullptr,
+              const typename SpreadSolver<HookContext>::Angles* precomputedCorrection = nullptr) const noexcept
     {
         if (redirectedEntry)
             *redirectedEntry = -1;
@@ -82,7 +89,8 @@ public:
             int claimedEntry = -1;
             if (size <= 0
                 && claimRecycledHistoryEntry(cmdBytes, localPawn, aimPitch, aimYaw, punchPitch, punchYaw,
-                                             backtrackSimTime, compensateSpread, backtracking, claimedLands, claimedEntry)) {
+                                             backtrackSimTime, compensateSpread, backtracking, claimedLands, claimedEntry,
+                                             precomputedCorrection)) {
                 if (redirectedEntry)
                     *redirectedEntry = claimedEntry;
                 return claimedLands;
@@ -104,13 +112,13 @@ public:
                 std::memcpy(&allocatedSize, probeRep, sizeof(allocatedSize));
             VerifyConsole::write(1.0f, "hist", "empty path (base-angle fallback): current=%d total=%d rep=%p allocated=%d", size, totalSize, static_cast<void*>(probeRep), allocatedSize);
 
-            return writeIntoBaseViewangles(localPawn, cmd, aimPitch, aimYaw, punchPitch, punchYaw, compensateSpread);
+            return writeIntoBaseViewangles(localPawn, cmd, aimPitch, aimYaw, punchPitch, punchYaw, compensateSpread, precomputedCorrection);
         }
 
         std::byte* rep = nullptr;
         std::memcpy(&rep, cmdBytes + kInputHistoryRepOffset, sizeof(rep));
         if (!rep)
-            return writeIntoBaseViewangles(localPawn, cmd, aimPitch, aimYaw, punchPitch, punchYaw, compensateSpread);
+            return writeIntoBaseViewangles(localPawn, cmd, aimPitch, aimYaw, punchPitch, punchYaw, compensateSpread, precomputedCorrection);
 
         // Which entry does the attack reference? A non-negative index the game wrote itself wins;
         // otherwise the attack does not exist yet (or is ours about to be spliced) and will point
@@ -139,7 +147,8 @@ public:
             *redirectedEntry = index;
 
         return writeShotIntoEntry(entry, viewAngles, localPawn, aimPitch, aimYaw, punchPitch, punchYaw,
-                                  backtrackSimTime, compensateSpread, backtracking, /*recycledEntry=*/false);
+                                  backtrackSimTime, compensateSpread, backtracking, /*recycledEntry=*/false,
+                                  precomputedCorrection);
     }
 
 private:
@@ -166,7 +175,8 @@ private:
                                                  float aimPitch, float aimYaw,
                                                  float punchPitch, float punchYaw,
                                                  float backtrackSimTime, bool compensateSpread,
-                                                 bool backtracking, bool& lands, int& entryIndex) const noexcept
+                                                 bool backtracking, bool& lands, int& entryIndex,
+                                                 const typename SpreadSolver<HookContext>::Angles* precomputedCorrection) const noexcept
     {
         std::byte* rep = nullptr;
         std::memcpy(&rep, cmdBytes + kInputHistoryRepOffset, sizeof(rep));
@@ -207,7 +217,8 @@ private:
 
         entryIndex = 0;
         lands = writeShotIntoEntry(entry, viewAngles, localPawn, aimPitch, aimYaw, punchPitch, punchYaw,
-                                   backtrackSimTime, compensateSpread, backtracking, /*recycledEntry=*/true);
+                                   backtrackSimTime, compensateSpread, backtracking, /*recycledEntry=*/true,
+                                   precomputedCorrection);
         return true;
     }
 
@@ -218,7 +229,8 @@ private:
     [[nodiscard]] bool writeShotIntoEntry(std::byte* entry, std::byte* viewAngles, auto&& localPawn,
                             float aimPitch, float aimYaw, float punchPitch, float punchYaw,
                             float backtrackSimTime, bool compensateSpread, bool backtracking,
-                            bool recycledEntry) const noexcept
+                            bool recycledEntry,
+                            const typename SpreadSolver<HookContext>::Angles* precomputedCorrection = nullptr) const noexcept
     {
         // The tick this entry is made self-consistent with: the rewind tick when backtracking,
         // else the predicted server tick. velocity stamps their eye-derived sample tick here; ours
@@ -230,11 +242,17 @@ private:
             ? static_cast<int>(backtrackSimTime / kTickInterval) + 1
             : tickBase;
 
+        // A precomputed correction (aimbot path, computed at CreateMove for this same tick) wins;
+        // backtracking ignores it - the rewind tick's correction differs and is solved below.
         Optional<typename SpreadSolver<HookContext>::Angles> corrected;
         if (compensateSpread && stampTick > 0) {
-            auto solver = hookContext.template make<SpreadSolver>();
-            if (const auto params = solver.weaponParams(localPawn.getActiveWeapon()); params.hasValue())
-                corrected = solver.findSpreadCorrection(typename SpreadSolver<HookContext>::Angles{aimPitch, aimYaw, 0.0f}, stampTick, params.value());
+            if (precomputedCorrection && !backtracking) {
+                corrected = *precomputedCorrection;
+            } else {
+                auto solver = hookContext.template make<SpreadSolver>();
+                if (const auto params = solver.weaponParams(localPawn.getActiveWeapon()); params.hasValue())
+                    corrected = solver.findSpreadCorrection(typename SpreadSolver<HookContext>::Angles{aimPitch, aimYaw, 0.0f}, stampTick, params.value());
+            }
         }
         const bool lands = !compensateSpread || corrected.hasValue();
 
@@ -292,7 +310,8 @@ private:
     // spray the punch subtraction doubles as recoil control: the view pulls against the kick to
     // keep bullets on the original aim point.
     [[nodiscard]] bool writeIntoBaseViewangles(auto&& localPawn, cs2::CUserCmd* cmd, float aimPitch, float aimYaw,
-                                               float punchPitch, float punchYaw, bool compensateSpread) const noexcept
+                                               float punchPitch, float punchYaw, bool compensateSpread,
+                                               const typename SpreadSolver<HookContext>::Angles* precomputedCorrection = nullptr) const noexcept
     {
         int tickBase{};
         if (const auto baseTick = hookContext.localPlayerController().tickBase(); baseTick.hasValue())
@@ -300,9 +319,13 @@ private:
 
         Optional<typename SpreadSolver<HookContext>::Angles> corrected;
         if (compensateSpread && tickBase > 0) {
-            auto solver = hookContext.template make<SpreadSolver>();
-            if (const auto params = solver.weaponParams(localPawn.getActiveWeapon()); params.hasValue())
-                corrected = solver.findSpreadCorrection(typename SpreadSolver<HookContext>::Angles{aimPitch, aimYaw, 0.0f}, tickBase, params.value());
+            if (precomputedCorrection) {
+                corrected = *precomputedCorrection;
+            } else {
+                auto solver = hookContext.template make<SpreadSolver>();
+                if (const auto params = solver.weaponParams(localPawn.getActiveWeapon()); params.hasValue())
+                    corrected = solver.findSpreadCorrection(typename SpreadSolver<HookContext>::Angles{aimPitch, aimYaw, 0.0f}, tickBase, params.value());
+            }
         }
         const bool lands = !compensateSpread || corrected.hasValue();
         const float pitch = (corrected.hasValue() ? corrected.value().pitch : aimPitch) - punchPitch;
