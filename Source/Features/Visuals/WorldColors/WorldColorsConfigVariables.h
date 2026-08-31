@@ -26,6 +26,11 @@ inline constexpr auto kFogDistance = RangeConstrainedVariableParams<float>{.min 
 // Bloom strength percent; the cvar value written is strength * 0.05 (1% -> 0.05, 100% -> 5.0,
 // the game's default sits around 0.15). uint8 per the schema's range-branch rule.
 inline constexpr auto kBloomStrength = RangeConstrainedVariableParams<std::uint8_t>{.min = 1, .max = 100, .def = 40};
+// Sky HDR overbright: multiplies the tint channels written into the sky scene objects. 1.0 =
+// plain color; values above 1.0 push the sky over 1.0 luminance, which is what makes it pass
+// the bloom threshold and GLOW (the bloom strength cvar only scales pixels that already
+// qualify). Float - the range exceeds uint8 and floats are schema/test-supported.
+inline constexpr auto kSkyBrightness = RangeConstrainedVariableParams<float>{.min = 1.0f, .max = 10.0f, .def = 1.0f};
 }
 
 CONFIG_VARIABLE(WorldColorsFogEnabled, bool, false);
@@ -35,6 +40,7 @@ CONFIG_VARIABLE(WorldColorsFogEnabled, bool, false);
 // (the cvar keeps its default). Paired with Recolor Sky this is the full "sunrise bloom" look.
 CONFIG_VARIABLE(WorldColorsBloomEnabled, bool, false);
 CONFIG_VARIABLE_RANGE(WorldColorsBloomStrength, world_colors_params::kBloomStrength);
+CONFIG_VARIABLE_RANGE(WorldColorsSkyBrightness, world_colors_params::kSkyBrightness);
 CONFIG_VARIABLE(WorldColorsFogColor, color::Rgba, (color::Rgba{10, 14, 28, 255}));
 CONFIG_VARIABLE_RANGE(WorldColorsFogDensity, world_colors_params::kFogDensity);
 CONFIG_VARIABLE_RANGE(WorldColorsFogDistance, world_colors_params::kFogDistance);

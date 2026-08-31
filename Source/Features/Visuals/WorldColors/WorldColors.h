@@ -229,10 +229,14 @@ public:
             return 0;
 
         const auto color = GET_CONFIG_VAR(WorldColorsSkyColor);
+        // HDR overbright: values above 1.0 are what let the sky pass the bloom threshold (the
+        // bloom strength cvar only scales pixels that already qualify) - 100% = plain color,
+        // 800% = strongly overbright, glowing hard in the bloom pass.
+        const float brightness = static_cast<float>(GET_CONFIG_VAR(WorldColorsSkyBrightness));
         const float channels[3] = {
-            static_cast<float>(color.r()) / 255.0f,
-            static_cast<float>(color.g()) / 255.0f,
-            static_cast<float>(color.b()) / 255.0f,
+            static_cast<float>(color.r()) / 255.0f * brightness,
+            static_cast<float>(color.g()) / 255.0f * brightness,
+            static_cast<float>(color.b()) / 255.0f * brightness,
         };
 
         int savedCount = 0;

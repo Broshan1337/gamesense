@@ -1872,7 +1872,7 @@ void pageEffects() noexcept
         toggleVar<RemoveFlashOverlay>("Remove Flash Overlay", ++controlId);
         toggleVar<RemoveMenuAds>("Remove Main Menu Ads", ++controlId);
     });
-    addCard("WORLD COLORS", 15, [] {
+    addCard("WORLD COLORS", 16, [] {
         toggleVar<WorldColorsInfernoEnabled>("Recolor Fire", ++controlId);
         colorVar<MolotovColor>("Molotov Color", ++controlId);
         colorVar<IncendiaryColor>("Incendiary Color", ++controlId);
@@ -1880,6 +1880,7 @@ void pageEffects() noexcept
         colorVar<WorldColorsLightColor>("Light Color", ++controlId);
         toggleVar<WorldColorsSkyEnabled>("Recolor Sky", ++controlId);
         colorVar<WorldColorsSkyColor>("Sky Color", ++controlId);
+        floatSliderVar<WorldColorsSkyBrightness>("Sky Brightness", ++controlId, "x");
         toggleVar<WorldColorsWorldEnabled>("Recolor World", ++controlId);
         colorVar<WorldColorsWorldColor>("World Color", ++controlId);
         toggleVar<WorldColorsFogEnabled>("Gradient Fog", ++controlId);

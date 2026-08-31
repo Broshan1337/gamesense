@@ -391,6 +391,7 @@ private:
         configConversion.floating(u8"FogDistance", loadVariable<WorldColorsFogDistance>(), saveVariable<WorldColorsFogDistance>());
         configConversion.boolean(u8"Bloom", loadVariable<WorldColorsBloomEnabled>(), saveVariable<WorldColorsBloomEnabled>());
         configConversion.uint(u8"BloomStrength", loadVariable<WorldColorsBloomStrength>(), saveVariable<WorldColorsBloomStrength>());
+        configConversion.uint(u8"SkyBrightness", loadVariable<WorldColorsSkyBrightness>(), saveVariable<WorldColorsSkyBrightness>());
         configConversion.endObject();
 
         configConversion.beginObject(u8"PlayerList");

@@ -266,6 +266,7 @@ using ConfigVariableTypes = TypeList<
     WorldColorsFogDistance,
     WorldColorsBloomEnabled,
     WorldColorsBloomStrength,
+    WorldColorsSkyBrightness,
     PlayerListEnabled,
     MenuAccentColor,
     MenuButtonColor,
