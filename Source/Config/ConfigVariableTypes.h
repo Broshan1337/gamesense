@@ -11,6 +11,7 @@
 #include <Features/Game/BunnyhopConfigVariables.h>
 #include <Features/Game/CooldownRevealerConfigVariables.h>
 #include <Features/Game/FakeLevelConfigVariables.h>
+#include <Features/Game/MovementConfigVariables.h>
 #include <Features/Game/FakePrimeConfigVariables.h>
 #include <Features/Game/FvaConfigVariables.h>
 #include <Features/Game/MatchAutoAcceptConfigVariables.h>
@@ -167,6 +168,12 @@ using ConfigVariableTypes = TypeList<
     aimbot_vars::Autowall,
     aimbot_vars::SpreadGate,
     aimbot_vars::SeedFallback,
+    movement_vars::EdgeJump,
+    movement_vars::EdgeStop,
+    movement_vars::SlowWalk,
+    movement_vars::SlowWalkSpeed,
+    movement_vars::FastLadder,
+    movement_vars::JumpBug,
     legit_aimbot_vars::Enabled,
     legit_aimbot_vars::AimKey,
     legit_aimbot_vars::Fov,

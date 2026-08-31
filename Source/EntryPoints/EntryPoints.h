@@ -29,6 +29,7 @@
 #include <Features/SkinChanger/SkinChanger.h>
 #include <Features/Game/Blockbot.h>
 #include <Features/Game/Bunnyhop.h>
+#include <Features/Game/Movement.h>
 #include <Features/Game/TestStrafer.h>
 #include <Features/Game/CooldownRevealer.h>
 #include <Features/Game/FakeLevel.h>
@@ -126,6 +127,7 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     hookContext.template make<SpectatorList>().onUnload();
     hookContext.template make<Blockbot>().onUnload();
     hookContext.template make<Bunnyhop>().onUnload();
+    hookContext.template make<Movement>().onUnload();
     hookContext.template make<Triggerbot>().onUnload();
     hookContext.template make<RadioManager>().onUnload();
     hookContext.template make<FakePrime>().onUnload();
@@ -284,6 +286,10 @@ void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCm
     // reads that same timeline - the strafer then schedules its yaw deltas AFTER the jump press
     // instead of colliding with it.
     hookContext.template make<Bunnyhop>().onCreateMove(cmd);
+    // The movement suite (edgejump/edgestop/slowwalk/fastladder/jumpbug) stages behind the
+    // bunnyhop: same CreateMove decision point, its writes go out through BuildUserCmd /
+    // WriteMoveCrc below. See Movement.h.
+    hookContext.template make<Movement>().onCreateMove(cmd);
     // The quantized strafer simulates air acceleration across up to 16 sub-frames of the remaining
     // tick and emits one yaw_delta step per sub-frame. See TestStrafer.h.
     hookContext.template make<TestStrafer>().onCreateMove(cmd);
@@ -318,6 +324,7 @@ std::uint64_t CSGOInputHook_onBuildUserCmd(cs2::CCSGOInput* thisptr, int slot, i
     if (!shuttingDown && !hookContext.template make<PanicKey>().isActive()) {
         hookContext.template make<Blockbot>().onBuildUserCmd(thisptr, slot);
         hookContext.template make<Bunnyhop>().onBuildUserCmd(thisptr, slot);
+        hookContext.template make<Movement>().onBuildUserCmd(thisptr, slot);
     }
     return hookContext.hooks().csgoInputHook.getOriginalBuildUserCmd()(thisptr, slot, frameNumber);
 }
@@ -339,6 +346,9 @@ std::uint64_t CSGOInputHook_onWriteMoveCrc(cs2::CCSGOInput* thisptr, cs2::CUserC
     if (!shuttingDown && !hookContext.template make<PanicKey>().isActive()) {
     hookContext.template make<Blockbot>().onWriteMoveCrc(cmd);
     hookContext.template make<Bunnyhop>().onWriteMoveCrc(cmd);
+    // The movement suite writes its buttons/view angles/subtick brackets behind the bunnyhop's
+    // (both share the slot-7 write position; the staged flags never overlap on one tick).
+    hookContext.template make<Movement>().onWriteMoveCrc(cmd);
     // The quantized strafer writes its yaw-delta subtick steps HERE, not at CreateMove: slot 6
     // rebuilds the subtick timeline from the input queue after CreateMove on this build, so
     // steps appended there never reach the wire. It runs after the bunnyhop so its simulation

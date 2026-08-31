@@ -458,6 +458,16 @@ private:
         configConversion.boolean(u8"TestStrafer", loadVariable<TestStraferEnabled>(), saveVariable<TestStraferEnabled>());
         configConversion.endObject();
 
+        // NEW keys go LAST in an object - appending keeps old config files parsing.
+        configConversion.beginObject(u8"Movement");
+        configConversion.boolean(u8"EdgeJump", loadVariable<movement_vars::EdgeJump>(), saveVariable<movement_vars::EdgeJump>());
+        configConversion.boolean(u8"EdgeStop", loadVariable<movement_vars::EdgeStop>(), saveVariable<movement_vars::EdgeStop>());
+        configConversion.boolean(u8"SlowWalk", loadVariable<movement_vars::SlowWalk>(), saveVariable<movement_vars::SlowWalk>());
+        configConversion.uint(u8"SlowWalkSpeed", loadVariable<movement_vars::SlowWalkSpeed>(), saveVariable<movement_vars::SlowWalkSpeed>());
+        configConversion.boolean(u8"FastLadder", loadVariable<movement_vars::FastLadder>(), saveVariable<movement_vars::FastLadder>());
+        configConversion.boolean(u8"JumpBug", loadVariable<movement_vars::JumpBug>(), saveVariable<movement_vars::JumpBug>());
+        configConversion.endObject();
+
         configConversion.beginObject(u8"PanicKey");
         configConversion.uint(u8"Bind", loadVariable<panic_vars::Bind>(), saveVariable<panic_vars::Bind>());
         configConversion.endObject();

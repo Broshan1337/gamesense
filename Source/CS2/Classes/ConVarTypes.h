@@ -30,6 +30,9 @@ CONVAR(sv_standable_normal, float);
 // velocity overshoots, because a player who has stopped pressing keys is already decelerating.
 CONVAR(sv_friction, float);
 CONVAR(sv_stopspeed, float);
+// Ground acceleration: how fast the wish move converts into velocity per tick. The edgestop's
+// counter-strafe needs it to size the stop move so the player halts in as few ticks as possible.
+CONVAR(sv_accelerate, float);
 
 }
 

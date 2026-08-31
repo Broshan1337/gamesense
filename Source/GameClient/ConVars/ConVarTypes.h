@@ -16,5 +16,6 @@ using ConVarTypes = TypeList<
     cs2::sv_gravity,
     cs2::sv_standable_normal,
     cs2::sv_friction,
-    cs2::sv_stopspeed
+    cs2::sv_stopspeed,
+    cs2::sv_accelerate
 >;

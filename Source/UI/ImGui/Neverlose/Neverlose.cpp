@@ -22,6 +22,7 @@
 
 #include <GameClient/Bind.h>
 #include "FeatureBinds.h"
+#include <Features/Game/MovementConfigVariables.h>
 #include <Utils/ColorUtils.h>
 #include <Utils/StatusReport.h>
 
@@ -1946,11 +1947,17 @@ void pageMisc() noexcept
         toggleVar<VoteRevealerEnabled>("Vote Revealer", ++controlId);
         toggleVar<CooldownRevealerEnabled>("Cooldown Revealer", ++controlId);
     });
-    addCard("MOVEMENT", 4, [] {
+    addCard("MOVEMENT", 10, [] {
         toggleVar<BlockbotEnabled>("Blockbot", ++controlId);
         toggleVar<BunnyhopEnabled>("Bunnyhop", ++controlId);
         toggleVar<AutoStrafeEnabled>("Auto Strafe", ++controlId);
         toggleVar<TestStraferEnabled>("Test Strafer", ++controlId);
+        toggleVar<movement_vars::EdgeJump>("Edge Jump", ++controlId);
+        toggleVar<movement_vars::EdgeStop>("Edge Stop", ++controlId);
+        toggleVar<movement_vars::SlowWalk>("Slow Walk", ++controlId);
+        sliderVar<movement_vars::SlowWalkSpeed>("Slow Walk Speed", ++controlId, "%");
+        toggleVar<movement_vars::FastLadder>("Fast Ladder", ++controlId);
+        toggleVar<movement_vars::JumpBug>("Jump Bug", ++controlId);
     });
     addCard("ACCOUNT", 4, [] {
         toggleVar<FakePrimeEnabled>("Fake Prime", ++controlId);
