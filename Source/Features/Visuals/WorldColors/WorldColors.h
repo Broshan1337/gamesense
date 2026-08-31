@@ -10,6 +10,7 @@
 #include <Features/Visuals/WorldColors/WorldColorsConfigVariables.h>
 #include <Features/Visuals/WorldColors/WorldColorsState.h>
 #include <GameClient/ConVars/CvarSystem.h>
+#include <GameClient/EngineCommandExecutor.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
 #include <GameClient/GameEvents/GameEventFields.h>
 #include <HookContext/HookContextMacros.h>
@@ -124,37 +125,57 @@ public:
         updateBloom();
     }
 
-    // Sky Bloom: scale the game's own post-process bloom (r_csgo_render_post_bloom_strength,
-    // written through CvarSystem::forceFloatConVar) while enabled. Bright pixels - the recolored
-    // sky and its clouds above all - then glow into the frame; paired with Recolor Sky this is
-    // the full "sunrise bloom" look. The original value is cached on first enable and restored
-    // exactly once on disable (bloomWasEnabled edge). Forcing per-frame like the FVA cvar
-    // suppression: if the game ever resets the cvar, the next frame rewrites it.
+    // Sky Bloom: scale the game's own post-process bloom (r_csgo_render_post_bloom_strength).
+    //
+    // TWO write paths, because the first iteration (memory write alone) showed NO visual effect:
+    //   1. the console path (EngineCommandExecutor) - the command goes through the engine's
+    //      command buffer exactly as if typed, so any callback the post pipeline hooks to pick
+    //      the value up fires; this is what working reference clients do,
+    //   2. the direct memory write (forceFloatConVar) - belt-and-braces in case the cvar turns
+    //      out to be memory-read-per-frame.
+    // Queued on CHANGE only, plus a throttled self-heal: every ~2s while enabled the live cvar
+    // is read back and the command re-queued if something (map load, another writer) moved it.
+    // The game's original value is cached on first enable, restored once on disable. [bloom]
+    // diagnostics log each queue.
     void updateBloom() const noexcept
     {
         auto& state = hookContext.featuresStates().visualFeaturesStates.worldColorsState;
         const bool enabled = GET_CONFIG_VAR(WorldColorsBloomEnabled);
+        const float desired = enabled
+            ? static_cast<float>(GET_CONFIG_VAR(WorldColorsBloomStrength)) * 0.05f
+            : 0.0f;
 
         if (!enabled) {
-            if (state.bloomWasEnabled && state.bloomOriginalValid) {
-                static_cast<void>(hookContext.template make<CvarSystem>().forceFloatConVar(kBloomCvarName, state.bloomOriginal));
-                state.bloomOriginalValid = false;
+            if (state.bloomWasEnabled) {
+                if (state.bloomOriginalValid)
+                    queueBloom(state.bloomOriginal, state);
+                else
+                    VerifyConsole::write(10.0f, "bloom", "disable skipped - no cached original");
             }
             state.bloomWasEnabled = false;
             return;
         }
 
         if (!state.bloomOriginalValid) {
-            if (const auto original = hookContext.template make<CvarSystem>().readFloatConVar(kBloomCvarName); original.has_value()) {
+            if (const auto original = cvarSystem().readFloatConVar(kBloomCvarName); original.has_value()) {
                 state.bloomOriginal = original.value();
                 state.bloomOriginalValid = true;
+                VerifyConsole::write(30.0f, "bloom", "cvar found, original=%.3f", state.bloomOriginal);
+            } else {
+                VerifyConsole::write(30.0f, "bloom", "cvar NOT found/type mismatch - memory path inactive");
             }
-            // Fails closed: without the cached original, disabling simply leaves the last forced
-            // value - the game's own default comes back on the next map load.
         }
 
-        const float strength = static_cast<float>(GET_CONFIG_VAR(WorldColorsBloomStrength)) * 0.05f;
-        static_cast<void>(hookContext.template make<CvarSystem>().forceFloatConVar(kBloomCvarName, strength));
+        const bool valueChanged = !state.bloomQueuedValid || state.lastQueued != desired;
+        bool drifted = false;
+        if (monotonicSeconds() - state.lastQueueTime > 2.0) {
+            if (const auto live = cvarSystem().readFloatConVar(kBloomCvarName); live.has_value()
+                && (live.value() < desired - 0.001f || live.value() > desired + 0.001f))
+                drifted = true;
+        }
+
+        if (valueChanged || drifted || !state.bloomWasEnabled)
+            queueBloom(desired, state);
         state.bloomWasEnabled = true;
     }
 
@@ -195,6 +216,7 @@ public:
     // The post-process bloom strength knob the Sky Bloom feature forces (the game's only
     // user-facing bloom amount control on this build - verified present in libclient strings).
     static constexpr const char* kBloomCvarName = "r_csgo_render_post_bloom_strength";
+
 
     struct SavedSkyTint {
         void* object;
@@ -238,6 +260,33 @@ public:
     }
 
 private:
+    [[nodiscard]] CvarSystem<HookContext> cvarSystem() const noexcept
+    {
+        return hookContext.template make<CvarSystem>();
+    }
+
+    // Queues the console command AND writes the value through memory (whichever path the
+    // renderer honors, we are covered), logs both, and records the queued value for the
+    // change/self-heal detection above.
+    void queueBloom(float value, auto& state) const noexcept
+    {
+        char command[64];
+        std::snprintf(command, sizeof(command), "%s %.3f", kBloomCvarName, value);
+        hookContext.template make<EngineCommandExecutor>().execute(command);
+        static_cast<void>(cvarSystem().forceFloatConVar(kBloomCvarName, value));
+
+        VerifyConsole::write(5.0f, "bloom", "queued '%s'", command);
+        state.lastQueued = value;
+        state.bloomQueuedValid = true;
+        state.lastQueueTime = monotonicSeconds();
+    }
+
+    [[nodiscard]] static double monotonicSeconds() noexcept
+    {
+        timespec ts{};
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) * 1.0e-9;
+    }
     // Fog override (velocity-cs2 port, night-mode atmosphere): every map-placed fog entity is
     // rewritten each frame while enabled; the originals are cached once and restored on
     // disable / map change. All offsets come from the runtime schema and every field is

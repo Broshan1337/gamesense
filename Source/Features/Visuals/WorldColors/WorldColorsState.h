@@ -39,4 +39,7 @@ struct WorldColorsState {
     bool bloomWasEnabled = false;
     bool bloomOriginalValid = false;
     float bloomOriginal = 0.0f;
+    bool bloomQueuedValid = false;
+    float lastQueued = 0.0f;
+    double lastQueueTime = 0.0;
 };
