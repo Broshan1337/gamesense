@@ -21,6 +21,7 @@
 #include <ThirdParty/stb/stb_image.h>
 
 #include <GameClient/Bind.h>
+#include "FeatureBinds.h"
 #include <Utils/ColorUtils.h>
 #include <Utils/StatusReport.h>
 
@@ -334,6 +335,15 @@ struct State {
     ImVec2 colorPickerAnchor{};
     color::Rgba (*colorGet)() = nullptr;
     void (*colorSet)(color::Rgba) = nullptr;
+
+    // feature-bind popup (right-click on a registered toggle): edits the FeatureBinds registry
+    // entry at featureBindIndex - key capture reuses the State::Capture machine with a dedicated
+    // owner id (never a real control id, which are small positive ints)
+    bool featureBindOpen = false;
+    int featureBindOpenedFrame = -1;
+    int featureBindIndex = -1;
+    ImVec2 featureBindAnchor{};
+    static constexpr int kFeatureBindCaptureOwner = 0x40000000;
 };
 
 bool fontReloadPending = false;
@@ -481,7 +491,7 @@ void textY(ImDrawList* d, float x, float y, float h, ImU32 color, const char* va
 // open: clicking one activates it AND dismisses the popup through the popup's own
 // click-outside check, so nothing ever needs a throwaway click first.
 
-enum PopupKind { PopupConfig, PopupProfile, PopupStyle, PopupDropdown, PopupMultiSelect, PopupColor, PopupKindCount };
+enum PopupKind { PopupConfig, PopupProfile, PopupStyle, PopupDropdown, PopupMultiSelect, PopupColor, PopupFeatureBind, PopupKindCount };
 
 struct PopupRect { ImVec2 min, max; bool valid; };
 PopupRect popupPrev[PopupKindCount] = {}; // complete snapshot of last frame's popups
@@ -643,7 +653,7 @@ void beginRow(ImDrawList* d, const char* label) noexcept
 
 // --- row primitives ---------------------------------------------------------------
 
-bool toggle(const char* label, bool* value, int id) noexcept
+bool toggle(const char* label, bool* value, int id, bool* rightClicked = nullptr) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
     beginRow(d, label);
@@ -654,6 +664,8 @@ bool toggle(const char* label, bool* value, int id) noexcept
     ImGui::PushID(id);
     const bool clicked = hit("##toggle", p - ImVec2(s(5), s(6)), ImVec2(s(39), s(30)));
     const ImGuiID iid = ImGui::GetItemID();
+    if (rightClicked)
+        *rightClicked = ImGui::IsItemClicked(ImGuiMouseButton_Right);
     // Hover preview, same as the popover toggles (Outer Glow etc.): hovering an OFF toggle
     // slides the knob to the middle and tints the track halfway toward the accent - the knob
     // then commits to whichever side on click. ON toggles stay put under the cursor.
@@ -922,6 +934,157 @@ void multiSelectPopover(ImDrawList* d) noexcept
 
     if (accepts && clickedOutside(p, p + size))
         state.multiSelectOpen = false;
+}
+
+// --- feature-bind popup (right-click on a registered toggle) -----------------------------
+//
+// Context menu over the toggled row: capture a key (the shared State::Capture machine with a
+// dedicated owner id), pick Toggle/Hold mode, unbind. Edits go straight into the FeatureBinds
+// registry and persist to <configDir>/feature_binds.txt on every change (tiny file). Closes on
+// outside click / Escape - but never while a key capture is in flight (the user is pressing
+// keys somewhere, possibly outside the popup).
+
+void featureBindPopover(ImDrawList* d) noexcept
+{
+    if (!state.featureBindOpen)
+        return;
+    if (state.featureBindIndex < 0 || state.featureBindIndex >= static_cast<int>(feature_binds::entryCount)) {
+        state.featureBindOpen = false;
+        return;
+    }
+    auto& entry = feature_binds::entries[state.featureBindIndex];
+
+    // Another popup took over - yield (the openers close us too; this is belt-and-braces).
+    if (state.popup.open || state.multiSelectOpen || state.colorPickerOpen || styleSelect.open)
+        state.featureBindOpen = false;
+
+    const bool accepts = ImGui::GetFrameCount() > state.featureBindOpenedFrame;
+    const bool capturing = state.capture != State::Capture::Inactive && state.captureOwner == State::kFeatureBindCaptureOwner;
+
+    constexpr float width = 170.0f;
+    const float rowH = s(23.0f);
+    const float gap = s(6.0f);
+    const float height = s(14.0f) + s(8.0f) + rowH + gap + rowH + gap + rowH + s(8.0f);
+    ImVec2 p = state.featureBindAnchor;
+    // clamp inside the shell clip rect (same rule as the dropdown popover)
+    const ImVec2 clipMin = d->GetClipRectMin();
+    const ImVec2 clipMax = d->GetClipRectMax();
+    p.x = ImClamp(p.x, clipMin.x + s(10.0f), ImMax(clipMin.x + s(10.0f), clipMax.x - width - s(10.0f)));
+    p.y = ImClamp(p.y, clipMin.y + s(10.0f), ImMax(clipMin.y + s(10.0f), clipMax.y - height - s(10.0f)));
+    const ImVec2 size{width, height};
+
+    recordPopupRect(PopupFeatureBind, p, p + size);
+    softShadow(d, p, p + size, s(10.0f));
+    d->AddRectFilled(p, p + size, C(18, 18, 20, 245), s(8));
+    d->AddRect(p, p + size, C(54, 54, 60, 205), s(8));
+
+    textY(d, p.x + s(10), p.y + s(7), s(14), C(137, 142, 153), entry.label ? entry.label : "Bind", kTextCaption, nullptr);
+
+    float y = p.y + s(14) + s(8);
+
+    // --- key pill (click to capture) ---
+    {
+        ImGui::PushID(91001);
+        const bool clicked = hitModal("##fb_key", ImVec2{p.x + s(10), y}, ImVec2{width - s(20), rowH});
+        ImGui::PopID();
+        if (clicked && state.capture == State::Capture::Inactive) {
+            state.capture = State::Capture::WaitingRelease;
+            state.captureOwner = State::kFeatureBindCaptureOwner;
+        }
+
+        bool held = false;
+        if (state.captureOwner == State::kFeatureBindCaptureOwner) {
+            if (state.capture == State::Capture::WaitingRelease) {
+                if (!gui_sdl::anyInputHeld())
+                    state.capture = State::Capture::WaitingPress;
+            } else if (state.capture == State::Capture::WaitingPress) {
+                if (gui_sdl::scancodeDown[76]) { // Delete clears
+                    entry.key = Bind::kOff;
+                    feature_binds::save();
+                    state.capture = State::Capture::Inactive;
+                } else if (gui_sdl::scancodeDown[41]) { // Escape cancels
+                    state.capture = State::Capture::Inactive;
+                } else {
+                    const std::uint32_t mask = gui_sdl::liveMouseMask();
+                    const auto down = [mask](std::uint32_t button) { return (mask & (1u << (button - 1))) != 0; };
+                    int bind = Bind::kOff;
+                    if (down(4)) bind = Bind::kMouse4;
+                    else if (down(5)) bind = Bind::kMouse5;
+                    else if (down(3)) bind = Bind::kMouse3;
+                    else if (down(1)) bind = Bind::kMouse1;
+                    else if (down(2)) bind = Bind::kMouse2;
+                    else {
+                        for (int scancode = Bind::kMinScancode; scancode <= Bind::kMaxScancode; ++scancode) {
+                            if (gui_sdl::scancodeDown[scancode]) {
+                                bind = scancode;
+                                break;
+                            }
+                        }
+                    }
+                    if (bind != Bind::kOff) {
+                        entry.key = bind;
+                        entry.lastKeyDown = true; // the captured key is down right now - do not let
+                                                  // the next apply() tick treat it as a fresh edge
+                        feature_binds::save();
+                        state.capture = State::Capture::Inactive;
+                    }
+                }
+            }
+        }
+        held = entry.key != Bind::kOff && Bind::isDown(entry.key) && state.capture == State::Capture::Inactive;
+
+        const char* keyText = (state.captureOwner == State::kFeatureBindCaptureOwner && state.capture == State::Capture::WaitingPress) ? "PRESS ANY KEY"
+            : (state.captureOwner == State::kFeatureBindCaptureOwner && state.capture == State::Capture::WaitingRelease) ? "RELEASE ALL"
+            : Bind::displayName(entry.key);
+        d->AddRectFilled(ImVec2{p.x + s(10), y}, ImVec2{p.x + s(10) + width - s(20), y + rowH},
+                         held ? g_buttonAccent : C(24, 24, 26), s(5));
+        d->AddRect(ImVec2{p.x + s(10), y}, ImVec2{p.x + s(10) + width - s(20), y + rowH},
+                   held ? g_buttonAccent : C(30, 30, 33), s(5));
+        textY(d, p.x + s(10) + s(7), y, rowH, held ? C(18, 18, 20) : C(170, 173, 184), keyText, kTextControl, nullptr);
+        y += rowH + gap;
+    }
+
+    // --- mode pills: TOGGLE | HOLD ---
+    {
+        const float pillWidth = (width - s(20) - gap) * 0.5f;
+        for (int mode = 0; mode < 2; ++mode) {
+            const float x = p.x + s(10) + mode * (pillWidth + s(6));
+            ImGui::PushID(91010 + mode);
+            const bool clicked = hitModal("##fb_mode", ImVec2{x, y}, ImVec2{pillWidth, rowH});
+            ImGui::PopID();
+            if (clicked && accepts && entry.key != Bind::kOff && entry.holdMode != (mode != 0)) {
+                entry.holdMode = mode != 0;
+                entry.lastKeyDown = false;
+                feature_binds::save();
+            }
+            const bool active = entry.holdMode == (mode != 0);
+            d->AddRectFilled(ImVec2{x, y}, ImVec2{x + pillWidth, y + rowH},
+                             active ? mix(C(24, 24, 26), g_buttonAccent, 0.55f) : C(24, 24, 26), s(5));
+            d->AddRect(ImVec2{x, y}, ImVec2{x + pillWidth, y + rowH},
+                       active ? g_buttonAccent : C(30, 30, 33), s(5));
+            textY(d, x, y, rowH, active ? C(248, 249, 252) : C(170, 173, 184), mode == 0 ? "TOGGLE" : "HOLD", kTextControl, nullptr);
+        }
+        y += rowH + gap;
+    }
+
+    // --- unbind pill (only meaningful with a key) ---
+    if (entry.key != Bind::kOff) {
+        ImGui::PushID(91020);
+        const bool clicked = hitModal("##fb_unbind", ImVec2{p.x + s(10), y}, ImVec2{width - s(20), rowH});
+        ImGui::PopID();
+        if (clicked && accepts) {
+            entry.key = Bind::kOff;
+            entry.lastKeyDown = false;
+            feature_binds::save();
+        }
+        d->AddRectFilled(ImVec2{p.x + s(10), y}, ImVec2{p.x + s(10) + width - s(20), y + rowH}, C(24, 24, 26), s(5));
+        d->AddRect(ImVec2{p.x + s(10), y}, ImVec2{p.x + s(10) + width - s(20), y + rowH}, C(30, 30, 33), s(5));
+        textY(d, p.x + s(10), y, rowH, C(206, 110, 110), "UNBIND", kTextControl, nullptr);
+    }
+
+    if (accepts && !capturing && state.capture == State::Capture::Inactive
+        && (clickedOutside(p, p + size) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)))
+        state.featureBindOpen = false;
 }
 
 // --- RGBA color picker ------------------------------------------------------------------
@@ -1205,8 +1368,24 @@ template <typename ConfigVar>
 void toggleVar(const char* label, int id) noexcept
 {
     bool value = ui_config::get<ConfigVar>();
-    if (toggle(label, &value, id))
+    bool rightClicked = false;
+    if (toggle(label, &value, id, &rightClicked))
         ui_config::set<ConfigVar>(typename ConfigVar::ValueType{value});
+
+    // Feature-bind integration: for toggles registered in FeatureBinds, right-click opens the
+    // bind popup (at the cursor - a context menu, not an anchored dropdown).
+    if (rightClicked) {
+        if (auto* entry = feature_binds::entryFor<ConfigVar>()) {
+            state.featureBindOpen = true;
+            state.featureBindOpenedFrame = ImGui::GetFrameCount();
+            state.featureBindIndex = static_cast<int>(entry - feature_binds::entries);
+            state.featureBindAnchor = ImGui::GetIO().MousePos;
+            state.popup.open = false;
+            state.multiSelectOpen = false;
+            state.colorPickerOpen = false;
+            styleSelect.open = false;
+        }
+    }
 }
 
 template <typename ConfigVar>
@@ -3466,6 +3645,7 @@ void neverlose::render() noexcept
         popupLayer(d);
         multiSelectPopover(d);
         colorPickerPopover(d);
+        featureBindPopover(d);
 
         // rotate the popup rect snapshot: what the popups drew THIS frame gates page controls
         // NEXT frame (popupPrev holds the complete last-frame set; popupCur starts empty again)
@@ -3545,8 +3725,108 @@ void neverlose::drawMenuGlow(float menuAlpha) noexcept
     }
 }
 
+// Feature binds: the curated list of bindable toggles (right-click in the menu opens the bind
+// popup) registered once per session, then the binds applied every rendered frame - menu closed
+// or not. Registration happens on the present thread like everything else bind-related (see
+// FeatureBinds.h: no locking needed, the registry never leaves this thread).
+void registerFeatureBinds() noexcept
+{
+    static bool done = false;
+    if (done)
+        return;
+    done = true;
+
+    using namespace aimbot_vars;
+    using namespace triggerbot_vars;
+    using namespace legit_aimbot_vars;
+    using namespace rcs_vars;
+    using namespace no_scope_inaccuracy_vis_vars;
+    using namespace spread_circle_vars;
+    using namespace outline_glow_vars;
+    using namespace model_glow_vars;
+    using namespace viewmodel_mod_vars;
+    using namespace grenade_timers_vars;
+    using namespace watermark_vars;
+    using namespace binds_list_vars;
+
+    // --- rage ---
+    feature_binds::registerToggle<aimbot_vars::Enabled>("Silent Aim");
+    feature_binds::registerToggle<aimbot_vars::BodyAim>("Force Body Aim");
+    feature_binds::registerToggle<aimbot_vars::Multipoint>("Multipoint");
+    feature_binds::registerToggle<aimbot_vars::DynamicPointscale>("Dynamic Point Scale");
+    feature_binds::registerToggle<aimbot_vars::Backtrack>("Backtrack");
+    feature_binds::registerToggle<aimbot_vars::AutoStop>("Auto Stop");
+    feature_binds::registerToggle<aimbot_vars::SpreadCompensation>("Compensate Spread");
+    feature_binds::registerToggle<aimbot_vars::SpreadGate>("Hold Fire Until Exact");
+    feature_binds::registerToggle<aimbot_vars::RecoilCompensation>("Compensate Recoil");
+    feature_binds::registerToggle<aimbot_vars::ForceShot>("Auto Shoot Ground");
+    feature_binds::registerToggle<aimbot_vars::ForceShotAir>("Auto Shoot Air");
+    feature_binds::registerToggle<aimbot_vars::WallCheck>("Rage Shoot Visible");
+    feature_binds::registerToggle<aimbot_vars::Autowall>("Rage Shoot Walls");
+    feature_binds::registerToggle<aimbot_vars::SpreadCircleFov>("Rage Spread FOV");
+    feature_binds::registerToggle<aimbot_vars::Extrapolate>("Lead Targets");
+
+    // --- legit / triggerbot ---
+    feature_binds::registerToggle<legit_aimbot_vars::Enabled>("Smooth Aim");
+    feature_binds::registerToggle<legit_aimbot_vars::DrawFov>("Draw FOV Circle");
+    feature_binds::registerToggle<legit_aimbot_vars::SpreadCircleFov>("Legit Spread Circle FOV");
+    feature_binds::registerToggle<aimbot_vars::HitHead>("Target Head");
+    feature_binds::registerToggle<aimbot_vars::HitChest>("Target Chest");
+    feature_binds::registerToggle<aimbot_vars::HitStomach>("Target Stomach");
+    feature_binds::registerToggle<aimbot_vars::HitArms>("Target Arms");
+    feature_binds::registerToggle<aimbot_vars::HitLegs>("Target Legs");
+    feature_binds::registerToggle<triggerbot_vars::Enabled>("Triggerbot");
+    feature_binds::registerToggle<triggerbot_vars::AccuracyCheck>("Shoot When Accurate");
+    feature_binds::registerToggle<triggerbot_vars::HeadOnly>("Shoot At The Head");
+    feature_binds::registerToggle<triggerbot_vars::MaxAccuracyOnly>("Shoot At Max Accuracy");
+    feature_binds::registerToggle<triggerbot_vars::WallCheck>("Triggerbot Shoot Visible");
+    feature_binds::registerToggle<triggerbot_vars::Autowall>("Triggerbot Shoot Walls");
+    feature_binds::registerToggle<rcs_vars::Enabled>("Control Recoil");
+    feature_binds::registerToggle<no_scope_inaccuracy_vis_vars::Enabled>("No-scope Inaccuracy Vis");
+    feature_binds::registerToggle<spread_circle_vars::Enabled>("Draw Weapon Spread");
+
+    // --- visuals ---
+    feature_binds::registerToggle<outline_glow_vars::Enabled>("Outline Glow");
+    feature_binds::registerToggle<model_glow_vars::Enabled>("Model Glow");
+    feature_binds::registerToggle<viewmodel_mod_vars::ModifyFov>("Modify Viewmodel Fov");
+    feature_binds::registerToggle<::HitmarkerEnabled>("Hit Marker");
+    feature_binds::registerToggle<::ForceThirdPersonEnabled>("Force Third Person");
+    feature_binds::registerToggle<::RemoveViewPunch>("Remove View Punch");
+    feature_binds::registerToggle<::RemoveLegs>("Remove First-Person Legs");
+    feature_binds::registerToggle<::RemoveFlashOverlay>("Remove Flash Overlay");
+    feature_binds::registerToggle<::RemoveMenuAds>("Remove Main Menu Ads");
+    feature_binds::registerToggle<::WorldColorsInfernoEnabled>("Recolor Fire");
+    feature_binds::registerToggle<::WorldColorsLightsEnabled>("Recolor Lights");
+    feature_binds::registerToggle<::WorldColorsSkyEnabled>("Recolor Sky");
+    feature_binds::registerToggle<::WorldColorsWorldEnabled>("Recolor World");
+    feature_binds::registerToggle<::WorldColorsFogEnabled>("Gradient Fog");
+    feature_binds::registerToggle<::PlayerListEnabled>("Player List");
+    feature_binds::registerToggle<player_info_vars::PlayerPositionArrowEnabled>("Show Player Position Arrow");
+    feature_binds::registerToggle<player_info_vars::PlayerHealthEnabled>("Player Health");
+    feature_binds::registerToggle<player_info_vars::ActiveWeaponIconEnabled>("Active Weapon Icon");
+    feature_binds::registerToggle<player_info_vars::ActiveWeaponAmmoEnabled>("Active Weapon Ammo");
+    feature_binds::registerToggle<player_info_vars::BombCarrierIconEnabled>("Bomb Carrier Icon");
+    feature_binds::registerToggle<player_info_vars::BombPlantIconEnabled>("Bomb Planting Icon");
+    feature_binds::registerToggle<player_info_vars::BombDefuseIconEnabled>("Defuse Icon");
+    feature_binds::registerToggle<player_info_vars::HostagePickupIconEnabled>("Picking Up Hostage Icon");
+    feature_binds::registerToggle<player_info_vars::HostageRescueIconEnabled>("Rescuing Hostage Icon");
+    feature_binds::registerToggle<player_info_vars::BlindedIconEnabled>("Blinded By Flashbang Icon");
+    feature_binds::registerToggle<grenade_timers_vars::Enabled>("Grenade Timers");
+    feature_binds::registerToggle<grenade_timers_vars::SmokeTimers>("Smoke Timers");
+    feature_binds::registerToggle<grenade_timers_vars::MolotovTimers>("Molotov Timers");
+    feature_binds::registerToggle<::BombTimerEnabled>("Bomb Explosion Countdown And Site");
+    feature_binds::registerToggle<::DefusingAlertEnabled>("Bomb Defuse Countdown");
+    feature_binds::registerToggle<::BombPlantAlertEnabled>("Bomb Plant Alert");
+    feature_binds::registerToggle<::KillfeedPreserverEnabled>("Preserve Killfeed");
+    feature_binds::registerToggle<watermark_vars::Enabled>("Watermark");
+    feature_binds::registerToggle<binds_list_vars::Enabled>("Keybind List");
+}
+
 void neverlose::renderGameOverlay() noexcept
 {
+    registerFeatureBinds();
+    feature_binds::apply();
+
     refreshMenuTheme();
 
     const auto snapshot = overlay_layer::snapshot();
@@ -3643,19 +3923,29 @@ void drawBindsListWindow() noexcept
 
         float y = winPos.y + s(32.0f);
         const float rowHeight = s(28.0f);
-        for (const auto& entry : entries) {
-            textY(d, winPos.x + s(12), y, rowHeight, C(207, 209, 218), entry.label, kTextControl, nullptr);
+        const auto drawBindRow = [&](const char* label, int key) {
+            textY(d, winPos.x + s(12), y, rowHeight, C(207, 209, 218), label, kTextControl, nullptr);
 
-            const bool held = entry.value != Bind::kOff && Bind::isDown(entry.value);
+            const bool held = key != Bind::kOff && Bind::isDown(key);
             const float pillWidth = s(76.0f);
             const float pillHeight = s(19.0f);
             const ImVec2 pill(winPos.x + winWidth - s(12) - pillWidth, y + (rowHeight - pillHeight) * 0.5f);
             d->AddRectFilled(pill, pill + ImVec2(pillWidth, pillHeight), held ? g_buttonAccent : C(24, 24, 26), s(5));
             d->AddRect(pill, pill + ImVec2(pillWidth, pillHeight), held ? g_buttonAccent : C(30, 30, 33), s(5));
-            const char* keyName = Bind::displayName(entry.value);
+            const char* keyName = Bind::displayName(key);
             const float keyWidth = ImGui::GetFont()->CalcTextSizeA(kTextSmall, FLT_MAX, 0.0f, keyName).x;
             textY(d, pill.x + ImMax(s(6), (pillWidth - keyWidth) * 0.5f), pill.y, pillHeight, held ? C(18, 18, 20) : C(170, 173, 184), keyName, kTextSmall, nullptr);
             y += rowHeight;
+        };
+
+        for (const auto& entry : entries)
+            drawBindRow(entry.label, entry.value);
+
+        // feature binds (right-click binds): every registered entry with a key
+        for (std::size_t i = 0; i < feature_binds::entryCount; ++i) {
+            const auto& entry = feature_binds::entries[i];
+            if (entry.key != Bind::kOff && entry.label)
+                drawBindRow(entry.label, entry.key);
         }
     }
     ImGui::End();
