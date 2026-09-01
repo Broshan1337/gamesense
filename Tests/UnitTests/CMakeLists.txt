@@ -7,7 +7,8 @@ endif()
 target_include_directories(UnitTests PRIVATE "${CMAKE_SOURCE_DIR}/Tests" "${CMAKE_SOURCE_DIR}/Source")
 # imgui is header-only from the tests' point of view (include path + public compile defines for
 # Source/UI/ImGui/** headers); linking the static lib costs nothing but a few objects.
-target_link_libraries(UnitTests gtest_main gmock Threads::Threads imgui)
+# luajit is linked for the same reason: the Lua scripting framework tests need the real runtime.
+target_link_libraries(UnitTests gtest_main gmock Threads::Threads imgui luajit)
 set_target_properties(UnitTests PROPERTIES OUTPUT_NAME UnitTestsBin)
 gtest_discover_tests(UnitTests DISCOVERY_TIMEOUT 60 TEST_PREFIX Unit_)
 

@@ -23,6 +23,7 @@
 #include <GameClient/Bind.h>
 #include "FeatureBinds.h"
 #include <Features/Hud/SpectatorList/SpectatorSnapshot.h>
+#include <Features/Lua/LuaManager.h>
 #include <Features/Game/MovementConfigVariables.h>
 #include <Utils/ColorUtils.h>
 #include <Utils/StatusReport.h>
@@ -230,6 +231,7 @@ enum class Page
     Sound,
     Inventory,
     Radio,
+    Scripts,
     Misc
 };
 
@@ -268,6 +270,7 @@ constexpr ImWchar kIconCodepoints[] = {
     0xf54b, // shoe-prints     (Movement)
     0xf519, // broadcast-tower (Radio)
     0xf6cb, // dagger          (Inventory)
+    0xf121, // code            (Scripts)
     0xf8cc, // mouse           (Legit)
     0
 };
@@ -2559,6 +2562,251 @@ void pageRadio() noexcept
     columnYs[1] = columnYs[0];
 }
 
+// --- scripts (Lua framework tab) -------------------------------------------------------
+// One full-width card: scripts directory listing with per-row LOAD/UNLOAD/EDIT/DELETE, a create
+// row, and the script editor as a separate RESIZABLE ImGui window (opened per script). Script
+// state lives in lua:: (Features/Lua/LuaManager.h); this page only drives it.
+
+struct ScriptEditor {
+    bool open = false;
+    char name[lua::kMaxScriptName] = {};      // file being edited (with .lua)
+    char buffer[98 * 1024] = {};              // editor content (fits kMaxScriptBytes)
+    bool dirty = false;
+    char status[160] = {};                    // last save/load feedback
+};
+
+ScriptEditor scriptEditor;
+
+void drawScriptEditorWindow() noexcept
+{
+    if (!scriptEditor.open || !GUI::isMenuOpen())
+        return;
+
+    ImGui::SetNextWindowSize(ImVec2(860.0f * menuScale, 540.0f * menuScale), ImGuiCond_FirstUseEver);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(10.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(s(12), s(10)));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, C(14, 14, 16, 250));
+    ImGui::PushStyleColor(ImGuiCol_Border, C(30, 30, 33, 220));
+    const ImGuiWindowFlags editorFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings
+        | ImGuiWindowFlags_NoScrollbar; // the input scrolls its own content
+
+    char title[160];
+    std::snprintf(title, sizeof(title), "%s%s##script_editor", scriptEditor.name, scriptEditor.dirty ? " *" : "");
+    if (ImGui::Begin(title, &scriptEditor.open, editorFlags)) {
+        ImDrawList* d = ImGui::GetWindowDrawList();
+
+        // caption: scripts folder
+        textY(d, ImGui::GetWindowPos().x, ImGui::GetWindowPos().y + s(2), s(16), C(110, 114, 124), lua::scriptsDirPath, kTextCaption, nullptr);
+
+        // editor body: fixed buffer InputTextMultiline (no std::string in this tree), fills
+        // whatever space is left under the action row.
+        const ImVec2 inputSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y - s(34));
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, C(19, 19, 21));
+        ImGui::PushStyleColor(ImGuiCol_Text, C(207, 209, 218));
+        ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
+        const bool edited = ImGui::InputTextMultiline("##script_source", scriptEditor.buffer, sizeof(scriptEditor.buffer), inputSize);
+        ImGui::PopFont();
+        ImGui::PopStyleColor(2);
+        if (edited)
+            scriptEditor.dirty = true;
+
+        // action row: SAVE + RELOAD FROM DISK (left), RUN (right)
+        const float y = ImGui::GetCursorScreenPos().y + s(4);
+        const float saveWidth = s(64);
+        const float revertWidth = s(96);
+        const float runWidth = s(56);
+        const float rowRight = ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - s(12);
+
+        auto editorButton = [&](int id, const char* label, float x, float width) {
+            ImGui::PushID(id);
+            const bool clicked = hit("##editor_btn", ImVec2(x, y), ImVec2(width, s(25)));
+            const float hover = motion(ImGui::GetItemID() ^ 0x5eedu, ImGui::IsItemHovered() ? 1.0f : 0.0f);
+            ImGui::PopID();
+            d->AddRectFilled(ImVec2(x, y), ImVec2(x + width, y + s(25)), mix(C(24, 24, 26), C(32, 32, 36), hover), s(5));
+            d->AddRect(ImVec2(x, y), ImVec2(x + width, y + s(25)), mix(C(30, 30, 33), g_accent, hover), s(5));
+            const float labelWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, label).x;
+            textY(d, x + (width - labelWidth) * 0.5f, y, s(25), C(170, 173, 184), label, kTextControl, nullptr);
+            return clicked;
+        };
+
+        if (editorButton(1, "SAVE", rowRight - saveWidth, saveWidth) && scriptEditor.dirty) {
+            const std::size_t length = std::strlen(scriptEditor.buffer);
+            if (lua::writeScript(scriptEditor.name, scriptEditor.buffer, length)) {
+                scriptEditor.dirty = false;
+                std::snprintf(scriptEditor.status, sizeof(scriptEditor.status), "saved");
+            } else {
+                std::snprintf(scriptEditor.status, sizeof(scriptEditor.status), "save failed");
+            }
+            if (lua::loadedIndex(scriptEditor.name) >= 0)
+                lua::load(scriptEditor.name); // live-reload: keep a loaded script in sync
+        }
+        if (editorButton(2, "REVERT", rowRight - saveWidth - s(6) - revertWidth, revertWidth)) {
+            long size = 0;
+            if (lua::readScript(scriptEditor.name, scriptEditor.buffer, sizeof(scriptEditor.buffer), &size)) {
+                scriptEditor.dirty = false;
+                std::snprintf(scriptEditor.status, sizeof(scriptEditor.status), "reloaded from disk");
+            }
+        }
+        if (editorButton(3, "RUN", rowRight - saveWidth - s(6) - revertWidth - s(6) - runWidth, runWidth))
+            lua::load(scriptEditor.name);
+    }
+    ImGui::End();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
+}
+
+void pageScripts() noexcept
+{
+    // Snapshot the directory listing once per frame (cheap: opendir on a small dir).
+    constexpr int kMaxList = 32;
+    lua::FileEntry entries[kMaxList];
+    const int fileCount = lua::listFiles(entries, kMaxList);
+
+    int loadedCount = 0;
+    for (int i = 0; i < lua::kMaxScripts; ++i)
+        loadedCount += lua::scripts[i].L ? 1 : 0;
+
+    const int listRows = fileCount > 0 ? fileCount : 1;
+    constexpr int kFixedRows = 3; // header / create / hint
+    const float width = kShellWidth - kSidebarWidth - s(13.0f);
+    const float height = (kFixedRows + listRows) * kRowHeight + s(12.0f);
+
+    const float x = shellBase.x + kSidebarWidth + s(9.0f);
+    const float y = shellBase.y + kToolbarHeight + s(24.0f) + columnYs[0] - scrollOffset;
+
+    ImDrawList* d = ImGui::GetWindowDrawList();
+    text(d, ImVec2(x, y - s(16.0f)), C(89, 94, 106), "LUA SCRIPTS", kTextCaption, nullptr);
+    const ImVec2 p(x, y);
+    softShadow(d, p, p + ImVec2(width, height), s(14.0f));
+    d->AddRectFilled(p, p + ImVec2(width, height), C(16, 16, 18, 224), s(14.0f));
+    d->AddRect(p, p + ImVec2(width, height), C(30, 30, 33), s(14.0f));
+
+    card = CardContext{p + ImVec2(0, s(6.0f)), width, 0};
+
+    auto pillButton = [&](int id, const char* label, ImVec2 pos, float buttonWidth) {
+        ImGui::PushID(id);
+        const bool clicked = hit("##pill_btn", pos, ImVec2(buttonWidth, s(23)));
+        const float hover = motion(ImGui::GetItemID() ^ 0x1ea7u, ImGui::IsItemHovered() ? 1.0f : 0.0f);
+        ImGui::PopID();
+        d->AddRectFilled(pos, pos + ImVec2(buttonWidth, s(23)), mix(C(24, 24, 26), C(32, 32, 36), hover), s(5));
+        d->AddRect(pos, pos + ImVec2(buttonWidth, s(23)), mix(C(30, 30, 33), g_accent, hover), s(5));
+        const float labelWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, label).x;
+        textY(d, pos.x + (buttonWidth - labelWidth) * 0.5f, pos.y, s(23), C(170, 173, 184), label, kTextControl, nullptr);
+        return clicked;
+    };
+
+    // Row 0: header - folder path + loaded count.
+    {
+        const float rowY = card.origin.y + 0 * kRowHeight;
+        textY(d, card.origin.x + s(13), rowY, kRowHeight, C(89, 94, 106), lua::scriptsDirPath[0] ? lua::scriptsDirPath : "(scripts folder unavailable)", kTextCaption, nullptr);
+        char loadedLabel[48];
+        std::snprintf(loadedLabel, sizeof(loadedLabel), "%d loaded / %d max", loadedCount, lua::kMaxScripts);
+        const float rightWidth = ImGui::GetFont()->CalcTextSizeA(kTextCaption, FLT_MAX, 0.0f, loadedLabel).x;
+        textY(d, card.origin.x + width - s(13) - rightWidth, rowY, kRowHeight, C(89, 94, 106), loadedLabel, kTextCaption, nullptr);
+        ++card.row;
+    }
+
+    // Row 1: create-new (name + CREATE button).
+    static char newScriptName[96] = "";
+    {
+        beginRow(d, "New Script");
+        const ImVec2 row = card.origin + ImVec2(0, 1 * kRowHeight);
+        const float inputWidth = width - s(120) - s(84);
+        ImGui::SetCursorScreenPos(ImVec2(row.x + s(105), row.y + rowCentered(s(25))));
+        ImGui::PushItemWidth(inputWidth);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, C(23, 23, 25));
+        ImGui::PushStyleColor(ImGuiCol_Text, C(207, 209, 218));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(8), s(5)));
+        const bool submitted = ImGui::InputTextWithHint("##script_new", "name.lua (creates a template)", newScriptName, sizeof(newScriptName), ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(2);
+        ImGui::PopItemWidth();
+
+        auto nameToFileName = [](const char* raw, char* out, std::size_t outSize) {
+            if (std::strstr(newScriptName, ".lua") == newScriptName + std::strlen(newScriptName) - 4)
+                std::snprintf(out, outSize, "%s", newScriptName);
+            else
+                std::snprintf(out, outSize, "%s.lua", newScriptName);
+        };
+
+        const bool createClicked = pillButton(++controlId, "CREATE", ImVec2(p.x + width - s(13) - s(70), row.y + rowCentered(s(23))), s(70));
+        if ((submitted || createClicked) && newScriptName[0] != '\0' && !searchIndexing) {
+            char fileName[128];
+            nameToFileName(newScriptName, fileName, sizeof(fileName));
+            if (lua::createScript(fileName)) {
+                lua::readScript(fileName, scriptEditor.buffer, sizeof(scriptEditor.buffer));
+                std::strncpy(scriptEditor.name, fileName, sizeof(scriptEditor.name) - 1);
+                scriptEditor.name[sizeof(scriptEditor.name) - 1] = '\0';
+                scriptEditor.dirty = false;
+                scriptEditor.open = true;
+                newScriptName[0] = '\0';
+            }
+        }
+        ++card.row;
+    }
+
+    // Row 2: hint.
+    beginRow(d, "Scripts");
+    textY(d, card.origin.x + s(140), card.origin.y + 2 * kRowHeight, kRowHeight, C(110, 114, 124), "events: paint, createmove, game events | ffi available", kTextSmall, nullptr);
+    ++card.row;
+
+    // Rows 3+: one row per .lua file in the scripts folder.
+    for (int i = 0; i < fileCount; ++i) {
+        const float rowY = card.origin.y + (3 + i) * kRowHeight;
+        d->AddLine(ImVec2(card.origin.x + s(12), rowY), ImVec2(card.origin.x + width - s(12), rowY), C(26, 26, 30));
+
+        const int loaded = lua::loadedIndex(entries[i].name);
+        const lua::Script* scriptState = loaded >= 0 ? &lua::scripts[loaded] : nullptr;
+
+        // buttons at the right edge: EDIT | RELOAD/LOAD | UNLOAD
+        const float unloadX = p.x + width - s(13) - s(64);
+        const float loadX = unloadX - s(72) - s(6);
+        const float editX = loadX - s(52) - s(6);
+        const bool unloadClicked = scriptState && pillButton(++controlId, "UNLOAD", ImVec2(unloadX, rowY + rowCentered(s(23))), s(64));
+        const bool loadClicked = pillButton(++controlId, scriptState ? "RELOAD" : "LOAD", ImVec2(loadX, rowY + rowCentered(s(23))), s(72));
+        const bool editClicked = pillButton(++controlId, "EDIT", ImVec2(editX, rowY + rowCentered(s(23))), s(52));
+
+        if (unloadClicked && !searchIndexing) {
+            lua::unloadScript(loaded);
+        }
+        if (loadClicked && !searchIndexing)
+            lua::load(entries[i].name);
+        if (editClicked && !searchIndexing) {
+            lua::readScript(entries[i].name, scriptEditor.buffer, sizeof(scriptEditor.buffer));
+            std::strncpy(scriptEditor.name, entries[i].name, sizeof(scriptEditor.name) - 1);
+            scriptEditor.name[sizeof(scriptEditor.name) - 1] = '\0';
+            scriptEditor.dirty = false;
+            scriptEditor.open = true;
+        }
+
+        textY(d, card.origin.x + s(13), rowY, kRowHeight, scriptState ? g_accent : C(207, 209, 218), entries[i].name, kTextControl, nullptr);
+        if (scriptState && scriptState->errored) {
+            d->PushClipRect(ImVec2(card.origin.x + s(200), rowY), ImVec2(editX - s(8), rowY + kRowHeight), true);
+            textY(d, card.origin.x + s(200), rowY, kRowHeight, C(232, 96, 96), scriptState->lastError, kTextSmall, nullptr);
+            d->PopClipRect();
+        } else {
+            char sizeLabel[32];
+            std::snprintf(sizeLabel, sizeof(sizeLabel), "%ld B", entries[i].size);
+            const float sizeWidth = ImGui::GetFont()->CalcTextSizeA(kTextCaption, FLT_MAX, 0.0f, sizeLabel).x;
+            textY(d, editX - s(10) - sizeWidth, rowY, kRowHeight, C(110, 114, 124), sizeLabel, kTextCaption, nullptr);
+        }
+        ++card.row;
+    }
+
+    if (fileCount == 0) {
+        const float rowY = card.origin.y + 3 * kRowHeight;
+        textY(d, card.origin.x + s(13), rowY, kRowHeight, C(110, 114, 124), "no scripts yet - create one above", kTextControl, nullptr);
+        ++card.row;
+    }
+
+    columnYs[0] += height + s(30.0f);
+    columnYs[1] = columnYs[0];
+
+    // The editor is its own resizable window on top of the shell - it renders here so it exists
+    // exactly while this page is active (like the config popovers).
+    drawScriptEditorWindow();
+}
+
 // --- global search: index build + overlay --------------------------------------------
 //
 // Ghost-rendering one page per frame into an offscreen window: SkipItems short-circuits every
@@ -2604,6 +2852,7 @@ void indexNextSearchPage() noexcept
         case Page::Sound: pageSound(); break;
         case Page::Inventory: pageInventory(); break;
         case Page::Radio: pageRadio(); break;
+        case Page::Scripts: pageScripts(); break;
         case Page::Misc: pageMisc(); break;
         }
         searchIndexing = false;
@@ -2878,6 +3127,7 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
     eyebrow("OTHER");
     nav("\xEF\x9B\x8B", "Inventory", Page::Inventory); // dagger
     nav("\xEF\x94\x99", "Radio", Page::Radio);         // broadcast-tower
+    nav("\xEF\x84\xA1", "Scripts", Page::Scripts);     // code
     nav("\xEF\x80\x93", "Misc", Page::Misc);           // cog
     d->PopClipRect();
 
@@ -3537,6 +3787,7 @@ void neverlose::render() noexcept
         case Page::Sound: pageSound(); break;
         case Page::Inventory: pageInventory(); break;
         case Page::Radio: pageRadio(); break;
+        case Page::Scripts: pageScripts(); break;
         case Page::Misc: pageMisc(); break;
         }
 
@@ -3912,6 +4163,10 @@ void neverlose::renderGameOverlay() noexcept
     float bindsListOffset = 0.0f;
     drawSpectatorListWindow(bindsListOffset);
     drawBindsListWindow(bindsListOffset);
+
+    // Lua scripts last: their paint callbacks draw on top of everything else. Each call is
+    // pcall'd and instruction-budgeted inside the manager - a bad script errors, never crashes.
+    lua::dispatchPaint(ImGui::GetForegroundDrawList());
 }
 
 // --- spectator list (in-game HUD overlay) ------------------------------------------------

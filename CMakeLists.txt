@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
-project(Neversneeze LANGUAGES CXX)
+# C is enabled for the vendored LuaJIT static library (Source/ThirdParty/luajit) - it is a C
+# codebase; without the C language enabled CMake silently generates an EMPTY archive.
+project(Neversneeze LANGUAGES CXX C)
 
 # No build type configured (bare `cmake -B build`, or an IDE defaulting to Debug) must never
 # silently produce a -O0 debug binary: besides being ~4x larger, a Debug build asserts at
@@ -15,6 +17,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(WIN32)
   enable_language(ASM_MASM)
 elseif(UNIX)
+  # ASM (not just ASM-ATT): the vendored LuaJIT's lj_vm.S is a preprocessed-assembly source and
+  # CMake 4 only assigns a language to .S files when the generic ASM language is enabled.
+  enable_language(ASM)
   enable_language(ASM-ATT)
 endif()
 

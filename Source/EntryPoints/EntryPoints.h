@@ -25,6 +25,7 @@
 #include <GameClient/Lagcomp.h>
 #include <GameClient/SubtickMoves.h>
 #include <GameClient/UserCmd.h>
+#include <GameClient/GameEvents/GameEventFields.h>
 #include <Features/Radio/RadioManager.h>
 #include <Features/SkinChanger/SkinChanger.h>
 #include <Features/Game/Blockbot.h>
@@ -54,6 +55,7 @@
 #include <Features/Visuals/Removals/Removals.h>
 #include <Features/Visuals/ThirdPerson/ForceThirdPerson.h>
 #include <Features/Visuals/WorldColors/WorldColors.h>
+#include <Features/Lua/LuaManager.h>
 #include <Hooks/SceneRenderHooks.h>
 
 [[NOINLINE]] void finishInit(auto& hookContext)
@@ -61,6 +63,11 @@
     hookContext.entityClassifier().init(hookContext);
     hookContext.config().init();
     hookContext.config().scheduleLoad();
+
+    // Lua scripting framework: creates ~/OsirisCS2/scripts and prepares the manager. Scripts
+    // are loaded on demand from the menu tab, not automatically here.
+    lua::init();
+    lua::menuOpenQuery = []() noexcept { return GUI::isMenuOpen(); };
 
     // ImGui menu: build the context (allocations bridged to CS2's IMemAlloc) and attempt the
     // Vulkan presentation hook. The hook legitimately fails while libvulkan is not mapped yet
@@ -115,6 +122,10 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
 
 [[NOINLINE]] void unload(auto& hookContext) noexcept
 {
+    // Lua states first: they own timers, child processes (http) and Lua heaps that must all be
+    // gone before any of the feature/hook teardown below runs.
+    lua::unloadAll();
+
     hookContext.template make<BombTimer>().onUnload();
     hookContext.template make<DefusingAlert>().onUnload();
     hookContext.template make<PostRoundTimer>().onUnload();
@@ -237,6 +248,9 @@ bool GameEventManagerHook_onFireEventClientSide(cs2::IGameEventManager2* thisptr
     hookContext.template make<SpawnProtectionSound>().onFireEventClientSide(event);
     hookContext.template make<CombatStats>().onFireEventClientSide(event);
     hookContext.template make<Killsay>().onFireEventClientSide(event);
+    // Lua scripts: dispatch under the event's own name (player_hurt etc.). Reads the name
+    // through the event vtable before the original can recycle the event object.
+    lua::dispatchEvent(game_events::name(event));
 
     return hookContext.hooks().gameEventManagerHook.getOriginalFireEventClientSide()(thisptr, event);
 }
@@ -304,6 +318,9 @@ void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCm
     // FVA-style view-angle chains: runs LAST so the history entries interpolate towards the FINAL
     // angles every feature above settled on. See Features/Game/FvaEmulator.h.
     hookContext.template make<FvaEmulator>().onCreateMove(cmd);
+
+    // Lua scripts: one "createmove" callback batch per input tick, after all native features.
+    lua::dispatchTick();
 }
 
 // Hook on CCSGOInput slot 6 - the function that builds the command from the queued input samples.

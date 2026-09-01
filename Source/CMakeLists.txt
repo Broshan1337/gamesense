@@ -132,6 +132,47 @@ endif()
 
 target_link_libraries(Neversneeze PRIVATE imgui m)
 
+# ---- LuaJIT 2.1 (vendored, pre-generated codegen) ---------------------------------------
+# Vendored copy of github.com/LuaJIT/LuaJIT (commit 1ee778a4, 2026-08-19, rolling 2.1) in
+# Source/ThirdParty/luajit. The buildvm/minilua host-tool codegen steps were run ONCE at
+# vendor time; their outputs (lj_vm.S, lj_bcdef.h, lj_ffdef.h, lj_libdef.h, lj_recdef.h,
+# lj_folddef.h, jit/vmdef.lua, luajit.h) are committed inside src/, so our build needs no host
+# tools and no git. Regenerate only when updating the vendored LuaJIT (build it with its own
+# Makefile and copy the generated files back).
+# GC64 is the rolling-release default on x64 (see lj_arch.h) - required for a DSO injected at
+# arbitrary addresses: non-GC64 packs pointers into 47-bit values and breaks outside the
+# assumptions it makes about heap address ranges.
+file(GLOB LUAJIT_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/luajit/src/lib_*.c")
+message(STATUS "LUAJIT lib sources: ${LUAJIT_LIB_SOURCES}")
+file(GLOB LUAJIT_LJ_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/luajit/src/lj_*.c")
+message(STATUS "LUAJIT at add_library: LIB=${LUAJIT_LIB_SOURCES}")
+add_library(luajit STATIC
+  ${LUAJIT_LIB_SOURCES} ${LUAJIT_LJ_SOURCES}
+  "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/luajit/src/lj_vm.S")
+get_target_property(LUAJIT_SOURCES luajit SOURCES)
+list(GET LUAJIT_SOURCES 0 LUAJIT_FIRST_SOURCE)
+get_source_file_property(LUAJIT_VM_LANGUAGE "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/luajit/src/lj_vm.S" LANGUAGE)
+get_source_file_property(LUAJIT_VM_HEADER_ONLY "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/luajit/src/lj_vm.S" HEADER_FILE_ONLY)
+message(STATUS "LUAJIT lj_vm.S language: ${LUAJIT_VM_LANGUAGE} headerOnly=${LUAJIT_VM_HEADER_ONLY}")
+get_source_file_property(LUAJIT_FIRST_GENERATED ${LUAJIT_FIRST_SOURCE} GENERATED)
+get_source_file_property(LUAJIT_FIRST_EXTERNAL ${LUAJIT_FIRST_SOURCE} EXTERNAL_OBJECT)
+message(STATUS "LUAJIT first source: ${LUAJIT_FIRST_SOURCE} headerOnly=${LUAJIT_FIRST_HEADER_ONLY} generated=${LUAJIT_FIRST_GENERATED} external=${LUAJIT_FIRST_EXTERNAL}")
+target_include_directories(luajit PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/luajit/src")
+target_compile_definitions(luajit PRIVATE _FILE_OFFSET_BITS=64 _LARGEFILE_SOURCE
+  # x64 LuaJIT errors unwind through libgcc's DWARF unwinder (LJ_UNWIND_EXT, see lj_arch.h /
+  # lj_err.c) - without this define lj_err.c refuses to compile on x64, and with it the
+  # _Unwind_* symbols must be linked (libgcc_s is always mapped alongside the game's C++ modules).
+  LUAJIT_UNWIND_EXTERNAL)
+target_compile_options(luajit PRIVATE -fno-stack-protector)
+set_target_properties(luajit PROPERTIES
+  C_VISIBILITY_PRESET hidden
+  LINKER_LANGUAGE CXX
+  POSITION_INDEPENDENT_CODE ON)
+# pthread: lj_profile.c (referenced once the profiler path is pulled in); m: LuaJIT's own math;
+# gcc_s: the _Unwind_* external-unwinder functions LUAJIT_UNWIND_EXTERNAL binds to.
+target_link_libraries(luajit PUBLIC m pthread gcc_s)
+target_link_libraries(Neversneeze PRIVATE luajit)
+
 # UI / hook translation units (the tree is otherwise header-only; these carry the ImGui menu
 # implementation and the Vulkan presentation hook).
 target_sources(Neversneeze PRIVATE
@@ -143,6 +184,14 @@ target_sources(Neversneeze PRIVATE
   hooks/integrity_audit.cpp
   hooks/game_state_resolver.cpp
 )
+
+# Lua scripting framework: the lua_CFunction bindings are unwound THROUGH by LuaJIT foreign
+# exceptions (LUAJIT_UNWIND_EXTERNAL on x64), so this one TU must keep unwind tables even in
+# the release build (which sets -fno-unwind-tables target-wide). Per-source options come after
+# the target flags, so these win.
+set_source_files_properties(Features/Lua/Lua.cpp PROPERTIES
+  COMPILE_OPTIONS "-funwind-tables;-fasynchronous-unwind-tables")
+target_sources(Neversneeze PRIVATE Features/Lua/Lua.cpp)
 
 # Neverlose menu fonts, embedded into the binary (objcopy) so the UI has no filesystem
 # dependency. Symbols follow the objcopy convention: _binary_<name with ./- replaced>_start/_end.
