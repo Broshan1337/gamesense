@@ -1,12 +1,15 @@
-add_library(Osiris SHARED dllmain.cpp)
+add_library(Neversneeze SHARED dllmain.cpp)
 
-set_target_properties(Osiris PROPERTIES
+set_target_properties(Neversneeze PROPERTIES
+  # Output file name must stay libOsiris.so: inject.sh, inject_memfd, self-unload (SONAME
+  # matching) and the module-hiding code all key on it. Only the CMake target is rebranded.
+  OUTPUT_NAME "Osiris"
   CXX_VISIBILITY_PRESET hidden
   C_VISIBILITY_PRESET hidden
   POSITION_INDEPENDENT_CODE ON)
 
-target_include_directories(Osiris PRIVATE "${CMAKE_SOURCE_DIR}/Source" "${CMAKE_SOURCE_DIR}/Source/hooks")
-target_link_libraries(Osiris PRIVATE ${CMAKE_DL_LIBS})
+target_include_directories(Neversneeze PRIVATE "${CMAKE_SOURCE_DIR}/Source" "${CMAKE_SOURCE_DIR}/Source/hooks")
+target_link_libraries(Neversneeze PRIVATE ${CMAKE_DL_LIBS})
 
 # ---- Steam Module (separate target for Steam process injection) --------------------
 add_library(SteamModule SHARED SteamModule/steam_module.cpp)
@@ -24,9 +27,9 @@ target_link_libraries(SteamModule PRIVATE ${CMAKE_DL_LIBS} pthread)
 # Built in its OWN tree (build-steam, see inject.sh), NOT here: both modules use the source file
 # and output name, so defining both targets in one build directory makes two rules generate
 # Source/libSteamModule.so - ninja aborts every build of the tree on it. Configure with
-# -DOSIRIS_BUILD_STEAM_MODULE32=ON (as build-steam is) to get this target.
-option(OSIRIS_BUILD_STEAM_MODULE32 "Also define the 32-bit SteamModule target (build-steam tree only)" OFF)
-if(OSIRIS_BUILD_STEAM_MODULE32 AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+# -DNEVERSNEEZE_BUILD_STEAM_MODULE32=ON (as build-steam is) to get this target.
+option(NEVERSNEEZE_BUILD_STEAM_MODULE32 "Also define the 32-bit SteamModule target (build-steam tree only)" OFF)
+if(NEVERSNEEZE_BUILD_STEAM_MODULE32 AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
   add_library(SteamModule32 SHARED SteamModule/steam_module.cpp)
   
   set_target_properties(SteamModule32 PROPERTIES
@@ -60,7 +63,7 @@ FetchContent_MakeAvailable(sdl3)
 
 add_library(sdl3_headers INTERFACE)
 target_include_directories(sdl3_headers INTERFACE "${sdl3_SOURCE_DIR}/include")
-target_link_libraries(Osiris PRIVATE sdl3_headers)
+target_link_libraries(Neversneeze PRIVATE sdl3_headers)
 
 # ---- Dear ImGui (freestanding bridging model) ------------------------------------------
 #
@@ -127,11 +130,11 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
   endif()
 endif()
 
-target_link_libraries(Osiris PRIVATE imgui m)
+target_link_libraries(Neversneeze PRIVATE imgui m)
 
 # UI / hook translation units (the tree is otherwise header-only; these carry the ImGui menu
 # implementation and the Vulkan presentation hook).
-target_sources(Osiris PRIVATE
+target_sources(Neversneeze PRIVATE
   UI/ImGui/GUI.cpp
   UI/ImGui/Neverlose/Neverlose.cpp
   Hooks/Graphics/VulkanHook.cpp
@@ -152,27 +155,27 @@ if(UNIX)
       WORKING_DIRECTORY "${NL_FONT_DIR}" # relative input -> short _binary_<name>_start symbols
       DEPENDS "${NL_FONT_DIR}/${FONT}.ttf"
       VERBATIM)
-    target_sources(Osiris PRIVATE "${FONT_OBJ}")
+    target_sources(Neversneeze PRIVATE "${FONT_OBJ}")
     set_source_files_properties("${FONT_OBJ}" PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
   endforeach()
 endif()
 
 if(WIN32)
-  target_sources(Osiris PRIVATE Platform/Windows/Syscalls/WindowsSyscall.asm)
+  target_sources(Neversneeze PRIVATE Platform/Windows/Syscalls/WindowsSyscall.asm)
 endif()
 
 if(MSVC)
-  set_target_properties(Osiris PROPERTIES MSVC_RUNTIME_LIBRARY "$<$<CONFIG:Debug>:MultiThreadedDebugDLL>")
+  set_target_properties(Neversneeze PROPERTIES MSVC_RUNTIME_LIBRARY "$<$<CONFIG:Debug>:MultiThreadedDebugDLL>")
   string(REGEX REPLACE "/EH[a-z]+" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
-  target_sources(Osiris PRIVATE $<$<CONFIG:Release>:Platform/Windows/CRTWindows.cpp>)
-  target_compile_options(Osiris PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W4 $<$<CONFIG:Release>:/sdl- /GS->>)
-  target_compile_definitions(Osiris PRIVATE $<$<CONFIG:Release>:_USE_STD_VECTOR_ALGORITHMS=0>)
-  target_link_options(Osiris PRIVATE $<$<CONFIG:Release>:/nodefaultlib /ENTRY:"DllMain">)
+  target_sources(Neversneeze PRIVATE $<$<CONFIG:Release>:Platform/Windows/CRTWindows.cpp>)
+  target_compile_options(Neversneeze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W4 $<$<CONFIG:Release>:/sdl- /GS->>)
+  target_compile_definitions(Neversneeze PRIVATE $<$<CONFIG:Release>:_USE_STD_VECTOR_ALGORITHMS=0>)
+  target_link_options(Neversneeze PRIVATE $<$<CONFIG:Release>:/nodefaultlib /ENTRY:"DllMain">)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   if(NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
-    target_compile_options(Osiris PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall>)
+    target_compile_options(Neversneeze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall>)
     # -fno-gnu-unique is load-bearing for unload. GCC emits static template variables (e.g. the
     # inline std::atomic/atomic_flag objects in Utils/RetAddrSpoofer.h) with the STB_GNU_UNIQUE
     # symbol binding, which -fvisibility=hidden does NOT suppress. glibc marks any DSO that
@@ -182,22 +185,22 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU
     # existing copy and never re-runs .init_array. With this flag those symbols are emitted as
     # ordinary weak COMDAT symbols instead, weak definitions do not pin the DSO, and the unmap
     # works. Verified offline (see the unload repro): UNIQUE bind -> stays mapped; WEAK -> clean.
-    target_compile_options(Osiris PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -fno-gnu-unique>)
-    target_link_options(Osiris PRIVATE LINKER:--no-undefined -z noexecstack)
+    target_compile_options(Neversneeze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -fno-gnu-unique>)
+    target_link_options(Neversneeze PRIVATE LINKER:--no-undefined -z noexecstack)
   endif()
 
-  target_compile_options(Osiris PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-missing-braces>)
+  target_compile_options(Neversneeze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-missing-braces>)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14.0)
-  target_compile_options(Osiris PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-dangling-reference>) # false positive
+  target_compile_options(Neversneeze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-dangling-reference>) # false positive
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   if(UNIX)
-    target_compile_options(Osiris PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-stack-protector -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-math-errno>)
-    target_link_options(Osiris PRIVATE -nostdlib)
-    target_link_libraries(Osiris PRIVATE c)
+    target_compile_options(Neversneeze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-stack-protector -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-math-errno>)
+    target_link_options(Neversneeze PRIVATE -nostdlib)
+    target_link_libraries(Neversneeze PRIVATE c)
 
     target_compile_options(SteamModule PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-stack-protector -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables>)
     if(TARGET SteamModule32)
@@ -205,7 +208,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     endif()
     
     if(CMAKE_STRIP)
-      add_custom_command(TARGET Osiris POST_BUILD COMMAND ${CMAKE_STRIP} "$<TARGET_FILE:Osiris>")
+      add_custom_command(TARGET Neversneeze POST_BUILD COMMAND ${CMAKE_STRIP} "$<TARGET_FILE:Neversneeze>")
       add_custom_command(TARGET SteamModule POST_BUILD COMMAND ${CMAKE_STRIP} "$<TARGET_FILE:SteamModule>")
       if(TARGET SteamModule32)
         add_custom_command(TARGET SteamModule32 POST_BUILD COMMAND ${CMAKE_STRIP} "$<TARGET_FILE:SteamModule32>")

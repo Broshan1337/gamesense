@@ -69,9 +69,9 @@ private:
     // accept.
     static constexpr auto kSubscribeScript = R"(
 (function() {
-  if (typeof $.OsirisMatchAutoAccept !== 'undefined' && $.OsirisMatchAutoAccept !== null)
+  if (typeof $.NeversneezeMatchAutoAccept !== 'undefined' && $.NeversneezeMatchAutoAccept !== null)
     return;
-  $.OsirisMatchAutoAccept = $.RegisterForUnhandledEvent('PanoramaComponent_Lobby_ReadyUpForMatch', function (shouldShow) {
+  $.NeversneezeMatchAutoAccept = $.RegisterForUnhandledEvent('PanoramaComponent_Lobby_ReadyUpForMatch', function (shouldShow) {
     if (shouldShow)
       $.DispatchEvent('MatchAssistedAccept');
   });
@@ -80,10 +80,10 @@ private:
 
     static constexpr auto kUnsubscribeScript = R"(
 (function() {
-  if (typeof $.OsirisMatchAutoAccept === 'undefined' || $.OsirisMatchAutoAccept === null)
+  if (typeof $.NeversneezeMatchAutoAccept === 'undefined' || $.NeversneezeMatchAutoAccept === null)
     return;
-  $.UnregisterForUnhandledEvent('PanoramaComponent_Lobby_ReadyUpForMatch', $.OsirisMatchAutoAccept);
-  $.OsirisMatchAutoAccept = null;
+  $.UnregisterForUnhandledEvent('PanoramaComponent_Lobby_ReadyUpForMatch', $.NeversneezeMatchAutoAccept);
+  $.NeversneezeMatchAutoAccept = null;
 })();
 )";
 

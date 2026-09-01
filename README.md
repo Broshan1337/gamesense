@@ -1,4 +1,4 @@
-# Osiris
+# Neversneeze
 
 [![Linux](https://github.com/danielkrupinski/Osiris/actions/workflows/linux.yml/badge.svg?branch=master&event=push)](https://github.com/danielkrupinski/Osiris/actions/workflows/linux.yml)
 

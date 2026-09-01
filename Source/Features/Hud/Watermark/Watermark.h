@@ -22,7 +22,7 @@
 #include <Utils/StringBuilder.h>
 #include <Utils/Trig.h>
 
-// The watermark: "gamesense.pub | 84 | <fps> fps | <speed> u/s | <ping> ms | <dmg> td | HH:MM"
+// The watermark: "Neversneeze | 84 | <fps> fps | <speed> u/s | <ping> ms | <dmg> td | HH:MM"
 // plus three feature chips (BT / EXP / COMP - backtracking, extrapolation, triggerbot spread
 // compensation - bright when enabled, dim gray when not). Purely cosmetic; the data behind every
 // segment is already read elsewhere in the codebase.
@@ -90,11 +90,11 @@ private:
     {
         using namespace watermark_panel_params;
 
-        // "gamesense.pub | 84" is the constant prefix; every segment after it is individually
+        // "Neversneeze | 84" is the constant prefix; every segment after it is individually
         // toggleable from the Hud page (Hud > Watermark).
         StringBuilderStorage<96> storage;
         auto builder = storage.builder();
-        builder.put("gamesense", '.', 'p', 'u', 'b', ' ', '|', ' ', 84);
+        builder.put("Neversneeze", ' ', '|', ' ', 84);
         if (GET_CONFIG_VAR(watermark_vars::ShowFps))
             builder.put(' ', '|', ' ', framesPerSecond, ' ', 'f', 'p', 's');
         if (GET_CONFIG_VAR(watermark_vars::ShowSpeed))

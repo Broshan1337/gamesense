@@ -37,7 +37,7 @@ if [ ! -f "$steam_module" ]; then
 fi
 
 if [ ! -f "$osiris_module" ]; then
-    echo "[Build] Osiris module not found"
+    echo "[Build] Neversneeze module not found"
     need_build=1
 fi
 
@@ -62,8 +62,8 @@ if [ "$need_build" -eq 1 ]; then
         cmake --build "$project_dir/build-steam" --target SteamModule32 2>&1 | tail -5
         
         echo ""
-        echo "[Build] Building Osiris (64-bit)..."
-        cmake --build "$project_dir/build" --target Osiris 2>&1 | tail -5
+        echo "[Build] Building Neversneeze (64-bit)..."
+        cmake --build "$project_dir/build" --target Neversneeze 2>&1 | tail -5
         
         echo ""
         echo "[Build] Done"
@@ -175,7 +175,7 @@ fi
 
 if [ ! -f "$build_lib" ]; then
     echo "[CS2] Error: Built library not found at '$build_lib'"
-    echo "[CS2] Build it first: cmake --build build --target Osiris"
+    echo "[CS2] Build it first: cmake --build build --target Neversneeze"
     exit 1
 fi
 

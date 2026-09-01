@@ -18,7 +18,7 @@ namespace RetAddrSpoofer
 // Return-address spoofer (signature-agnostic, naked-asm design).
 //
 // Goal: call a game function so that, WHILE it executes, the return address sitting on the stack
-// points inside libclient.so instead of into Osiris' mapped memory. Stack walkers / tracebacks that
+// points inside libclient.so instead of into our module's mapped memory. Stack walkers / tracebacks that
 // sample the thread mid-call therefore see a game module address, not ours.
 //
 // Mechanism (no self-modifying code, nothing signature-specific):
@@ -203,7 +203,7 @@ inline void init(std::span<const std::byte> executableSection) noexcept
         auto builder = storage.builder();
         builder.put("Return address spoofer: couldn't find a 'pop rcx; ret' gadget in the client's "
                     "executable section, spoofed invocations are disabled.");
-        SimpleMessageBox{}.showWarning("Osiris", builder.cstring());
+        SimpleMessageBox{}.showWarning("Neversneeze", builder.cstring());
         return;
     }
 

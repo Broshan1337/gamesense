@@ -297,7 +297,7 @@ namespace CrashLogger
 
         const int fd = LinuxPlatformApi::open("/tmp/gamesense_crash.txt", /* O_WRONLY|O_CREAT|O_TRUNC */ 0x41 | 01000);
         if (fd >= 0) {
-            appendString(fd, "gamesense crash: signal ");
+            appendString(fd, "Neversneeze crash: signal ");
             appendHex(fd, static_cast<std::uint32_t>(signalNumber));
             appendString(fd, "\npc = ");
             describeAddress(fd, pc);

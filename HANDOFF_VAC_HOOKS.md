@@ -45,7 +45,7 @@
 gcc -O2 -o inject_memfd inject_memfd.c -ldl
 
 # Build the library
-cmake --build build --target Osiris
+cmake --build build --target Neversneeze
 
 # Inject (root required)
 sudo ./inject_memfd.sh
@@ -292,7 +292,7 @@ Use IDA MCP or `scratchpad/disasm.py` capstone toolkit to find these.
 
 ```bash
 cd /path/to/gamesense
-cmake --build build --target Osiris
+cmake --build build --target Neversneeze
 ```
 
 ---

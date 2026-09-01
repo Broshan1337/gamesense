@@ -434,7 +434,7 @@ inline bool initForWindow(SDL_Window* w) noexcept
     window = w;
     windowId = functions.getWindowID(w);
     ImGuiIO& io = ImGui::GetIO();
-    io.BackendPlatformName = "gamesense_sdl3";
+    io.BackendPlatformName = "neversneeze_sdl3";
     io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
     return true;
 }

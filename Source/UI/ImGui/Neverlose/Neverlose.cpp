@@ -2777,8 +2777,8 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
     d->AddLine(base + ImVec2(kSidebarWidth, 0), base + ImVec2(kSidebarWidth, kShellHeight), C(30, 33, 43));
 
     d->AddRectFilled(base + ImVec2(s(15), s(11)), base + ImVec2(s(45), s(43)), C(22, 22, 25), s(7));
-    text(d, base + ImVec2(s(21), s(18)), g_accent, "GS", kTextTitle, strongFont());
-    text(d, base + ImVec2(s(53), s(14)), C(228, 230, 236), "Gamesense", kTextTitle, strongFont());
+    text(d, base + ImVec2(s(21), s(18)), g_accent, "NS", kTextTitle, strongFont());
+    text(d, base + ImVec2(s(53), s(14)), C(228, 230, 236), "Neversneeze", kTextTitle, strongFont());
     text(d, base + ImVec2(s(53), s(33)), C(91, 96, 108), "Counter-Strike 2", s(8));
     d->AddLine(base + ImVec2(s(10), s(56)), base + ImVec2(s(147), s(56)), C(26, 26, 30));
 
@@ -2808,7 +2808,7 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
 
     // The expanded Visuals sub-list (8 pages) can outgrow the rail space between the logo and
     // the account bar - clamp the nav content with a clip rect and wheel-scroll it instead of
-    // letting Misc slide behind the Gamesense chip.
+    // letting Misc slide behind the Neversneeze chip.
     const float expand = motion(ImGui::GetID("##visual_expand"), state.visualsExpanded ? 1.0f : 0.0f, 18.0f);
     const float navTop = base.y + s(58.0f);
     const float navBottom = base.y + kShellHeight - s(45.0f) - s(4.0f);
@@ -3007,7 +3007,7 @@ void accountBar(ImDrawList* d, ImVec2 base) noexcept
     if (r > 0.001f)
         d->AddRectFilled(account, account + ImVec2(barWidth, s(38)), C(37, 37, 41, static_cast<int>(235 * r)), s(6));
 
-    // avatar: user image from <Osiris dir>/avatar.png once uploaded, GS monogram fallback.
+    // avatar: user image from <config dir>/avatar.png once uploaded, NS monogram fallback.
     const ImVec2 avatar = account + ImVec2(s(7), s(5));
     const float avatarRadius = s(14);
     const ImTextureID avatarTex = reinterpret_cast<ImTextureID>(VulkanHook::avatar_texture::query());
@@ -3015,10 +3015,10 @@ void accountBar(ImDrawList* d, ImVec2 base) noexcept
         d->AddImageRounded(avatarTex, avatar, avatar + ImVec2(avatarRadius * 2.0f, avatarRadius * 2.0f), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), C(255, 255, 255, 255), avatarRadius);
     else {
         d->AddCircleFilled(avatar + ImVec2(avatarRadius, avatarRadius), avatarRadius, C(22, 22, 25));
-        textY(d, avatar.x + s(5), avatar.y, s(28), g_accent, "GS", kTextControl, strongFont());
+        textY(d, avatar.x + s(5), avatar.y, s(28), g_accent, "NS", kTextControl, strongFont());
     }
     d->AddCircle(avatar + ImVec2(avatarRadius, avatarRadius), avatarRadius, g_accent, 0, s(2));
-    text(d, account + ImVec2(s(43), s(4)), C(225, 227, 233), "Gamesense", kTextControl, nullptr);
+    text(d, account + ImVec2(s(43), s(4)), C(225, 227, 233), "Neversneeze", kTextControl, nullptr);
     text(d, account + ImVec2(s(43), s(20)), C(111, 116, 128), "INSERT to toggle", kTextSmall, nullptr);
     chevron(d, account + ImVec2(barWidth - s(9), s(16)), C(181, 185, 195));
 }
@@ -3301,7 +3301,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
     }
     y += rowHeight;
 
-    textY(d, p.x + s(14), y, rowHeight, C(150, 154, 165), "Gamesense - neverlose UI port", kTextSmall, nullptr);
+    textY(d, p.x + s(14), y, rowHeight, C(150, 154, 165), "Neversneeze", kTextSmall, nullptr);
 
     const float eased = 1.0f - std::pow(1.0f - open, 3.0f);
     const ImVec2 pivot(p.x + size.x * 0.5f, p.y + size.y);
@@ -4186,9 +4186,9 @@ void drawPlayerListWindow() noexcept
 }
 
 // --- avatar (account-bar image) -------------------------------------------------------
-// The user drops avatar.png (or .jpg) into the Osiris folder; it is decoded once on the present
+// The user drops avatar.png (or .jpg) into the config folder; it is decoded once on the present
 // thread and handed to the Vulkan hook for upload (avatar_texture in VulkanHook.h). Anything
-// missing or undecodable simply keeps the GS monogram fallback.
+// missing or undecodable simply keeps the NS monogram fallback.
 
 bool avatarLoadAttempted = false;
 

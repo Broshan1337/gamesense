@@ -5,7 +5,7 @@
 
 namespace watermark_vars
 {
-// The "gamesense | 84 | fps" HUD watermark. On by default; it is cosmetic and local-only.
+// The "Neversneeze | 84 | fps" HUD watermark. On by default; it is cosmetic and local-only.
 CONFIG_VARIABLE(Enabled, bool, true);
 
 // Segment toggles - each "| fps", "| u/s", "| ping", "| td" and clock chunk of the watermark

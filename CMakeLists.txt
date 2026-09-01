@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(Osiris LANGUAGES CXX)
+project(Neversneeze LANGUAGES CXX)
 
 # No build type configured (bare `cmake -B build`, or an IDE defaulting to Debug) must never
 # silently produce a -O0 debug binary: besides being ~4x larger, a Debug build asserts at
