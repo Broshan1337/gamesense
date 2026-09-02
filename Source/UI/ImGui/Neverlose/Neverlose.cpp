@@ -2573,9 +2573,261 @@ struct ScriptEditor {
     char buffer[98 * 1024] = {};              // editor content (fits kMaxScriptBytes)
     bool dirty = false;
     char status[160] = {};                    // last save/load feedback
+    double statusTime = 0.0;                  // shown for a few seconds after a save/revert
 };
 
 ScriptEditor scriptEditor;
+
+// Control-id base for script-owned gui.* items - far above the page*1000 controlId space and
+// the sliderRow id+500000 pills, so nothing collides.
+constexpr int kScriptGuiControlBase = 900000;
+
+// --- script editor: undo/redo + Lua syntax highlighting --------------------------------
+//
+// The InputTextMultiline renders with INVISIBLE text (alpha 0) and we draw the same layout
+// ourselves on top: 1.91.7 multiline does not soft-wrap (one AddText per whole buffer, lines
+// advance by FontSize, horizontal chunk-scroll = InputTextState::Scroll.x, vertical scroll is
+// zero because the input is sized to its exact content height inside our own scroll child), so
+// per-line token drawing lands pixel-exact on the native layout. The native selection
+// background (semi-transparent) still renders above the highlight, and the native caret is
+// invisible with the text, so we draw our own.
+
+// Snapshot undo/redo (freestanding statics, no heap): the input runs with
+// ImGuiInputTextFlags_NoUndoRedo so ImGui's own per-character undo never fights ours. A
+// snapshot is taken on every edit burst (>0.5s gap), so Ctrl+Z rewinds in word-burst steps.
+constexpr int kEditorUndoDepth = 16;
+constexpr int kEditorRedoDepth = 8;
+
+struct ScriptEditorUndo {
+    char undo[kEditorUndoDepth][98 * 1024];
+    int undoLengths[kEditorUndoDepth] = {};
+    int undoCount = 0;
+    char redo[kEditorRedoDepth][98 * 1024];
+    int redoLengths[kEditorRedoDepth] = {};
+    int redoCount = 0;
+    char preEdit[98 * 1024] = {}; // content as it was at the start of this frame
+    double lastEditTime = -100.0;
+};
+ScriptEditorUndo scriptEditorUndo;
+int scriptEditorPendingHistory = 0; // 1 = undo, 2 = redo - deferred one frame past ClearActiveID
+
+void scriptEditorPushUndo() noexcept
+{
+    auto& u = scriptEditorUndo;
+    const int length = static_cast<int>(std::strlen(u.preEdit));
+    if (u.undoCount == kEditorUndoDepth) {
+        std::memmove(u.undo[0], u.undo[1], sizeof(u.undo[0]) * (kEditorUndoDepth - 1));
+        std::memmove(u.undoLengths, u.undoLengths + 1, sizeof(int) * (kEditorUndoDepth - 1));
+        --u.undoCount;
+    }
+    std::memcpy(u.undo[u.undoCount], u.preEdit, static_cast<std::size_t>(length) + 1);
+    u.undoLengths[u.undoCount] = length;
+    ++u.undoCount;
+    u.redoCount = 0; // a new edit branch invalidates redo
+}
+
+bool scriptEditorApplyHistory(ScriptEditor& editor, bool undoDir) noexcept
+{
+    auto& u = scriptEditorUndo;
+    char (*srcStack)[98 * 1024];
+    int* srcLengths;
+    int srcCount;
+    char (*dstStack)[98 * 1024];
+    int* dstLengths;
+    int dstCount;
+    int dstDepth;
+    if (undoDir) {
+        if (u.undoCount == 0)
+            return false;
+        srcStack = u.undo;
+        srcLengths = u.undoLengths;
+        srcCount = u.undoCount;
+        dstStack = u.redo;
+        dstLengths = u.redoLengths;
+        dstCount = u.redoCount;
+        dstDepth = kEditorRedoDepth;
+    } else {
+        if (u.redoCount == 0)
+            return false;
+        srcStack = u.redo;
+        srcLengths = u.redoLengths;
+        srcCount = u.redoCount;
+        dstStack = u.undo;
+        dstLengths = u.undoLengths;
+        dstCount = u.undoCount;
+        dstDepth = kEditorUndoDepth;
+    }
+    const int length = static_cast<int>(std::strlen(editor.buffer));
+    if (dstCount == dstDepth) {
+        std::memmove(dstStack[0], dstStack[1], sizeof(dstStack[0]) * (dstDepth - 1));
+        std::memmove(dstLengths, dstLengths + 1, sizeof(int) * (dstDepth - 1));
+        --dstCount;
+    }
+    std::memcpy(dstStack[dstCount], editor.buffer, static_cast<std::size_t>(length) + 1);
+    dstLengths[dstCount] = length;
+    ++dstCount;
+    --srcCount;
+    std::memcpy(editor.buffer, srcStack[srcCount], static_cast<std::size_t>(srcLengths[srcCount]) + 1);
+    // write the (possibly trimmed) counts back - src/dst alias different members, no overlap
+    if (undoDir) {
+        u.undoCount = srcCount;
+        u.redoCount = dstCount;
+    } else {
+        u.redoCount = srcCount;
+        u.undoCount = dstCount;
+    }
+    return true;
+}
+
+int scriptEditorTabCallback(ImGuiInputTextCallbackData* data) noexcept
+{
+    if (data->EventFlag == ImGuiInputTextFlags_CallbackCompletion)
+        data->InsertChars(data->CursorPos, "    "); // Tab indents instead of stealing focus
+    return 0;
+}
+
+int scriptEditorLineCount() noexcept
+{
+    int count = 1;
+    for (const char* p = scriptEditor.buffer; (p = std::strchr(p, '\n')) != nullptr; ++p)
+        ++count;
+    return count;
+}
+
+// Lua tokenizer + renderer for one editor frame. Draws into the scroll child's draw list at
+// the input's exact text origin. Colors follow the menu palette.
+void drawScriptEditorHighlight(ImDrawList* d, const ImVec2& origin, const ImVec2& clipMin, const ImVec2& clipMax,
+    float scrollX, const int* cursorByte) noexcept
+{
+    constexpr ImU32 kDefault = IM_COL32(207, 209, 218, 255);
+    constexpr ImU32 kKeyword = IM_COL32(158, 130, 240, 255);
+    constexpr ImU32 kString = IM_COL32(140, 200, 120, 255);
+    constexpr ImU32 kNumber = IM_COL32(230, 170, 90, 255);
+    constexpr ImU32 kComment = IM_COL32(96, 106, 120, 255);
+    constexpr ImU32 kApi = IM_COL32(90, 170, 230, 255);
+    static constexpr const char* kKeywords[] = {"and", "break", "do", "else", "elseif", "end", "false", "for",
+        "function", "goto", "if", "in", "local", "nil", "not", "or", "repeat", "return", "then", "true", "until", "while"};
+    static constexpr const char* kApis[] = {"client", "renderer", "gui", "entity", "memory", "http", "ffi", "bit", "jit"};
+
+    const auto identStart = [](unsigned char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; };
+    const auto identChar = [&identStart](unsigned char c) { return identStart(c) || (c >= '0' && c <= '9'); };
+    const auto digitChar = [](unsigned char c) { return c >= '0' && c <= '9'; };
+    const auto hexChar = [&digitChar](unsigned char c) { return digitChar(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); };
+    const auto wordIs = [](const char* p, const char* end, const char* word) {
+        const std::size_t length = std::strlen(word);
+        return static_cast<std::size_t>(end - p) == length && std::memcmp(p, word, length) == 0;
+    };
+
+    ImFont* font = ImGui::GetIO().Fonts->Fonts[0];
+    const float fontSize = font->FontSize;
+    const double time = ImGui::GetTime();
+    const bool caretVisible = std::fmod(time, 1.2) < 0.8; // matches ConfigInputTextCursorBlink cadence
+
+    d->PushClipRect(clipMin, clipMax, true);
+    int lineIndex = 0;
+    int lineStartOffset = 0;
+    bool inBlockComment = false;
+    float caretX = 0.0f;
+    float caretY = 0.0f;
+    bool caretFound = false;
+    for (const char* lineStart = scriptEditor.buffer;;) {
+        const char* newline = std::strchr(lineStart, '\n');
+        const char* lineEnd = newline ? newline : lineStart + std::strlen(lineStart);
+        const int lineEndOffset = lineStartOffset + static_cast<int>(lineEnd - lineStart);
+        const float y = origin.y + lineIndex * fontSize;
+        if (y > clipMax.y)
+            break;
+        if (y + fontSize >= clipMin.y) {
+            float x = origin.x - scrollX;
+            const char* p = lineStart;
+            while (p < lineEnd) {
+                const char* runStart = p;
+                const char* runEnd = lineEnd;
+                ImU32 color = kDefault;
+                if (inBlockComment) {
+                    color = kComment;
+                    const char* c = p;
+                    while (c + 1 < lineEnd && !(c[0] == ']' && c[1] == ']'))
+                        ++c;
+                    if (c + 1 < lineEnd && c[0] == ']' && c[1] == ']') {
+                        runEnd = c + 2;
+                        inBlockComment = false;
+                    }
+                } else if (p + 1 < lineEnd && p[0] == '-' && p[1] == '-') {
+                    color = kComment;
+                    if (p + 3 < lineEnd && p[2] == '[' && p[3] == '[')
+                        inBlockComment = true; // --[[ opens a block; the rest of the line is comment
+                } else if (*p == '"' || *p == '\'') {
+                    color = kString;
+                    const char quote = *p;
+                    const char* c = p + 1;
+                    while (c < lineEnd) {
+                        if (*c == '\\' && c + 1 < lineEnd)
+                            c += 2;
+                        else if (*c == quote) {
+                            ++c;
+                            break;
+                        } else
+                            ++c;
+                    }
+                    runEnd = c < lineEnd ? c : lineEnd;
+                } else if (digitChar(static_cast<unsigned char>(*p))
+                    || (*p == '.' && p + 1 < lineEnd && digitChar(static_cast<unsigned char>(p[1])))) {
+                    color = kNumber;
+                    const char* c = p;
+                    if (c[0] == '0' && c + 1 < lineEnd && (c[1] == 'x' || c[1] == 'X')) {
+                        c += 2;
+                        while (c < lineEnd && hexChar(static_cast<unsigned char>(*c)))
+                            ++c;
+                    } else {
+                        while (c < lineEnd && (digitChar(static_cast<unsigned char>(*c)) || *c == '.'))
+                            ++c;
+                    }
+                    runEnd = c;
+                } else if (identStart(static_cast<unsigned char>(*p))) {
+                    const char* c = p;
+                    while (c < lineEnd && identChar(static_cast<unsigned char>(*c)))
+                        ++c;
+                    for (const char* keyword : kKeywords)
+                        if (wordIs(p, c, keyword)) { color = kKeyword; break; }
+                    if (color == kDefault)
+                        for (const char* api : kApis)
+                            if (wordIs(p, c, api)) { color = kApi; break; }
+                    runEnd = c;
+                } else {
+                    // punctuation / whitespace run
+                    const char* c = p;
+                    while (c < lineEnd && !identStart(static_cast<unsigned char>(*c)) && !digitChar(static_cast<unsigned char>(*c))
+                        && *c != '"' && *c != '\'' && !(c + 1 < lineEnd && c[0] == '-' && c[1] == '-'))
+                        ++c;
+                    runEnd = c > p ? c : p + 1;
+                }
+                bool hasVisible = false;
+                for (const char* c = runStart; c < runEnd; ++c)
+                    if (*c != ' ' && *c != '\t') { hasVisible = true; break; }
+                if (hasVisible)
+                    d->AddText(font, fontSize, ImVec2(x, y), color, runStart, runEnd);
+                x += font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, runStart, runEnd).x;
+                p = runEnd;
+            }
+            // caret column (the native one is invisible along with the ghost text)
+            if (cursorByte && !caretFound && *cursorByte >= lineStartOffset && *cursorByte <= lineEndOffset) {
+                const int cursorInLine = (*cursorByte - lineStartOffset < lineEnd - lineStart) ? *cursorByte - lineStartOffset : static_cast<int>(lineEnd - lineStart);
+                caretX = origin.x - scrollX + font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, lineStart, lineStart + cursorInLine).x;
+                caretY = y;
+                caretFound = true;
+            }
+        }
+        if (!newline)
+            break;
+        lineStart = newline + 1;
+        lineStartOffset = lineEndOffset + 1;
+        ++lineIndex;
+    }
+    if (cursorByte && caretFound && caretVisible)
+        d->AddRectFilled(ImVec2(caretX, caretY + 1.0f), ImVec2(caretX + 1.5f, caretY + fontSize - 1.0f), IM_COL32(226, 228, 235, 220));
+    d->PopClipRect();
+}
 
 void drawScriptEditorWindow() noexcept
 {
@@ -2590,31 +2842,143 @@ void drawScriptEditorWindow() noexcept
     const ImGuiWindowFlags editorFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings
         | ImGuiWindowFlags_NoScrollbar; // the input scrolls its own content
 
+    // The window id IS the title string: it must never change between frames or ImGui treats
+    // this as a brand-new window - position resets to the default and keyboard focus (the
+    // InputText) dies. That was exactly the "backspace moves the window and drops the caret"
+    // bug when the dirty asterisk was part of the title; the marker renders in the caption
+    // row below instead.
     char title[160];
-    std::snprintf(title, sizeof(title), "%s%s##script_editor", scriptEditor.name, scriptEditor.dirty ? " *" : "");
+    std::snprintf(title, sizeof(title), "%s##script_editor", scriptEditor.name);
     if (ImGui::Begin(title, &scriptEditor.open, editorFlags)) {
         ImDrawList* d = ImGui::GetWindowDrawList();
 
-        // caption: scripts folder
-        textY(d, ImGui::GetWindowPos().x, ImGui::GetWindowPos().y + s(2), s(16), C(110, 114, 124), lua::scriptsDirPath, kTextCaption, nullptr);
+        // glow: same nested rounded-ring pass as the menu shell (drawn first = under content)
+        if (ui_config::get<MenuGlowEnabled>()) {
+            const auto glowColor = ui_config::get<MenuGlowColor>();
+            const float glowSize = static_cast<float>(ui_config::get<MenuGlowSize>());
+            float r = glowColor.r() / 255.0f;
+            float g = glowColor.g() / 255.0f;
+            float b = glowColor.b() / 255.0f;
+            if (ui_config::get<MenuGlowRainbow>()) {
+                float hue = std::fmod(static_cast<float>(ImGui::GetTime()) * ui_config::get<MenuGlowSpeed>() * 0.1f, 1.0f);
+                ImGui::ColorConvertHSVtoRGB(hue, 0.8f, 1.0f, r, g, b);
+            }
+            const int aC = static_cast<int>(glowColor.a());
+            const ImVec2 gMin = ImGui::GetWindowPos();
+            const ImVec2 gMax = gMin + ImGui::GetWindowSize();
+            const int rings = ImClamp(static_cast<int>(glowSize / 2.5f), 8, 24);
+            const float thickness = glowSize / rings + 2.0f;
+            for (int i = rings; i >= 1; --i) {
+                const float outer = glowSize * static_cast<float>(i) / static_cast<float>(rings);
+                const float inner = glowSize * static_cast<float>(i - 1) / static_cast<float>(rings);
+                const float offset = (outer + inner) * 0.5f - 0.5f;
+                const float fade = 1.0f - static_cast<float>(i) / static_cast<float>(rings);
+                const float ringAlpha = static_cast<float>(aC) * (fade * fade * (3.0f - 2.0f * fade));
+                if (ringAlpha < 1.0f)
+                    continue;
+                d->AddRect(ImVec2(gMin.x - offset, gMin.y - offset), ImVec2(gMax.x + offset, gMax.y + offset),
+                    IM_COL32(static_cast<int>(r * 255), static_cast<int>(g * 255), static_cast<int>(b * 255), static_cast<int>(ringAlpha)),
+                    s(10.0f) + offset, 0, thickness + 1.0f);
+            }
+        }
 
-        // editor body: fixed buffer InputTextMultiline (no std::string in this tree), fills
-        // whatever space is left under the action row.
-        const ImVec2 inputSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y - s(34));
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, C(19, 19, 21));
-        ImGui::PushStyleColor(ImGuiCol_Text, C(207, 209, 218));
-        ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-        const bool edited = ImGui::InputTextMultiline("##script_source", scriptEditor.buffer, sizeof(scriptEditor.buffer), inputSize);
+        // caption: scripts folder ... + dirty/save status on the right
+        const bool showStatus = scriptEditor.status[0] != '\0' && ImGui::GetTime() - scriptEditor.statusTime < 3.0;
+        const char* stateText = showStatus ? scriptEditor.status : (scriptEditor.dirty ? "unsaved changes" : "");
+        if (stateText[0]) {
+            const float stateWidth = ImGui::GetFont()->CalcTextSizeA(kTextCaption, FLT_MAX, 0.0f, stateText).x;
+            textY(d, ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - s(14) - stateWidth, ImGui::GetWindowPos().y + s(2), s(16),
+                scriptEditor.dirty ? C(232, 180, 96) : C(140, 200, 120), stateText, kTextCaption, nullptr);
+        }
+
+        // editor body: the input lives in OUR scroll child (content-sized input -> its internal
+        // scrolling stays at zero, so the highlight overlay always knows the exact offsets).
+        const ImVec2 viewSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y - s(34));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, C(19, 19, 21));
+        ImGui::BeginChild("##editor_view", viewSize, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
+        ImDrawList* vd = ImGui::GetWindowDrawList();
+        const ImVec2 vMin = ImGui::GetWindowPos();
+        const ImVec2 vMax = vMin + viewSize;
+        vd->AddRectFilled(vMin, vMax, C(19, 19, 21), s(4));
+
+        ImFont* editorFont = ImGui::GetIO().Fonts->Fonts[0];
+        const float lineHeight = editorFont->FontSize;
+        const int lineCount = scriptEditorLineCount();
+        const float contentHeight = (lineCount + 1) * lineHeight + ImGui::GetStyle().FramePadding.y * 2.0f;
+
+        // snapshot the pre-edit content for the undo burst detection
+        std::memcpy(scriptEditorUndo.preEdit, scriptEditor.buffer, std::strlen(scriptEditor.buffer) + 1);
+
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, C(19, 19, 21, 0)); // input bg invisible, ours above
+        ImGui::PushStyleColor(ImGuiCol_Text, C(207, 209, 218, 0)); // ghost text: the highlight draws it
+        ImGui::PushFont(editorFont);
+        const bool edited = ImGui::InputTextMultiline("##script_source", scriptEditor.buffer, sizeof(scriptEditor.buffer),
+            ImVec2(ImGui::GetContentRegionAvail().x, contentHeight),
+            ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_NoUndoRedo, scriptEditorTabCallback);
+        const ImGuiID inputId = ImGui::GetItemID();
+        const bool inputActive = ImGui::IsItemActive();
         ImGui::PopFont();
         ImGui::PopStyleColor(2);
-        if (edited)
-            scriptEditor.dirty = true;
 
-        // action row: SAVE + RELOAD FROM DISK (left), RUN (right)
+        if (edited) {
+            scriptEditor.dirty = true;
+            const double now = ImGui::GetTime();
+            if (now - scriptEditorUndo.lastEditTime > 0.5) {
+                scriptEditorPushUndo(); // burst start: snapshot the pre-edit content
+            }
+            scriptEditorUndo.lastEditTime = now;
+        }
+
+        // undo/redo: keyboard (input inactive -> apply now, active -> deactivate and apply on
+        // the next frame, after InputText's own deactivated-state reapply has settled)
+        const bool editorFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+        bool wantUndo = editorFocused && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false);
+        bool wantRedo = editorFocused && ImGui::GetIO().KeyCtrl && (ImGui::IsKeyPressed(ImGuiKey_Y, false) || (ImGui::IsKeyPressed(ImGuiKey_Z, false) && ImGui::GetIO().KeyShift));
+        if (scriptEditorPendingHistory == 1)
+            wantUndo = true;
+        if (scriptEditorPendingHistory == 2)
+            wantRedo = true;
+        scriptEditorPendingHistory = 0;
+        if (wantUndo || wantRedo) {
+            if (inputActive) {
+                ImGui::ClearActiveID();
+                scriptEditorPendingHistory = wantUndo ? 1 : 2;
+            } else if (scriptEditorApplyHistory(scriptEditor, wantUndo)) {
+                scriptEditor.dirty = true;
+                std::snprintf(scriptEditor.status, sizeof(scriptEditor.status), wantUndo ? "undo" : "redo");
+                scriptEditor.statusTime = ImGui::GetTime();
+            }
+        }
+
+        // syntax highlight overlay: exact native layout (origin + per-line advance + Scroll.x)
+        {
+            const ImVec2 itemMin = ImGui::GetItemRectMin();
+            const ImGuiInputTextState* inputState = ImGui::GetInputTextState(inputId);
+            const float scrollX = inputState ? inputState->Scroll.x : 0.0f;
+            int cursorByte = inputState ? inputState->GetCursorPos() : -1;
+            drawScriptEditorHighlight(vd, ImVec2(itemMin.x + ImGui::GetStyle().FramePadding.x, itemMin.y + ImGui::GetStyle().FramePadding.y),
+                vMin, vMax, scrollX, inputState ? &cursorByte : nullptr);
+        }
+
+        // scroll thumb
+        const float scrollMaxY = ImGui::GetScrollMaxY();
+        if (scrollMaxY > 0.0f) {
+            const float viewH = vMax.y - vMin.y;
+            const float thumbH = ImMax(s(24.0f), viewH * viewH / (viewH + scrollMaxY));
+            const float thumbY = vMin.y + (viewH - thumbH) * (ImGui::GetScrollY() / scrollMaxY);
+            vd->AddRectFilled(ImVec2(vMax.x - s(4), thumbY), ImVec2(vMax.x - s(2), thumbY + thumbH), C(60, 62, 70, 180), s(2));
+        }
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+
+        // action row: UNDO + REDO (left), SAVE + REVERT + RUN (right)
         const float y = ImGui::GetCursorScreenPos().y + s(4);
         const float saveWidth = s(64);
         const float revertWidth = s(96);
         const float runWidth = s(56);
+        const float undoWidth = s(64);
+        const float redoWidth = s(64);
+        const float rowLeft = ImGui::GetWindowPos().x + s(12);
         const float rowRight = ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - s(12);
 
         auto editorButton = [&](int id, const char* label, float x, float width) {
@@ -2629,22 +2993,34 @@ void drawScriptEditorWindow() noexcept
             return clicked;
         };
 
-        if (editorButton(1, "SAVE", rowRight - saveWidth, saveWidth) && scriptEditor.dirty) {
+        auto saveEditor = [&]() {
             const std::size_t length = std::strlen(scriptEditor.buffer);
             if (lua::writeScript(scriptEditor.name, scriptEditor.buffer, length)) {
                 scriptEditor.dirty = false;
                 std::snprintf(scriptEditor.status, sizeof(scriptEditor.status), "saved");
+                scriptEditor.statusTime = ImGui::GetTime();
+                if (lua::loadedIndex(scriptEditor.name) >= 0)
+                    lua::load(scriptEditor.name); // live-reload: keep a loaded script in sync
             } else {
                 std::snprintf(scriptEditor.status, sizeof(scriptEditor.status), "save failed");
+                scriptEditor.statusTime = ImGui::GetTime();
             }
-            if (lua::loadedIndex(scriptEditor.name) >= 0)
-                lua::load(scriptEditor.name); // live-reload: keep a loaded script in sync
-        }
+        };
+
+        if (editorButton(4, "UNDO", rowLeft, undoWidth))
+            scriptEditorPendingHistory = 1;
+        if (editorButton(5, "REDO", rowLeft + undoWidth + s(6), redoWidth))
+            scriptEditorPendingHistory = 2;
+
+        if ((editorButton(1, "SAVE", rowRight - saveWidth, saveWidth) && scriptEditor.dirty)
+            || (editorFocused && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false)))
+            saveEditor();
         if (editorButton(2, "REVERT", rowRight - saveWidth - s(6) - revertWidth, revertWidth)) {
             long size = 0;
             if (lua::readScript(scriptEditor.name, scriptEditor.buffer, sizeof(scriptEditor.buffer), &size)) {
                 scriptEditor.dirty = false;
                 std::snprintf(scriptEditor.status, sizeof(scriptEditor.status), "reloaded from disk");
+                scriptEditor.statusTime = ImGui::GetTime();
             }
         }
         if (editorButton(3, "RUN", rowRight - saveWidth - s(6) - revertWidth - s(6) - runWidth, runWidth))
@@ -2801,6 +3177,63 @@ void pageScripts() noexcept
 
     columnYs[0] += height + s(30.0f);
     columnYs[1] = columnYs[0];
+
+    // --- second card: SCRIPT CONTROLS ---
+    // Rows created by loaded scripts through gui.checkbox / gui.slider. Values are read/written
+    // in place in lua::scripts[].guiItems (same unlocked-menu access the rest of this file does
+    // on the framework state); the widget ids live in their own kScriptGuiControlBase range.
+    {
+        int guiRows = 1; // header row
+        for (int i = 0; i < lua::kMaxScripts; ++i) {
+            if (lua::scripts[i].L && lua::scripts[i].guiItemCount > 0)
+                guiRows += 1 + lua::scripts[i].guiItemCount; // script caption + item rows
+        }
+        const bool hasItems = guiRows > 1;
+        if (!hasItems)
+            ++guiRows; // hint row
+
+        const float controlsHeight = guiRows * kRowHeight + s(12.0f);
+        const float cy = shellBase.y + kToolbarHeight + s(24.0f) + columnYs[0] - scrollOffset;
+
+        text(d, ImVec2(x, cy - s(16.0f)), C(89, 94, 106), "SCRIPT CONTROLS", kTextCaption, nullptr);
+        const ImVec2 cp(x, cy);
+        softShadow(d, cp, cp + ImVec2(width, controlsHeight), s(14.0f));
+        d->AddRectFilled(cp, cp + ImVec2(width, controlsHeight), C(16, 16, 18, 224), s(14.0f));
+        d->AddRect(cp, cp + ImVec2(width, controlsHeight), C(30, 30, 33), s(14.0f));
+        card = CardContext{cp + ImVec2(0, s(6.0f)), width, 0};
+
+        {
+            const float rowY = card.origin.y + 0 * kRowHeight;
+            textY(d, card.origin.x + s(13), rowY, kRowHeight, C(89, 94, 106), "MENU ITEMS CREATED BY LOADED SCRIPTS (GUI.*)", kTextCaption, nullptr);
+            ++card.row;
+        }
+
+        if (!hasItems) {
+            const float rowY = card.origin.y + 1 * kRowHeight;
+            textY(d, card.origin.x + s(13), rowY, kRowHeight, C(110, 114, 124), "scripts add rows here with gui.checkbox / gui.slider", kTextControl, nullptr);
+            ++card.row;
+        } else {
+            for (int i = 0; i < lua::kMaxScripts; ++i) {
+                lua::Script& script = lua::scripts[i];
+                if (!script.L || script.guiItemCount == 0)
+                    continue;
+                const float rowY = card.origin.y + card.row * kRowHeight;
+                textY(d, card.origin.x + s(13), rowY, kRowHeight, g_accent, script.name, kTextCaption, nullptr);
+                ++card.row;
+                for (int itemIndex = 0; itemIndex < script.guiItemCount; ++itemIndex) {
+                    lua::GuiItem& item = script.guiItems[itemIndex];
+                    const int id = kScriptGuiControlBase + i * lua::kMaxGuiItems + itemIndex;
+                    if (item.type == lua::GuiItem::Type::Checkbox)
+                        toggle(item.label, &item.boolValue, id);
+                    else
+                        sliderRow(item.label, &item.intValue, item.minValue, item.maxValue, id, "");
+                }
+            }
+        }
+
+        columnYs[0] += controlsHeight + s(30.0f);
+        columnYs[1] = columnYs[0];
+    }
 
     // The editor is its own resizable window on top of the shell - it renders here so it exists
     // exactly while this page is active (like the config popovers).

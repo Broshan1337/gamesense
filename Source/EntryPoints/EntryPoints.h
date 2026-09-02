@@ -15,6 +15,9 @@
 #include <UI/ImGui/GUI.h>
 
 #include <CS2/Econ/PaintKitIndex.h>
+#include <CS2/Classes/Entities/C_CSPlayerPawn.h>
+#include <CS2/Classes/Entities/C_BaseEntity.h>
+#include <CS2/Classes/EntitySystem/CEntityIndex.h>
 #include <Features/Combat/Aimbot/Aimbot.h>
 #include <Features/Combat/Aimbot/AimbotFovCircle.h>
 #include <Features/Combat/AttackCommand.h>
@@ -26,6 +29,9 @@
 #include <GameClient/SubtickMoves.h>
 #include <GameClient/UserCmd.h>
 #include <GameClient/GameEvents/GameEventFields.h>
+#include <GameClient/Entities/BaseEntity.h>
+#include <GameClient/Entities/PlayerPawn.h>
+#include <GameClient/EntitySystem/EntitySystem.h>
 #include <Features/Radio/RadioManager.h>
 #include <Features/SkinChanger/SkinChanger.h>
 #include <Features/Game/Blockbot.h>
@@ -68,6 +74,49 @@
     // are loaded on demand from the menu tab, not automatically here.
     lua::init();
     lua::menuOpenQuery = []() noexcept { return GUI::isMenuOpen(); };
+
+    // Entity/schema bridges for the Lua entity.* API. Each query builds its own HookContext per
+    // call behind the same guards as ui_config::withContext, so the Lua core never links the
+    // pattern/schema machinery and the unit tests run with all four pointers null.
+    lua::localPlayerIndexQuery = []() noexcept -> int {
+        if (!HookContext<GlobalContext>::isGlobalContextComplete() || HookQuiesce::isShuttingDown())
+            return 0;
+        HookContext<GlobalContext> context;
+        return context.localPlayerController().baseEntity().handle().index().value;
+    };
+    lua::entityFromIndexQuery = [](int entityIndex) noexcept -> void* {
+        if (!HookContext<GlobalContext>::isGlobalContextComplete() || HookQuiesce::isShuttingDown())
+            return nullptr;
+        HookContext<GlobalContext> context;
+        return context.make<EntitySystem>().getEntityFromIndex(cs2::CEntityIndex{entityIndex});
+    };
+    lua::schemaFieldOffsetQuery = [](const char* className, const char* fieldName) noexcept -> int {
+        if (!HookContext<GlobalContext>::isGlobalContextComplete() || HookQuiesce::isShuttingDown())
+            return -1;
+        HookContext<GlobalContext> context;
+        const auto offset = context.schemaSystem().getFieldOffset(className, fieldName);
+        return offset.has_value() ? *offset : -1;
+    };
+    lua::playerListQuery = [](lua::PlayerListEntry* out, int max) noexcept -> int {
+        if (!out || max <= 0 || !HookContext<GlobalContext>::isGlobalContextComplete() || HookQuiesce::isShuttingDown())
+            return 0;
+        HookContext<GlobalContext> context;
+        int count = 0;
+        context.make<EntitySystem>().forEachNetworkableEntityIdentity([&](const auto& entityIdentity) {
+            if (count >= max)
+                return;
+            auto&& baseEntity = context.make<BaseEntity>(static_cast<cs2::C_BaseEntity*>(entityIdentity.entity));
+            if (!baseEntity.classify().is<cs2::C_CSPlayerPawn>())
+                return;
+            const int controllerIndex = baseEntity.as<PlayerPawn>().playerController().baseEntity().handle().index().value;
+            if (controllerIndex <= 0)
+                return;
+            out[count].controllerIndex = controllerIndex;
+            out[count].pawnIndex = entityIdentity.handle.index().value;
+            ++count;
+        });
+        return count;
+    };
 
     // ImGui menu: build the context (allocations bridged to CS2's IMemAlloc) and attempt the
     // Vulkan presentation hook. The hook legitimately fails while libvulkan is not mapped yet
@@ -218,6 +267,67 @@ void Source2ClientHook_onFrameStageNotify(cs2::CSource2Client* thisptr, int fram
         hookContext.template make<Lagcomp>().run();
 }
 
+// Numeric event fields for the Lua callbacks' `event` table (see lua::dispatchEvent). Strings
+// are deliberately absent: intForKey/floatForKey/entityForKey are the only vtable slots
+// verified by decompilation in this tree (GameEventFields.h); GetString (slots 11/12 pair) is
+// not, and calling an unverified slot with a char* cast is a garbage-pointer read.
+// "userid"/"attacker" come out of entityForKey as 0-BASED PLAYER SLOTS (65535 = nobody) - see
+// localPlayerIsAttacker in GameEventFields.h for the full encoding trail.
+static int buildLuaEventArgs(lua::EventArg* out, const char* eventName, cs2::IGameEvent* event) noexcept
+{
+    constexpr int kMaxArgs = 16;
+    int count = 0;
+    if (!out || !eventName || !event)
+        return 0;
+    const auto addInt = [&](const char* key, int value) {
+        if (count < kMaxArgs) {
+            out[count].key = key;
+            out[count].isNumber = false;
+            out[count].intValue = value;
+            ++count;
+        }
+    };
+    const auto addFloat = [&](const char* key, float value) {
+        if (count < kMaxArgs) {
+            out[count].key = key;
+            out[count].isNumber = true;
+            out[count].numberValue = value;
+            ++count;
+        }
+    };
+
+    if (std::strcmp(eventName, "player_hurt") == 0) {
+        addInt("userid", static_cast<int>(game_events::entityForKey(event, "userid")));
+        addInt("attacker", static_cast<int>(game_events::entityForKey(event, "attacker")));
+        addInt("dmg_health", game_events::intForKey(event, "dmg_health"));
+        addInt("health", game_events::intForKey(event, "health"));
+        addInt("armor", game_events::intForKey(event, "armor"));
+        addInt("dmg_armor", game_events::intForKey(event, "dmg_armor"));
+        addInt("hitgroup", game_events::intForKey(event, "hitgroup"));
+    } else if (std::strcmp(eventName, "player_death") == 0) {
+        addInt("userid", static_cast<int>(game_events::entityForKey(event, "userid")));
+        addInt("attacker", static_cast<int>(game_events::entityForKey(event, "attacker")));
+        addInt("assister", static_cast<int>(game_events::entityForKey(event, "assister")));
+        addInt("headshot", game_events::intForKey(event, "headshot"));
+        addInt("dominated", game_events::intForKey(event, "dominated"));
+    } else if (std::strcmp(eventName, "weapon_fire") == 0) {
+        addInt("userid", static_cast<int>(game_events::entityForKey(event, "userid")));
+    } else if (std::strcmp(eventName, "bullet_impact") == 0) {
+        addInt("userid", static_cast<int>(game_events::entityForKey(event, "userid")));
+        addFloat("x", game_events::floatForKey(event, "x"));
+        addFloat("y", game_events::floatForKey(event, "y"));
+        addFloat("z", game_events::floatForKey(event, "z"));
+    } else if (std::strcmp(eventName, "hegrenade_detonate") == 0
+        || std::strcmp(eventName, "flashbang_detonate") == 0
+        || std::strcmp(eventName, "smokegrenade_detonate") == 0) {
+        addInt("userid", static_cast<int>(game_events::entityForKey(event, "userid")));
+        addFloat("x", game_events::floatForKey(event, "x"));
+        addFloat("y", game_events::floatForKey(event, "y"));
+        addFloat("z", game_events::floatForKey(event, "z"));
+    }
+    return count;
+}
+
 // Real hook on IGameEventManager2::FireEventClientSide (CGameEventManager vtable slot 9 - see
 // Hooks/GameEventManagerHook.h and CS2/Classes/IGameEventManager2.h for the full RE trail).
 // Infrastructure only for now - no per-event feature logic wired in yet (hitmarkers, hitsounds,
@@ -248,9 +358,13 @@ bool GameEventManagerHook_onFireEventClientSide(cs2::IGameEventManager2* thisptr
     hookContext.template make<SpawnProtectionSound>().onFireEventClientSide(event);
     hookContext.template make<CombatStats>().onFireEventClientSide(event);
     hookContext.template make<Killsay>().onFireEventClientSide(event);
-    // Lua scripts: dispatch under the event's own name (player_hurt etc.). Reads the name
-    // through the event vtable before the original can recycle the event object.
-    lua::dispatchEvent(game_events::name(event));
+    // Lua scripts: dispatch under the event's own name (player_hurt etc.), with the common
+    // numeric fields passed along as the callbacks' `event` table. Everything is read through
+    // the event vtable BEFORE the original can recycle the event object.
+    const char* const eventName = game_events::name(event);
+    lua::EventArg luaArgs[16];
+    const int luaArgCount = buildLuaEventArgs(luaArgs, eventName, event);
+    lua::dispatchEvent(eventName, luaArgs, luaArgCount);
 
     return hookContext.hooks().gameEventManagerHook.getOriginalFireEventClientSide()(thisptr, event);
 }

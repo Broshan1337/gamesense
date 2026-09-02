@@ -10,7 +10,14 @@
 //   client.set_event_callback(name, fn)   - events: "paint" (present thread, every frame,
 //                                           renderer valid inside), "createmove" (game thread,
 //                                           once per input tick), plus any game event name
-//                                           (e.g. "player_hurt", "weapon_fire")
+//                                           (e.g. "player_hurt", "weapon_fire"). Known events
+//                                           pass an `event` table of NUMERIC fields to the
+//                                           callback: player_hurt (userid/attacker 0-based
+//                                           player slots, 65535 = nobody, dmg_health, health,
+//                                           armor, dmg_armor, hitgroup), player_death (userid/
+//                                           attacker/assister/headshot/dominated), weapon_fire
+//                                           (userid), bullet_impact + *_detonate (userid,
+//                                           x/y/z floats). Other events pass nil.
 //   client.log(message)                   - engine console (VerifyConsole, throttled)
 //   client.get_screen_size()              - width, height
 //   client.is_menu_open()
@@ -25,6 +32,22 @@
 //   memory.pattern_scan(module, pattern)  - IDA-style "48 8B 05 ?? ?? ?? ??" scan of .text,
 //                                           returns the match address as lightuserdata or nil
 //   http.get(url, callback)               - async; callback(bodyOrNil) fires on a later frame
+//   entity.get_local_player()             - local CONTROLLER entity index, or nil when not
+//                                           in a game (schema/entity data not ready)
+//   entity.get_players()                  - table of controller entity indices (players with
+//                                           an active pawn; bots included)
+//   entity.get_player_pawn(controllerIdx) - pawn entity index for a controller index, or nil
+//   entity.get_prop(index, class, field)  - schema-driven read; declaring class required (the
+//                                           schema iterator does not walk parents). Int variant,
+//   entity.get_prop_float(...)            - float variant,
+//   entity.get_prop_string(...)           - string variant for fixed char arrays (printable
+//                                           check; nil when the bytes are not a clean string)
+//   gui.checkbox(label [, default])       - menu checkbox in the script's section; 1-based id
+//   gui.slider(label, min, max [, default]) - menu slider; 1-based id
+//   gui.get(id)                           - current value (boolean / integer)
+//   gui.set(id, value)                    - set from the script; values persist per script
+//                                           (sidecar <scriptsDir>/<name>.gui, applied by label
+//                                           on load, written on unload)
 //
 // FFI is available as a global (ffi.cast / ffi.C / ffi.load, LuaJIT GC64 build) for raw memory
 // work; memory.module_base + memory.pattern_scan give scripts the same anchors our C++ uses.
@@ -298,6 +321,230 @@ inline int l_httpGet(lua_State* L)
     return 0;
 }
 
+// ---- gui (script-owned menu items; values live in Script::guiItems) ----
+
+inline const char* checkGuiLabel(lua_State* L, int index)
+{
+    const char* label = luaL_checkstring(L, index);
+    const std::size_t length = std::strlen(label);
+    if (length == 0 || length >= kMaxGuiLabel)
+        luaL_error(L, "gui label must be 1-%d characters", static_cast<int>(kMaxGuiLabel) - 1);
+    for (std::size_t i = 0; i < length; ++i) {
+        const unsigned char c = static_cast<unsigned char>(label[i]);
+        if (c < 0x20 || c == '=')
+            luaL_error(L, "gui label contains a forbidden character");
+    }
+    return label;
+}
+
+inline GuiItem& guiItemAt(lua_State* L, int id)
+{
+    Script& script = selfScript(L);
+    if (id < 1 || id > script.guiItemCount)
+        luaL_error(L, "invalid gui item id %d", id);
+    return script.guiItems[id - 1];
+}
+
+inline int l_guiCheckbox(lua_State* L)
+{
+    Script& script = selfScript(L);
+    const char* label = checkGuiLabel(L, 1);
+    const bool defaultValue = lua_toboolean(L, 2) != 0;
+    if (script.guiItemCount >= kMaxGuiItems)
+        return luaL_error(L, "too many gui items (max %d)", kMaxGuiItems);
+    GuiItem& item = script.guiItems[script.guiItemCount++];
+    item = GuiItem{};
+    item.type = GuiItem::Type::Checkbox;
+    std::strncpy(item.label, label, kMaxGuiLabel - 1);
+    item.boolValue = defaultValue;
+    if (const auto* saved = findPendingGuiDefault(script.name, label))
+        item.boolValue = saved->boolValue; // sidecar value wins over the script default
+    lua_pushinteger(L, script.guiItemCount);
+    return 1;
+}
+
+inline int l_guiSlider(lua_State* L)
+{
+    Script& script = selfScript(L);
+    const char* label = checkGuiLabel(L, 1);
+    const int min = static_cast<int>(luaL_checkinteger(L, 2));
+    const int max = static_cast<int>(luaL_checkinteger(L, 3));
+    const int defaultValue = lua_isnoneornil(L, 4) ? min : static_cast<int>(luaL_checkinteger(L, 4));
+    if (min > max)
+        return luaL_error(L, "gui.slider: min must not be greater than max");
+    if (script.guiItemCount >= kMaxGuiItems)
+        return luaL_error(L, "too many gui items (max %d)", kMaxGuiItems);
+    GuiItem& item = script.guiItems[script.guiItemCount++];
+    item = GuiItem{};
+    item.type = GuiItem::Type::Slider;
+    std::strncpy(item.label, label, kMaxGuiLabel - 1);
+    item.minValue = min;
+    item.maxValue = max;
+    item.intValue = defaultValue < min ? min : (defaultValue > max ? max : defaultValue);
+    if (const auto* saved = findPendingGuiDefault(script.name, label)) {
+        const int value = saved->intValue;
+        item.intValue = value < min ? min : (value > max ? max : value);
+    }
+    lua_pushinteger(L, script.guiItemCount);
+    return 1;
+}
+
+inline int l_guiGet(lua_State* L)
+{
+    GuiItem& item = guiItemAt(L, static_cast<int>(luaL_checkinteger(L, 1)));
+    if (item.type == GuiItem::Type::Checkbox)
+        lua_pushboolean(L, item.boolValue ? 1 : 0);
+    else
+        lua_pushinteger(L, item.intValue);
+    return 1;
+}
+
+inline int l_guiSet(lua_State* L)
+{
+    GuiItem& item = guiItemAt(L, static_cast<int>(luaL_checkinteger(L, 1)));
+    if (item.type == GuiItem::Type::Checkbox) {
+        item.boolValue = lua_toboolean(L, 2) != 0;
+    } else {
+        const int value = static_cast<int>(luaL_checkinteger(L, 2));
+        item.intValue = value < item.minValue ? item.minValue : (value > item.maxValue ? item.maxValue : value);
+    }
+    return 0;
+}
+
+// ---- entity (schema-driven reads through the EntryPoints-installed bridges) ----
+
+inline constexpr int kMaxEntityIndex = 0x7FFE;    // cs2::kMaxValidEntityIndex
+inline constexpr int kMaxSchemaFieldOffset = 0x100000; // 1 MiB sanity cap on schema offsets
+inline constexpr int kMaxEntityStringBytes = 128; // m_iszPlayerName-scale fixed char arrays
+
+inline bool entityBridgesAvailable()
+{
+    return localPlayerIndexQuery && entityFromIndexQuery && schemaFieldOffsetQuery;
+}
+
+inline int l_getLocalPlayer(lua_State* L)
+{
+    const int index = localPlayerIndexQuery ? localPlayerIndexQuery() : 0;
+    if (index <= 0)
+        lua_pushnil(L);
+    else
+        lua_pushinteger(L, index);
+    return 1;
+}
+
+inline int l_getPlayers(lua_State* L)
+{
+    lua_newtable(L);
+    if (!playerListQuery)
+        return 1;
+    PlayerListEntry entries[64];
+    const int count = playerListQuery(entries, 64);
+    int out = 0;
+    for (int i = 0; i < count; ++i) {
+        if (entries[i].controllerIndex <= 0)
+            continue;
+        lua_pushinteger(L, entries[i].controllerIndex);
+        lua_rawseti(L, -2, ++out);
+    }
+    return 1;
+}
+
+inline int l_getPlayerPawn(lua_State* L)
+{
+    const int controllerIndex = static_cast<int>(luaL_checkinteger(L, 1));
+    if (!playerListQuery || controllerIndex <= 0) {
+        lua_pushnil(L);
+        return 1;
+    }
+    PlayerListEntry entries[64];
+    const int count = playerListQuery(entries, 64);
+    for (int i = 0; i < count; ++i) {
+        if (entries[i].controllerIndex == controllerIndex) {
+            lua_pushinteger(L, entries[i].pawnIndex);
+            return 1;
+        }
+    }
+    lua_pushnil(L);
+    return 1;
+}
+
+// Validates the common arguments and resolves the schema offset + entity pointer for
+// (entityIndex, className, fieldName). Returns false with nil pushed when the entity/schema
+// data is unavailable (not in a game, unknown field); errors on malformed arguments.
+inline bool resolveEntityProp(lua_State* L, const std::byte** outEntity, int* outOffset)
+{
+    const int entityIndex = static_cast<int>(luaL_checkinteger(L, 1));
+    const char* className = luaL_checkstring(L, 2);
+    const char* fieldName = luaL_checkstring(L, 3);
+
+    if (!entityBridgesAvailable()) {
+        lua_pushnil(L);
+        return false;
+    }
+    if (entityIndex < 0 || entityIndex > kMaxEntityIndex)
+        luaL_error(L, "entity index out of range");
+    if (className[0] == '\0' || fieldName[0] == '\0' || std::strlen(className) > 96 || std::strlen(fieldName) > 96)
+        luaL_error(L, "invalid class or field name");
+
+    const int offset = schemaFieldOffsetQuery(className, fieldName);
+    const auto* entity = static_cast<const std::byte*>(entityFromIndexQuery(entityIndex));
+    if (offset <= 0 || offset > kMaxSchemaFieldOffset || !entity) {
+        lua_pushnil(L);
+        return false;
+    }
+    *outEntity = entity;
+    *outOffset = offset;
+    return true;
+}
+
+inline int l_getProp(lua_State* L)
+{
+    const std::byte* entity = nullptr;
+    int offset = 0;
+    if (!resolveEntityProp(L, &entity, &offset))
+        return 1;
+    std::int32_t value = 0;
+    std::memcpy(&value, entity + offset, sizeof(value));
+    lua_pushinteger(L, value);
+    return 1;
+}
+
+inline int l_getPropFloat(lua_State* L)
+{
+    const std::byte* entity = nullptr;
+    int offset = 0;
+    if (!resolveEntityProp(L, &entity, &offset))
+        return 1;
+    float value = 0.0f;
+    std::memcpy(&value, entity + offset, sizeof(value));
+    lua_pushnumber(L, value);
+    return 1;
+}
+
+inline int l_getPropString(lua_State* L)
+{
+    const std::byte* entity = nullptr;
+    int offset = 0;
+    if (!resolveEntityProp(L, &entity, &offset))
+        return 1;
+    char buffer[kMaxEntityStringBytes + 1] = {};
+    std::memcpy(buffer, entity + offset, kMaxEntityStringBytes); // fixed in-object char array
+    std::size_t length = 0;
+    while (length < kMaxEntityStringBytes && buffer[length] != '\0') {
+        if (static_cast<unsigned char>(buffer[length]) < 0x20) {
+            length = 0; // control byte - not a clean string, refuse rather than guess
+            break;
+        }
+        ++length;
+    }
+    if (length == 0) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushstring(L, buffer);
+    return 1;
+}
+
 // ---- registration ----
 
 inline void registerApi(lua_State* L, int scriptIndex)
@@ -331,6 +578,22 @@ inline void registerApi(lua_State* L, int scriptIndex)
     pushFunction(l_moduleBase);  lua_setfield(L, -2, "module_base");
     pushFunction(l_patternScan); lua_setfield(L, -2, "pattern_scan");
     lua_setglobal(L, "memory");
+
+    lua_newtable(L);
+    pushClosure(l_getLocalPlayer); lua_setfield(L, -2, "get_local_player");
+    pushClosure(l_getPlayers);     lua_setfield(L, -2, "get_players");
+    pushClosure(l_getPlayerPawn);  lua_setfield(L, -2, "get_player_pawn");
+    pushClosure(l_getProp);        lua_setfield(L, -2, "get_prop");
+    pushClosure(l_getPropFloat);   lua_setfield(L, -2, "get_prop_float");
+    pushClosure(l_getPropString);  lua_setfield(L, -2, "get_prop_string");
+    lua_setglobal(L, "entity");
+
+    lua_newtable(L);
+    pushClosure(l_guiCheckbox); lua_setfield(L, -2, "checkbox");
+    pushClosure(l_guiSlider);   lua_setfield(L, -2, "slider");
+    pushClosure(l_guiGet);      lua_setfield(L, -2, "get");
+    pushClosure(l_guiSet);      lua_setfield(L, -2, "set");
+    lua_setglobal(L, "gui");
 
     lua_newtable(L);
     pushClosure(l_httpGet); lua_setfield(L, -2, "get");

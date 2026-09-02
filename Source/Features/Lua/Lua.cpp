@@ -41,6 +41,10 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 ImDrawList* paintDrawList = nullptr;
 char httpBuffer[kMaxHttpBytes + 1];
 bool (*menuOpenQuery)() noexcept = nullptr;
+int (*localPlayerIndexQuery)() noexcept = nullptr;
+void* (*entityFromIndexQuery)(int) noexcept = nullptr;
+int (*schemaFieldOffsetQuery)(const char*, const char*) noexcept = nullptr;
+int (*playerListQuery)(PlayerListEntry*, int) noexcept = nullptr;
 
 // posix_spawn environment (unistd.h only declares it under feature macros - mirror RadioManager)
 extern "C" char** environ;
@@ -67,6 +71,151 @@ extern "C" char** environ;
 }
 
 static void pollHttp() noexcept;
+
+// ---- gui.* state persistence (sidecar files next to the scripts) ----
+//
+// Values a script's menu items hold are persisted per script in <scriptsDir>/<name>.gui (a
+// tiny line format, NOT the order-sensitive config schema - same sidecar decision the radio
+// favorites and feature binds made). Loaded once per script load into `pendingGuiDefaults`;
+// each gui.checkbox/gui.slider creation then applies its saved value by label. Declared here,
+// ABOVE the LuaApi.h include, because the gui bindings consume these helpers.
+
+struct PendingGuiValue {
+    char label[kMaxGuiLabel] = {};
+    bool boolValue = false;
+    int intValue = 0;
+    int minValue = 0;
+    int maxValue = 100;
+};
+static PendingGuiValue pendingGuiDefaults[kMaxGuiItems];
+static int pendingGuiDefaultCount = 0;
+static char pendingGuiOwner[kMaxScriptName] = {};
+
+static void guiStatePath(char* out, std::size_t outSize, const char* name) noexcept
+{
+    const std::size_t dirLength = std::strlen(scriptsDirPath);
+    const std::size_t nameLength = std::strlen(name);
+    if (dirLength + 1 + nameLength + sizeof(".gui") > outSize) {
+        out[0] = '\0';
+        return;
+    }
+    std::memcpy(out, scriptsDirPath, dirLength);
+    out[dirLength] = '/';
+    std::memcpy(out + dirLength + 1, name, nameLength + 1);
+    std::memcpy(out + dirLength + 1 + nameLength, ".gui", sizeof(".gui"));
+}
+
+static void loadGuiDefaults(const char* name) noexcept
+{
+    pendingGuiDefaultCount = 0;
+    std::strncpy(pendingGuiOwner, name, kMaxScriptName - 1);
+    pendingGuiOwner[kMaxScriptName - 1] = '\0';
+
+    char path[648];
+    guiStatePath(path, sizeof(path), name);
+    if (!path[0])
+        return;
+    const int fd = ::open(path, O_RDONLY);
+    if (fd < 0)
+        return; // no saved state yet - items keep their script-provided defaults
+
+    char buffer[4096];
+    long total = 0;
+    for (;;) {
+        const ssize_t bytes = ::read(fd, buffer + total, static_cast<std::size_t>(sizeof(buffer) - 1 - total));
+        if (bytes <= 0)
+            break;
+        total += bytes;
+        if (total >= static_cast<long>(sizeof(buffer) - 1))
+            break;
+    }
+    ::close(fd);
+    buffer[total] = '\0';
+
+    // Lines: "c\t<label>\t<0|1>" (checkbox) / "s\t<label>\t<value>\t<min>\t<max>" (slider).
+    for (char* line = buffer; line && pendingGuiDefaultCount < kMaxGuiItems;) {
+        char* next = std::strchr(line, '\n');
+        if (next)
+            *next++ = '\0';
+        const bool isCheckbox = line[0] == 'c' && line[1] == '\t';
+        const bool isSlider = line[0] == 's' && line[1] == '\t';
+        if (isCheckbox || isSlider) {
+            char* label = line + 2;
+            char* rest = std::strchr(label, '\t');
+            if (rest) {
+                *rest++ = '\0';
+                const std::size_t labelLength = std::strlen(label);
+                if (labelLength > 0 && labelLength < kMaxGuiLabel) {
+                    PendingGuiValue parsed{};
+                    std::strncpy(parsed.label, label, kMaxGuiLabel - 1);
+                    if (isCheckbox) {
+                        parsed.boolValue = rest[0] == '1';
+                        pendingGuiDefaults[pendingGuiDefaultCount++] = parsed;
+                    } else {
+                        // sliders: value, min, max (ints)
+                        char* valueEnd = std::strchr(rest, '\t');
+                        if (valueEnd) {
+                            *valueEnd++ = '\0';
+                            char* minEnd = std::strchr(valueEnd, '\t');
+                            if (minEnd) {
+                                *minEnd++ = '\0';
+                                parsed.intValue = std::atoi(rest);
+                                parsed.minValue = std::atoi(valueEnd);
+                                parsed.maxValue = std::atoi(minEnd);
+                                pendingGuiDefaults[pendingGuiDefaultCount++] = parsed;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        line = next;
+    }
+}
+
+static void saveGuiState(const Script& script) noexcept
+{
+    if (script.guiItemCount <= 0)
+        return;
+    char path[648];
+    guiStatePath(path, sizeof(path), script.name);
+    if (!path[0])
+        return;
+    const int fd = ::open(path, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+    if (fd < 0)
+        return;
+    char line[kMaxGuiLabel + 48];
+    for (int i = 0; i < script.guiItemCount; ++i) {
+        const GuiItem& item = script.guiItems[i];
+        int length = 0;
+        if (item.type == GuiItem::Type::Checkbox)
+            length = std::snprintf(line, sizeof(line), "c\t%s\t%d\n", item.label, item.boolValue ? 1 : 0);
+        else
+            length = std::snprintf(line, sizeof(line), "s\t%s\t%d\t%d\t%d\n", item.label, item.intValue, item.minValue, item.maxValue);
+        if (length <= 0)
+            continue;
+        std::size_t written = 0;
+        while (written < static_cast<std::size_t>(length)) {
+            const ssize_t bytes = ::write(fd, line + written, static_cast<std::size_t>(length) - written);
+            if (bytes <= 0)
+                break;
+            written += static_cast<std::size_t>(bytes);
+        }
+    }
+    ::close(fd);
+}
+
+// Returns the saved value for `label` from the currently-loading script's sidecar, if any.
+static const PendingGuiValue* findPendingGuiDefault(const char* scriptName, const char* label) noexcept
+{
+    if (std::strcmp(pendingGuiOwner, scriptName) != 0)
+        return nullptr;
+    for (int i = 0; i < pendingGuiDefaultCount; ++i) {
+        if (std::strcmp(pendingGuiDefaults[i].label, label) == 0)
+            return &pendingGuiDefaults[i];
+    }
+    return nullptr;
+}
 
 // ---- script-facing bindings (LuaApi.h is included INSIDE namespace lua on purpose) ----
 #include "LuaApi.h"
@@ -389,14 +538,26 @@ const unsigned char* scanMemoryPattern(const unsigned char* data, std::size_t si
 
 // ---- dispatch (shared iteration body) ----
 
-// Runs every callback registered under the string key pushed on top of the script's stack
-// (already fetched from the callbacks table). Pushes and pops its own temporaries.
-static void runCallbacks(Script& script, int arrayIndex) noexcept
+// Runs every callback registered under the array on top of the script's stack. args/argCount
+// (optional) are pushed as a single `event` table before each callback. Pushes and pops its
+// own temporaries.
+static void runCallbacks(Script& script, int arrayIndex, const EventArg* args = nullptr, int argCount = 0) noexcept
 {
     const int count = static_cast<int>(lua_objlen(script.L, arrayIndex));
     for (int k = 1; k <= count; ++k) {
         lua_rawgeti(script.L, arrayIndex, k);
-        protectedCall(script, 0);
+        if (argCount > 0) {
+            lua_createtable(script.L, 0, argCount);
+            for (int a = 0; a < argCount; ++a) {
+                lua_pushstring(script.L, args[a].key);
+                if (args[a].isNumber)
+                    lua_pushnumber(script.L, args[a].numberValue);
+                else
+                    lua_pushinteger(script.L, args[a].intValue);
+                lua_rawset(script.L, -3);
+            }
+        }
+        protectedCall(script, argCount > 0 ? 1 : 0);
         if (script.errored)
             break; // auto-disabled mid-event; stop calling into it
     }
@@ -471,6 +632,7 @@ bool load(const char* name) noexcept
     script = Script{};
     std::strncpy(script.name, name, kMaxScriptName - 1);
     script.L = L;
+    loadGuiDefaults(name); // gui.* items created by the chunk below restore their saved values
 
     if (luaL_loadfile(L, path) != 0) {
         copyError(script, lua_tostring(L, -1));
@@ -485,10 +647,13 @@ void unloadScript(int index) noexcept
 {
     Script& script = scripts[index];
     if (script.L) {
+        saveGuiState(script); // persist gui.* values across reloads/unloads
         lua_close(script.L);
         script.L = nullptr;
     }
     killPendingHttpFor(index);
+    if (std::strcmp(pendingGuiOwner, script.name) == 0)
+        pendingGuiDefaultCount = 0; // no stale defaults for a different script
     script = Script{};
 }
 
@@ -615,10 +780,12 @@ bool deleteScript(const char* name) noexcept
     return ::unlink(path) == 0;
 }
 
-void dispatchEvent(const char* eventName) noexcept
+void dispatchEvent(const char* eventName, const EventArg* args, int argCount) noexcept
 {
     if (!eventName || !scriptsDirPath[0])
         return;
+    if (argCount < 0)
+        argCount = 0;
     pthread_mutex_lock(&mutex);
     struct MutexUnlock {
         pthread_mutex_t& m;
@@ -630,7 +797,7 @@ void dispatchEvent(const char* eventName) noexcept
         if (!script.L || script.errored)
             continue;
         if (fetchCallbackArray(script, eventName)) {
-            runCallbacks(script, -1);
+            runCallbacks(script, -1, args, argCount);
             lua_pop(script.L, 2); // array + callbacks table
         }
     }
