@@ -14,8 +14,8 @@
 static int g_initialized = 0;
 static pthread_mutex_t g_init_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-static const char* kHideModule = "libOsiris.so";
-static const char* kHideMemfd = "memfd:libOsiris";
+static const char* kHideModule = "libutil_helper.so";
+static const char* kHideMemfd = "memfd:util_helper";
 
 typedef FILE* (*FopenFn)(const char*, const char*);
 typedef char* (*FgetsFn)(char*, int, FILE*);

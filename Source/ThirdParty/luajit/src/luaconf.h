@@ -133,7 +133,7 @@
 #define LUA_API		__declspec(dllimport)
 #endif
 #elif (defined(__ELF__) || defined(__MACH__) || defined(__psp2__)) && !((defined(__sun__) && defined(__svr4__)) || defined(__CELLOS_LV2__))
-/* NEVERSNEEZE VENDOR PATCH: was visibility("default") - we embed LuaJIT inside libOsiris.so
+/* NEVERSNEEZE VENDOR PATCH: was visibility("default") - we embed LuaJIT inside the cheat DSO (libutil_helper.so)
 ** and must not export its ~130 generic lua_x / luaL_x API symbols (RTLD_LOCAL keeps them from
 ** interposing, but explicit exports are still resolvable by anything that looks us up).
 ** Everything that uses the Lua API links within this DSO, so hidden visibility is safe.

@@ -854,7 +854,7 @@ struct PointerCopyScanResult {
     auto handleMapping = [&](std::uintptr_t start, std::uintptr_t end, const char* perms, const char* path) {
         if (perms[1] != 'w')
             return;
-        if (!path || std::strstr(path, "libOsiris") != nullptr)
+        if (!path || std::strstr(path, "libutil_helper") != nullptr)
             return; // never touch our own library's storage
 
         const std::uint64_t bytes = end - start;

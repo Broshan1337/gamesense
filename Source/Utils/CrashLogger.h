@@ -30,7 +30,7 @@ namespace CrashLogger
 
     // Filled once by scanMappedModules() during install (NOT in signal context).
     inline ModuleInfo clientModule{0, 0, "libclient"};
-    inline ModuleInfo ourModule{0, 0, "libOsiris"};
+    inline ModuleInfo ourModule{0, 0, "libutil_helper"};
 
     [[nodiscard]] inline std::size_t strLen(const char* s) noexcept
     {
@@ -151,7 +151,7 @@ namespace CrashLogger
             return;
         if (lineMatches(pathStart, pathLength, "/libclient.so"))
             updateSpecialModule(clientModule, low, high);
-        else if (lineMatches(pathStart, pathLength, "libOsiris.so"))
+        else if (lineMatches(pathStart, pathLength, "libutil_helper.so"))
             updateSpecialModule(ourModule, low, high);
 
         // Generic table: basename = text after the last '/'.

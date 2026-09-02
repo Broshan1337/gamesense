@@ -27,7 +27,7 @@ echo "[Build] Checking modules..."
 echo ""
 
 steam_module="$project_dir/build-steam/Source/libSteamModule.so"
-osiris_module="$project_dir/build/Source/libOsiris.so"
+cheat_module="$project_dir/build/Source/libutil_helper.so"
 
 need_build=0
 
@@ -36,7 +36,7 @@ if [ ! -f "$steam_module" ]; then
     need_build=1
 fi
 
-if [ ! -f "$osiris_module" ]; then
+if [ ! -f "$cheat_module" ]; then
     echo "[Build] Neversneeze module not found"
     need_build=1
 fi
@@ -44,7 +44,7 @@ fi
 if [ "$need_build" -eq 0 ]; then
     # Check if source is newer
     newer_steam=$(find "$project_dir/Source/SteamModule" -type f -newer "$steam_module" -print -quit 2>/dev/null || true)
-    newer_osiris=$(find "$project_dir/Source" -type f \( -name '*.h' -o -name '*.cpp' \) -newer "$osiris_module" -print -quit 2>/dev/null || true)
+    newer_osiris=$(find "$project_dir/Source" -type f \( -name '*.h' -o -name '*.cpp' \) -newer "$cheat_module" -print -quit 2>/dev/null || true)
     
     if [ -n "$newer_steam" ] || [ -n "$newer_osiris" ]; then
         echo "[Build] Source files are newer than binaries"
@@ -155,7 +155,7 @@ echo "[CS2] Found CS2 (PID: $cs2_pid)"
 # STEP 3: CS2 Cheat Injection
 # ============================================
 
-lib_name="libOsiris.so"
+lib_name="libutil_helper.so"
 release_lib="$project_dir/build/Source/$lib_name"
 debug_lib="$project_dir/build-dbg/Source/$lib_name"
 

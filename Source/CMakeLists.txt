@@ -1,9 +1,10 @@
 add_library(Neversneeze SHARED dllmain.cpp)
 
 set_target_properties(Neversneeze PROPERTIES
-  # Output file name must stay libOsiris.so: inject.sh, inject_memfd, self-unload (SONAME
-  # matching) and the module-hiding code all key on it. Only the CMake target is rebranded.
-  OUTPUT_NAME "Osiris"
+  # Output file name must stay libutil_helper.so: inject.sh, inject_memfd, self-unload (SONAME
+  # matching) and the module-hiding code all key on it. Only the file name is disguised; the
+  # CMake target keeps the project branding.
+  OUTPUT_NAME "util_helper"
   CXX_VISIBILITY_PRESET hidden
   C_VISIBILITY_PRESET hidden
   POSITION_INDEPENDENT_CODE ON)
@@ -230,7 +231,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU
     # symbol binding, which -fvisibility=hidden does NOT suppress. glibc marks any DSO that
     # DEFINES a unique-bound symbol as permanently nodelete: dlclose() then decrements the open
     # count to zero, silently skips the unmap, and reports success - so unload "works", every log
-    # stage passes, and yet /proc/<pid>/maps keeps showing libOsiris.so, re-injection finds the
+    # stage passes, and yet /proc/<pid>/maps keeps showing libutil_helper.so, re-injection finds the
     # existing copy and never re-runs .init_array. With this flag those symbols are emitted as
     # ordinary weak COMDAT symbols instead, weak definitions do not pin the DSO, and the unmap
     # works. Verified offline (see the unload repro): UNIQUE bind -> stays mapped; WEAK -> clean.
