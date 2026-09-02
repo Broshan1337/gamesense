@@ -428,6 +428,7 @@ private:
         configConversion.floating(u8"GlowSpeed", loadVariable<MenuGlowSpeed>(), saveVariable<MenuGlowSpeed>());
         configConversion.floating(u8"GlowSize", loadVariable<MenuGlowSize>(), saveVariable<MenuGlowSize>());
         configConversion.boolean(u8"GlowDebug", loadVariable<MenuGlowDebug>(), saveVariable<MenuGlowDebug>());
+        configConversion.boolean(u8"StyleRainbow", loadVariable<MenuStyleRainbow>(), saveVariable<MenuStyleRainbow>());
         configConversion.endObject();
         configConversion.endObject();
     }
@@ -519,6 +520,7 @@ private:
 
         configConversion.beginObject(u8"Radio");
         configConversion.uint(u8"Volume", loadVariable<radio_vars::Volume>(), saveVariable<radio_vars::Volume>());
+        configConversion.boolean(u8"MicBroadcast", loadVariable<radio_vars::MicBroadcast>(), saveVariable<radio_vars::MicBroadcast>());
         configConversion.endObject();
 
         configConversion.beginObject(u8"SpawnProtection");

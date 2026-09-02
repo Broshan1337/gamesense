@@ -240,9 +240,137 @@ public:
     void onUnload() const noexcept
     {
         stop();
+        micBroadcastHardOff();
+    }
+
+    // --- mic broadcast (radio -> voice chat) ---
+    //
+    // While the menu toggle is on AND a station is playing, the game's microphone capture is
+    // routed to a virtual source: the switch script (written once to /tmp/ns_mic_radio.sh,
+    // executed ON THE HOST via spawnHostShell) creates a module-pipe-source, feeds it with a
+    // second ffmpeg streaming the same station at s16le/48k mono, and `pactl
+    // move-source-output`s the cs2 capture stream (matched by application.name = "cs2") to it.
+    // When the radio stops or the toggle goes off, the capture is moved back to the remembered
+    // original source and the user can talk normally. Nothing in the game is touched - this is
+    // purely at the audio-server level, so it works regardless of which layer captures the mic.
+    //
+    // Called every frame from the present thread (renderGameOverlay) so the routing follows
+    // play/stop transitions even while the user is on another menu tab.
+    [[nodiscard]] bool isPlaying() const noexcept
+    {
+        if (currentPid <= 0)
+            return false;
+        int status;
+        if (::waitpid(currentPid, &status, WNOHANG) == currentPid) {
+            currentPid = 0; // ffplay exited (stream ended / -autoexit)
+            return false;
+        }
+        return true;
+    }
+
+    void updateMicBroadcast() const noexcept
+    {
+        writeBroadcastScriptOnce();
+        const bool want = isPlaying() && GET_CONFIG_VAR(radio_vars::MicBroadcast);
+        const bool stationChanged = micBroadcastActive && std::strcmp(micBroadcastStation, lastPlayedId) != 0;
+        if (want == micBroadcastActive && !stationChanged)
+            return;
+        StringBuilderStorage<96> storage;
+        auto builder = storage.builder();
+        if (want) {
+            builder.put("exec sh /tmp/ns_mic_radio.sh on ", lastPlayedId);
+            copyId(micBroadcastStation, lastPlayedId);
+            micBroadcastActive = true;
+        } else {
+            builder.put("exec sh /tmp/ns_mic_radio.sh off");
+            micBroadcastStation[0] = '\0';
+            micBroadcastActive = false;
+        }
+        static_cast<void>(spawnHostShell(builder.cstring()));
+    }
+
+    void micBroadcastHardOff() const noexcept
+    {
+        if (!micBroadcastActive)
+            return;
+        micBroadcastActive = false;
+        micBroadcastStation[0] = '\0';
+        static_cast<void>(spawnHostShell("exec sh /tmp/ns_mic_radio.sh hardoff"));
     }
 
 private:
+    // The switch script must live on disk (too long for the spawnHostShell command buffer and
+    // easier to keep idempotent as a standalone file). Written once per process; /tmp is shared
+    // with the host the same way the radio results file is.
+    static void writeBroadcastScriptOnce() noexcept
+    {
+        if (broadcastScriptWritten)
+            return;
+        broadcastScriptWritten = true;
+
+        // $1 = on|off|hardoff, $2 = station id (on only). Ids are alphanumeric (TuneIn), so the
+        // interpolation into the curl URL is safe.
+        static constexpr char kScript[] =
+            "#!/bin/sh\n"
+            "# Neversneeze mic broadcast: route the game's mic capture to the radio source and back.\n"
+            "FF=/tmp/ns_mic_radio.pcm\n"
+            "PIDF=/tmp/ns_mic_radio.ffpid\n"
+            "ORIG=/tmp/ns_mic_orig.txt\n"
+            "cs2_out() {\n"
+            "\tpactl list source-outputs | awk '\n"
+            "\t\t/^Source Output #/ { o=$3; gsub(/[#]/,\"\",o); gsub(/:/,\"\",o) }\n"
+            "\t\t/^[[:space:]]*Source: / { s=$2 }\n"
+            "\t\t/application.name = \"cs2\"/ { print o, s; exit }'\n"
+            "}\n"
+            "case \"$1\" in\n"
+            "on)\n"
+            "\t[ -p \"$FF\" ] || mkfifo \"$FF\"\n"
+            "\tpactl list short modules | grep -q ns_mic_radio || \\\n"
+            "\t\tpactl load-module module-pipe-source source_name=ns_mic_radio file=\"$FF\" format=s16le rate=48000 channels=1\n"
+            "\tif [ ! -f \"$PIDF\" ] || ! kill -0 \"$(cat $PIDF)\" 2>/dev/null; then\n"
+            "\t\tU=$(curl -s --max-time 15 \"https://opml.radiotime.com/Tune.ashx?id=$2\" | grep -m1 -E \"^https?://\")\n"
+            "\t\tif [ -n \"$U\" ]; then\n"
+            "\t\t\tnohup ffmpeg -nostdin -loglevel quiet -i \"$U\" -f s16le -ar 48000 -ac 1 \"$FF\" >/dev/null 2>&1 &\n"
+            "\t\t\techo $! > \"$PIDF\"\n"
+            "\t\tfi\n"
+            "\tfi\n"
+            "\trec=$(cs2_out)\n"
+            "\tout=${rec%% *}\n"
+            "\t[ -n \"$out\" ] || exit 0\n"
+            "\t[ -f \"$ORIG\" ] || echo \"${rec##* }\" > \"$ORIG\"\n"
+            "\tpactl move-source-output \"$out\" ns_mic_radio\n"
+            "\t;;\n"
+            "off)\n"
+            "\tif [ -f \"$PIDF\" ]; then kill \"$(cat $PIDF)\" 2>/dev/null; rm -f \"$PIDF\"; fi\n"
+            "\trec=$(cs2_out)\n"
+            "\tout=${rec%% *}\n"
+            "\tif [ -f \"$ORIG\" ] && [ -n \"$out\" ]; then\n"
+            "\t\tpactl move-source-output \"$out\" \"$(cat $ORIG)\"\n"
+            "\tfi\n"
+            "\trm -f \"$ORIG\"\n"
+            "\t;;\n"
+            "hardoff)\n"
+            "\t$0 off\n"
+            "\tm=$(pactl list short modules | awk '/ns_mic_radio/{print $1; exit}')\n"
+            "\t[ -n \"$m\" ] && pactl unload-module \"$m\"\n"
+            "\trm -f \"$FF\"\n"
+            "\t;;\n"
+            "esac\n";
+
+        const int fd = ::open("/tmp/ns_mic_radio.sh", O_CREAT | O_WRONLY | O_TRUNC, 0755);
+        if (fd < 0)
+            return;
+        constexpr std::size_t length = sizeof(kScript) - 1;
+        std::size_t written = 0;
+        while (written < length) {
+            const ssize_t chunk = ::write(fd, kScript + written, length - written);
+            if (chunk <= 0)
+                break;
+            written += static_cast<std::size_t>(chunk);
+        }
+        ::close(fd);
+    }
+
     // Resolves a station id to a stream URL and plays it, entirely host-side: curl the Tune.ashx playlist,
     // take the first http(s) line, and exec ffplay on it. The id comes from TuneIn and is alphanumeric
     // (e.g. "s307738"), so interpolating it into the shell command is safe.
@@ -454,6 +582,9 @@ private:
     inline static char resultsHeader[128]{};
     inline static char lastPlayedId[sizeof(RadioStation::id)]{};
     inline static char lastPlayedNameBuf[sizeof(RadioStation::text)]{};
+    inline static bool micBroadcastActive{false};
+    inline static char micBroadcastStation[sizeof(RadioStation::id)]{};
+    inline static bool broadcastScriptWritten{false};
     inline static char fetchBuffer[192 * 1024]{};
     inline static SavedStation favoriteStations[kMaxFavorites]{};
     inline static int favoriteStationCount{0};

@@ -287,5 +287,7 @@ using ConfigVariableTypes = TypeList<
     binds_list_vars::Enabled,
     grenade_timers_vars::Enabled,
     grenade_timers_vars::SmokeTimers,
-    grenade_timers_vars::MolotovTimers
+    grenade_timers_vars::MolotovTimers,
+    radio_vars::MicBroadcast,
+    MenuStyleRainbow
 >;

@@ -58,3 +58,8 @@ CONFIG_VARIABLE(MenuGlowRainbow, bool, false);
 CONFIG_VARIABLE_RANGE(MenuGlowSpeed, menu_theme_vars::kGlowSpeed);
 CONFIG_VARIABLE_RANGE(MenuGlowSize, menu_theme_vars::kGlowSize);
 CONFIG_VARIABLE(MenuGlowDebug, bool, false);
+
+// Fading-RGB menu style: cycles the accent/button/slider colors' hue at MenuGlowSpeed (same
+// clock as the glow rainbow, so both fade in sync when both are on). Alpha channels of the
+// configured colors are kept.
+CONFIG_VARIABLE(MenuStyleRainbow, bool, false);

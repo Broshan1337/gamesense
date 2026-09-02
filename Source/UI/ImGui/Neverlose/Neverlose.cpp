@@ -179,6 +179,21 @@ void refreshMenuTheme() noexcept
     g_buttonAccent = C(button.r(), button.g(), button.b(), button.a());
     const auto slider = ui_config::get<MenuSliderColor>();
     g_sliderAccent = C(slider.r(), slider.g(), slider.b(), slider.a());
+
+    // Fading-RGB style: recolors the three theme accents with the same hue clock the glow
+    // rainbow uses (MenuGlowSpeed), so style and glow cycle together when both are on. Only
+    // the RGB channels cycle - each color keeps its configured alpha.
+    if (ui_config::get<MenuStyleRainbow>()) {
+        const float hue = std::fmod(static_cast<float>(ImGui::GetTime()) * ui_config::get<MenuGlowSpeed>() * 0.1f, 1.0f);
+        float r = 0.0f, g = 0.0f, b = 0.0f;
+        ImGui::ColorConvertHSVtoRGB(hue, 0.8f, 1.0f, r, g, b);
+        const auto tinted = [r, g, b](const color::Rgba& base) {
+            return C(static_cast<int>(r * 255.0f), static_cast<int>(g * 255.0f), static_cast<int>(b * 255.0f), base.a());
+        };
+        g_accent = tinted(accent);
+        g_buttonAccent = tinted(button);
+        g_sliderAccent = tinted(slider);
+    }
 }
 
 struct StylePreset {
@@ -267,7 +282,7 @@ constexpr ImWchar kIconCodepoints[] = {
     0xf0d0, // magic           (Effects)
     0xf108, // desktop         (Hud)
     0xf1fc, // paint-brush     (Model Glow)
-    0xf54b, // shoe-prints     (Movement)
+    0xf70c, // person-running  (Movement)
     0xf519, // broadcast-tower (Radio)
     0xf6cb, // dagger          (Inventory)
     0xf121, // code            (Scripts)
@@ -2419,6 +2434,10 @@ void pageRadio() noexcept
     // Row 2: volume (standard slider primitive; applied to the next play).
     sliderVar<radio_vars::Volume>("Volume", ++controlId, "%");
 
+    // Row 3: mic broadcast - while a station plays, CS2's mic capture is switched to the radio
+    // (host-side pactl move-source-output); on stop/toggle-off the real mic comes back.
+    toggleVar<radio_vars::MicBroadcast>("Broadcast To Voice", ++controlId);
+
     // Sections: persisted favorites (star toggles back off) and this session's recently played.
     auto sectionHeader = [&](const char* title, const char* right) {
         const float rowY = card.origin.y + card.row * kRowHeight;
@@ -3155,10 +3174,13 @@ void pageScripts() noexcept
             scriptEditor.open = true;
         }
 
-        textY(d, card.origin.x + s(13), rowY, kRowHeight, scriptState ? g_accent : C(207, 209, 218), entries[i].name, kTextControl, nullptr);
+        // file icon + indented name (radio-row style) so the names don't sit flush against the
+        // left edge where they read as one blob with the "Scripts" label above them.
+        textY(d, card.origin.x + s(16), rowY, kRowHeight, scriptState ? g_accent : C(120, 124, 134), "\xEF\x84\xA1", s(12.0f), iconFont()); // code
+        textY(d, card.origin.x + s(38), rowY, kRowHeight, scriptState ? g_accent : C(207, 209, 218), entries[i].name, kTextControl, nullptr);
         if (scriptState && scriptState->errored) {
-            d->PushClipRect(ImVec2(card.origin.x + s(200), rowY), ImVec2(editX - s(8), rowY + kRowHeight), true);
-            textY(d, card.origin.x + s(200), rowY, kRowHeight, C(232, 96, 96), scriptState->lastError, kTextSmall, nullptr);
+            d->PushClipRect(ImVec2(card.origin.x + s(220), rowY), ImVec2(editX - s(8), rowY + kRowHeight), true);
+            textY(d, card.origin.x + s(220), rowY, kRowHeight, C(232, 96, 96), scriptState->lastError, kTextSmall, nullptr);
             d->PopClipRect();
         } else {
             char sizeLabel[32];
@@ -3514,7 +3536,7 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
     eyebrow("AIMBOT");
     nav("\xEF\x81\x9B", "Rage", Page::Rage);   // crosshairs
     nav("\xEF\xA3\x8C", "Legit", Page::Legit); // mouse
-    nav("\xEF\x95\x8B", "Movement", Page::Movement); // shoe-prints
+    nav("\xEF\x9C\x8C", "Movement", Page::Movement); // person-running
     y_nav += 2.0f;
 
     eyebrow("FEATURES");
@@ -3714,7 +3736,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
 
     const float width = s(210.0f);
     const float rowHeight = s(30.0f);
-    const float height = rowHeight * 14.0f + s(16.0f) + s(26.0f); // scale block, style, 3 theme colors, 6 glow rows, esp, about
+    const float height = rowHeight * 15.0f + s(16.0f) + s(26.0f); // scale block, style, 3 theme colors, 6 glow rows, style rainbow, esp, about
     const ImVec2 p = base + ImVec2(s(7.0f), kShellHeight - s(45.0f) - height * open - s(6.0f));
     const ImVec2 size(width, height);
     recordPopupRect(PopupProfile, p, p + size);
@@ -3906,6 +3928,24 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
             d->AddCircleFilled(tp + ImVec2(ImLerp(s(9), s(20), r), s(9)), s(7), mix(C(133, 133, 138), C(248, 249, 252), r));
             if (clicked)
                 ui_config::set<MenuGlowRainbow>(!rainbow);
+        }
+        y += rowHeight;
+
+        // Fading-RGB style: the accent/button/slider colors cycle with the same clock as the
+        // glow rainbow (see refreshMenuTheme).
+        {
+            const bool styleRainbow = ui_config::get<MenuStyleRainbow>();
+            textY(d, p.x + s(14), y, rowHeight, C(185, 188, 198), "Fading RGB Style", kTextControl, nullptr);
+            const ImVec2 tp(p.x + width - s(43.0f), y + rowCentered(s(18.0f)));
+            ImGui::PushID(8718);
+            const bool clicked = hitPopupRow("##style_rainbow", tp, ImVec2(s(29.0f), s(18.0f)), PopupProfile);
+            const float r = motion(ImGui::GetItemID() ^ 0x6d17u, styleRainbow ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+            ImGui::PopID();
+            if (r > 0.001f)
+                d->AddRectFilled(tp, tp + ImVec2(s(29), s(18)), mix(C(27, 27, 29), g_buttonAccent, r), s(9));
+            d->AddCircleFilled(tp + ImVec2(ImLerp(s(9), s(20), r), s(9)), s(7), mix(C(133, 133, 138), C(248, 249, 252), r));
+            if (clicked)
+                ui_config::set<MenuStyleRainbow>(!styleRainbow);
         }
         y += rowHeight;
 
@@ -4550,6 +4590,10 @@ void neverlose::renderGameOverlay() noexcept
     feature_binds::apply();
 
     refreshMenuTheme();
+
+    // Mic broadcast follows the radio's play state every frame (not only while the Radio tab is
+    // open), so stopping a station always hands the microphone back - wherever the user is.
+    withRadio([](auto&& radio) { radio.updateMicBroadcast(); });
 
     const auto snapshot = overlay_layer::snapshot();
     ImDrawList* fg = ImGui::GetForegroundDrawList();
