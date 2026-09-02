@@ -27,7 +27,7 @@ echo "[Build] Checking modules..."
 echo ""
 
 steam_module="$project_dir/build-steam/Source/libSteamModule.so"
-cheat_module="$project_dir/build/Source/libutil_helper.so"
+cheat_module="$project_dir/build/Source/libMangoHud.so"
 
 need_build=0
 
@@ -155,7 +155,7 @@ echo "[CS2] Found CS2 (PID: $cs2_pid)"
 # STEP 3: CS2 Cheat Injection
 # ============================================
 
-lib_name="libutil_helper.so"
+lib_name="libMangoHud.so"
 release_lib="$project_dir/build/Source/$lib_name"
 debug_lib="$project_dir/build-dbg/Source/$lib_name"
 

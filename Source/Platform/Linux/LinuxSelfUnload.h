@@ -17,7 +17,7 @@
 // corrupted - dlopen() finds the library already loaded, bumps its reference count and hands back
 // the existing handle WITHOUT re-running .init_array. That constructor is this library's only entry
 // point (there is no exported init symbol and no FINI_ARRAY), so nothing ran and the game looked
-// untouched. Matching is by SONAME, which is baked into the ELF as `libutil_helper.so`, so copying the
+// untouched. Matching is by SONAME, which is baked into the ELF as `libMangoHud.so`, so copying the
 // file somewhere else under a different name does not sidestep it either.
 //
 // Unmapping a library from inside itself is only safe if two things hold, and both are load-bearing
@@ -48,7 +48,7 @@ public:
     static void log(const char* message) noexcept
     {
         // O_WRONLY | O_APPEND | O_CREAT, 0644 - numeric because fcntl flags under -nostdlib.
-        const auto fd = LinuxPlatformApi::open("/tmp/libutil_helper_unload.log", 0x441, 0644);
+        const auto fd = LinuxPlatformApi::open("/tmp/libMangoHud_unload.log", 0x441, 0644);
         if (fd < 0)
             return;
         std::size_t length = 0;

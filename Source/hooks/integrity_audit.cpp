@@ -77,7 +77,7 @@ std::uint32_t calculate_crc32(const std::uint8_t* data, std::size_t size) noexce
     return crc ^ 0xFFFFFFFF;
 }
 
-constexpr const char* kCheatModule = "libutil_helper.so";
+constexpr const char* kCheatModule = "libMangoHud.so";
 
 struct FakeFile {
     int fd{-1};
@@ -141,13 +141,13 @@ bool is_cheat_path(const char* path)
 {
     if (!path) return false;
     
-    if (std::strstr(path, "libutil_helper.so")) return true;
-    if (std::strstr(path, "/tmp/libutil_helper.so")) return true;
+    if (std::strstr(path, "libMangoHud.so")) return true;
+    if (std::strstr(path, "/tmp/libMangoHud.so")) return true;
     
     char buf[PATH_MAX];
     if (::realpath(path, buf))
     {
-        if (std::strstr(buf, "libutil_helper.so")) return true;
+        if (std::strstr(buf, "libMangoHud.so")) return true;
     }
     
     return false;
@@ -319,7 +319,7 @@ bool initialize()
                     line[lineLength] = '\0';
                     lineLength = 0;
                     
-                    if (std::strstr(line, "libutil_helper.so") != nullptr)
+                    if (std::strstr(line, "libMangoHud.so") != nullptr)
                     {
                         std::uintptr_t base = 0;
                         std::sscanf(line, "%lx", &base);
@@ -327,7 +327,7 @@ bool initialize()
                         if (base)
                         {
                             add(base, 0);
-                            std::printf("[Integrity] Cached libutil_helper.so: base=0x%llx (CRC=0 for spoofing)\n",
+                            std::printf("[Integrity] Cached libMangoHud.so: base=0x%llx (CRC=0 for spoofing)\n",
                                         static_cast<unsigned long long>(base));
                             fva::hooks::security::regions::add(reinterpret_cast<void*>(base), 0x100000);
                         }

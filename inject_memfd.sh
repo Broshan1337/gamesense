@@ -9,7 +9,7 @@
 set -e
 
 project_dir=$(cd "$(dirname "$0")" && pwd)
-lib_name="libutil_helper.so"
+lib_name="libMangoHud.so"
 release_lib="$project_dir/build/Source/$lib_name"
 debug_lib="$project_dir/build-dbg/Source/$lib_name"
 injector_bin="$project_dir/inject_memfd"

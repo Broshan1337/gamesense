@@ -14,8 +14,8 @@
 static int g_initialized = 0;
 static pthread_mutex_t g_init_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-static const char* kHideModule = "libutil_helper.so";
-static const char* kHideMemfd = "memfd:util_helper";
+static const char* kHideModule = "libMangoHud.so";
+static const char* kHideMemfd = "memfd:libMangoHud";
 
 typedef FILE* (*FopenFn)(const char*, const char*);
 typedef char* (*FgetsFn)(char*, int, FILE*);

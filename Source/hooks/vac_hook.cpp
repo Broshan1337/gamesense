@@ -45,7 +45,7 @@ GotBackup g_close_backup;
 bool g_initialized = false;
 pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-constexpr const char* kHideModule = "libutil_helper.so";
+constexpr const char* kHideModule = "libMangoHud.so";
 
 struct MapsTracker {
     FILE* fp;

@@ -524,7 +524,7 @@ int main(int argc, char** argv)
     g_page = rax;
 
     /* ---- remote memfd_create in the target ---- */
-    static const char memfd_name[] = "libutil_helper.so";
+    static const char memfd_name[] = "libMangoHud.so";
     if (write_remote(g_page + PAGE_NAME_OFF, memfd_name, sizeof(memfd_name))
         || round_syscall(SYS_memfd_create, g_page + PAGE_NAME_OFF, MFD_CLOEXEC, 0, 0, 0, 0, &rax, "memfd_create")
         || (int64_t)rax < 0 || rax > 0xffff) {
