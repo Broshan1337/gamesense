@@ -3137,7 +3137,8 @@ void pageScripts() noexcept
                 newScriptName[0] = '\0';
             }
         }
-        ++card.row;
+        // beginRow already advanced card.row - the extra increment here used to shift every row
+        // below down by one, putting the "Scripts" hint label on top of the first file row.
     }
 
     // Row 2: hint.
@@ -3256,10 +3257,6 @@ void pageScripts() noexcept
         columnYs[0] += controlsHeight + s(30.0f);
         columnYs[1] = columnYs[0];
     }
-
-    // The editor is its own resizable window on top of the shell - it renders here so it exists
-    // exactly while this page is active (like the config popovers).
-    drawScriptEditorWindow();
 }
 
 // --- global search: index build + overlay --------------------------------------------
@@ -4332,8 +4329,9 @@ void neverlose::render() noexcept
             indexNextSearchPage();
         searchOverlay(d, b);
 
-        // game-anchored overlay: hitmarker moved to
-        // neverlose::renderGameOverlay - they draw every frame, with the menu closed too.
+        // The script editor is its own top-level window on top of the shell - rendered here so
+        // it stays up regardless of which nav tab is active (it self-gates on open + menu open).
+        drawScriptEditorWindow();
 
         // reveal: scale + fade the whole shell - forward from the open moment, reversed while
         // the menu dismisses (GUI.cpp keeps render() alive past the alpha fade until this
