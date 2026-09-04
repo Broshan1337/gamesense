@@ -405,6 +405,15 @@ import json, os, socket, struct, time
 CLIENT_ID = "1545419869732995173"
 STATE = "/tmp/ns_discord_rpc.json"
 
+# Opcode numbering per arRPC / the official modern Discord SDK (NOT the legacy discord-rpc C++
+# library, whose Frame=0/Handshake=2 numbering makes arRPC read the handshake as CLOSE and hang
+# up - that was the "no activity" bug). Verified live against the user's Vesktop + arRPC.
+OP_HANDSHAKE = 0
+OP_FRAME = 1
+OP_CLOSE = 2
+OP_PING = 3
+OP_PONG = 4
+
 def socket_paths():
     dirs = set()
     env = os.environ.get("XDG_RUNTIME_DIR")
@@ -426,8 +435,8 @@ def connect():
         try:
             sock.connect(path)
             payload = json.dumps({"v": 1, "client_id": "1545419869732995173"}).encode()
-            sock.sendall(struct.pack("<II", 2, len(payload)) + payload)
-            read_frame(sock)  # READY
+            sock.sendall(struct.pack("<II", OP_HANDSHAKE, len(payload)) + payload)
+            read_frame(sock)  # READY dispatch
             return sock
         except OSError:
             try:
@@ -456,7 +465,7 @@ def set_activity(sock, activity):
     frame = json.dumps({"cmd": "SET_ACTIVITY",
                         "args": {"pid": os.getpid(), "activity": activity},
                         "nonce": "ns-%f" % time.time()}).encode()
-    sock.sendall(struct.pack("<II", 0, len(frame)) + frame)
+    sock.sendall(struct.pack("<II", OP_FRAME, len(frame)) + frame)
     read_frame(sock)
 
 def main():
@@ -477,15 +486,14 @@ def main():
             except Exception:
                 state = {}
             if state.get("clear"):
+                # arRPC ties the presence to the connection: closing the socket clears it
+                # (SET_ACTIVITY with a null activity is not something arRPC handles).
                 if sock is not None:
                     try:
-                        frame = json.dumps({"cmd": "SET_ACTIVITY",
-                                            "args": {"pid": os.getpid(), "activity": None},
-                                            "nonce": "ns-clear"}).encode()
-                        sock.sendall(struct.pack("<II", 0, len(frame)) + frame)
-                        read_frame(sock)
-                    except OSError:
+                        sock.close()
+                    except Exception:
                         pass
+                    sock = None
                 start_epoch = None
                 was_in_match = False
             else:
