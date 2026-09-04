@@ -1172,10 +1172,7 @@ void colorVar(const char* label, int id) noexcept
     const auto color = ui_config::get<Var>();
     const ImVec2 swatch = cp + ImVec2(s(6), s(4));
     d->AddRectFilled(swatch, swatch + ImVec2(s(20), s(15)), C(color.r(), color.g(), color.b(), color.a()), s(3));
-    char hex[10];
-    std::snprintf(hex, sizeof(hex), "%06X", static_cast<unsigned>(static_cast<std::uint32_t>(color) >> 8));
-    const float hexWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, hex).x;
-    textY(d, cp.x + (controlWidth - hexWidth) * 0.5f, cp.y, s(23), C(170, 173, 184), hex, kTextControl, nullptr);
+    // hex readout lives in the picker popover now - the row just shows the swatch
 }
 
 // Discord-style picker: saturation/value square + hue bar + alpha bar + hex readout.
