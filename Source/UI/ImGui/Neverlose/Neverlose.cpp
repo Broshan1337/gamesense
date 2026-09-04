@@ -1210,7 +1210,9 @@ void colorPickerPopover(ImDrawList* d) noexcept
     const ImVec2 size(width, height);
     recordPopupRect(PopupColor, p, p + size);
     softShadow(d, p, p + size, s(10.0f));
-    d->AddRectFilled(p, p + size, C(18, 18, 20, 245), s(10));
+    // opaque body: the gradient's corner caps are painted opaque too - at 245 the caps would
+    // show as mismatched lighter patches over the body (and whatever is behind the picker)
+    d->AddRectFilled(p, p + size, C(18, 18, 20, 255), s(10));
     d->AddRect(p, p + size, C(54, 54, 60, 205), s(10));
 
     const ImVec2 squarePos = p + ImVec2(s(9), s(9));
