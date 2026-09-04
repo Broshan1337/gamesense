@@ -140,7 +140,7 @@ private:
     static constexpr const char* kStatePartPath = "/tmp/ns_discord_rpc.json.part";
     static constexpr const char* kRelayScriptPath = "/tmp/ns_discord_rpc.py";
     static constexpr const char* kLaunchClientPath = "/usr/bin/steam-runtime-launch-client";
-    static constexpr const char* kLargeImageKey = "ns";
+    static constexpr const char* kLargeImageKey = "ns1";
     static constexpr const char* kLargeImageText = "Neversneeze";
     static constexpr const char* kSmallImageKey = "cs2";
     static constexpr const char* kSmallImageText = "nonprime.club";
@@ -496,7 +496,7 @@ def main():
                 activity = {
                     "details": state.get("details", ""),
                     "state": state.get("state", ""),
-                    "assets": {"large_image": "ns", "large_text": "Neversneeze",
+                    "assets": {"large_image": "ns1", "large_text": "Neversneeze",
                                "small_image": "cs2", "small_image_text": "nonprime.club"},
                     "instance": True,
                 }
