@@ -25,6 +25,7 @@
 #include <Features/Hud/SpectatorList/SpectatorSnapshot.h>
 #include <Features/Lua/LuaManager.h>
 #include <Features/Game/MovementConfigVariables.h>
+#include <Features/Misc/DiscordRpc.h>
 #include <Utils/ColorUtils.h>
 #include <Utils/StatusReport.h>
 
@@ -1991,6 +1992,43 @@ void pageMovement() noexcept
     });
 }
 
+// Discord RPC template row: an InputText into the feature's static template buffer, persisted
+// to <configDir>/discord_rpc.txt when the edit deactivates. Captureless so addCard can take it.
+void discordRpcTemplateRow(const char* label, bool details, int id) noexcept
+{
+    ImDrawList* d = ImGui::GetWindowDrawList();
+    beginRow(d, label);
+
+    char* buffer = nullptr;
+    static_cast<void>(ui_config::withContext([&](auto&& hookContext) {
+        buffer = details ? hookContext.template make<DiscordRpc>().detailsBuffer()
+                         : hookContext.template make<DiscordRpc>().stateBuffer();
+    }));
+    if (!buffer) {
+        const ImVec2 row = card.origin + ImVec2(0, (card.row - 1) * kRowHeight);
+        textY(d, card.origin.x + s(96), row.y, kRowHeight, C(110, 114, 124), "unavailable", kTextSmall, nullptr);
+        return;
+    }
+
+    const ImVec2 row = card.origin + ImVec2(0, (card.row - 1) * kRowHeight);
+    ImGui::SetCursorScreenPos(ImVec2(row.x + s(96), row.y + rowCentered(s(25))));
+    ImGui::PushItemWidth(card.width - s(96) - s(13));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, C(23, 23, 25));
+    ImGui::PushStyleColor(ImGuiCol_Text, C(207, 209, 218));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(8), s(5)));
+    ImGui::PushID(id);
+    ImGui::InputText("##rpc_template", buffer, 192);
+    ImGui::PopID();
+    const bool deactivated = ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
+    ImGui::PopItemWidth();
+    if (deactivated)
+        static_cast<void>(ui_config::withContext([](auto&& hookContext) {
+            hookContext.template make<DiscordRpc>().saveTemplates();
+        }));
+}
+
 void pageMisc() noexcept
 {
     addCard("LOGGING", 4, [] {
@@ -2020,6 +2058,11 @@ void pageMisc() noexcept
     });
     addCard("PANIC", 1, [] {
         keybindVar<panic_vars::Bind>("Combat Panic", ++controlId);
+    });
+    addCard("DISCORD RPC", 3, [] {
+        toggleVar<discord_rpc_vars::Enabled>("Rich Presence", ++controlId);
+        discordRpcTemplateRow("Details", true, ++controlId);
+        discordRpcTemplateRow("Status", false, ++controlId);
     });
 }
 
@@ -3720,8 +3763,7 @@ void accountBar(ImDrawList* d, ImVec2 base) noexcept
         textY(d, avatar.x + s(5), avatar.y, s(28), g_accent, "NS", kTextControl, strongFont());
     }
     d->AddCircle(avatar + ImVec2(avatarRadius, avatarRadius), avatarRadius, g_accent, 0, s(2));
-    text(d, account + ImVec2(s(43), s(4)), C(225, 227, 233), "Neversneeze", kTextControl, nullptr);
-    text(d, account + ImVec2(s(43), s(20)), C(111, 116, 128), "INSERT to toggle", kTextSmall, nullptr);
+    textY(d, account.x + s(43), account.y, s(38), C(225, 227, 233), "Neversneeze", kTextControl, nullptr);
     chevron(d, account + ImVec2(barWidth - s(9), s(16)), C(181, 185, 195));
 }
 
@@ -4592,6 +4634,12 @@ void neverlose::renderGameOverlay() noexcept
     // Mic broadcast follows the radio's play state every frame (not only while the Radio tab is
     // open), so stopping a station always hands the microphone back - wherever the user is.
     withRadio([](auto&& radio) { radio.updateMicBroadcast(); });
+
+    // Discord Rich Presence: 1Hz throttled inside, cheap gates outside; runs with the menu open
+    // or closed so the presence tracks the match.
+    static_cast<void>(ui_config::withContext([](auto&& hookContext) {
+        hookContext.template make<DiscordRpc>().update();
+    }));
 
     const auto snapshot = overlay_layer::snapshot();
     ImDrawList* fg = ImGui::GetForegroundDrawList();

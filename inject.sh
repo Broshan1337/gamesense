@@ -222,5 +222,4 @@ mkdir --mode=000 /tmp/dumps 2>/dev/null || true
 echo ""
 echo "=========================================="
 echo " Injection complete!"
-echo " Toggle menu: INSERT"
 echo "=========================================="
