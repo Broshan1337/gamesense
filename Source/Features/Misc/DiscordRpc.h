@@ -12,6 +12,7 @@
 #include <imgui.h>
 
 #include <Features/Misc/DiscordRpcConfigVariables.h>
+#include <Features/Radio/RadioManager.h>
 #include <Features/Visuals/PlayerList/PlayerListSnapshot.h>
 #include <HookContext/HookContextMacros.h>
 #include <Utils/StringBuilder.h>
@@ -54,7 +55,7 @@ public:
         if (relaySpawned) {
             killRelay();
             relaySpawned = false;
-            writeStateFile(nullptr); // relay clears the presence before dying (or socket death does)
+            writeStateFile(nullptr, nullptr); // relay clears the presence before dying (or socket death does)
         }
     }
 
@@ -67,7 +68,7 @@ public:
             if (relaySpawned) {
                 killRelay();
                 relaySpawned = false;
-                writeStateFile(nullptr);
+                writeStateFile(nullptr, nullptr);
             }
             return;
         }
@@ -90,8 +91,9 @@ public:
         if (relayPid <= 0)
             spawnRelay();
 
+        auto&& radio = hookContext.template make<RadioManager>();
         MatchState match = gatherMatchState();
-        writeStateFile(&match);
+        writeStateFile(&match, radio.isPlaying() ? radio.lastPlayedName() : nullptr);
     }
 
     // --- menu editor support ------------------------------------------------------------
@@ -279,16 +281,23 @@ private:
         out[o] = '\0';
     }
 
-    // Writes the wire state the relay consumes: {"clear":true} (disabled), a match object, or
-    // the fixed in-menu line. Atomic rename so the relay never reads a torn file; content gate
-    // so a static presence does not cause pointless SET_ACTIVITY frames.
-    void writeStateFile(const MatchState* match) noexcept
+    // Writes the wire state the relay consumes: {"clear":true} (disabled), a match object, the
+    // fixed in-menu line, or - whenever the web radio is playing - a LISTENING presence for the
+    // current station (station beats match: it is what the user is actually doing). Atomic
+    // rename so the relay never reads a torn file; content gate so a static presence does not
+    // cause pointless SET_ACTIVITY frames.
+    void writeStateFile(const MatchState* match, const char* station) noexcept
     {
         loadTemplatesOnce();
 
         char rendered[1024];
         if (!match) {
             std::snprintf(rendered, sizeof(rendered), "{\"clear\":true}");
+        } else if (station && station[0] != '\0') {
+            char stationEscaped[256];
+            jsonEscape(stationEscaped, sizeof(stationEscaped), station);
+            std::snprintf(rendered, sizeof(rendered), "{\"inmatch\":false,\"radio\":\"%s\",\"details\":\"%s\",\"state\":\"Neversneeze Web Radio\"}",
+                stationEscaped, stationEscaped);
         } else if (match->inMatch) {
             char details[192];
             char state[192];
@@ -508,6 +517,8 @@ def main():
                                "small_image": "cs2", "small_image_text": "nonprime.club"},
                     "instance": True,
                 }
+                if state.get("radio"):
+                    activity["type"] = 2  # LISTENING
                 if in_match and start_epoch:
                     activity["timestamps"] = {"start": start_epoch}
                 while True:

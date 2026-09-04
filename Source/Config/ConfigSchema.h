@@ -408,8 +408,8 @@ private:
         // stay as parse-and-discard placeholders per the config-loader ordering rule
         configConversion.floating(u8"PosX", [](float) {}, [] { return 0.0f; });
         configConversion.floating(u8"PosY", [](float) {}, [] { return 0.0f; });
-        configConversion.uint(u8"OffsetX", loadVariable<PlayerListOffsetX>(), saveVariable<PlayerListOffsetX>());
-        configConversion.uint(u8"OffsetY", loadVariable<PlayerListOffsetY>(), saveVariable<PlayerListOffsetY>());
+        configConversion.floating(u8"OffsetX", loadVariable<PlayerListOffsetX>(), saveVariable<PlayerListOffsetX>());
+        configConversion.floating(u8"OffsetY", loadVariable<PlayerListOffsetY>(), saveVariable<PlayerListOffsetY>());
         configConversion.endObject();
 
         // NEW keys go LAST in an object - appending keeps old config files parsing.

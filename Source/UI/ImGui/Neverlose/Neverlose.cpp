@@ -2041,8 +2041,8 @@ void pageHud() noexcept
     });
     addCard("PLAYER LIST", 3, [] {
         toggleVar<PlayerListEnabled>("Player List", ++controlId);
-        sliderVar<PlayerListOffsetX>("X Offset", ++controlId);
-        sliderVar<PlayerListOffsetY>("Y Offset", ++controlId);
+        floatSliderVar<PlayerListOffsetX>("X Offset", ++controlId);
+        floatSliderVar<PlayerListOffsetY>("Y Offset", ++controlId);
     });
 }
 
