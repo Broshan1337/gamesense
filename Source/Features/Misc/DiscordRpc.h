@@ -147,7 +147,7 @@ private:
     static constexpr const char* kSmallImageKey = "cs2";
     static constexpr const char* kSmallImageText = "nonprime.club";
     static constexpr const char* kDefaultDetails = "{mode} | {t}v{ct} | alive {alive} | dead {dead} | team dmg {tdmg}";
-    static constexpr const char* kDefaultState = "tapping NNs while on Linux";
+    static constexpr const char* kDefaultState = "Tapping Windows NNs";
 
     struct MatchState {
         int tCount = 0;
@@ -290,31 +290,35 @@ private:
     {
         loadTemplatesOnce();
 
-        char rendered[1024];
-        if (!match) {
+        char rendered[1280];
+        const bool hasMatch = match && match->inMatch;
+        const bool hasRadio = station && station[0] != '\0';
+
+        if (!hasMatch && !hasRadio) {
             std::snprintf(rendered, sizeof(rendered), "{\"clear\":true}");
-        } else if (station && station[0] != '\0') {
-            char stationEscaped[256];
-            jsonEscape(stationEscaped, sizeof(stationEscaped), station);
-            std::snprintf(rendered, sizeof(rendered), "{\"inmatch\":false,\"radio\":\"%s\",\"details\":\"%s\",\"state\":\"Neversneeze Web Radio\"}",
-                stationEscaped, stationEscaped);
-        } else if (match->inMatch) {
-            char details[192];
-            char state[192];
-            char detailsEscaped[384];
-            char stateEscaped[384];
-            renderTemplate(details, sizeof(details), detailsTemplate, *match);
-            renderTemplate(state, sizeof(state), stateTemplate, *match);
-            jsonEscape(detailsEscaped, sizeof(detailsEscaped), details);
-            jsonEscape(stateEscaped, sizeof(stateEscaped), state);
-            std::snprintf(rendered, sizeof(rendered), "{\"inmatch\":true,\"details\":\"%s\",\"state\":\"%s\"}",
-                detailsEscaped, stateEscaped);
         } else {
-            std::snprintf(rendered, sizeof(rendered), "{\"inmatch\":false,\"details\":\"In the menus\",\"state\":\"\"}");
+            char matchPart[512] = "null";
+            char radioPart[640] = "null";
+
+            if (hasMatch) {
+                char details[192];
+                char state[192];
+                char detailsEscaped[384];
+                char stateEscaped[384];
+                renderTemplate(details, sizeof(details), detailsTemplate, *match);
+                renderTemplate(state, sizeof(state), stateTemplate, *match);
+                jsonEscape(detailsEscaped, sizeof(detailsEscaped), details);
+                jsonEscape(stateEscaped, sizeof(stateEscaped), state);
+                std::snprintf(matchPart, sizeof(matchPart), "{\"details\":\"%s\",\"state\":\"%s\"}", detailsEscaped, stateEscaped);
+            }
+            if (hasRadio) {
+                char stationEscaped[256];
+                jsonEscape(stationEscaped, sizeof(stationEscaped), station);
+                std::snprintf(radioPart, sizeof(radioPart), "{\"details\":\"%s\",\"state\":\"Neversneeze Web Radio\",\"large\":\"listening to fire while tapping NNs\"}", stationEscaped);
+            }
+            std::snprintf(rendered, sizeof(rendered), "{\"match\":%s,\"radio\":%s}", matchPart, radioPart);
         }
 
-        if (std::strcmp(lastRendered, rendered) == 0)
-            return;
         std::snprintf(lastRendered, sizeof(lastRendered), "%s", rendered);
 
         const int fd = ::open(kStatePartPath, O_CREAT | O_WRONLY | O_TRUNC, 0666);
@@ -479,8 +483,8 @@ def set_activity(sock, activity):
 
 def main():
     sock = None
-    start_epoch = None
-    was_in_match = False
+    match_start = None
+    radio_start = None
     last_seen = None
     while True:
         try:
@@ -495,33 +499,57 @@ def main():
             except Exception:
                 state = {}
             if state.get("clear"):
-                # arRPC ties the presence to the connection: closing the socket clears it
-                # (SET_ACTIVITY with a null activity is not something arRPC handles).
                 if sock is not None:
                     try:
                         sock.close()
                     except Exception:
                         pass
                     sock = None
-                start_epoch = None
-                was_in_match = False
+                match_start = None
+                radio_start = None
             else:
-                in_match = bool(state.get("inmatch"))
-                if in_match and not was_in_match:
-                    start_epoch = time.time()
-                was_in_match = in_match
-                activity = {
-                    "details": state.get("details", ""),
-                    "state": state.get("state", ""),
-                    "assets": {"large_image": "ns2", "large_text": "Neversneeze",
-                               "small_image": "cs2", "small_image_text": "nonprime.club"},
-                    "instance": True,
-                }
-                if state.get("radio"):
-                    activity["type"] = 2  # LISTENING
-                if in_match and start_epoch:
-                    activity["timestamps"] = {"start": start_epoch}
-                while True:
+                match = state.get("match")
+                radio = state.get("radio")
+                now = time.time()
+                if match and match_start is None:
+                    match_start = now
+                if not match:
+                    match_start = None
+                if radio and radio_start is None:
+                    radio_start = now
+                if not radio:
+                    radio_start = None
+
+                # both live: alternate every 7s so readers see match info AND the station
+                use_radio = bool(radio) and (not match or int(now / 7) % 2 == 1)
+
+                if use_radio and radio:
+                    activity = {
+                        "type": 2,  # LISTENING
+                        "details": radio.get("details", ""),
+                        "state": radio.get("state", ""),
+                        "assets": {"large_image": "ns2",
+                                   "large_text": radio.get("large", "Neversneeze"),
+                                   "small_image": "cs2", "small_image_text": "nonprime.club"},
+                        "instance": True,
+                    }
+                    if radio_start:
+                        activity["timestamps"] = {"start": radio_start}
+                elif match:
+                    activity = {
+                        "details": match.get("details", ""),
+                        "state": match.get("state", ""),
+                        "assets": {"large_image": "ns2",
+                                   "large_text": "Neversneeze",
+                                   "small_image": "cs2", "small_image_text": "nonprime.club"},
+                        "instance": True,
+                    }
+                    if match_start:
+                        activity["timestamps"] = {"start": match_start}
+                else:
+                    activity = None
+
+                while activity is not None:
                     if sock is None:
                         sock = connect()
                         if sock is None:
