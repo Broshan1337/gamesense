@@ -1175,6 +1175,50 @@ void colorVar(const char* label, int id) noexcept
     // hex readout lives in the picker popover now - the row just shows the swatch
 }
 
+// Spread-circle color row: like colorVar, but alpha 0 means "follow the crosshair" - the pill
+// shows a "Crosshair" placeholder instead of a swatch, and setting alpha to 0 in the picker
+// resets to that state (an "unpick" path the plain colorVar rows don't have).
+void spreadCircleColorVar(const char* label, int id) noexcept
+{
+    const auto color = ui_config::get<spread_circle_vars::SpreadCircleColor>();
+    if (color.a() == 0) {
+        // not customized: render the pill with the placeholder text, still opens the picker
+        ImDrawList* d = ImGui::GetWindowDrawList();
+        beginRow(d, label);
+        const float controlWidth = ImMin(s(134.0f), card.width * 0.48f);
+        ImVec2 cp = rowControlPos(controlWidth + s(13.0f));
+        cp.y += rowCentered(s(23.0f));
+
+        ImGui::PushID(id);
+        const bool ownPicker = state.colorPickerOpen && state.colorPickerOwner == id;
+        const bool click = ownPicker ? hitModal("##color", cp, ImVec2(controlWidth, s(23)))
+                                     : hit("##color", cp, ImVec2(controlWidth, s(23)));
+        const ImGuiID iid = ImGui::GetItemID();
+        const bool open = state.colorPickerOpen && state.colorPickerOwner == id;
+        const float response = motion(iid ^ 0xc011u, (open || ImGui::IsItemHovered()) ? 1.0f : 0.0f);
+        ImGui::PopID();
+
+        if (click) {
+            state.colorPickerOpen = !open;
+            state.colorPickerOwner = id;
+            state.colorPickerOpenedFrame = ImGui::GetFrameCount();
+            state.colorPickerAnchor = cp;
+            state.colorGet = &colorPickerGetter<spread_circle_vars::SpreadCircleColor>;
+            state.colorSet = &colorPickerSetter<spread_circle_vars::SpreadCircleColor>;
+            state.multiSelectOpen = false;
+            styleSelect.open = false;
+        }
+
+        d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(C(24, 24, 26), C(32, 32, 36), response), s(5));
+        d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(C(30, 30, 33), g_accent, response), s(5));
+        textY(d, cp.x + (controlWidth - ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, "Crosshair").x) * 0.5f,
+            cp.y, s(23), C(140, 144, 154), "Crosshair", kTextControl, nullptr);
+        return;
+    }
+    colorVar<spread_circle_vars::SpreadCircleColor>(label, id);
+}
+
+
 // Discord-style picker: saturation/value square + hue bar + alpha bar + hex readout.
 void colorPickerPopover(ImDrawList* d) noexcept
 {
@@ -1768,11 +1812,12 @@ void pageLegit() noexcept
         sliderVar<triggerbot_vars::AutowallMaxThickness>("Max Wall Thickness", ++controlId, " u");
         toggleVar<triggerbot_vars::SeededFire>("Seeded Fire", ++controlId);
     });
-    addCard("RECOIL & SCOPES", 4, [] {
+    addCard("RECOIL & SCOPES", 5, [] {
         toggleVar<rcs_vars::Enabled>("Control Recoil", ++controlId);
         sliderVar<rcs_vars::Strength>("Strength", ++controlId, "%");
         toggleVar<no_scope_inaccuracy_vis_vars::Enabled>("No-scope Inaccuracy Vis", ++controlId);
         toggleVar<spread_circle_vars::Enabled>("Draw Weapon Spread", ++controlId);
+        spreadCircleColorVar("Circle Color", ++controlId);
     });
 }
 

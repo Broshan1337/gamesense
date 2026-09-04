@@ -36,7 +36,11 @@ public:
         panel.setVisible(visible);
         if (visible) {
             panel.setHeight(computeHeightFromCone());
-            const auto color = hookContext.template make<Crosshair>().getColor().valueOr(kFallbackColor);
+            // custom color when its alpha is set, otherwise follow the in-game crosshair color
+            const auto custom = GET_CONFIG_VAR(spread_circle_vars::SpreadCircleColor);
+            const auto color = custom.a() > 0
+                ? cs2::Color{custom.r(), custom.g(), custom.b()}
+                : hookContext.template make<Crosshair>().getColor().valueOr(kFallbackColor);
             panel.setBorder(kBorderWidth, color.setAlpha(kBorderAlpha));
             panel.setBackgroundColor(color.setAlpha(kBackgroundAlpha));
         }

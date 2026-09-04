@@ -135,6 +135,7 @@ private:
         // object just keeps its defaults), while inserting earlier would desync old files.
         configConversion.beginObject(u8"SpreadCircleVis");
         configConversion.boolean(u8"Enabled", loadVariable<spread_circle_vars::Enabled>(), saveVariable<spread_circle_vars::Enabled>());
+        configConversion.uint(u8"Color", loadVariable<spread_circle_vars::SpreadCircleColor>(), saveVariable<spread_circle_vars::SpreadCircleColor>());
         configConversion.endObject();
 
         configConversion.endObject();

@@ -195,6 +195,7 @@ using ConfigVariableTypes = TypeList<
     legit_aimbot_vars::HitLegs,
     legit_aimbot_vars::SpreadCircleFov,
     spread_circle_vars::Enabled,
+    spread_circle_vars::SpreadCircleColor,
     rcs_vars::Enabled,
     rcs_vars::Strength,
     BombPlantAlertEnabled,
