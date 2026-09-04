@@ -26,6 +26,7 @@
 #include <Features/Lua/LuaManager.h>
 #include <Features/Game/MovementConfigVariables.h>
 #include <Features/Misc/DiscordRpc.h>
+#include <Features/Hud/SteamPersona.h>
 #include <UI/ImGui/Neverlose/LogoAsset.h>
 #include <Utils/ColorUtils.h>
 #include <Utils/StatusReport.h>
@@ -3522,7 +3523,17 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
     d->AddLine(base + ImVec2(kSidebarWidth, 0), base + ImVec2(kSidebarWidth, kShellHeight), C(30, 33, 43));
 
     d->AddRectFilled(base + ImVec2(s(15), s(11)), base + ImVec2(s(45), s(43)), C(22, 22, 25), s(7));
-    text(d, base + ImVec2(s(21), s(18)), g_accent, "NS", kTextTitle, strongFont());
+    // brand chip: the HQ swirl (same uploaded texture the account chip falls back to), aspect-fit
+    // in the s(30)x s(32) square; the "NS" monogram only shows while the texture is uploading.
+    if (const ImTextureID chipTex = reinterpret_cast<ImTextureID>(VulkanHook::logo_texture::query())) {
+        const float chipW = s(30.0f) * 0.86f;
+        const float chipH = chipW * static_cast<float>(logo_asset::kHeight) / static_cast<float>(logo_asset::kWidth);
+        d->AddImage(chipTex,
+            base + ImVec2(s(15) + (s(30) - chipW) * 0.5f, s(11) + (s(32) - chipH) * 0.5f),
+            base + ImVec2(s(15) + (s(30) + chipW) * 0.5f, s(11) + (s(32) + chipH) * 0.5f));
+    } else {
+        text(d, base + ImVec2(s(21), s(18)), g_accent, "NS", kTextTitle, strongFont());
+    }
     text(d, base + ImVec2(s(53), s(14)), C(228, 230, 236), "Neversneeze", kTextTitle, strongFont());
     text(d, base + ImVec2(s(53), s(33)), C(91, 96, 108), "Counter-Strike 2", s(8));
     d->AddLine(base + ImVec2(s(10), s(56)), base + ImVec2(s(147), s(56)), C(26, 26, 30));
@@ -3753,8 +3764,8 @@ void accountBar(ImDrawList* d, ImVec2 base) noexcept
     if (r > 0.001f)
         d->AddRectFilled(account, account + ImVec2(barWidth, s(38)), C(37, 37, 41, static_cast<int>(235 * r)), s(6));
 
-    // avatar: user image from <config dir>/avatar.png once uploaded, Neversneeze swirl (embedded
-    // cutout, uploaded once) as fallback, NS monogram until the logo texture is live.
+    // avatar: user image from <config dir>/avatar.png first, then the steam persona fetch
+    // (/tmp/ns_steam_avatar.png from SteamPersona.h), NS monogram until either is staged.
     const ImVec2 avatar = account + ImVec2(s(7), s(5));
     const float avatarRadius = s(14);
     static bool logoStaged = false; // present thread only
@@ -3768,9 +3779,9 @@ void accountBar(ImDrawList* d, ImVec2 base) noexcept
     }
     const ImTextureID avatarTex = reinterpret_cast<ImTextureID>(VulkanHook::avatar_texture::query());
     const ImTextureID logoTex = reinterpret_cast<ImTextureID>(VulkanHook::logo_texture::query());
-    if (avatarTex)
+    if (avatarTex) {
         d->AddImageRounded(avatarTex, avatar, avatar + ImVec2(avatarRadius * 2.0f, avatarRadius * 2.0f), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), C(255, 255, 255, 255), avatarRadius);
-    else if (logoTex) {
+    } else if (logoTex) {
         // the swirl is wider than tall - aspect-fit it inside the circle, slightly inset
         const float drawW = avatarRadius * 2.0f * 0.92f;
         const float drawH = drawW * static_cast<float>(logo_asset::kHeight) / static_cast<float>(logo_asset::kWidth);
@@ -3781,7 +3792,7 @@ void accountBar(ImDrawList* d, ImVec2 base) noexcept
         textY(d, avatar.x + s(5), avatar.y, s(28), g_accent, "NS", kTextControl, strongFont());
     }
     d->AddCircle(avatar + ImVec2(avatarRadius, avatarRadius), avatarRadius, g_accent, 0, s(2));
-    textY(d, account.x + s(43), account.y, s(38), C(225, 227, 233), "Neversneeze", kTextControl, nullptr);
+    textY(d, account.x + s(43), account.y, s(38), C(225, 227, 233), steam_persona::name()[0] ? steam_persona::name() : "Neversneeze", kTextControl, nullptr);
     chevron(d, account + ImVec2(barWidth - s(9), s(16)), C(181, 185, 195));
 }
 
@@ -4988,55 +4999,65 @@ void drawPlayerListWindow() noexcept
 
 bool avatarLoadAttempted = false;
 
-void loadAvatar() noexcept
+// Reads an image file, decodes it and stages it as the account-bar avatar texture.
+// Returns true when a texture was staged (stop retrying then).
+[[nodiscard]] bool stageAvatarFromFile(const char* path) noexcept
 {
-    if (!ui_config::withContext([&](auto&& hookContext) {
+    const int fd = LinuxPlatformApi::open(path, O_RDONLY);
+    if (fd < 0)
+        return false;
+
+    struct stat st {};
+    if (LinuxPlatformApi::fstat(fd, &st) != 0 || st.st_size <= 0 || st.st_size > 8 * 1024 * 1024) {
+        LinuxPlatformApi::close(fd);
+        return false;
+    }
+    auto* fileData = static_cast<std::uint8_t*>(std::malloc(static_cast<std::size_t>(st.st_size)));
+    if (!fileData) {
+        LinuxPlatformApi::close(fd);
+        return false;
+    }
+    std::size_t totalRead = 0;
+    while (totalRead < static_cast<std::size_t>(st.st_size)) {
+        const auto n = LinuxPlatformApi::pread(fd, fileData + totalRead, static_cast<std::size_t>(st.st_size) - totalRead, static_cast<off_t>(totalRead));
+        if (n <= 0)
+            break;
+        totalRead += static_cast<std::size_t>(n);
+    }
+    LinuxPlatformApi::close(fd);
+    if (totalRead != static_cast<std::size_t>(st.st_size)) {
+        std::free(fileData);
+        return false;
+    }
+
+    int width = 0, height = 0;
+    unsigned char* pixels = stbi_load_from_memory(fileData, static_cast<int>(totalRead), &width, &height, nullptr, 4);
+    std::free(fileData);
+    if (!pixels)
+        return false;
+
+    gui_log::write("avatar staged: %s (%dx%d)", path, width, height);
+    VulkanHook::avatar_texture::request(pixels, width, height); // takes ownership
+    return true;
+}
+
+// Priority: user avatar in the config dir, then the steam persona fetch in /tmp
+// (Source/Features/Hud/SteamPersona.h). Returns true when a texture was staged.
+[[nodiscard]] bool loadAvatar() noexcept
+{
+    bool staged = false;
+    static_cast<void>(ui_config::withContext([&](auto&& hookContext) {
         const auto* const directory = hookContext.osirisDirectoryPath().get();
         if (!directory)
             return;
-
-        for (const char* name : {"avatar.png", "avatar.jpg"}) {
-            char path[512];
-            std::snprintf(path, sizeof(path), "%s/%s", directory, name);
-            const int fd = LinuxPlatformApi::open(path, O_RDONLY);
-            if (fd < 0)
-                continue;
-
-            struct stat st {};
-            if (LinuxPlatformApi::fstat(fd, &st) != 0 || st.st_size <= 0 || st.st_size > 8 * 1024 * 1024) {
-                LinuxPlatformApi::close(fd);
-                continue;
-            }
-            auto* fileData = static_cast<std::uint8_t*>(std::malloc(static_cast<std::size_t>(st.st_size)));
-            if (!fileData) {
-                LinuxPlatformApi::close(fd);
-                continue;
-            }
-            std::size_t totalRead = 0;
-            while (totalRead < static_cast<std::size_t>(st.st_size)) {
-                const auto n = LinuxPlatformApi::pread(fd, fileData + totalRead, static_cast<std::size_t>(st.st_size) - totalRead, static_cast<off_t>(totalRead));
-                if (n <= 0)
-                    break;
-                totalRead += static_cast<std::size_t>(n);
-            }
-            LinuxPlatformApi::close(fd);
-            if (totalRead != static_cast<std::size_t>(st.st_size)) {
-                std::free(fileData);
-                continue;
-            }
-
-            int width = 0, height = 0;
-            unsigned char* pixels = stbi_load_from_memory(fileData, static_cast<int>(totalRead), &width, &height, nullptr, 4);
-            std::free(fileData);
-            if (!pixels)
-                continue;
-
-            gui_log::write("avatar staged: %s (%dx%d)", name, width, height);
-            VulkanHook::avatar_texture::request(pixels, width, height); // takes ownership
-            return;
+        char path[512];
+        std::snprintf(path, sizeof(path), "%s/avatar.png", directory);
+        if (!(staged = stageAvatarFromFile(path))) {
+            std::snprintf(path, sizeof(path), "%s/avatar.jpg", directory);
+            staged = stageAvatarFromFile(path);
         }
-    }))
-        gui_log::write("avatar: config context unavailable (monogram stays)");
+    });
+    return staged || stageAvatarFromFile("/tmp/ns_steam_avatar.png");
 }
 
 void neverlose::processDeferred() noexcept
@@ -5059,10 +5080,15 @@ void neverlose::processDeferred() noexcept
         }
     }
 
-    // Avatar: one attempt per session. Missing file / decode failure keeps the GS monogram.
-    if (!avatarLoadAttempted) {
-        avatarLoadAttempted = true;
-        loadAvatar();
+    // Steam persona (name + avatar for the account bar): start the host fetch once, then retry
+    // the avatar staging every few seconds until it succeeds (the fetch lands seconds after
+    // launch; a user avatar.png in the config dir wins whenever it exists).
+    steam_persona::ensureFetchStarted();
+    static float nextAvatarTry = 0.0f; // present thread only
+    if (!avatarLoadAttempted && ImGui::GetTime() >= nextAvatarTry) {
+        nextAvatarTry = ImGui::GetTime() + 4.0f;
+        if (loadAvatar())
+            avatarLoadAttempted = true;
     }
 }
 
