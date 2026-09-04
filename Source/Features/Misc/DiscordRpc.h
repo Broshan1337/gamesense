@@ -140,9 +140,9 @@ private:
     static constexpr const char* kStatePartPath = "/tmp/ns_discord_rpc.json.part";
     static constexpr const char* kRelayScriptPath = "/tmp/ns_discord_rpc.py";
     static constexpr const char* kLaunchClientPath = "/usr/bin/steam-runtime-launch-client";
-    static constexpr const char* kLargeImageKey = "ns1";
+    static constexpr const char* kLargeImageKey = "cs2";
     static constexpr const char* kLargeImageText = "Neversneeze";
-    static constexpr const char* kSmallImageKey = "cs2";
+    static constexpr const char* kSmallImageKey = "ns2";
     static constexpr const char* kSmallImageText = "nonprime.club";
     static constexpr const char* kDefaultDetails = "{mode} | {t}v{ct} | alive {alive} | dead {dead} | team dmg {tdmg}";
     static constexpr const char* kDefaultState = "tapping NNs while on Linux";
@@ -504,8 +504,8 @@ def main():
                 activity = {
                     "details": state.get("details", ""),
                     "state": state.get("state", ""),
-                    "assets": {"large_image": "ns1", "large_text": "Neversneeze",
-                               "small_image": "cs2", "small_image_text": "nonprime.club"},
+                    "assets": {"large_image": "cs2", "large_text": "Neversneeze",
+                               "small_image": "ns2", "small_image_text": "nonprime.club"},
                     "instance": True,
                 }
                 if in_match and start_epoch:
