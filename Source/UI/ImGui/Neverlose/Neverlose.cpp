@@ -1178,70 +1178,131 @@ void colorVar(const char* label, int id) noexcept
     textY(d, cp.x + (controlWidth - hexWidth) * 0.5f, cp.y, s(23), C(170, 173, 184), hex, kTextControl, nullptr);
 }
 
-// gradient strip for one RGBA channel; returns true when the user dragged a new value in
-bool colorChannelStrip(ImDrawList* d, ImVec2 start, float trackWidth, char channelLetter,
-    std::uint8_t currentValue, std::uint8_t o0, std::uint8_t o1, std::uint8_t o2, int id, std::uint8_t& newValue) noexcept
+// gradient strip for one channel; returns true when the user dragged a new value in
+bool colorChannelStrip(ImDrawList* d, ImVec2 start, float trackWidth, ImU32 leftColor, ImU32 rightColor,
+    float currentValue, int id, float& newValue) noexcept
 {
     ImGui::PushID(id);
     hitModal("##channel", start - ImVec2(s(4), s(5)), ImVec2(trackWidth + s(8), s(15)));
     const bool active = ImGui::IsItemActive();
     if (active)
-        newValue = static_cast<std::uint8_t>(ImClamp((ImGui::GetIO().MousePos.x - start.x) / trackWidth, 0.0f, 1.0f) * 255.0f + 0.5f);
-    const float shown = motion(ImGui::GetItemID() ^ 0x3b01u, currentValue / 255.0f, 18.0f, currentValue / 255.0f);
+        newValue = ImClamp((ImGui::GetIO().MousePos.x - start.x) / trackWidth, 0.0f, 1.0f);
+    const float shown = motion(ImGui::GetItemID() ^ 0x3b01u, currentValue, 18.0f, currentValue);
     ImGui::PopID();
 
-    constexpr int segments = 8;
-    for (int i = 0; i < segments; ++i) {
-        const auto t = static_cast<std::uint8_t>((i + 1) * 255 / segments);
-        ImU32 segmentColor;
-        if (channelLetter == 'R') segmentColor = C(t, o1, o2, o0);
-        else if (channelLetter == 'G') segmentColor = C(o0, t, o1, o2);
-        else if (channelLetter == 'B') segmentColor = C(o0, o1, t, o2);
-        else segmentColor = C(o0, o1, o2, t);
-        d->AddRectFilled(start + ImVec2(trackWidth * i / segments, 0), start + ImVec2(trackWidth * (i + 1) / segments, s(8)), segmentColor, s(2));
-    }
+    d->AddRectFilledMultiColor(start, start + ImVec2(trackWidth, s(8)), leftColor, rightColor, rightColor, leftColor);
+    d->AddRect(start, start + ImVec2(trackWidth, s(8)), C(0, 0, 0, 90), s(2));
     d->AddCircleFilled(start + ImVec2(trackWidth * shown, s(4.0f)), s(5), C(247, 248, 252));
-    const char letter[2] = { channelLetter, 0 };
-    textY(d, start.x - s(12), start.y - s(1), s(10), C(140, 144, 154), letter, kTextSmall, nullptr);
     return active;
 }
 
+// Discord-style picker: saturation/value square + hue bar + alpha bar + hex readout.
 void colorPickerPopover(ImDrawList* d) noexcept
 {
     if (!state.colorPickerOpen || !state.colorGet)
         return;
 
     const auto color = state.colorGet();
-    const float width = s(150.0f);
-    const float trackWidth = width - s(34.0f);
-    const ImVec2 size(width, s(10) + 4 * s(22) + s(6));
+
+    // HSV state per open: re-seed from the current color whenever a different picker opens
+    // (same statics shared by all colorVar rows - only one popover is ever open).
+    static float hue = 0.0f, sat = 0.0f, val = 0.0f;
+    static int seededOwner = -1;
+    if (seededOwner != state.colorPickerOwner) {
+        seededOwner = state.colorPickerOwner;
+        float rgb[3] = {color.r() / 255.0f, color.g() / 255.0f, color.b() / 255.0f};
+        ImGui::ColorConvertRGBtoHSV(rgb[0], rgb[1], rgb[2], hue, sat, val);
+        if (sat <= 0.0f && val <= 0.0f)
+            hue = 0.0f; // grayscale keeps a usable square
+    }
+
+    const float width = s(170.0f);
+    const float squareH = s(96.0f);
+    const float barH = s(8.0f);
+    const float gap = s(9.0f);
+    const float height = s(10) + squareH + gap + barH + gap + barH + gap + s(16);
     // flip above the anchor swatch when the popover would run past the clip bottom - the shell
     // window clips its own draw list, so the clip rect (not the display) is the real bound
-    const bool openAbove = state.colorPickerAnchor.y + s(23.0f) + s(4.0f) + size.y > d->GetClipRectMax().y;
+    const bool openAbove = state.colorPickerAnchor.y + s(23.0f) + s(4.0f) + height > d->GetClipRectMax().y;
     const ImVec2 p(state.colorPickerAnchor.x,
-        openAbove ? state.colorPickerAnchor.y - size.y - s(4.0f) : state.colorPickerAnchor.y + s(23.0f) + s(4.0f));
+        openAbove ? state.colorPickerAnchor.y - height - s(4.0f) : state.colorPickerAnchor.y + s(23.0f) + s(4.0f));
+    const ImVec2 size(width, height);
     recordPopupRect(PopupColor, p, p + size);
     softShadow(d, p, p + size, s(10.0f));
     d->AddRectFilled(p, p + size, C(18, 18, 20, 245), s(8));
     d->AddRect(p, p + size, C(54, 54, 60, 205), s(8));
 
-    const std::uint8_t channels[4] = { color.r(), color.g(), color.b(), color.a() };
-    const char channelLetters[4] = { 'R', 'G', 'B', 'A' };
+    const ImVec2 squarePos = p + ImVec2(s(8), s(8));
+    const ImVec2 squareSize = ImVec2(width - s(16), squareH);
+    const ImVec2 huePos = ImVec2(squarePos.x, squarePos.y + squareH + gap);
+    const ImVec2 alphaPos = ImVec2(squarePos.x, huePos.y + barH + gap);
+    const float barWidth = squareSize.x;
+    float r = 0.0f, g = 0.0f, b = 0.0f;
+    ImGui::ColorConvertHSVtoRGB(hue, 1.0f, 1.0f, r, g, b);
+    const ImU32 hueColor = C(static_cast<int>(r * 255), static_cast<int>(g * 255), static_cast<int>(b * 255));
+    const auto apply = [&]() {
+        float rr = 0.0f, gg = 0.0f, bb = 0.0f;
+        ImGui::ColorConvertHSVtoRGB(hue, sat, val, rr, gg, bb);
+        state.colorSet(color::Rgba{static_cast<std::uint8_t>(rr * 255 + 0.5f), static_cast<std::uint8_t>(gg * 255 + 0.5f),
+            static_cast<std::uint8_t>(bb * 255 + 0.5f), color.a()});
+    };
 
-    for (int i = 0; i < 4; ++i) {
-        const ImVec2 start = p + ImVec2(s(22), s(10) + i * s(22));
-        std::uint8_t newValue = channels[i];
-        const std::uint8_t others[3] = { channels[i == 0 ? 1 : 0], channels[i <= 1 ? 2 : 1], channels[i == 3 ? 2 : 3] };
-        if (colorChannelStrip(d, start, trackWidth, channelLetters[i], channels[i], others[0], others[1], others[2], 880 + i, newValue)) {
-            std::uint8_t updated[4] = { channels[0], channels[1], channels[2], channels[3] };
-            updated[i] = newValue;
-            state.colorSet(color::Rgba{updated[0], updated[1], updated[2], updated[3]});
-        }
+    // SV square: white->hue horizontally, then a black vertical fade on top (imgui's own trick)
+    d->AddRectFilledMultiColor(squarePos, squarePos + squareSize, C(255, 255, 255), hueColor, hueColor, C(255, 255, 255));
+    d->AddRectFilledMultiColor(squarePos, squarePos + squareSize, C(0, 0, 0, 0), C(0, 0, 0, 0), C(0, 0, 0, 255), C(0, 0, 0, 255));
+    d->AddRect(squarePos, squarePos + squareSize, C(0, 0, 0, 110), s(3));
+    ImGui::PushID(8800);
+    hitModal("##sv", squarePos, squarePos + squareSize);
+    if (ImGui::IsItemActive() && ImGui::IsMouseDown(0)) {
+        const ImVec2 mouse = ImGui::GetIO().MousePos;
+        sat = ImClamp((mouse.x - squarePos.x) / squareSize.x, 0.0f, 1.0f);
+        val = 1.0f - ImClamp((mouse.y - squarePos.y) / squareSize.y, 0.0f, 1.0f);
+        apply();
     }
+    ImGui::PopID();
+    d->AddCircle(ImVec2(squarePos.x + squareSize.x * sat, squarePos.y + squareSize.y * (1.0f - val)), s(4), C(255, 255, 255, 230), 0, s(1.5f));
+
+    // hue bar: six rainbow segments
+    constexpr ImU32 hueStops[7] = {C(255, 0, 0), C(255, 255, 0), C(0, 255, 0), C(0, 255, 255), C(0, 0, 255), C(255, 0, 255), C(255, 0, 0)};
+    for (int i = 0; i < 6; ++i)
+        d->AddRectFilled(ImVec2(huePos.x + barWidth * i / 6.0f, huePos.y), ImVec2(huePos.x + barWidth * (i + 1) / 6.0f, huePos.y + barH), hueStops[i], 0, i == 0 ? ImDrawFlags_RoundCornersLeft : (i == 5 ? ImDrawFlags_RoundCornersRight : 0));
+    float newHue = hue;
+    if (colorChannelStrip(d, huePos, barWidth, C(255, 255, 255), C(255, 255, 255), hue, 8801, newHue)) {
+        hue = newHue;
+        apply();
+    }
+    // re-draw the rainbow over the invisible strip's own visuals? No - the strip drew white; hide
+    // that by drawing the rainbow AFTER the hit test instead. (colorChannelStrip paints first, so
+    // just repaint the rainbow now.)
+    for (int i = 0; i < 6; ++i)
+        d->AddRectFilled(ImVec2(huePos.x + barWidth * i / 6.0f, huePos.y), ImVec2(huePos.x + barWidth * (i + 1) / 6.0f, huePos.y + barH), hueStops[i], 0, i == 0 ? ImDrawFlags_RoundCornersLeft : (i == 5 ? ImDrawFlags_RoundCornersRight : 0));
+    d->AddCircleFilled(ImVec2(huePos.x + barWidth * hue, huePos.y + barH * 0.5f), s(4), C(247, 248, 252));
+    d->AddCircle(ImVec2(huePos.x + barWidth * hue, huePos.y + barH * 0.5f), s(4), C(0, 0, 0, 120), 0, s(1.2f));
+
+    // alpha bar: checkerboard under a white->color fade
+    for (int i = 0; i < 8; ++i)
+        for (int j = 0; j < 2; ++j)
+            d->AddRectFilled(ImVec2(alphaPos.x + barWidth / 8 * i, alphaPos.y + barH / 2 * j),
+                ImVec2(alphaPos.x + barWidth / 8 * (i + 1), alphaPos.y + barH / 2 * (j + 1)),
+                ((i + j) & 1) ? C(70, 70, 74) : C(112, 112, 118));
+    float newAlpha = color.a() / 255.0f;
+    if (colorChannelStrip(d, alphaPos, barWidth, C(255, 255, 255, 0), C(color.r(), color.g(), color.b(), 255), newAlpha, 8802, newAlpha)) {
+        state.colorSet(color::Rgba{color.r(), color.g(), color.b(), static_cast<std::uint8_t>(newAlpha * 255 + 0.5f)});
+    }
+    // repaint the gradient over the strip's white pass, then the checkerboard peek stays at the
+    // ends only through the alpha itself - draw gradient last:
+    d->AddRectFilledMultiColor(alphaPos, alphaPos + ImVec2(barWidth, barH), C(255, 255, 255, 0), C(color.r(), color.g(), color.b(), 255), C(color.r(), color.g(), color.b(), 255), C(255, 255, 255, 0));
+    d->AddCircleFilled(ImVec2(alphaPos.x + barWidth * (color.a() / 255.0f), alphaPos.y + barH * 0.5f), s(4), C(247, 248, 252));
+
+    // hex readout
+    char hex[10];
+    std::snprintf(hex, sizeof(hex), "#%02X%02X%02X%02X", color.r(), color.g(), color.b(), color.a());
+    const float hexWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, hex).x;
+    textY(d, squarePos.x + (width - s(16) - hexWidth) * 0.5f, alphaPos.y + barH + gap, s(14), C(170, 173, 184), hex, kTextControl, nullptr);
 
     // click anywhere outside the picker (and its anchor swatch) closes it
     if (ImGui::GetFrameCount() > state.colorPickerOpenedFrame
-        && clickedOutside(p, p + ImVec2(width, s(10) + 4 * s(22) + s(6)))
+        && clickedOutside(p, p + size)
         && clickedOutside(state.colorPickerAnchor, state.colorPickerAnchor + ImVec2(s(72.0f), s(20.0f))))
         state.colorPickerOpen = false;
 }
@@ -3798,7 +3859,25 @@ void accountBar(ImDrawList* d, ImVec2 base) noexcept
         d->AddCircleFilled(avatar + ImVec2(avatarRadius, avatarRadius), avatarRadius, C(22, 22, 25));
         textY(d, avatar.x + s(5), avatar.y, s(28), g_accent, "NS", kTextControl, strongFont());
     }
-    d->AddCircle(avatar + ImVec2(avatarRadius, avatarRadius), avatarRadius, g_accent, 0, s(2));
+    // profile glow: nested accent rings fading out (drawMenuGlow's smoothstep falloff, scaled
+    // for the chip) instead of the hard classic circle outline.
+    {
+        const ImVec2 center = avatar + ImVec2(avatarRadius, avatarRadius);
+        constexpr int rings = 7;
+        constexpr float glowSize = 7.0f;
+        for (int i = rings; i >= 1; --i) {
+            const float outer = glowSize * static_cast<float>(i) / static_cast<float>(rings);
+            const float inner = glowSize * static_cast<float>(i - 1) / static_cast<float>(rings);
+            const float offset = (outer + inner) * 0.5f - 0.5f;
+            const float fade = 1.0f - static_cast<float>(i) / static_cast<float>(rings);
+            const float alpha = 200.0f * (fade * fade * (3.0f - 2.0f * fade));
+            if (alpha < 1.0f)
+                continue;
+            d->AddCircle(center, avatarRadius + s(offset),
+                (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(alpha) << IM_COL32_A_SHIFT), 0, glowSize / rings + 1.2f);
+        }
+        d->AddCircle(center, avatarRadius, g_accent, 0, s(1.2f));
+    }
     textY(d, account.x + s(43), account.y, s(38), C(225, 227, 233), steam_persona::name()[0] ? steam_persona::name() : "Neversneeze", kTextControl, nullptr);
     chevron(d, account + ImVec2(barWidth - s(9), s(16)), C(181, 185, 195));
 }
