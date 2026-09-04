@@ -1249,16 +1249,37 @@ void colorPickerPopover(ImDrawList* d) noexcept
             static_cast<std::uint8_t>(bb * 255 + 0.5f), color.a()});
     };
 
+    // rounded-corner caps: paint the popover-bg "corner square minus quarter disc" piece over
+    // already-drawn content (AddRectFilledMultiColor cannot round itself). Star-shaped from the
+    // corner, so a small triangle fan is exact - no convexity limit.
+    const auto cornerCap = [&](ImVec2 k, ImVec2 cOffset, float amin, float amax, float r) {
+        constexpr ImU32 bg = IM_COL32(18, 18, 20, 255);
+        const ImVec2 c = k + cOffset;
+        constexpr int steps = 10;
+        ImVec2 prev = k;
+        for (int i = 0; i <= steps; ++i) {
+            const float a = amin + (amax - amin) * static_cast<float>(i) / static_cast<float>(steps);
+            const ImVec2 pt(c.x + r * std::cos(a), c.y + r * std::sin(a));
+            if (i > 0)
+                d->AddTriangleFilled(k, prev, pt, bg);
+            prev = pt;
+        }
+    };
+    const auto roundRectCorners = [&](ImVec2 min, ImVec2 max, float r) {
+        cornerCap(min, ImVec2(r, r), IM_PI, IM_PI * 1.5f, r);                      // TL
+        cornerCap(ImVec2(max.x, min.y), ImVec2(-r, r), -IM_PI * 0.5f, 0.0f, r);    // TR
+        cornerCap(ImVec2(min.x, max.y), ImVec2(r, -r), IM_PI * 0.5f, IM_PI, r);    // BL
+        cornerCap(max, ImVec2(-r, -r), 0.0f, IM_PI * 0.5f, r);                     // BR
+    };
+
     // --- SV square: white->hue horizontally, then a black vertical fade on top (imgui's trick) ---
     float hr = 0.0f, hg = 0.0f, hb = 0.0f;
     ImGui::ColorConvertHSVtoRGB(hue, 1.0f, 1.0f, hr, hg, hb);
     const ImU32 hueColor = C(static_cast<int>(hr * 255), static_cast<int>(hg * 255), static_cast<int>(hb * 255));
     d->AddRectFilledMultiColor(squarePos, squarePos + squareSize, C(255, 255, 255), hueColor, hueColor, C(255, 255, 255));
     d->AddRectFilledMultiColor(squarePos, squarePos + squareSize, C(0, 0, 0, 0), C(0, 0, 0, 0), C(0, 0, 0, 255), C(0, 0, 0, 255));
-    // rounded corners: a bg-colored frame over the quad's edges (AddRectFilledMultiColor cannot
-    // round itself) - reads as an inset rounded swatch against the popover body
-    d->AddRect(squarePos, squarePos + squareSize, C(18, 18, 20), s(5), 0, s(3));
-    d->AddRect(squarePos, squarePos + squareSize, C(0, 0, 0, 110), s(5));
+    roundRectCorners(squarePos, squarePos + squareSize, s(6.0f));
+    d->AddRect(squarePos, squarePos + squareSize, C(0, 0, 0, 110), s(6.0f));
     if (dragRegion == 1 && ImGui::IsMouseDown(0)) {
         sat = ImClamp((mouse.x - squarePos.x) / squareSize.x, 0.0f, 1.0f);
         val = 1.0f - ImClamp((mouse.y - squarePos.y) / squareSize.y, 0.0f, 1.0f);
@@ -1266,15 +1287,19 @@ void colorPickerPopover(ImDrawList* d) noexcept
     }
     d->AddCircle(ImVec2(squarePos.x + squareSize.x * sat, squarePos.y + squareSize.y * (1.0f - val)), s(4), C(255, 255, 255, 230), 0, s(1.5f));
 
-    // --- hue bar: six rainbow segments ---
-    constexpr ImU32 hueStops[7] = {C(255, 0, 0), C(255, 255, 0), C(0, 255, 0), C(0, 255, 255), C(0, 0, 255), C(255, 0, 255), C(255, 0, 0)};
-    for (int i = 0; i < 6; ++i)
-        d->AddRectFilled(ImVec2(huePos.x + barWidth * i / 6.0f, huePos.y), ImVec2(huePos.x + barWidth * (i + 1) / 6.0f, huePos.y + barH), hueStops[i], s(2));
-    d->AddRect(huePos, huePos + ImVec2(barWidth, barH), C(0, 0, 0, 90), s(2));
+    // --- hue bar: one smooth rainbow fade (interpolated quads between the six stops) ---
+    constexpr ImU32 hueStops[6] = {C(255, 0, 0), C(255, 255, 0), C(0, 255, 0), C(0, 255, 255), C(0, 0, 255), C(255, 0, 255)};
+    for (int i = 0; i < 5; ++i) {
+        const float x0 = huePos.x + barWidth * static_cast<float>(i) / 5.0f;
+        const float x1 = huePos.x + barWidth * static_cast<float>(i + 1) / 5.0f;
+        d->AddRectFilledMultiColor(ImVec2(x0, huePos.y), ImVec2(x1, huePos.y + barH), hueStops[i], hueStops[i + 1], hueStops[i + 1], hueStops[i]);
+    }
     if (dragRegion == 2 && ImGui::IsMouseDown(0)) {
         hue = ImClamp((mouse.x - huePos.x) / barWidth, 0.0f, 0.999f);
         applyHsv();
     }
+    roundRectCorners(huePos, huePos + ImVec2(barWidth, barH), s(4.0f));
+    d->AddRect(huePos, huePos + ImVec2(barWidth, barH), C(0, 0, 0, 90), s(4.0f));
     d->AddCircleFilled(ImVec2(huePos.x + barWidth * hue, huePos.y + barH * 0.5f), s(4.5f), C(247, 248, 252));
     d->AddCircle(ImVec2(huePos.x + barWidth * hue, huePos.y + barH * 0.5f), s(4.5f), C(0, 0, 0, 120), 0, s(1.2f));
 
@@ -1285,11 +1310,12 @@ void colorPickerPopover(ImDrawList* d) noexcept
                 ImVec2(alphaPos.x + barWidth / 8 * (i + 1), alphaPos.y + barH / 2 * (j + 1)),
                 ((i + j) & 1) ? C(70, 70, 74) : C(112, 112, 118));
     d->AddRectFilledMultiColor(alphaPos, alphaPos + ImVec2(barWidth, barH), C(color.r(), color.g(), color.b(), 0), C(color.r(), color.g(), color.b(), 255), C(color.r(), color.g(), color.b(), 255), C(color.r(), color.g(), color.b(), 0));
-    d->AddRect(alphaPos, alphaPos + ImVec2(barWidth, barH), C(0, 0, 0, 90), s(2));
     if (dragRegion == 3 && ImGui::IsMouseDown(0)) {
         const float newAlpha = ImClamp((mouse.x - alphaPos.x) / barWidth, 0.0f, 1.0f);
         state.colorSet(color::Rgba{color.r(), color.g(), color.b(), static_cast<std::uint8_t>(newAlpha * 255 + 0.5f)});
     }
+    roundRectCorners(alphaPos, alphaPos + ImVec2(barWidth, barH), s(4.0f));
+    d->AddRect(alphaPos, alphaPos + ImVec2(barWidth, barH), C(0, 0, 0, 90), s(4.0f));
     d->AddCircleFilled(ImVec2(alphaPos.x + barWidth * (color.a() / 255.0f), alphaPos.y + barH * 0.5f), s(4.5f), C(247, 248, 252));
     d->AddCircle(ImVec2(alphaPos.x + barWidth * (color.a() / 255.0f), alphaPos.y + barH * 0.5f), s(4.5f), C(0, 0, 0, 120), 0, s(1.2f));
 
