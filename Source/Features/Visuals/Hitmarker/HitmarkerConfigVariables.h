@@ -6,7 +6,7 @@ namespace hitmarker_vars
 {
 inline constexpr auto kLength = RangeConstrainedVariableParams<float>{.min = 0.0f, .max = 30.0f, .def = 6.0f};
 inline constexpr auto kGap = RangeConstrainedVariableParams<float>{.min = 0.0f, .max = 30.0f, .def = 4.0f};
-inline constexpr auto kTimeout = RangeConstrainedVariableParams<float>{.min = 0.0f, .max = 2000.0f, .def = 500.0f};
+inline constexpr auto kTimeout = RangeConstrainedVariableParams<float>{.min = 0.0f, .max = 2000.0f, .def = 0.6f};
 }
 
 CONFIG_VARIABLE(HitmarkerEnabled, bool, false);
