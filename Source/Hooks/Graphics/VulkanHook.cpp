@@ -180,6 +180,10 @@ struct AvatarUploadState {
 
 AvatarUploadState avatar;
 std::atomic<bool> avatarRequestPending{false};
+// Menu logo (the swirl cutout): same machinery, second state. The UI stages decoded PNG bytes
+// once; until the descriptor is live the UI keeps the NS monogram fallback.
+AvatarUploadState logo;
+std::atomic<bool> logoRequestPending{false};
 
 [[nodiscard]] std::uint32_t findMemoryType(std::uint32_t typeBits, VkMemoryPropertyFlags properties) noexcept
 {
@@ -196,7 +200,9 @@ std::atomic<bool> avatarRequestPending{false};
 // into the current frame's command buffer (executed by that frame's regular submit), then poll
 // the recording frame's slot fence on later frames and finalize (view + sampler + descriptor).
 // The slot fence cannot be reset under us: slot reuse waits >= kMaxFrames frames out.
-void processAvatarUpload(VkDevice device, VkCommandBuffer commandBuffer, VkFence submitFence) noexcept
+// Generic RGBA8 texture upload (see avatar_texture / logo_texture in VulkanHook.h).
+void processTextureUpload(VkDevice device, VkCommandBuffer commandBuffer, VkFence submitFence,
+    AvatarUploadState& avatar, std::atomic<bool>& avatarRequestPending) noexcept
 {
     if (avatar.descriptor != VK_NULL_HANDLE || submitFence == VK_NULL_HANDLE)
         return;
@@ -292,13 +298,13 @@ void processAvatarUpload(VkDevice device, VkCommandBuffer commandBuffer, VkFence
 
             avatar.uploadRecorded = true;
             avatar.usedFence = submitFence;
-            gui_log::write("hook: avatar upload recorded (%dx%d)", avatar.width, avatar.height);
+            gui_log::write("hook: texture upload recorded (%dx%d)", avatar.width, avatar.height);
         }
 
         std::free(const_cast<unsigned char*>(avatar.pixels)); // consumed either way
         avatar.pixels = nullptr;
         if (!ok)
-            gui_log::write("hook: avatar upload setup FAILED (monogram stays)");
+            gui_log::write("hook: texture upload setup FAILED");
         return;
     }
 
@@ -337,10 +343,11 @@ void processAvatarUpload(VkDevice device, VkCommandBuffer commandBuffer, VkFence
     avatar.staging = VK_NULL_HANDLE;
     deviceFunctions.freeMemory(device, avatar.stagingMemory, nullptr);
     avatar.stagingMemory = VK_NULL_HANDLE;
-    gui_log::write("hook: avatar texture ready");
+    gui_log::write("hook: texture ready");
 }
 
-void destroyAvatarTexture(VkDevice device) noexcept
+// See processTextureUpload - same state shape.
+void destroyTextureState(VkDevice device, AvatarUploadState& avatar, std::atomic<bool>& avatarRequestPending) noexcept
 {
     if (device == VK_NULL_HANDLE)
         return;
@@ -1448,8 +1455,9 @@ void cleanupRenderTargets(VkDevice device) noexcept
         // Texture uploads record into this frame's command buffer BEFORE the render pass
         // (transfers are illegal inside a render pass); readiness rides this frame's fence.
         if (willRender && rendererInitialized) {
-            processAvatarUpload(device, fd->CommandBuffer, slotFence);
+            processTextureUpload(device, fd->CommandBuffer, slotFence, avatar, avatarRequestPending);
             CrashLogger::trace(kTraceAvatar);
+            processTextureUpload(device, fd->CommandBuffer, slotFence, logo, logoRequestPending);
             processShadowUpload(device, fd->CommandBuffer, slotFence);
         }
 
@@ -1531,6 +1539,23 @@ void cleanupRenderTargets(VkDevice device) noexcept
 } // namespace
 
 // --- public API (avatar_texture, see VulkanHook.h) -----------------------------------
+
+void VulkanHook::logo_texture::request(const void* pixelsRgba, int width, int height) noexcept
+{
+    if (logo.descriptor != VK_NULL_HANDLE || logo.uploadRecorded || width <= 0 || height <= 0) {
+        std::free(const_cast<void*>(pixelsRgba)); // one texture per process; late requests dropped
+        return;
+    }
+    logo.pixels = static_cast<const unsigned char*>(pixelsRgba);
+    logo.width = width;
+    logo.height = height;
+    logoRequestPending.store(true, std::memory_order_release);
+}
+
+void* VulkanHook::logo_texture::query() noexcept
+{
+    return logo.descriptor != VK_NULL_HANDLE ? logo.descriptor : nullptr;
+}
 
 void VulkanHook::avatar_texture::request(const void* pixelsRgba, int width, int height) noexcept
 {
@@ -1670,7 +1695,8 @@ void VulkanHook::destroyResources() noexcept
 {
     // Texture teardowns first: RemoveTexture writes into our descriptor pool, and the backend
     // shutdown below expects its own sets to still be registered while it runs.
-    destroyAvatarTexture(gameDevice.load(std::memory_order_acquire));
+    destroyTextureState(gameDevice.load(std::memory_order_acquire), avatar, avatarRequestPending);
+    destroyTextureState(gameDevice.load(std::memory_order_acquire), logo, logoRequestPending);
     destroyShadowTexture(gameDevice.load(std::memory_order_acquire));
 
     // Renderer shutdown first: ImGui_ImplVulkan owns descriptor sets allocated from our pool and

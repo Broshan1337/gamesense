@@ -79,6 +79,20 @@ void request(const void* pixelsRgba, int width, int height) noexcept;
 
 }
 
+// Menu logo (the Neversneeze swirl cutout, embedded as a PNG byte array in the UI): identical
+// machinery to avatar_texture. Present-thread only.
+namespace logo_texture
+{
+
+// Stages RGBA8 pixels for upload. Takes ownership (freed with free() once staged or rejected);
+// only the first request before the texture is ready is honored.
+void request(const void* pixelsRgba, int width, int height) noexcept;
+
+// nullptr until the image is uploaded and ready to sample (an ImTextureID / VkDescriptorSet).
+[[nodiscard]] void* query() noexcept;
+
+}
+
 // Soft-shadow stamp for the menu: a precomputed gaussian-blurred rounded box, generated on the
 // CPU once and uploaded through the same staging machinery as the avatar texture. query()
 // returns null until the stamp is ready - the UI keeps its layered-rect fake shadows until

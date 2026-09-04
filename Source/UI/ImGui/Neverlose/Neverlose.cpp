@@ -26,6 +26,7 @@
 #include <Features/Lua/LuaManager.h>
 #include <Features/Game/MovementConfigVariables.h>
 #include <Features/Misc/DiscordRpc.h>
+#include <UI/ImGui/Neverlose/LogoAsset.h>
 #include <Utils/ColorUtils.h>
 #include <Utils/StatusReport.h>
 
@@ -3752,13 +3753,30 @@ void accountBar(ImDrawList* d, ImVec2 base) noexcept
     if (r > 0.001f)
         d->AddRectFilled(account, account + ImVec2(barWidth, s(38)), C(37, 37, 41, static_cast<int>(235 * r)), s(6));
 
-    // avatar: user image from <config dir>/avatar.png once uploaded, NS monogram fallback.
+    // avatar: user image from <config dir>/avatar.png once uploaded, Neversneeze swirl (embedded
+    // cutout, uploaded once) as fallback, NS monogram until the logo texture is live.
     const ImVec2 avatar = account + ImVec2(s(7), s(5));
     const float avatarRadius = s(14);
+    static bool logoStaged = false; // present thread only
+    if (!logoStaged) {
+        logoStaged = true;
+        auto* pixels = static_cast<std::uint8_t*>(std::malloc(logo_asset::kPixelBytes));
+        if (pixels) {
+            std::memcpy(pixels, logo_asset::kRgba, logo_asset::kPixelBytes);
+            VulkanHook::logo_texture::request(pixels, logo_asset::kWidth, logo_asset::kHeight);
+        }
+    }
     const ImTextureID avatarTex = reinterpret_cast<ImTextureID>(VulkanHook::avatar_texture::query());
+    const ImTextureID logoTex = reinterpret_cast<ImTextureID>(VulkanHook::logo_texture::query());
     if (avatarTex)
         d->AddImageRounded(avatarTex, avatar, avatar + ImVec2(avatarRadius * 2.0f, avatarRadius * 2.0f), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), C(255, 255, 255, 255), avatarRadius);
-    else {
+    else if (logoTex) {
+        // the swirl is wider than tall - aspect-fit it inside the circle, slightly inset
+        const float drawW = avatarRadius * 2.0f * 0.92f;
+        const float drawH = drawW * static_cast<float>(logo_asset::kHeight) / static_cast<float>(logo_asset::kWidth);
+        d->AddImage(logoTex, avatar + ImVec2(avatarRadius - drawW * 0.5f, avatarRadius - drawH * 0.5f),
+            avatar + ImVec2(avatarRadius + drawW * 0.5f, avatarRadius + drawH * 0.5f));
+    } else {
         d->AddCircleFilled(avatar + ImVec2(avatarRadius, avatarRadius), avatarRadius, C(22, 22, 25));
         textY(d, avatar.x + s(5), avatar.y, s(28), g_accent, "NS", kTextControl, strongFont());
     }
