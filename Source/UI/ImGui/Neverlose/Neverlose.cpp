@@ -5056,7 +5056,7 @@ bool avatarLoadAttempted = false;
             std::snprintf(path, sizeof(path), "%s/avatar.jpg", directory);
             staged = stageAvatarFromFile(path);
         }
-    });
+    }));
     return staged || stageAvatarFromFile("/tmp/ns_steam_avatar.png");
 }
 
