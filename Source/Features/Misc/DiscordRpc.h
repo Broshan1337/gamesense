@@ -290,7 +290,7 @@ private:
     {
         loadTemplatesOnce();
 
-        char rendered[1280];
+        char rendered[2048];
         const bool hasMatch = match && match->inMatch;
         const bool hasRadio = station && station[0] != '\0';
 
@@ -639,7 +639,7 @@ main()
     inline static bool relayScriptWritten = false;
     inline static pid_t relayPid = 0;
     inline static float lastUpdate = -10.0f;
-    inline static char lastRendered[1024] = {};
+    inline static char lastRendered[2048] = {};
     inline static bool templatesLoaded = false;
     inline static char detailsTemplate[192] = {};
     inline static char stateTemplate[192] = {};
