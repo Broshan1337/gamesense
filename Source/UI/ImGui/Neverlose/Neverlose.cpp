@@ -27,6 +27,7 @@
 #include <Features/Game/MovementConfigVariables.h>
 #include <Features/Misc/DiscordRpc.h>
 #include <Features/Hud/SteamPersona.h>
+#include <Features/Hud/ThemeAccent.h>
 #include <UI/ImGui/Neverlose/LogoAsset.h>
 #include <Utils/ColorUtils.h>
 #include <Utils/StatusReport.h>
@@ -197,6 +198,11 @@ void refreshMenuTheme() noexcept
         g_buttonAccent = tinted(button);
         g_sliderAccent = tinted(slider);
     }
+
+    // Publish for the game-thread panorama HUD (CombatStats feed/labels follow the theme).
+    theme_accent::publish(static_cast<std::uint8_t>(g_accent >> IM_COL32_R_SHIFT & 0xFF),
+        static_cast<std::uint8_t>(g_accent >> IM_COL32_G_SHIFT & 0xFF),
+        static_cast<std::uint8_t>(g_accent >> IM_COL32_B_SHIFT & 0xFF));
 }
 
 struct StylePreset {
@@ -205,7 +211,8 @@ struct StylePreset {
 };
 
 constexpr StylePreset kStylePresets[] = {
-    {"Default", accentFromWatermark()}, // default theme = the watermark's green
+    {"Default v2", C(150, 127, 238)}, // the logo's light purple - the new default theme
+    {"Default (green)", accentFromWatermark()},
     {"Blue", C(75, 126, 255)},
     {"Cyan", C(115, 214, 210)},
     {"Purple", C(171, 70, 255)},

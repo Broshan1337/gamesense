@@ -8,6 +8,7 @@
 #include <CS2/Classes/IGameEventManager2.h>
 #include <Features/Hud/CombatStats/CombatStatsParams.h>
 #include <Features/Hud/CombatStats/CombatStatsState.h>
+#include <Features/Hud/ThemeAccent.h>
 #include <GameClient/GameEvents/GameEventFields.h>
 #include <GameClient/Panorama/PanoramaLabel.h>
 #include <GameClient/Panorama/PanoramaUiEngine.h>
@@ -27,7 +28,7 @@
 //   misses = shots - hits (saturating; converges once both events of a shot arrive)
 //
 // Feed lines (newest first, consecutive misses coalesce into "missed xN"):
-//   [gs] hit <name> for <dmg> dmg [head]   /   [gs] missed xN   /   [gs] killed <name>
+//   [ns] hit <name> for <dmg> dmg [head]   /   [ns] missed xN   /   [ns] killed <name>
 template <typename HookContext>
 class CombatStats {
 public:
@@ -116,7 +117,7 @@ private:
         char line[96];
         {
             StringBuilder builder{line};
-            builder.put('[', 'g', 's', ']', ' ', 'h', 'i', 't', ' ', lookup.nameBySlot(victimSlot), ' ', 'f', 'o', 'r', ' ', damage, ' ', 'd', 'm', 'g');
+            builder.put('[', 'n', 's', ']', ' ', 'h', 'i', 't', ' ', lookup.nameBySlot(victimSlot), ' ', 'f', 'o', 'r', ' ', damage, ' ', 'd', 'm', 'g');
             if (hitgroup == 1)
                 builder.put(' ', '[', 'h', 'e', 'a', 'd', ']');
             pushFeedLine(builder.cstring());
@@ -135,7 +136,7 @@ private:
 
         char line[96];
         StringBuilder builder{line};
-        builder.put('[', 'g', 's', ']', ' ', 'k', 'i', 'l', 'l', 'e', 'd', ' ', lookup.nameBySlot(victimSlot));
+        builder.put('[', 'n', 's', ']', ' ', 'k', 'i', 'l', 'l', 'e', 'd', ' ', lookup.nameBySlot(victimSlot));
         pushFeedLine(builder.cstring());
     }
 
@@ -148,13 +149,13 @@ private:
 
     void pushFeedLine(const char* line) const noexcept
     {
-        // Coalesce consecutive misses: "[gs] missed" -> "[gs] missed x2" -> ... instead of a
+        // Coalesce consecutive misses: "[ns] missed" -> "[ns] missed x2" -> ... instead of a
         // line per bullet of a missed spray.
-        if (std::strncmp(line, "[gs] missed", 11) == 0) {
+        if (std::strncmp(line, "[ns] missed", 11) == 0) {
             if (missStreak > 0) {
                 char rebuilt[32];
                 StringBuilder builder{rebuilt};
-                builder.put('[', 'g', 's', ']', ' ', 'm', 'i', 's', 's', 'e', 'd', ' ', 'x', ++missStreak);
+                builder.put('[', 'n', 's', ']', ' ', 'm', 'i', 's', 's', 'e', 'd', ' ', 'x', ++missStreak);
                 std::memcpy(lineTexts[0], rebuilt, sizeof(rebuilt));
                 return;
             }
@@ -175,6 +176,12 @@ private:
     {
         using namespace combat_stats_params;
 
+        // Live theme accent (published by the menu every frame - follows color picks AND the
+        // fading-RGB style; see ThemeAccent.h). The legacy kTextColor is only the pre-menu
+        // creation fallback.
+        const std::uint32_t accent = theme_accent::rgb();
+        const cs2::Color accentColor{static_cast<std::uint8_t>(accent >> 16), static_cast<std::uint8_t>(accent >> 8), static_cast<std::uint8_t>(accent)};
+
         // cstring() everywhere: StringBuilder does NOT null-terminate on put() - passing the raw
         // buffer would let stale bytes from the previous label leak into the text (that is where
         // the mysterious "50%S 7" came from).
@@ -183,7 +190,9 @@ private:
 
         StringBuilder hitsBuilder{buffer};
         hitsBuilder.put('H', 'I', 'T', 'S', ' ', hitsLanded);
-        uiEngine().getPanelFromHandle(state().hitsPanelHandle).clientPanel().template as<PanoramaLabel>().setText(hitsBuilder.cstring());
+        auto&& hitsLabel = uiEngine().getPanelFromHandle(state().hitsPanelHandle).clientPanel().template as<PanoramaLabel>();
+        hitsLabel.setText(hitsBuilder.cstring());
+        hitsLabel.uiPanel().setColor(accentColor);
 
         StringBuilder missBuilder{buffer};
         missBuilder.put('M', 'I', 'S', 'S', ' ', misses);
@@ -198,18 +207,24 @@ private:
             else
                 ratioBuilder.put(static_cast<int>((static_cast<std::uint64_t>(hitsLanded) * 100) / shotsFired));
             ratioBuilder.put('%');
-            ratioPanel.clientPanel().template as<PanoramaLabel>().setText(ratioBuilder.cstring());
+            auto&& ratioLabel = ratioPanel.clientPanel().template as<PanoramaLabel>();
+            ratioLabel.setText(ratioBuilder.cstring());
+            ratioLabel.uiPanel().setColor(accentColor);
         }
     }
 
     void updateFeedLabels() const noexcept
     {
+        const std::uint32_t accent = theme_accent::rgb();
+        const cs2::Color accentColor{static_cast<std::uint8_t>(accent >> 16), static_cast<std::uint8_t>(accent >> 8), static_cast<std::uint8_t>(accent)};
         constexpr std::size_t kFeedLines = sizeof(lineTexts) / sizeof(lineTexts[0]);
         for (std::size_t i = 0; i < kFeedLines; ++i) {
             auto&& panel = uiEngine().getPanelFromHandle(state().feedLineHandles[i]);
             if (!panel)
                 continue;
-            panel.clientPanel().template as<PanoramaLabel>().setText(lineTexts[i]);
+            auto&& label = panel.clientPanel().template as<PanoramaLabel>();
+            label.setText(lineTexts[i]);
+            label.uiPanel().setColor(accentColor);
         }
     }
 

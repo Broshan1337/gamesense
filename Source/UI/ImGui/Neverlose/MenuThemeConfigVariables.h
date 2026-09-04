@@ -33,14 +33,16 @@ constexpr color::Rgba readableOnDark(color::Rgba color) noexcept
     return color;
 }
 
-inline constexpr color::Rgba kDefaultAccent{0xA3, 0xD4, 0x1F, 255}; // the watermark's green
-inline constexpr auto kDefaultButtonColor = color::Rgba{0xA3, 0xD4, 0x1F, 255};
-inline constexpr auto kDefaultSliderColor = color::Rgba{0xA3, 0xD4, 0x1F, 255};
+// "Default v2": the Neversneeze logo's light purple, sampled from the swirl's highlight band.
+// Everything accent-tinted (nav, controls, glow defaults, HUD counters) keys off these.
+inline constexpr color::Rgba kDefaultAccent{150, 127, 238, 255};
+inline constexpr auto kDefaultButtonColor = color::Rgba{150, 127, 238, 255};
+inline constexpr auto kDefaultSliderColor = color::Rgba{150, 127, 238, 255};
 
 // Outer menu glow: MenuGlowColor tints the gaussian stamp around the shell (its alpha channel is
 // the glow strength); MenuGlowRainbow ignores the RGB channels and cycles hue over time at
 // MenuGlowSpeed (full rainbow cycle = 10 / speed seconds); alpha still applies in rainbow mode.
-inline constexpr auto kDefaultGlowColor = color::Rgba{0xA3, 0xD4, 0x1F, 220};
+inline constexpr auto kDefaultGlowColor = color::Rgba{150, 127, 235, 220};
 inline constexpr auto kGlowSpeed = RangeConstrainedVariableParams<float>{.min = 0.2f, .max = 10.0f, .def = 2.0f};
 // 15 keeps the stamp's corner curve at the shell's own s(17) rounding (the stamp maps its
 // 24px margin band 1:1 at s(12); curve radius on screen = 1.1667 x margin). Bigger sizes stretch
