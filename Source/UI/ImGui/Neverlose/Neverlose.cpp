@@ -2003,11 +2003,6 @@ void pageEffects() noexcept
         toggleVar<WorldColorsBloomEnabled>("Sky Bloom", ++controlId);
         sliderVar<WorldColorsBloomStrength>("Bloom Strength", ++controlId, "%");
     });
-    addCard("PLAYER LIST", 3, [] {
-        toggleVar<PlayerListEnabled>("Player List", ++controlId);
-        sliderVar<PlayerListOffsetX>("X Offset", ++controlId);
-        sliderVar<PlayerListOffsetY>("Y Offset", ++controlId);
-    });
     addCard("GRENADE TIMERS", 3, [] {
         toggleVar<grenade_timers_vars::Enabled>("Master Switch", ++controlId);
         toggleVar<grenade_timers_vars::SmokeTimers>("Smoke Timers", ++controlId);
@@ -2043,6 +2038,11 @@ void pageHud() noexcept
     });
     addCard("TIME", 1, [] {
         toggleVar<PostRoundTimerEnabled>("Post-round Timer", ++controlId);
+    });
+    addCard("PLAYER LIST", 3, [] {
+        toggleVar<PlayerListEnabled>("Player List", ++controlId);
+        sliderVar<PlayerListOffsetX>("X Offset", ++controlId);
+        sliderVar<PlayerListOffsetY>("Y Offset", ++controlId);
     });
 }
 

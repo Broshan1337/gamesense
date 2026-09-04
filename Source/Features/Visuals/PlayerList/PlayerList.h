@@ -27,11 +27,9 @@ public:
 
     void run() noexcept
     {
-        if (!GET_CONFIG_VAR(PlayerListEnabled)) {
-            player_list::publish(nullptr, 0);
-            return;
-        }
-
+        // ALWAYS gathers: the snapshot also feeds the Discord RPC's match state (alive/dead,
+        // team sizes), which must work whether or not the Player List visual is toggled on.
+        // The visual itself is gated by PlayerListEnabled in drawPlayerListWindow.
         const auto nameOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayerController", "m_iszPlayerName");
         const auto moneyServicesOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayerController", "m_pInGameMoneyServices");
         const auto accountOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayerController_InGameMoneyServices", "m_iAccount");
