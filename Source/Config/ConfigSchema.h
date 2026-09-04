@@ -228,6 +228,10 @@ private:
         configConversion.boolean(u8"Enabled", loadVariable<spectator_list_params::SpectatorListEnabled>(), saveVariable<spectator_list_params::SpectatorListEnabled>());
         configConversion.endObject();
 
+        configConversion.beginObject(u8"HudThemeColor");
+        configConversion.boolean(u8"Enabled", loadVariable<hud_theme_vars::Enabled>(), saveVariable<hud_theme_vars::Enabled>());
+        configConversion.endObject();
+
         configConversion.endObject();
     }
 

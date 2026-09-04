@@ -21,6 +21,7 @@
 #include <Features/Game/ValveDsSpoofConfigVariables.h>
 #include <Features/Game/PanicKeyConfigVariables.h>
 #include <Features/Game/TeamDamageConfigVariables.h>
+#include <Features/Hud/HudThemeColorConfigVariables.h>
 #include <Features/Misc/DiscordRpcConfigVariables.h>
 #include <Features/Game/VoteRevealerConfigVariables.h>
 #include <Features/Hud/BombPlantAlert/BombPlantAlertConfigVariables.h>
@@ -292,5 +293,6 @@ using ConfigVariableTypes = TypeList<
     grenade_timers_vars::MolotovTimers,
     radio_vars::MicBroadcast,
     MenuStyleRainbow,
-    discord_rpc_vars::Enabled
+    discord_rpc_vars::Enabled,
+    hud_theme_vars::Enabled
 >;

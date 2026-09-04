@@ -28,6 +28,7 @@
 #include <Features/Misc/DiscordRpc.h>
 #include <Features/Hud/SteamPersona.h>
 #include <Features/Hud/ThemeAccent.h>
+#include <Features/Hud/HudThemeColorConfigVariables.h>
 #include <UI/ImGui/Neverlose/LogoAsset.h>
 #include <Utils/ColorUtils.h>
 #include <Utils/StatusReport.h>
@@ -2083,6 +2084,9 @@ void pageHud() noexcept
     });
     addCard("TIME", 1, [] {
         toggleVar<PostRoundTimerEnabled>("Post-round Timer", ++controlId);
+    });
+    addCard("HUD THEME", 1, [] {
+        toggleVar<hud_theme_vars::Enabled>("Theme HUD Colors", ++controlId);
     });
     addCard("PLAYER LIST", 3, [] {
         toggleVar<PlayerListEnabled>("Player List", ++controlId);

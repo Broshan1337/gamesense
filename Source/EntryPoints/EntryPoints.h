@@ -34,6 +34,7 @@
 #include <GameClient/EntitySystem/EntitySystem.h>
 #include <Features/Radio/RadioManager.h>
 #include <Features/Misc/DiscordRpc.h>
+#include <Features/Hud/HudThemeColor.h>
 #include <Features/SkinChanger/SkinChanger.h>
 #include <Features/Game/Blockbot.h>
 #include <Features/Game/Bunnyhop.h>
@@ -580,6 +581,7 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     hookContext.template make<Watermark>().run();
     hookContext.template make<StatusPanel>().run();
     hookContext.template make<CombatStats>().run();
+    hookContext.template make<HudThemeColor>().run();
     hookContext.template make<SpectatorList>().run();
 
     // Init health report: features that validated runtime prerequisites during init recorded
