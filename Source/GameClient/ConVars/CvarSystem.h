@@ -56,6 +56,18 @@ public:
         return readValueAs<bool>(conVar);
     }
 
+    // The int32 counterpart to readFloatConVar (e.g. game_type / game_mode for the Discord RPC's
+    // match-kind line). {} if the cvar does not exist or is not an int32.
+    [[nodiscard]] std::optional<int> readIntConVar(const char* name) const noexcept
+    {
+        const auto conVar = findConVar(name);
+        if (!conVar)
+            return {};
+        if (!hookContext.patternSearchResults().template get<OffsetToConVarValueType>().of(conVar).toOptional().equal(cs2::ConVarValueType::int32).valueOr(false))
+            return {};
+        return readValueAs<int>(conVar);
+    }
+
     // Forces a bool cvar to `value` every call - the write counterpart to readBoolConVar, used for
     // the FVA-style per-tick suppression of analysis cvars (cl_showusercmd / cl_pred_print_every_cmd
     // dump the exact fields the view-angle chains rewrite, straight into a log a reviewer could

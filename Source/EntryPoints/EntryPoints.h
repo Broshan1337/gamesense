@@ -33,6 +33,7 @@
 #include <GameClient/Entities/PlayerPawn.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
 #include <Features/Radio/RadioManager.h>
+#include <Features/Misc/DiscordRpc.h>
 #include <Features/SkinChanger/SkinChanger.h>
 #include <Features/Game/Blockbot.h>
 #include <Features/Game/Bunnyhop.h>
@@ -189,6 +190,7 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     hookContext.template make<Movement>().onUnload();
     hookContext.template make<Triggerbot>().onUnload();
     hookContext.template make<RadioManager>().onUnload();
+    hookContext.template make<DiscordRpc>().onUnload();
     hookContext.template make<FakePrime>().onUnload();
     hookContext.template make<FakeLevel>().onUnload();
     hookContext.template make<MatchAutoAccept>().onUnload();

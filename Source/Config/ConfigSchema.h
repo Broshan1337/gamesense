@@ -23,10 +23,18 @@ public:
         soundObject(configConversion);
         gameObject(configConversion);
         menuObject(configConversion);
+        discordRpcObject(configConversion);
         return configConversion.endRoot();
     }
 
 private:
+    // Appended LAST (top-level objects must go last to keep old configs parsing).
+    void discordRpcObject(auto&& configConversion)
+    {
+        configConversion.beginObject(u8"DiscordRpc");
+        configConversion.boolean(u8"Enabled", loadVariable<discord_rpc_vars::Enabled>(), saveVariable<discord_rpc_vars::Enabled>());
+        configConversion.endObject();
+    }
     void combatObject(auto&& configConversion)
     {
         configConversion.beginObject(u8"Combat");
