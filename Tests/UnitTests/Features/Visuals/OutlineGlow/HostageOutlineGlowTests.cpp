@@ -35,7 +35,7 @@ class HostageOutlineGlowHueTest
 
 TEST_P(HostageOutlineGlowHueTest, CorrectGlowHueIsReturned) {
     EXPECT_CALL(mockHookContext, config()).WillOnce(testing::ReturnRef(mockConfig));
-    mockConfig.expectGetVariable<outline_glow_vars::HostageHue>(outline_glow_vars::HostageHue::ValueType{GetParam()});
+    mockConfig.expectGetVariable<outline_glow_vars::HostageHue>(outline_glow_vars::HostageHue::ValueType{color::HueInteger{GetParam()}});
     EXPECT_EQ(hostageOutlineGlow.hue(), GetParam());
 }
 

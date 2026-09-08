@@ -3,7 +3,9 @@
 #include <Features/Visuals/ModelGlow/ModelGlowConfigVariables.h>
 #include <Features/Visuals/ModelGlow/ModelGlowParams.h>
 #include <Features/Visuals/ModelGlow/ModelGlowState.h>
+#include <GameClient/Entities/EntityClassifier.h>
 #include <HookContext/HookContextMacros.h>
+#include <Utils/ColorUtils.h>
 
 template <typename HookContext>
 class TickingBombModelGlow {
@@ -31,6 +33,11 @@ public:
     [[nodiscard]] color::HueInteger hue() const
     {
         return GET_CONFIG_VAR(model_glow_vars::TickingBombHue);
+    }
+    [[nodiscard]] cs2::Color color(EntityTypeInfo /* entityTypeInfo */, auto&& /* entity */) const noexcept
+    {
+        const auto picked = GET_CONFIG_VAR(model_glow_vars::TickingBombColor);
+        return cs2::Color{picked.r(), picked.g(), picked.b(), picked.a()};
     }
 
 private:

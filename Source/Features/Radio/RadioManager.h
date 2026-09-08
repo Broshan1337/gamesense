@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -10,10 +11,22 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <CS2/Classes/IGameEventManager2.h>
+#include <CS2/Constants/TeamNumberConstants.h>
+#include <CS2/Constants/DllNames.h>
 #include <Features/Radio/RadioConfigVariables.h>
 #include <Features/Radio/RadioStationParser.h>
+#include <GameClient/Bind.h>
+#include <GameClient/ConVars/CvarSystem.h>
+#include <GameClient/EngineCommandExecutor.h>
+#include <GameClient/Entities/PlayerPawn.h>
+#include <GameClient/GameEvents/GameEventFields.h>
 #include <HookContext/HookContextMacros.h>
+#include <Platform/Linux/LinuxDynamicLibrary.h>
+#include <UI/ImGui/GuiLog.h>
+#include <Utils/CrashLogger.h>
 #include <Utils/StringBuilder.h>
+
 
 // Web radio backed by the RadioTime / TuneIn OPML API - the same endpoints the reference implementation
 // uses (Browse.ashx?c=local for the region's local stations, Search.ashx for queries, Tune.ashx to turn
@@ -254,6 +267,13 @@ public:
     // original source and the user can talk normally. Nothing in the game is touched - this is
     // purely at the audio-server level, so it works regardless of which layer captures the mic.
     //
+    // On top of the routing, the voice key is held for the whole broadcast: `+voicerecord` is
+    // queued through the console when the broadcast engages and `-voicerecord` when it
+    // disengages. The plus command latches the button down exactly like a physical key press,
+    // so the routed radio audio is transmitted CONTINUOUSLY without the user holding anything
+    // (CS2 only sends voice while the key is down). If the user is dead or between matches the
+    // press just does nothing and broadcasting resumes automatically once it would work again.
+    //
     // Called every frame from the present thread (renderGameOverlay) so the routing follows
     // play/stop transitions even while the user is on another menu tab.
     [[nodiscard]] bool isPlaying() const noexcept
@@ -273,32 +293,328 @@ public:
         writeBroadcastScriptOnce();
         const bool want = isPlaying() && GET_CONFIG_VAR(radio_vars::MicBroadcast);
         const bool stationChanged = micBroadcastActive && std::strcmp(micBroadcastStation, lastPlayedId) != 0;
-        if (want == micBroadcastActive && !stationChanged)
+        if (want == micBroadcastActive && !stationChanged) {
+            // While broadcasting: re-assert the synthetic press (window focus changes and other
+            // transitions clear SDL's key state), re-apply the capture-stream move (the stream
+            // only exists while voice is engaged, so the first move may have had nothing to
+            // move - and re-created streams land back on the default mic), and probe the
+            // capture level. Same ~2s cadence for all three.
+            if (micBroadcastActive && ++voiceKeyReassertCounter >= 128) {
+                voiceKeyReassertCounter = 0;
+                synthVoiceKey(true, true);
+                static_cast<void>(spawnHostShell("exec sh /tmp/ns_mic_radio.sh keepalive"));
+                // Anomaly-only probe (gui log contract: silence = healthy): if the game's voice
+                // capture reports no signal level for ~6s straight while the FIFO is being fed,
+                // the routing failed - say so once instead of failing silently.
+                if (const auto peak = hookContext.template make<CvarSystem>().readFloatConVar("voice_vox_current_peak")) {
+                    if (*peak > 0.0f) {
+                        capturePeakZeroStreak = 0;
+                        capturePeakAnomalyLogged = false;
+                    } else if (++capturePeakZeroStreak >= 3 && !capturePeakAnomalyLogged) {
+                        capturePeakAnomalyLogged = true;
+                        gui_log::write("broadcast: voice capture sees NO signal (peak 0) - the capture-stream move did not stick; check 'pactl list source-outputs' for the cs2 stream");
+                    }
+                }
+            }
             return;
+        }
         StringBuilderStorage<96> storage;
         auto builder = storage.builder();
         if (want) {
             builder.put("exec sh /tmp/ns_mic_radio.sh on ", lastPlayedId);
             copyId(micBroadcastStation, lastPlayedId);
             micBroadcastActive = true;
+            armTransmission();
         } else {
             builder.put("exec sh /tmp/ns_mic_radio.sh off");
             micBroadcastStation[0] = '\0';
             micBroadcastActive = false;
+            disarmTransmission();
         }
         static_cast<void>(spawnHostShell(builder.cstring()));
     }
 
     void micBroadcastHardOff() const noexcept
     {
-        if (!micBroadcastActive)
+        if (micBroadcastActive) {
+            micBroadcastActive = false;
+            micBroadcastStation[0] = '\0';
+            disarmTransmission();
+            static_cast<void>(spawnHostShell("exec sh /tmp/ns_mic_radio.sh hardoff"));
+        }
+        airhornHardOff();
+    }
+
+    // --- airhorn (event-triggered gag clips -> voice chat) ---------------------------------
+    //
+    // Same virtual-source routing as the mic broadcast, but engaged only for the duration of one
+    // clip: a game event (first blood / local headshot kill / round win) publishes a trigger on
+    // the game thread, and the present-thread update routes the capture to the FIFO, appends the
+    // transcoded <configDir>/sounds/airhorn.wav and holds voice_vox open for the clip's lifetime,
+    // then hands the mic back. Between gags the user's push-to-talk voice behaves exactly as
+    // before - the capture is only stolen while a clip plays. Skipped while the radio broadcast
+    // owns the capture stream.
+
+    static constexpr int kTriggerNone = 0;
+    static constexpr int kTriggerFirstBlood = 1;
+    static constexpr int kTriggerHeadshot = 2;
+    static constexpr int kTriggerRoundWin = 3;
+
+    // Called on the GAME thread from the game-event hook. Only decides + publishes; the routing
+    // and playback happen in updateAirhorn on the present thread.
+    void onGameEvent(cs2::IGameEvent* event) const noexcept
+    {
+        if (!event || !GET_CONFIG_VAR(radio_vars::AirhornEnabled))
             return;
-        micBroadcastActive = false;
-        micBroadcastStation[0] = '\0';
-        static_cast<void>(spawnHostShell("exec sh /tmp/ns_mic_radio.sh hardoff"));
+
+        if (game_events::is(event, "round_end")) {
+            firstBloodUsed = false; // a new round means a new first blood
+            const int winner = game_events::intForKey(event, "winner", -1);
+            if (!GET_CONFIG_VAR(radio_vars::AirhornRoundWin))
+                return;
+            const auto localTeam = hookContext.localPlayerController().pawn().template as<PlayerPawn>().teamNumber();
+            if ((winner == cs2::TEAM_TERRORIST && localTeam == TeamNumber::TT)
+                || (winner == cs2::TEAM_CT && localTeam == TeamNumber::CT))
+                pendingAirhorn.store(kTriggerRoundWin, std::memory_order_release);
+            return;
+        }
+
+        if (!game_events::is(event, "player_death"))
+            return;
+        if (!game_events::localPlayerIsAttacker(hookContext, event))
+            return;
+        if (pendingAirhorn.load(std::memory_order_relaxed) != kTriggerNone)
+            return;
+        if (GET_CONFIG_VAR(radio_vars::AirhornFirstBlood) && !firstBloodUsed) {
+            firstBloodUsed = true;
+            pendingAirhorn.store(kTriggerFirstBlood, std::memory_order_release);
+            return;
+        }
+        if (GET_CONFIG_VAR(radio_vars::AirhornHeadshot) && game_events::intForKey(event, "headshot", 0) != 0)
+            pendingAirhorn.store(kTriggerHeadshot, std::memory_order_release);
+    }
+
+    // Present thread, every frame next to updateMicBroadcast.
+    void updateAirhorn() const noexcept
+    {
+        CrashLogger::trace(0x301); // 0x301 entry / 0x302 exit (present thread, every frame)
+        writeAirhornScriptOnce();
+
+        const int trigger = pendingAirhorn.exchange(kTriggerNone, std::memory_order_acq_rel);
+        if (trigger != kTriggerNone && airhornCooldownFrames == 0 && !micBroadcastActive) {
+            char path[512];
+            if (airhornClipPath(path)) {
+                if (!airhornRouted) {
+                    static_cast<void>(spawnHostShell("exec sh /tmp/ns_mic_board.sh on"));
+                    airhornRouted = true;
+                }
+                armTransmission(); // key held so the routed clip transmits
+                StringBuilderStorage<640> storage;
+                auto builder = storage.builder();
+                builder.put("exec ffmpeg -nostdin -loglevel error -y -i '", path,
+                            "' -f s16le -ar 48000 -ac 1 - >> /tmp/ns_mic_board.pcm");
+                static_cast<void>(spawnHostShell(builder.cstring()));
+                airhornFramesLeft = 240; // ~4s at 60fps: clip + VOX tail
+                airhornCooldownFrames = 300;
+            }
+        }
+        if (airhornCooldownFrames > 0)
+            --airhornCooldownFrames;
+
+        // While the clip plays, re-apply the capture move - the stream only exists while voice
+        // is engaged, so the move inside "on" may have fired before the stream existed.
+        if (airhornRouted && airhornFramesLeft > 0 && ++airhornKeepaliveCounter >= 32) {
+            airhornKeepaliveCounter = 0;
+            static_cast<void>(spawnHostShell("exec sh /tmp/ns_mic_board.sh keepalive"));
+        }
+
+        if (airhornRouted && (airhornFramesLeft == 0 || micBroadcastActive)) {
+            static_cast<void>(spawnHostShell("exec sh /tmp/ns_mic_board.sh off"));
+            airhornRouted = false;
+            airhornFramesLeft = 0;
+            if (!micBroadcastActive)
+                disarmTransmission();
+        } else if (airhornRouted && airhornFramesLeft > 0) {
+            --airhornFramesLeft;
+        }
+        CrashLogger::trace(0x302);
+    }
+
+    void airhornHardOff() const noexcept
+    {
+        if (!airhornRouted)
+            return;
+        airhornRouted = false;
+        airhornFramesLeft = 0;
+        static_cast<void>(spawnHostShell("exec sh /tmp/ns_mic_board.sh off"));
+        disarmTransmission();
     }
 
 private:
+    // --- synthetic push-to-talk -------------------------------------------------------------
+    //
+    // The transmission story, after two failed experiments:
+    //   1. `+voicerecord` latching - does NOT transmit: the push-to-talk gate polls the PHYSICAL
+    //      bound key, a queued +command only lights the local indicator.
+    //   2. `voice_vox` + threshold clamping - the gate kept closing (icon dropped on BOTH
+    //      screens, i.e. CS2 stopped sending entirely).
+    //   3. Queued SDL key events (SDL_PeepEvents ADDEVENT) - pushed events are DATA in the queue;
+    //      they do NOT update SDL's keyboard-state array, so a state-polling gate never sees them.
+    // Two deterministic levers replace all of that:
+    //   A. SDL's keyboard-state array: SDL_GetKeyboardState returns SDL's OWN persistent per-
+    //      scancode bytes - the same array the game's binds read (our Bind::isDown reads it too).
+    //      Writing array[scancode] is exactly what SDL does for a real press: instant, no queue
+    //      round-trip.
+    //   B. `voice_device_override <virtual-source>`: instead of moving CS2's capture stream
+    //      behind its back (Pulse move-source-output, which made the game drop voice entirely),
+    //      the GAME ITSELF is pointed at the virtual mic. Its own voice system then captures the
+    //      FIFO audio as if it were a real microphone.
+    //   3. Queued SDL key events (SDL_PeepEvents ADDEVENT) - two strikes: they are DATA in the
+    //      queue (SDL's keyboard-state array is NOT updated, so state-polling gates never see
+    //      them), AND processing them on the game thread crashed inside libclient's gameui/bind
+    //      path (null deref at libclient+0x1a8ad05, input-system frames on the stack - a
+    //      synthetic event reaching UI code it was not shaped for). REMOVED for good.
+    // What remains is the only lever that ever worked:
+    //   SDL's keyboard-state array: SDL_GetKeyboardState returns SDL's OWN persistent per-
+    //   scancode bytes - the same array the game's binds read (our Bind::isDown reads it too).
+    //   Writing array[scancode] is exactly what SDL does for a real press: instant, no queue
+    //   round-trip, no game-thread event processing.
+    void synthVoiceKey(bool down, bool force = false) const noexcept
+    {
+        const int key = GET_CONFIG_VAR(radio_vars::VoiceKeyBind);
+        if (key <= Bind::kOff || key > Bind::kLast)
+            return;
+        if (!force && down == voiceKeySynthed)
+            return;
+
+        if (key > Bind::kMaxScancode) {
+            // Mouse buttons have no writable state array and the queued-event channel is gone -
+            // a mouse-bound voice key cannot be synthesized.
+            if (!mouseKeyHinted) {
+                mouseKeyHinted = true;
+                gui_log::write("broadcast: voice key must be a KEYBOARD key (SDL state array is keyboard-only)");
+            }
+            return;
+        }
+
+        const LinuxDynamicLibrary sdl{cs2::SDL_DLL};
+        if (!sdl)
+            return;
+        if (const auto getState = sdl.getFunctionAddress("SDL_GetKeyboardState").as<sdl3::SDL_GetKeyboardState*>())
+            const_cast<std::uint8_t*>(getState(nullptr))[key] = down ? 1 : 0;
+        voiceKeySynthed = down;
+    }
+
+    // Transmission arming: voice enabled + the capture stream routed to the virtual source
+    // (the caller's script "on"/keepalive does the move) + synthetic key held.
+    void armTransmission() const noexcept
+    {
+        hookContext.template make<EngineCommandExecutor>().execute("voice_modenable 1");
+        synthVoiceKey(true);
+    }
+
+    void disarmTransmission() const noexcept
+    {
+        synthVoiceKey(false);
+    }
+
+    // <configDir>/sounds/airhorn.wav - the user drops any funny clip there.
+    [[nodiscard]] bool airhornClipPath(char (&path)[512]) const noexcept
+    {
+        const auto& directoryPath = hookContext.configState().pathToConfigDirectory;
+        if (!directoryPath)
+            return false;
+        char* dir = reinterpret_cast<char*>(directoryPath.get());
+        std::size_t length = 0;
+        while (dir[length] != '\0' && length + 1 < sizeof(path) - sizeof("/sounds/airhorn.wav"))
+            ++length;
+        std::memcpy(path, dir, length);
+        std::memcpy(path + length, "/sounds/airhorn.wav", sizeof("/sounds/airhorn.wav"));
+        if (::access(path, R_OK) != 0) {
+            if (!airhornHinted) {
+                airhornHinted = true;
+                gui_log::write("airhorn: missing %s - drop a wav there", path);
+            }
+            return false;
+        }
+        return true;
+    }
+
+    // The airhorn's switch script - same keepalive contract as the radio script: the clip
+    // lifetime only starts once the routing is live, and the game re-applies the move during
+    // the clip in case the capture stream was (re)created after "on" ran.
+    static void writeAirhornScriptOnce() noexcept
+    {
+        if (airhornScriptWritten)
+            return;
+        airhornScriptWritten = true;
+
+        static constexpr char kScript[] =
+            "#!/bin/sh\n"
+            "# Neversnooze airhorn: feed the virtual mic and move the game's capture to it.\n"
+            "FF=/tmp/ns_mic_board.pcm\n"
+            "ORIG=/tmp/ns_mic_board_orig.txt\n"
+            "MOD=ns_mic_board\n"
+            "cs2_out() {\n"
+            "\tpactl list source-outputs | awk '\n"
+            "\t\t/^Source Output #/ { o=$3; gsub(/[#]/,\"\",o); gsub(/:/,\"\",o) }\n"
+            "\t\t/^[[:space:]]*Source: / { s=$2 }\n"
+            "\t\t/application.name = \"cs2\"/ || /application.process.binary = \"cs2\"/ { print o, s; exit }'\n"
+            "}\n"
+            "try_move() {\n"
+            "\trec=$(cs2_out)\n"
+            "\tout=${rec%% *}\n"
+            "\tsrc=${rec##* }\n"
+            "\t[ -n \"$out\" ] || return 0\n"
+            "\tif [ ! -f \"$ORIG\" ]; then\n"
+            "\t\tcase \"$src\" in\n"
+            "\t\t$MOD) return 0 ;;\n"
+            "\t\t*) echo \"$src\" > \"$ORIG\" ;;\n"
+            "\t\tesac\n"
+            "\tfi\n"
+            "\tpactl move-source-output \"$out\" \"$MOD\" 2>/dev/null\n"
+            "}\n"
+            "case \"$1\" in\n"
+            "on)\n"
+            "\t[ -p \"$FF\" ] || mkfifo \"$FF\"\n"
+            "\tpactl list short modules | grep -q ns_mic_board || \\\n"
+            "\t\tpactl load-module module-pipe-source source_name=ns_mic_board file=\"$FF\" format=s16le rate=48000 channels=1\n"
+            "\ttry_move\n"
+            "\t;;\n"
+            "keepalive)\n"
+            "\ttry_move\n"
+            "\t;;\n"
+            "off)\n"
+            "\trec=$(cs2_out)\n"
+            "\tout=${rec%% *}\n"
+            "\tsrc=${rec##* }\n"
+            "\tif [ -f \"$ORIG\" ] && [ -n \"$out\" ] && [ \"$src\" = \"$MOD\" ]; then\n"
+            "\t\tpactl move-source-output \"$out\" \"$(cat $ORIG)\" 2>/dev/null\n"
+            "\tfi\n"
+            "\trm -f \"$ORIG\"\n"
+            "\t;;\n"
+            "hardoff)\n"
+            "\t$0 off\n"
+            "\tm=$(pactl list short modules | awk '/ns_mic_board/{print $1; exit}')\n"
+            "\t[ -n \"$m\" ] && pactl unload-module \"$m\"\n"
+            "\trm -f \"$FF\"\n"
+            "\t;;\n"
+            "esac\n";
+
+        const int fd = ::open("/tmp/ns_mic_board.sh", O_CREAT | O_WRONLY | O_TRUNC, 0755);
+        if (fd < 0)
+            return;
+        constexpr std::size_t length = sizeof(kScript) - 1;
+        std::size_t written = 0;
+        while (written < length) {
+            const ssize_t chunk = ::write(fd, kScript + written, length - written);
+            if (chunk <= 0)
+                break;
+            written += static_cast<std::size_t>(chunk);
+        }
+        ::close(fd);
+    }
+
     // The switch script must live on disk (too long for the spawnHostShell command buffer and
     // easier to keep idempotent as a standalone file). Written once per process; /tmp is shared
     // with the host the same way the radio results file is.
@@ -310,17 +626,38 @@ private:
 
         // $1 = on|off|hardoff, $2 = station id (on only). Ids are alphanumeric (TuneIn), so the
         // interpolation into the curl URL is safe.
+        //
+        // The move-source-output is back (round-1 routing DID deliver audio; only the VOX gate
+        // was broken, and the keymap press now holds the gate). The capture stream may only
+        // exist while voice is engaged, so "keepalive" re-applies the move every ~2s from the
+        // game while broadcasting - also catching re-created streams landing on the default mic.
+        // Matcher matches BOTH application.name and application.process.binary = "cs2" (the
+        // container may set either).
         static constexpr char kScript[] =
             "#!/bin/sh\n"
-            "# Neversneeze mic broadcast: route the game's mic capture to the radio source and back.\n"
+            "# Neversnooze mic broadcast: feed the virtual mic and move the game's capture to it.\n"
             "FF=/tmp/ns_mic_radio.pcm\n"
             "PIDF=/tmp/ns_mic_radio.ffpid\n"
             "ORIG=/tmp/ns_mic_orig.txt\n"
+            "MOD=ns_mic_radio\n"
             "cs2_out() {\n"
             "\tpactl list source-outputs | awk '\n"
             "\t\t/^Source Output #/ { o=$3; gsub(/[#]/,\"\",o); gsub(/:/,\"\",o) }\n"
             "\t\t/^[[:space:]]*Source: / { s=$2 }\n"
-            "\t\t/application.name = \"cs2\"/ { print o, s; exit }'\n"
+            "\t\t/application.name = \"cs2\"/ || /application.process.binary = \"cs2\"/ { print o, s; exit }'\n"
+            "}\n"
+            "try_move() {\n"
+            "\trec=$(cs2_out)\n"
+            "\tout=${rec%% *}\n"
+            "\tsrc=${rec##* }\n"
+            "\t[ -n \"$out\" ] || return 0\n"
+            "\tif [ ! -f \"$ORIG\" ]; then\n"
+            "\t\tcase \"$src\" in\n"
+            "\t\t$MOD) return 0 ;;\n"
+            "\t\t*) echo \"$src\" > \"$ORIG\" ;;\n"
+            "\t\tesac\n"
+            "\tfi\n"
+            "\tpactl move-source-output \"$out\" \"$MOD\" 2>/dev/null\n"
             "}\n"
             "case \"$1\" in\n"
             "on)\n"
@@ -334,18 +671,18 @@ private:
             "\t\t\techo $! > \"$PIDF\"\n"
             "\t\tfi\n"
             "\tfi\n"
-            "\trec=$(cs2_out)\n"
-            "\tout=${rec%% *}\n"
-            "\t[ -n \"$out\" ] || exit 0\n"
-            "\t[ -f \"$ORIG\" ] || echo \"${rec##* }\" > \"$ORIG\"\n"
-            "\tpactl move-source-output \"$out\" ns_mic_radio\n"
+            "\ttry_move\n"
+            "\t;;\n"
+            "keepalive)\n"
+            "\ttry_move\n"
             "\t;;\n"
             "off)\n"
             "\tif [ -f \"$PIDF\" ]; then kill \"$(cat $PIDF)\" 2>/dev/null; rm -f \"$PIDF\"; fi\n"
             "\trec=$(cs2_out)\n"
             "\tout=${rec%% *}\n"
-            "\tif [ -f \"$ORIG\" ] && [ -n \"$out\" ]; then\n"
-            "\t\tpactl move-source-output \"$out\" \"$(cat $ORIG)\"\n"
+            "\tsrc=${rec##* }\n"
+            "\tif [ -f \"$ORIG\" ] && [ -n \"$out\" ] && [ \"$src\" = \"$MOD\" ]; then\n"
+            "\t\tpactl move-source-output \"$out\" \"$(cat $ORIG)\" 2>/dev/null\n"
             "\tfi\n"
             "\trm -f \"$ORIG\"\n"
             "\t;;\n"
@@ -585,6 +922,19 @@ private:
     inline static bool micBroadcastActive{false};
     inline static char micBroadcastStation[sizeof(RadioStation::id)]{};
     inline static bool broadcastScriptWritten{false};
+    inline static bool voiceKeySynthed{false};
+    inline static bool mouseKeyHinted{false};
+    inline static int voiceKeyReassertCounter{0};
+    inline static int capturePeakZeroStreak{0};
+    inline static bool capturePeakAnomalyLogged{false};
+    inline static bool airhornScriptWritten{false};
+    inline static bool airhornRouted{false};
+    inline static int airhornFramesLeft{0};
+    inline static int airhornCooldownFrames{0};
+    inline static int airhornKeepaliveCounter{0};
+    inline static bool airhornHinted{false};
+    inline static bool firstBloodUsed{false};
+    inline static std::atomic<int> pendingAirhorn{0}; // kTrigger* values
     inline static char fetchBuffer[192 * 1024]{};
     inline static SavedStation favoriteStations[kMaxFavorites]{};
     inline static int favoriteStationCount{0};

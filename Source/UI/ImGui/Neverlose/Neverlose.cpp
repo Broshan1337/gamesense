@@ -11,9 +11,6 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <backends/imgui_impl_vulkan.h>
-#include <imgui.h>
-#include <imgui_internal.h>
-#include <backends/imgui_impl_vulkan.h>
 
 #define STBI_NO_STDIO
 #define STBI_ONLY_PNG
@@ -25,10 +22,15 @@
 #include <Features/Hud/SpectatorList/SpectatorSnapshot.h>
 #include <Features/Lua/LuaManager.h>
 #include <Features/Game/MovementConfigVariables.h>
+#include <Features/Game/NetLagConfigVariables.h>
+#include <Features/Game/AutoPeekConfigVariables.h>
 #include <Features/Misc/DiscordRpc.h>
 #include <Features/Hud/SteamPersona.h>
 #include <Features/Hud/ThemeAccent.h>
 #include <Features/Hud/HudThemeColorConfigVariables.h>
+#include <CS2/Econ/PaintKitDatabase.h>
+#include <CS2/Econ/ItemDefDatabase.h>
+#include <Features/SkinChanger/SkinChangerData.h>
 #include <UI/ImGui/Neverlose/LogoAsset.h>
 #include <Utils/ColorUtils.h>
 #include <Utils/StatusReport.h>
@@ -50,7 +52,9 @@
 #include <Features/Combat/Triggerbot/TriggerbotConfigVariables.h>
 #include <Features/Game/BlockbotConfigVariables.h>
 #include <Features/Game/BunnyhopConfigVariables.h>
+#include <Features/Game/ChatTools.h>
 #include <Features/Game/CooldownRevealerConfigVariables.h>
+#include <Features/Game/RevealRadarConfigVariables.h>
 #include <Features/Game/FakeLevelConfigVariables.h>
 #include <Features/Game/FakePrimeConfigVariables.h>
 #include <Features/Game/FvaConfigVariables.h>
@@ -62,6 +66,7 @@
 #include <Features/Game/ValveDsSpoofConfigVariables.h>
 #include <Features/Game/VoteRevealerConfigVariables.h>
 #include <Features/Hud/BombPlantAlert/BombPlantAlertConfigVariables.h>
+#include <Features/Visuals/Chams/ChamsConfigVariables.h>
 #include <Features/Hud/BombTimer/BombTimerConfigVariables.h>
 #include <Features/Hud/DefusingAlert/DefusingAlertConfigVariables.h>
 #include <Features/Hud/KillfeedPreserver/KillfeedPreserverConfigVariables.h>
@@ -70,6 +75,7 @@
 #include <Features/Radio/RadioConfigVariables.h>
 #include <Features/Radio/RadioManager.h>
 #include <Features/SkinChanger/SkinChangerConfigVariables.h>
+#include <Features/Game/AgentChangerConfigVariables.h>
 #include <Features/Sound/HitSoundConfigVariables.h>
 #include <Features/Sound/SpawnProtectionSoundConfigVariables.h>
 #include <Features/Sound/SoundVisualizationConfigVariables.h>
@@ -103,10 +109,24 @@ namespace
 
 constexpr ImU32 C(int r, int g, int b, int a = 255) { return IM_COL32(r, g, b, a); }
 
+// Shared color tokens - the hand-drawn chrome re-uses these everywhere, so a theme pass is a
+// one-line change per token instead of hunting dozens of literal C(...) calls.
+constexpr ImU32 kCardBg = C(16, 16, 18, 224);        // card body fill
+constexpr ImU32 kSidebarBg = C(16, 16, 18, 222);     // nav rail fill
+constexpr ImU32 kHairline = C(26, 26, 30);           // in-card separators
+constexpr ImU32 kHairlineSoft = C(30, 30, 33);       // control/shell outlines
+constexpr ImU32 kPillBg = C(24, 24, 26);             // value pill / button resting fill
+constexpr ImU32 kPillBgHover = C(32, 32, 36);        // value pill / button hovered fill
+constexpr ImU32 kPopupBg = C(18, 18, 20, 242);       // popover body
+constexpr ImU32 kPopupBorder = C(54, 54, 60, 205);   // popover outline
+constexpr ImU32 kTextBodyCol = C(207, 209, 218);     // row label text
+constexpr ImU32 kTextFaint = C(114, 119, 132);       // captions/eyebrows: readable-dim (the old
+                                                     // C(91..) pair was ~2.3:1 on the shell)
+
 float kTextBody = 15.0f;
 float kTextControl = 14.0f;
 float kTextSmall = 12.0f;
-float kTextCaption = 10.0f;
+float kTextCaption = 11.0f;
 float kTextTitle = 16.0f;
 float kTextIcon = 13.0f;
 
@@ -118,8 +138,14 @@ float kRowHeight = 37.0f;
 
 float menuScale = 1.0f;     // 1.0 = design size; adjusted in the profile popover
 bool menuScaleInitialized = false;
+float shellHeightBase = 576.0f; // centering baseline (design height * menuScale) - the adaptive
+                                // shell animates kShellHeight per page; the base keeps the
+                                // default centering / drag clamps from drifting while it eases
+float lastContentHeight = 0.0f; // previous frame's page content height (adaptive height target)
 float navScroll = 0.0f;     // sidebar nav rail scroll (the expanded Visuals list can outgrow
                             // the space above the account bar - wheel-scrolls, clipped)
+float navContentEnd = 0.0f; // shell-absolute bottom of last frame's laid-out nav rail (the rail
+                            // scroll clamp reads it - hand-counted estimates drifted stale)
 
 // Live glow color for the popover swatch: in rainbow mode the swatch shows the CURRENT hue.
 ImU32 glowTintPreview() noexcept
@@ -233,11 +259,12 @@ void applyMetrics() noexcept
     kTextBody = 15.0f * menuScale;
     kTextControl = 14.0f * menuScale;
     kTextSmall = 12.0f * menuScale;
-    kTextCaption = 10.0f * menuScale;
+    kTextCaption = 11.0f * menuScale;
     kTextTitle = 16.0f * menuScale;
     kTextIcon = 13.0f * menuScale;
     kShellWidth = 748.0f * menuScale;
     kShellHeight = 576.0f * menuScale;
+    shellHeightBase = 576.0f * menuScale;
     kSidebarWidth = 158.0f * menuScale;
     kToolbarHeight = 56.0f * menuScale;
     kRowHeight = 37.0f * menuScale;
@@ -298,6 +325,7 @@ constexpr ImWchar kIconCodepoints[] = {
     0xf6cb, // dagger          (Inventory)
     0xf121, // code            (Scripts)
     0xf8cc, // mouse           (Legit)
+    0xf11c, // keyboard        (bind indicator on bound toggle rows)
     0
 };
 
@@ -321,6 +349,9 @@ constexpr bool iconInAtlas(ImWchar codepoint) noexcept
 constexpr char kIconStar[4] = {'\xEF', '\x80', '\x85', '\0'}; // f005 star (radio favorites, knife preview)
 static_assert(iconInAtlas(iconCodepointOf(kIconStar)), "star glyph missing from kIconCodepoints");
 
+constexpr char kIconKeyboard[4] = {'\xEF', '\x84', '\x9C', '\0'}; // f11c keyboard (bind indicator)
+static_assert(iconInAtlas(iconCodepointOf(kIconKeyboard)), "keyboard glyph missing from kIconCodepoints");
+
 // --- state ---------------------------------------------------------------------
 
 struct SelectPopup {
@@ -332,6 +363,32 @@ struct SelectPopup {
     ImVec2 anchor{};
     float width = 134.0f;
     int openedFrame = 0;
+
+    // Paint-kit picker mode (Inventory page): rows come from PaintKitDatabase for
+    // paintKitDefIndex instead of the static options[] table, the apply callback receives the
+    // RAW KIT ID (not a row index), and the list is searchable + wheel-scrollable (60+ entries
+    // for some weapons - a plain dropdown would be twice the menu's height).
+    bool paintKitMode = false;
+    std::uint16_t paintKitDefIndex = 0;
+    int paintKitCurrentId = 0; // highlights the committed row
+    float paintKitScroll = 0.0f;
+    char paintKitSearch[24] = "";
+
+    // Item-def picker mode (Inventory page LOCAL ITEMS): rows come from an arbitrary
+    // ItemDefEntry list (cases / keys from ItemDefDatabase) instead of PaintKitDatabase -
+    // same search/scroll/apply machinery, apply still receives the raw def index.
+    const cs2::ItemDefEntry* itemList = nullptr;
+    int itemCount = 0;
+
+    // String-list mode (persona presets): rows are plain text options - apply receives the
+    // option INDEX.
+    const char* const* stringList = nullptr;
+    int stringCount = 0;
+
+    // Skips the virtual "None" row (defIndex 0) for pickers where "none" is meaningless -
+    // ALSO required whenever an entry legitimately uses defIndex 0, or it would collide
+    // with the None row's PushID (the 2026-09-07 radio-phrase ID conflict).
+    bool omitNone = false;
 };
 
 struct State {
@@ -404,6 +461,7 @@ int searchGlowSubTab = 0;
 // with a frame-rate independent exponential decay - wheel notches land as a short glide
 // instead of a 40px jump, and trackpads accumulate naturally.
 float scrollOffset = 0.0f;
+float dropdownScroll = 0.0f; // the plain select() dropdown's wheel scroll (capped row count)
 float scrollTarget = 0.0f;
 float maxScroll = 0.0f;
 
@@ -433,25 +491,32 @@ bool searchIndexing = false;   // true only during a ghost page run
 bool searchOpen = false;
 int searchOpenedFrame = -1;
 char searchQuery[64] = "";
+int searchSelected = 0; // keyboard selection into the visible match list
 
 constexpr const char* kPageNames[] = {
     "Rage", "Legit", "Movement", "Player Info", "Glow",
-    "Viewmodel", "Effects", "Hud", "Sound", "Inventory", "Radio", "Misc"
+    "Viewmodel", "Effects", "Hud", "Sound", "Inventory", "Radio", "Scripts", "Misc"
 };
 
-// Case-insensitive substring match (strcasestr is GNU-only; keep it portable and local).
-[[nodiscard]] bool searchMatches(const char* haystack, const char* needle) noexcept
+// Case-insensitive substring locator; returns nullptr when absent (or the needle is empty).
+[[nodiscard]] const char* searchMatchPosition(const char* haystack, const char* needle) noexcept
 {
     if (!needle[0])
-        return false;
+        return nullptr;
     for (const char* h = haystack; *h; ++h) {
         int i = 0;
         while (needle[i] && h[i] && std::tolower(static_cast<unsigned char>(h[i])) == std::tolower(static_cast<unsigned char>(needle[i])))
             ++i;
         if (!needle[i])
-            return true;
+            return h;
     }
-    return false;
+    return nullptr;
+}
+
+// Case-insensitive substring match (strcasestr is GNU-only; keep it portable and local).
+[[nodiscard]] bool searchMatches(const char* haystack, const char* needle) noexcept
+{
+    return searchMatchPosition(haystack, needle) != nullptr;
 }
 
 // cinematic open: 0 right after the menu is toggled open, eased to 1 while rendering
@@ -462,6 +527,7 @@ float reveal = 1.0f;
 bool dismissActive = false;
 
 bool configPopoverOpen = false;
+std::uint64_t lastCleanConfigEpoch = 0; // ui_config::changeEpoch at the last save/switch/restore
 int configPopoverOpenedFrame = -1;
 ImVec2 menuOffset{0.0f, 0.0f}; // user drag offset from the screen-centered position
 bool draggingWindow = false;
@@ -485,13 +551,31 @@ ImVec2 styleAnchorMin, styleAnchorMax;
 
 // --- animation helpers (reference implementation) --------------------------------
 
+// Set once per frame in render(); motion() and the transforms read it instead of hitting the
+// config system on every call (motion() runs dozens of times per frame).
+bool g_reduceMotion = false;
+
 float motion(ImGuiID id, float target, float speed = 16.0f, float initial = -1.0f) noexcept
 {
     float* value = ImGui::GetStateStorage()->GetFloatRef(id, initial < 0.0f ? target : initial);
+    if (g_reduceMotion) { // accessibility: snap straight to the target, no easing
+        *value = target;
+        return target;
+    }
     *value = ImLerp(*value, target, 1.0f - std::exp(-speed * ImGui::GetIO().DeltaTime));
     if (std::fabs(*value - target) < 0.0005f)
         *value = target;
     return *value;
+}
+
+// Animation slots MUST key on the row's control id, never on ImGui::GetItemID(): a row covered
+// by an open popup submits a Dummy (item id 0 - see hit()), and a GetItemID-keyed slot was then
+// SHARED by every covered row - while any dropdown was open, all covered sliders/toggles eased
+// toward each other's values through one storage float (visible drift) and snapped back when
+// the popup closed. The salt keeps the domains of different primitives disjoint.
+ImGuiID animKey(ImU32 salt, int id) noexcept
+{
+    return ImHashData(&id, sizeof(id), salt);
 }
 
 ImU32 mix(ImU32 a, ImU32 b, float t) noexcept
@@ -631,18 +715,91 @@ bool drawStampSlice(ImDrawList* d, ImVec2 min, ImVec2 max, float margin, ImU32 t
     return false;
 }
 
-void softShadow(ImDrawList* d, ImVec2 min, ImVec2 max, float rounding) noexcept
+void softShadow(ImDrawList* d, ImVec2 min, ImVec2 max, float rounding, float margin = 0.0f) noexcept
 {
     // real gaussian falloff via the precomputed shadow stamp (shadow_texture in VulkanHook.h);
     // the layered-rect fake runs until the stamp upload completes (first frames) or permanently
     // if it failed.
-    drawStampSlice(d, min, max, s(12.0f), C(0, 0, 0, 110));
+    drawStampSlice(d, min, max, margin > 0.0f ? margin : s(12.0f), C(0, 0, 0, 110));
 }
 
 void chevron(ImDrawList* d, ImVec2 p, ImU32 color) noexcept
 {
     d->AddLine(p, p + ImVec2(s(3), s(3)), color, s(1.3f));
     d->AddLine(p + ImVec2(s(3), s(3)), p + ImVec2(s(0), s(6)), color, s(1.3f));
+}
+
+// Pulsing accent dot: soft breathing halo + bright core (the build-chip recipe, applied to
+// every header dot in the menu so they all breathe in sync).
+void pulsingDot(ImDrawList* d, ImVec2 center, float radius, ImU32 color, float speed = 2.2f) noexcept
+{
+    const float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(ImGui::GetTime()) * speed);
+    d->AddCircleFilled(center, radius * 1.9f, (color & 0x00FFFFFFu) | (static_cast<ImU32>(32 * pulse) << IM_COL32_A_SHIFT));
+    d->AddCircleFilled(center, radius, (color & 0x00FFFFFFu) | (static_cast<ImU32>(150 + 90 * pulse) << IM_COL32_A_SHIFT));
+}
+
+// --- toasts ---------------------------------------------------------------------------
+// Small bottom-center feedback pills (config saved/switched/created, failures). Ring of 4,
+// newest at the bottom; drawn last so they sit above popups.
+
+struct Toast { char text[96]; double born; ImU32 tint; };
+Toast toasts[4] = {};
+int toastCount = 0;
+
+void pushToast(const char* message, ImU32 tint) noexcept
+{
+    if (toastCount == 4) {
+        for (int i = 0; i < 3; ++i)
+            toasts[i] = toasts[i + 1];
+        --toastCount;
+    }
+    Toast& t = toasts[toastCount++];
+    std::snprintf(t.text, sizeof(t.text), "%s", message);
+    t.born = ImGui::GetTime();
+    t.tint = tint;
+}
+
+void drawToasts(ImDrawList* d, ImVec2 base) noexcept
+{
+    constexpr double kHold = 2.4;
+    constexpr double kIn = 0.16;
+    constexpr double kOut = 0.30;
+    const double now = ImGui::GetTime();
+
+    int keep = 0;
+    for (int i = 0; i < toastCount; ++i)
+        if (now - toasts[i].born <= kHold + kOut)
+            toasts[keep++] = toasts[i];
+    toastCount = keep;
+
+    const float rowHeight = s(26.0f);
+    const float gap = s(6.0f);
+    for (int i = toastCount - 1; i >= 0; --i) {
+        const Toast& t = toasts[i];
+        const double age = now - t.born;
+        float alpha = 1.0f;
+        float rise = 0.0f;
+        if (!g_reduceMotion) {
+            if (age < kIn) {
+                const float k = static_cast<float>(age / kIn);
+                alpha = k;
+                rise = (1.0f - k) * s(8.0f);
+            } else if (age > kHold) {
+                const float k = static_cast<float>((age - kHold) / kOut);
+                alpha = 1.0f - k;
+                rise = -k * s(4.0f);
+            }
+        }
+        const float textWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, t.text).x;
+        const float width = textWidth + s(34.0f);
+        const float x = base.x + kSidebarWidth + (kShellWidth - kSidebarWidth) * 0.5f - width * 0.5f;
+        const float y = base.y + kShellHeight - s(14.0f) - rowHeight - (toastCount - 1 - i) * (rowHeight + gap) + rise;
+        const ImU32 a = static_cast<ImU32>(alpha * 255.0f);
+        d->AddRectFilled(ImVec2(x, y), ImVec2(x + width, y + rowHeight), (C(18, 18, 20) & 0x00FFFFFFu) | (static_cast<ImU32>(244 * alpha) << IM_COL32_A_SHIFT), rowHeight * 0.5f);
+        d->AddRect(ImVec2(x, y), ImVec2(x + width, y + rowHeight), (t.tint & 0x00FFFFFFu) | (static_cast<ImU32>(110 * alpha) << IM_COL32_A_SHIFT), rowHeight * 0.5f);
+        d->AddCircleFilled(ImVec2(x + s(15), y + rowHeight * 0.5f), s(2.4f), (t.tint & 0x00FFFFFFu) | (a << IM_COL32_A_SHIFT));
+        textY(d, x + s(24), y, rowHeight, (C(224, 227, 235) & 0x00FFFFFFu) | (a << IM_COL32_A_SHIFT), t.text, kTextControl, nullptr);
+    }
 }
 
 ImFont* strongFont() noexcept
@@ -662,20 +819,75 @@ ImFont* iconFont() noexcept
 struct CardContext {
     ImVec2 origin; // first row's top-left on screen
     float width = 0.0f;
-    int row = 0;
+    float row = 0.0f; // fractional: cardDivider() consumes partial rows for sub-group captions
+    float labelReserve = 0.0f; // row's right-control reserve, set BEFORE beginRow (0 = widest s(158))
+    float lastLabelWidth = 0.0f; // DRAWN (possibly truncated) label width of the previous row
 };
 
 CardContext card;
+
+// Central label fitting: draws the label ellipsized to `maxWidth` when too long (UTF-8 aware),
+// returns the DRAWN width so followers (bind glyph etc.) can position after it. Before this,
+// long labels just ran under the right-hand controls; hueRow hand-rolled its own dodge.
+float drawLabelFit(ImDrawList* d, float x, float y, float h, ImU32 color, const char* label, float size, ImFont* font, float maxWidth) noexcept
+{
+    font = font ? font : ImGui::GetFont();
+    const float width = font->CalcTextSizeA(size, FLT_MAX, 0.0f, label).x;
+    if (width <= maxWidth) {
+        textY(d, x, y, h, color, label, size, font);
+        return width;
+    }
+    char buf[96];
+    float w = 0.0f;
+    int len = 0;
+    const float ellipsisW = font->CalcTextSizeA(size, FLT_MAX, 0.0f, "...").x;
+    while (label[len] && len < static_cast<int>(sizeof(buf)) - 1) {
+        const int charLen = label[len] < 0x80 ? 1 : label[len] < 0xE0 ? 2 : label[len] < 0xF0 ? 3 : 4;
+        for (int i = 0; i < charLen && label[len + i]; ++i)
+            buf[len + i] = label[len + i];
+        const int next = len + charLen;
+        const float nextW = font->CalcTextSizeA(size, FLT_MAX, 0.0f, buf, buf + next).x;
+        if (nextW + ellipsisW > maxWidth)
+            break;
+        len = next;
+        w = nextW;
+    }
+    std::memcpy(buf + len, "...", 4);
+    textY(d, x, y, h, color, buf, size, font);
+    return w + ellipsisW;
+}
 
 void beginRow(ImDrawList* d, const char* label) noexcept
 {
     const float y = card.origin.y + card.row * kRowHeight;
     if (searchIndexing && searchIndexCount < kSearchIndexCap)
         searchIndex[searchIndexCount++] = {label, static_cast<Page>(searchIndexPageCursor), y - (shellBase.y + kToolbarHeight + s(24.0f)), searchGlowSubTab};
-    if (card.row)
-        d->AddLine(ImVec2(card.origin.x + s(12), y), ImVec2(card.origin.x + card.width - s(12), y), C(26, 26, 30));
-    textY(d, card.origin.x + s(13), y, kRowHeight, C(207, 209, 218), label, kTextBody, nullptr);
-    ++card.row;
+    if (card.row > 0.5f)
+        d->AddLine(ImVec2(card.origin.x + s(12), y), ImVec2(card.origin.x + card.width - s(12), y), kHairline);
+    // label fitting: keep the text clear of the row's right-hand control. Rows set
+    // card.labelReserve = distance from the card's right edge to the control's left edge;
+    // 0 falls back to the widest control set (slider track + value pill ~s(158)).
+    const float reserve = card.labelReserve > 0.0f ? card.labelReserve : s(158.0f);
+    card.labelReserve = 0.0f;
+    card.lastLabelWidth = drawLabelFit(d, card.origin.x + s(13), y, kRowHeight, kTextBodyCol, label, kTextBody, nullptr, card.width - s(13) - reserve);
+    card.row += 1.0f;
+}
+
+// In-card sub-group caption: a hairline + small caption consuming one row slot. Splits long
+// cards (e.g. the triggerbot) into scannable sections without a second card frame. The accent
+// tick before the caption distinguishes it from a real card header band at a glance.
+void cardDivider(const char* caption) noexcept
+{
+    ImDrawList* d = ImGui::GetWindowDrawList();
+    const float y = card.origin.y + card.row * kRowHeight;
+    if (searchIndexing && searchIndexCount < kSearchIndexCap)
+        searchIndex[searchIndexCount++] = {caption, static_cast<Page>(searchIndexPageCursor), y - (shellBase.y + kToolbarHeight + s(24.0f)), searchGlowSubTab};
+    if (card.row > 0.5f)
+        d->AddLine(ImVec2(card.origin.x + s(12), y), ImVec2(card.origin.x + card.width - s(12), y), kHairline);
+    d->AddRectFilled(card.origin + ImVec2(s(13), y + rowCentered(s(10))), card.origin + ImVec2(s(13) + s(2.5f), y + rowCentered(s(10)) + s(10)),
+        (g_accent & 0x00FFFFFFu) | (130u << IM_COL32_A_SHIFT), s(1.2f));
+    textY(d, card.origin.x + s(21), y, kRowHeight, kTextFaint, caption, kTextCaption, nullptr);
+    card.row += 1.0f;
 }
 
 [[nodiscard]] ImVec2 rowControlPos(float widthFromRight) noexcept
@@ -689,6 +901,7 @@ void beginRow(ImDrawList* d, const char* label) noexcept
 bool toggle(const char* label, bool* value, int id, bool* rightClicked = nullptr) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
+    card.labelReserve = s(56.0f); // switch control
     beginRow(d, label);
 
     ImVec2 p = rowControlPos(s(43.0f));
@@ -696,19 +909,23 @@ bool toggle(const char* label, bool* value, int id, bool* rightClicked = nullptr
 
     ImGui::PushID(id);
     const bool clicked = hit("##toggle", p - ImVec2(s(5), s(6)), ImVec2(s(39), s(30)));
-    const ImGuiID iid = ImGui::GetItemID();
     if (rightClicked)
         *rightClicked = ImGui::IsItemClicked(ImGuiMouseButton_Right);
     // Hover preview, same as the popover toggles (Outer Glow etc.): hovering an OFF toggle
     // slides the knob to the middle and tints the track halfway toward the accent - the knob
     // then commits to whichever side on click. ON toggles stay put under the cursor.
-    const float on = motion(iid ^ 0x55aa721u, *value ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f, 19.0f);
-    const float hover = motion(iid ^ 0x118a0u, ImGui::IsItemHovered() ? 1.0f : 0.0f, 20.0f);
+    const float on = motion(animKey(0x55aa721u, id), *value ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f, 19.0f);
+    const float hover = motion(animKey(0x118a0u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f, 20.0f);
     ImGui::PopID();
     if (clicked)
         *value = !*value;
 
     d->AddRectFilled(p - ImVec2(s(1 + hover), s(1 + hover)), p + ImVec2(s(30 + hover), s(19 + hover)), (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(45 * hover) << IM_COL32_A_SHIFT), s(10));
+    // soft accent halo while the toggle is ON - the switch feels "lit" instead of just colored
+    if (on > 0.05f) {
+        d->AddRectFilled(p - ImVec2(s(3), s(3)), p + ImVec2(s(32), s(21)), (g_buttonAccent & 0x00FFFFFFu) | (static_cast<ImU32>(26 * on) << IM_COL32_A_SHIFT), s(12));
+        d->AddRectFilled(p - ImVec2(s(6), s(6)), p + ImVec2(s(35), s(24)), (g_buttonAccent & 0x00FFFFFFu) | (static_cast<ImU32>(10 * on) << IM_COL32_A_SHIFT), s(15));
+    }
     d->AddRectFilled(p, p + ImVec2(s(29), s(18)), mix(C(27, 27, 29), g_buttonAccent, on), s(9));
     d->AddCircleFilled(p + ImVec2(ImLerp(s(9), s(20), on), s(9)), s(7), mix(C(133, 144, 156), C(248, 249, 252), on));
     return clicked;
@@ -718,16 +935,16 @@ bool select(const char* label, int* index, const char* const* options, int count
     void (*apply)(int) = nullptr) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
+    const float controlWidth = ImMin(s(134.0f), card.width * 0.48f);
+    card.labelReserve = controlWidth + s(13.0f);
     beginRow(d, label);
 
-    const float controlWidth = ImMin(s(134.0f), card.width * 0.48f);
     ImVec2 cp = rowControlPos(controlWidth + s(13.0f));
     cp.y += rowCentered(s(23.0f));
 
     ImGui::PushID(id);
     const bool click = hit("##select", cp, ImVec2(controlWidth, s(23)));
-    const ImGuiID iid = ImGui::GetItemID();
-    const float response = motion(iid ^ 0x6161u, ImGui::IsItemHovered() ? 1.0f : 0.0f);
+    const float response = motion(animKey(0x6161u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f);
     ImGui::PopID();
 
     // The popover commits through `apply` in a later frame, so the option table and the
@@ -741,14 +958,63 @@ bool select(const char* label, int* index, const char* const* options, int count
         state.popup.anchor = cp;
         state.popup.width = controlWidth;
         state.popup.openedFrame = ImGui::GetFrameCount();
+        state.popup.paintKitMode = false;
+        state.popup.paintKitScroll = 0.0f;
+        state.popup.paintKitSearch[0] = '\0';
     }
 
-    d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(C(24, 24, 26), C(32, 32, 36), response), s(5));
-    d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(C(30, 30, 33), g_accent, response), s(5));
+    d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(kPillBg, kPillBgHover, response), s(5));
+    d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(kHairlineSoft, g_accent, response), s(5));
     textY(d, cp.x + s(7), cp.y, s(23), C(170, 173, 184), (*index >= 0 && *index < count) ? options[*index] : "Select", kTextControl, nullptr);
     d->AddLine(cp + ImVec2(controlWidth - s(13), s(9)), cp + ImVec2(controlWidth - s(9), s(13)), C(139, 143, 154), 1.0f);
     d->AddLine(cp + ImVec2(controlWidth - s(9), s(13)), cp + ImVec2(controlWidth - s(5), s(9)), C(139, 143, 154), 1.0f);
     return false; // changes arrive through the popup layer
+}
+
+// select() variant that opens the KIT-STYLE popup (search field + wheel scroll + draggable
+// scrollbar, 11 visible rows) instead of the plain dropdown - for option lists too long for
+// a fixed dropdown (26 persona presets). The option table is static (popup outlives the
+// opening frame); apply receives the option INDEX.
+bool selectList(const char* label, int* index, const char* const* options, int count, int id,
+    void (*apply)(int) = nullptr) noexcept
+{
+    ImDrawList* d = ImGui::GetWindowDrawList();
+    const float controlWidth = ImMin(s(134.0f), card.width * 0.48f);
+    card.labelReserve = controlWidth + s(13.0f);
+    beginRow(d, label);
+
+    ImVec2 cp = rowControlPos(controlWidth + s(13.0f));
+    cp.y += rowCentered(s(23.0f));
+
+    ImGui::PushID(id);
+    const bool click = hit("##select", cp, ImVec2(controlWidth, s(23)));
+    const float response = motion(animKey(0x6161u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f);
+    ImGui::PopID();
+
+    if (click) {
+        state.popup.open = !(state.popup.open && state.popup.owner == id);
+        state.popup.owner = id;
+        state.popup.options = options; // the control reads its current value from this
+        state.popup.count = count;
+        state.popup.apply = apply;
+        state.popup.anchor = cp;
+        state.popup.width = controlWidth;
+        state.popup.openedFrame = ImGui::GetFrameCount();
+        state.popup.paintKitMode = true;
+        state.popup.stringList = options;
+        state.popup.stringCount = count;
+        state.popup.omitNone = true;
+        state.popup.paintKitCurrentId = *index;
+        state.popup.paintKitScroll = 0.0f;
+        state.popup.paintKitSearch[0] = '\0';
+    }
+
+    d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(kPillBg, kPillBgHover, response), s(5));
+    d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(kHairlineSoft, g_accent, response), s(5));
+    textY(d, cp.x + s(7), cp.y, s(23), C(170, 173, 184), (*index >= 0 && *index < count) ? options[*index] : "Select", kTextControl, nullptr);
+    d->AddLine(cp + ImVec2(controlWidth - s(13), s(9)), cp + ImVec2(controlWidth - s(9), s(13)), C(139, 143, 154), 1.0f);
+    d->AddLine(cp + ImVec2(controlWidth - s(9), s(13)), cp + ImVec2(controlWidth - s(5), s(9)), C(139, 143, 154), 1.0f);
+    return false;
 }
 
 bool sliderRow(const char* label, int* value, int min, int max, int id, const char* suffix) noexcept
@@ -771,26 +1037,47 @@ bool sliderRow(const char* label, int* value, int min, int max, int id, const ch
             const float newPosition = ImClamp((ImGui::GetIO().MousePos.x - start.x) / trackWidth, 0.0f, 1.0f);
             *value = min + static_cast<int>(newPosition * static_cast<float>(max - min) + 0.5f);
         }
-        const float shown = motion(ImGui::GetItemID() ^ 0xa8f1u, position, 14.0f, position);
+        const float shown = motion(animKey(0xa8f1u, id), position, 14.0f, position);
+        const bool dragging = ImGui::IsItemActive();
         ImGui::PopID();
 
         d->AddRectFilled(start, start + ImVec2(trackWidth, s(3)), C(33, 33, 36), s(2));
         d->AddRectFilled(start, start + ImVec2(trackWidth * shown, s(3)), g_sliderAccent, s(2));
+        // while dragging: accent ring around the thumb + a value bubble riding above it
+        if (dragging) {
+            const ImVec2 thumb = start + ImVec2(trackWidth * shown, s(1.5f));
+            d->AddCircle(thumb, s(7.5f), (g_sliderAccent & 0x00FFFFFFu) | (90u << IM_COL32_A_SHIFT), 0, s(1.2f));
+            d->AddCircle(thumb, s(10.0f), (g_sliderAccent & 0x00FFFFFFu) | (36u << IM_COL32_A_SHIFT), 0, s(1.0f));
+            char bubble[32];
+            std::snprintf(bubble, sizeof(bubble), "%d", *value);
+            const float bubbleTextWidth = ImGui::GetFont()->CalcTextSizeA(kTextSmall, FLT_MAX, 0.0f, bubble).x;
+            const float bubbleWidth = bubbleTextWidth + s(10.0f);
+            ImVec2 bubblePos(thumb.x - bubbleWidth * 0.5f, thumb.y - s(22.0f));
+            bubblePos.x = ImClamp(bubblePos.x, card.origin.x + s(4), card.origin.x + card.width - bubbleWidth - s(4));
+            d->AddRectFilled(bubblePos, bubblePos + ImVec2(bubbleWidth, s(17)), C(23, 23, 25, 242), s(5));
+            d->AddRect(bubblePos, bubblePos + ImVec2(bubbleWidth, s(17)), (g_sliderAccent & 0x00FFFFFFu) | (110u << IM_COL32_A_SHIFT), s(5));
+            textY(d, bubblePos.x + (bubbleWidth - bubbleTextWidth) * 0.5f, bubblePos.y, s(17), C(233, 235, 241), bubble, kTextSmall, nullptr);
+        }
         d->AddCircleFilled(start + ImVec2(trackWidth * shown, s(1.5f)), s(5.5f), C(247, 248, 252));
     }
 
-    // Value pill: click to type an exact value (editable sliders).
-    ImVec2 pill = rowControlPos(s(55.0f));
+    // Value pill: click to type an exact value (editable sliders). The pill grows leftward to
+    // fit the text (big values like fog distance "3873.73" used to spill out of the fixed 42px).
+    char pillText[32];
+    std::snprintf(pillText, sizeof(pillText), "%d%s", *value, suffix ? suffix : "");
+    const float pillTextWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, pillText).x;
+    const float pillWidth = ImMax(s(42.0f), pillTextWidth + s(12.0f));
+    ImVec2 pill = rowControlPos(s(13.0f) + pillWidth);
     pill.y += rowCentered(s(21.0f));
-    d->AddRectFilled(pill, pill + ImVec2(s(42), s(21)), C(24, 24, 26), s(5));
+    d->AddRectFilled(pill, pill + ImVec2(pillWidth, s(21)), kPillBg, s(5));
 
     ImGui::PushID(id + 500000);
     if (editing) {
         ImGui::SetCursorScreenPos(pill + ImVec2(s(4), s(3)));
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, C(30, 30, 33));
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, kHairlineSoft);
         ImGui::PushStyleColor(ImGuiCol_Border, g_accent);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(4), s(2)));
-        ImGui::PushItemWidth(s(42) - s(8));
+        ImGui::PushItemWidth(pillWidth - s(8));
         ImGui::SetKeyboardFocusHere(0); // focus on frame 1 - without this the not-yet-focused
         ImGui::InputText("##edit", state.editBuffer, sizeof(state.editBuffer), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll); // input trips lostFocus instantly
         const bool committed = ImGui::IsItemDeactivatedAfterEdit() || ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter);
@@ -804,14 +1091,11 @@ bool sliderRow(const char* label, int* value, int min, int max, int id, const ch
             state.editingSlider = -1;
         }
     } else {
-        if (hit("##pill_edit", pill, ImVec2(s(42), s(21))) && ImGui::IsItemHovered() && ImGui::IsMouseReleased(0)) {
+        if (hit("##pill_edit", pill, ImVec2(pillWidth, s(21))) && ImGui::IsItemHovered() && ImGui::IsMouseReleased(0)) {
             state.editingSlider = id;
             std::snprintf(state.editBuffer, sizeof(state.editBuffer), "%d", *value);
         }
-        char pillText[32];
-        std::snprintf(pillText, sizeof(pillText), "%d%s", *value, suffix ? suffix : "");
-        const float pillTextWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, pillText).x;
-        textY(d, pill.x + (s(42) - pillTextWidth) * 0.5f, pill.y, s(21), C(166, 169, 179), pillText, kTextControl, nullptr);
+        textY(d, pill.x + (pillWidth - pillTextWidth) * 0.5f, pill.y, s(21), C(166, 169, 179), pillText, kTextControl, nullptr);
     }
     ImGui::PopID();
     return *value != previousValue;
@@ -820,6 +1104,7 @@ bool sliderRow(const char* label, int* value, int min, int max, int id, const ch
 bool hueRow(const char* label, float* hue, int id) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
+    card.labelReserve = s(55.0f); // hue pill; the track dodges the label itself
     beginRow(d, label);
 
     ImVec2 start = rowControlPos(s(175.0f));
@@ -839,7 +1124,7 @@ bool hueRow(const char* label, float* hue, int id) noexcept
     hit("##hue", start - ImVec2(s(5), s(8)), ImVec2(trackWidth + s(10), s(19)));
     if (ImGui::IsItemActive())
         *hue = ImClamp((ImGui::GetIO().MousePos.x - start.x) / trackWidth, 0.0f, 1.0f) * 359.0f;
-    const float shown = motion(ImGui::GetItemID() ^ 0x4d21u, *hue / 359.0f, 14.0f, *hue / 359.0f);
+    const float shown = motion(animKey(0x4d21u, id), *hue / 359.0f, 14.0f, *hue / 359.0f);
     ImGui::PopID();
 
     float r = 0, g = 0, b = 0;
@@ -854,7 +1139,7 @@ bool hueRow(const char* label, float* hue, int id) noexcept
 
     ImVec2 pill = rowControlPos(s(55.0f));
     pill.y += rowCentered(s(21.0f));
-    d->AddRectFilled(pill, pill + ImVec2(s(42), s(21)), C(24, 24, 26), s(5));
+    d->AddRectFilled(pill, pill + ImVec2(s(42), s(21)), kPillBg, s(5));
     d->AddRectFilled(pill + ImVec2(s(4), s(4)), pill + ImVec2(s(38), s(17)), C(static_cast<int>(r * 255), static_cast<int>(g * 255), static_cast<int>(b * 255)), s(3));
     char pillText[16];
     std::snprintf(pillText, sizeof(pillText), "%.0f", *hue);
@@ -884,9 +1169,10 @@ void multiSelectVar(const char* label, int id, const char* const (&optionNames)[
     static constexpr bool (*const kGetters[kCount])() noexcept = { &multiSelectGetter<BoolVars>... };
 
     ImDrawList* d = ImGui::GetWindowDrawList();
+    const float controlWidth = ImMin(s(134.0f), card.width * 0.48f);
+    card.labelReserve = controlWidth + s(13.0f);
     beginRow(d, label);
 
-    const float controlWidth = ImMin(s(134.0f), card.width * 0.48f);
     ImVec2 cp = rowControlPos(controlWidth + s(13.0f));
     cp.y += rowCentered(s(23.0f));
 
@@ -894,9 +1180,8 @@ void multiSelectVar(const char* label, int id, const char* const (&optionNames)[
     const bool ownPopup = state.multiSelectOpen && state.multiSelectOwner == id;
     const bool click = ownPopup ? hitModal("##multiselect", cp, ImVec2(controlWidth, s(23)))
                                 : hit("##multiselect", cp, ImVec2(controlWidth, s(23)));
-    const ImGuiID iid = ImGui::GetItemID();
     const bool open = state.multiSelectOpen && state.multiSelectOwner == id;
-    const float response = motion(iid ^ 0x71abu, (open || ImGui::IsItemHovered()) ? 1.0f : 0.0f);
+    const float response = motion(animKey(0x71abu, id), (open || ImGui::IsItemHovered()) ? 1.0f : 0.0f);
     ImGui::PopID();
 
     if (click) {
@@ -912,8 +1197,8 @@ void multiSelectVar(const char* label, int id, const char* const (&optionNames)[
         state.multiSelectNames = optionNames;
     }
 
-    d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(C(24, 24, 26), C(32, 32, 36), response), s(5));
-    d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(C(30, 30, 33), g_accent, response), s(5));
+    d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(kPillBg, kPillBgHover, response), s(5));
+    d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(kHairlineSoft, g_accent, response), s(5));
 
     std::size_t selected = 0;
     for (std::size_t i = 0; i < kCount; ++i)
@@ -940,15 +1225,15 @@ void multiSelectPopover(ImDrawList* d) noexcept
         openAbove ? state.multiSelectAnchor.y - size.y - s(4.0f) : state.multiSelectAnchor.y + s(23.0f) + s(4.0f));
     recordPopupRect(PopupMultiSelect, p, p + size);
     softShadow(d, p, p + size, s(10.0f));
-    d->AddRectFilled(p, p + size, C(18, 18, 20, 245), s(8));
-    d->AddRect(p, p + size, C(54, 54, 60, 205), s(8));
+    d->AddRectFilled(p, p + size, kPopupBg, s(8));
+    d->AddRect(p, p + size, kPopupBorder, s(8));
 
     const bool accepts = ImGui::GetFrameCount() > state.multiSelectOpenedFrame;
     for (int i = 0; i < state.multiSelectCount; ++i) {
         const ImVec2 rp = p + ImVec2(s(4), s(3) + i * rowHeight);
         ImGui::PushID(7500 + i);
         const bool clicked = hitModal("##ms_row", rp, ImVec2(size.x - s(8), rowHeight - s(4)));
-        const float hover = motion(ImGui::GetItemID() ^ (0xa11ceu + i), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
+        const float hover = motion(animKey(0xa11ceu, 7500 + i), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
         ImGui::PopID();
         if (hover > 0.001f)
             d->AddRectFilled(rp, rp + ImVec2(size.x - s(8), rowHeight - s(4)), C(255, 255, 255, static_cast<int>(12 * hover)), s(6));
@@ -994,10 +1279,11 @@ void featureBindPopover(ImDrawList* d) noexcept
     const bool accepts = ImGui::GetFrameCount() > state.featureBindOpenedFrame;
     const bool capturing = state.capture != State::Capture::Inactive && state.captureOwner == State::kFeatureBindCaptureOwner;
 
-    constexpr float width = 170.0f;
-    const float rowH = s(23.0f);
-    const float gap = s(6.0f);
-    const float height = s(14.0f) + s(8.0f) + rowH + gap + rowH + gap + rowH + s(8.0f);
+    constexpr float width = 190.0f;
+    const float rowH = s(25.0f);
+    const float gap = s(7.0f);
+    const float headerH = s(30.0f);
+    const float height = headerH + rowH + gap + rowH + gap + rowH + s(10.0f);
     ImVec2 p = state.featureBindAnchor;
     // clamp inside the shell clip rect (same rule as the dropdown popover)
     const ImVec2 clipMin = d->GetClipRectMin();
@@ -1007,13 +1293,19 @@ void featureBindPopover(ImDrawList* d) noexcept
     const ImVec2 size{width, height};
 
     recordPopupRect(PopupFeatureBind, p, p + size);
-    softShadow(d, p, p + size, s(10.0f));
-    d->AddRectFilled(p, p + size, C(18, 18, 20, 245), s(8));
-    d->AddRect(p, p + size, C(54, 54, 60, 205), s(8));
+    softShadow(d, p, p + size, s(12.0f));
+    d->AddRectFilled(p, p + size, C(18, 18, 20, 248), s(10));
+    // the menu's card depth: wide top-light wash + inner highlight
+    d->AddRectFilledMultiColor(p + ImVec2(s(10), s(1)), p + ImVec2(width - s(10), s(26)), C(255, 255, 255, 12), C(255, 255, 255, 12), 0, 0);
+    d->AddLine(p + ImVec2(s(8), s(0.75f)), p + ImVec2(width - s(8), s(0.75f)), C(255, 255, 255, 18), 1.0f);
+    d->AddRect(p, p + size, C(56, 56, 62, 215), s(10));
 
-    textY(d, p.x + s(10), p.y + s(7), s(14), C(137, 142, 153), entry.label ? entry.label : "Bind", kTextCaption, nullptr);
+    // header band: accent dot + label + hairline divider
+    pulsingDot(d, p + ImVec2(s(15), headerH * 0.5f - s(1)), s(2.2f), g_accent);
+    textY(d, p.x + s(23), p.y + s(6), s(16), C(196, 199, 208), entry.label ? entry.label : "Bind", kTextCaption, strongFont());
+    d->AddLine(p + ImVec2(s(8), headerH - s(2)), p + ImVec2(width - s(8), headerH - s(2)), kHairline, 1.0f);
 
-    float y = p.y + s(14) + s(8);
+    float y = p.y + headerH + s(4);
 
     // --- key pill (click to capture) ---
     {
@@ -1070,9 +1362,9 @@ void featureBindPopover(ImDrawList* d) noexcept
             : (state.captureOwner == State::kFeatureBindCaptureOwner && state.capture == State::Capture::WaitingRelease) ? "RELEASE ALL"
             : Bind::displayName(entry.key);
         d->AddRectFilled(ImVec2{p.x + s(10), y}, ImVec2{p.x + s(10) + width - s(20), y + rowH},
-                         held ? g_buttonAccent : C(24, 24, 26), s(5));
+                         held ? g_buttonAccent : kPillBg, s(5));
         d->AddRect(ImVec2{p.x + s(10), y}, ImVec2{p.x + s(10) + width - s(20), y + rowH},
-                   held ? g_buttonAccent : C(30, 30, 33), s(5));
+                   held ? g_buttonAccent : kHairlineSoft, s(5));
         textY(d, p.x + s(10) + s(7), y, rowH, held ? C(18, 18, 20) : C(170, 173, 184), keyText, kTextControl, nullptr);
         y += rowH + gap;
     }
@@ -1092,9 +1384,9 @@ void featureBindPopover(ImDrawList* d) noexcept
             }
             const bool active = entry.holdMode == (mode != 0);
             d->AddRectFilled(ImVec2{x, y}, ImVec2{x + pillWidth, y + rowH},
-                             active ? mix(C(24, 24, 26), g_buttonAccent, 0.55f) : C(24, 24, 26), s(5));
+                             active ? mix(kPillBg, g_buttonAccent, 0.55f) : kPillBg, s(5));
             d->AddRect(ImVec2{x, y}, ImVec2{x + pillWidth, y + rowH},
-                       active ? g_buttonAccent : C(30, 30, 33), s(5));
+                       active ? g_buttonAccent : kHairlineSoft, s(5));
             textY(d, x, y, rowH, active ? C(248, 249, 252) : C(170, 173, 184), mode == 0 ? "TOGGLE" : "HOLD", kTextControl, nullptr);
         }
         y += rowH + gap;
@@ -1110,8 +1402,8 @@ void featureBindPopover(ImDrawList* d) noexcept
             entry.lastKeyDown = false;
             feature_binds::save();
         }
-        d->AddRectFilled(ImVec2{p.x + s(10), y}, ImVec2{p.x + s(10) + width - s(20), y + rowH}, C(24, 24, 26), s(5));
-        d->AddRect(ImVec2{p.x + s(10), y}, ImVec2{p.x + s(10) + width - s(20), y + rowH}, C(30, 30, 33), s(5));
+        d->AddRectFilled(ImVec2{p.x + s(10), y}, ImVec2{p.x + s(10) + width - s(20), y + rowH}, kPillBg, s(5));
+        d->AddRect(ImVec2{p.x + s(10), y}, ImVec2{p.x + s(10) + width - s(20), y + rowH}, kHairlineSoft, s(5));
         textY(d, p.x + s(10), y, rowH, C(206, 110, 110), "UNBIND", kTextControl, nullptr);
     }
 
@@ -1141,9 +1433,12 @@ template <typename Var>
 void colorVar(const char* label, int id) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
+    card.labelReserve = s(55.0f); // compact swatch
     beginRow(d, label);
 
-    const float controlWidth = ImMin(s(134.0f), card.width * 0.48f);
+    // Compact swatch control: a full-width pill around a small color square read as a big
+    // empty space - the swatch IS the control.
+    const float controlWidth = s(42.0f);
     ImVec2 cp = rowControlPos(controlWidth + s(13.0f));
     cp.y += rowCentered(s(23.0f));
 
@@ -1151,9 +1446,8 @@ void colorVar(const char* label, int id) noexcept
     const bool ownPicker = state.colorPickerOpen && state.colorPickerOwner == id;
     const bool click = ownPicker ? hitModal("##color", cp, ImVec2(controlWidth, s(23)))
                                  : hit("##color", cp, ImVec2(controlWidth, s(23)));
-    const ImGuiID iid = ImGui::GetItemID();
     const bool open = state.colorPickerOpen && state.colorPickerOwner == id;
-    const float response = motion(iid ^ 0xc010u, (open || ImGui::IsItemHovered()) ? 1.0f : 0.0f);
+    const float response = motion(animKey(0xc010u, id), (open || ImGui::IsItemHovered()) ? 1.0f : 0.0f);
     ImGui::PopID();
 
     if (click) {
@@ -1167,8 +1461,8 @@ void colorVar(const char* label, int id) noexcept
         styleSelect.open = false;
     }
 
-    d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(C(24, 24, 26), C(32, 32, 36), response), s(5));
-    d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(C(30, 30, 33), g_accent, response), s(5));
+    d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(kPillBg, kPillBgHover, response), s(5));
+    d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(kHairlineSoft, g_accent, response), s(5));
 
     const auto color = ui_config::get<Var>();
     const ImVec2 swatch = cp + ImVec2(s(6), s(4));
@@ -1185,8 +1479,9 @@ void spreadCircleColorVar(const char* label, int id) noexcept
     if (color.a() == 0) {
         // not customized: render the pill with the placeholder text, still opens the picker
         ImDrawList* d = ImGui::GetWindowDrawList();
-        beginRow(d, label);
         const float controlWidth = ImMin(s(134.0f), card.width * 0.48f);
+        card.labelReserve = controlWidth + s(13.0f);
+        beginRow(d, label);
         ImVec2 cp = rowControlPos(controlWidth + s(13.0f));
         cp.y += rowCentered(s(23.0f));
 
@@ -1194,9 +1489,8 @@ void spreadCircleColorVar(const char* label, int id) noexcept
         const bool ownPicker = state.colorPickerOpen && state.colorPickerOwner == id;
         const bool click = ownPicker ? hitModal("##color", cp, ImVec2(controlWidth, s(23)))
                                      : hit("##color", cp, ImVec2(controlWidth, s(23)));
-        const ImGuiID iid = ImGui::GetItemID();
         const bool open = state.colorPickerOpen && state.colorPickerOwner == id;
-        const float response = motion(iid ^ 0xc011u, (open || ImGui::IsItemHovered()) ? 1.0f : 0.0f);
+        const float response = motion(animKey(0xc011u, id), (open || ImGui::IsItemHovered()) ? 1.0f : 0.0f);
         ImGui::PopID();
 
         if (click) {
@@ -1210,8 +1504,8 @@ void spreadCircleColorVar(const char* label, int id) noexcept
             styleSelect.open = false;
         }
 
-        d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(C(24, 24, 26), C(32, 32, 36), response), s(5));
-        d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(C(30, 30, 33), g_accent, response), s(5));
+        d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(kPillBg, kPillBgHover, response), s(5));
+        d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(kHairlineSoft, g_accent, response), s(5));
         textY(d, cp.x + (controlWidth - ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, "Crosshair").x) * 0.5f,
             cp.y, s(23), C(140, 144, 154), "Crosshair", kTextControl, nullptr);
         return;
@@ -1250,7 +1544,14 @@ void colorPickerPopover(ImDrawList* d) noexcept
     // flip above the anchor swatch when the popover would run past the clip bottom - the shell
     // window clips its own draw list, so the clip rect (not the display) is the real bound
     const bool openAbove = state.colorPickerAnchor.y + s(23.0f) + s(4.0f) + height > d->GetClipRectMax().y;
-    const ImVec2 p(state.colorPickerAnchor.x,
+    // horizontal clamp: pills on the left side of a card used to push the picker past the
+    // window's right clip edge (half the SV square/hex readout cut off)
+    float pickerX = state.colorPickerAnchor.x;
+    const ImVec2 clipMin = d->GetClipRectMin();
+    const float clipMaxX = d->GetClipRectMax().x;
+    pickerX = ImMax(pickerX, clipMin.x + s(6.0f));
+    pickerX = ImMin(pickerX, clipMaxX - width - s(6.0f));
+    const ImVec2 p(pickerX,
         openAbove ? state.colorPickerAnchor.y - height - s(4.0f) : state.colorPickerAnchor.y + s(23.0f) + s(4.0f));
     const ImVec2 size(width, height);
     recordPopupRect(PopupColor, p, p + size);
@@ -1258,7 +1559,7 @@ void colorPickerPopover(ImDrawList* d) noexcept
     // opaque body: the gradient's corner caps are painted opaque too - at 245 the caps would
     // show as mismatched lighter patches over the body (and whatever is behind the picker)
     d->AddRectFilled(p, p + size, C(18, 18, 20, 255), s(10));
-    d->AddRect(p, p + size, C(54, 54, 60, 205), s(10));
+    d->AddRect(p, p + size, kPopupBorder, s(10));
 
     const ImVec2 squarePos = p + ImVec2(s(9), s(9));
     const ImVec2 squareSize = ImVec2(width - s(18), squareH);
@@ -1406,7 +1707,7 @@ void floatSliderVar(const char* label, int id, const char* suffix = "") noexcept
             const float t = ImClamp((ImGui::GetIO().MousePos.x - start.x) / trackWidth, 0.0f, 1.0f);
             ui_config::set<Var>(Range{kMin + t * (kMax - kMin)});
         }
-        const float shown = motion(ImGui::GetItemID() ^ 0xf8a1u, position, 14.0f, position);
+        const float shown = motion(animKey(0xf8a1u, id), position, 14.0f, position);
         ImGui::PopID();
 
         d->AddRectFilled(start, start + ImVec2(trackWidth, s(3)), C(33, 33, 36), s(2));
@@ -1414,18 +1715,28 @@ void floatSliderVar(const char* label, int id, const char* suffix = "") noexcept
         d->AddCircleFilled(start + ImVec2(trackWidth * shown, s(1.5f)), s(5.5f), C(247, 248, 252));
     }
 
-    // Value pill: click to type an exact value.
-    ImVec2 pill = rowControlPos(s(55.0f));
+    // Value pill: click to type an exact value. Adaptive decimals + a pill that grows leftward
+    // keep big values (fog distance "3873.73") inside the pill.
+    char pillText[24];
+    if (value >= 100.0f || value <= -100.0f)
+        std::snprintf(pillText, sizeof(pillText), "%.0f%s", static_cast<double>(value), suffix ? suffix : "");
+    else if (value >= 10.0f || value <= -10.0f)
+        std::snprintf(pillText, sizeof(pillText), "%.1f%s", static_cast<double>(value), suffix ? suffix : "");
+    else
+        std::snprintf(pillText, sizeof(pillText), "%.2f%s", static_cast<double>(value), suffix ? suffix : "");
+    const float pillTextWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, pillText).x;
+    const float pillWidth = ImMax(s(42.0f), pillTextWidth + s(12.0f));
+    ImVec2 pill = rowControlPos(s(13.0f) + pillWidth);
     pill.y += rowCentered(s(21.0f));
-    d->AddRectFilled(pill, pill + ImVec2(s(42), s(21)), C(24, 24, 26), s(5));
+    d->AddRectFilled(pill, pill + ImVec2(pillWidth, s(21)), kPillBg, s(5));
 
     ImGui::PushID(id + 600000);
     if (editing) {
         ImGui::SetCursorScreenPos(pill + ImVec2(s(4), s(3)));
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, C(30, 30, 33));
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, kHairlineSoft);
         ImGui::PushStyleColor(ImGuiCol_Border, g_accent);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(4), s(2)));
-        ImGui::PushItemWidth(s(42) - s(8));
+        ImGui::PushItemWidth(pillWidth - s(8));
         ImGui::SetKeyboardFocusHere(0);
         ImGui::InputText("##fedit", state.editBuffer, sizeof(state.editBuffer), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
         const bool committed = ImGui::IsItemDeactivatedAfterEdit() || ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter);
@@ -1439,14 +1750,11 @@ void floatSliderVar(const char* label, int id, const char* suffix = "") noexcept
             state.editingSlider = -1;
         }
     } else {
-        if (hit("##fpill_edit", pill, ImVec2(s(42), s(21))) && ImGui::IsItemHovered() && ImGui::IsMouseReleased(0)) {
+        if (hit("##fpill_edit", pill, ImVec2(pillWidth, s(21))) && ImGui::IsItemHovered() && ImGui::IsMouseReleased(0)) {
             state.editingSlider = id;
             std::snprintf(state.editBuffer, sizeof(state.editBuffer), "%.2f", static_cast<double>(value));
         }
-        char pillText[24];
-        std::snprintf(pillText, sizeof(pillText), "%.2f%s", static_cast<double>(value), suffix ? suffix : "");
-        const float pillTextWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, pillText).x;
-        textY(d, pill.x + (s(42) - pillTextWidth) * 0.5f, pill.y, s(21), C(166, 169, 179), pillText, kTextControl, nullptr);
+        textY(d, pill.x + (pillWidth - pillTextWidth) * 0.5f, pill.y, s(21), C(166, 169, 179), pillText, kTextControl, nullptr);
     }
     ImGui::PopID();
 }
@@ -1454,6 +1762,7 @@ void floatSliderVar(const char* label, int id, const char* suffix = "") noexcept
 bool keybindRow(const char* label, int* bindValue, int id) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
+    card.labelReserve = s(133.0f); // key pill
     beginRow(d, label);
 
     const float buttonWidth = s(120.0f);
@@ -1462,7 +1771,6 @@ bool keybindRow(const char* label, int* bindValue, int id) noexcept
 
     ImGui::PushID(id);
     hit("##bind", bp, ImVec2(buttonWidth, s(23)));
-    const ImGuiID iid = ImGui::GetItemID();
 
     if (state.capture == State::Capture::Inactive) {
         if (ImGui::IsItemClicked()) {
@@ -1506,14 +1814,14 @@ bool keybindRow(const char* label, int* bindValue, int id) noexcept
             }
         }
     }
-    const float response = motion(iid ^ 0x9241u, ImGui::IsItemHovered() ? 1.0f : 0.0f);
+    const float response = motion(animKey(0x9241u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f);
     ImGui::PopID();
 
     // The pill glows in the button accent while the bound key is physically held, so the binds
     // panel (and every Hold Key row) doubles as a live input indicator.
     const bool held = *bindValue != Bind::kOff && Bind::isDown(*bindValue) && state.capture == State::Capture::Inactive;
-    d->AddRectFilled(bp, bp + ImVec2(buttonWidth, s(23)), held ? g_buttonAccent : mix(C(24, 24, 26), C(32, 32, 36), response), s(5));
-    d->AddRect(bp, bp + ImVec2(buttonWidth, s(23)), mix(C(30, 30, 33), g_buttonAccent, response), s(5));
+    d->AddRectFilled(bp, bp + ImVec2(buttonWidth, s(23)), held ? g_buttonAccent : mix(kPillBg, kPillBgHover, response), s(5));
+    d->AddRect(bp, bp + ImVec2(buttonWidth, s(23)), mix(kHairlineSoft, g_buttonAccent, response), s(5));
     const char* buttonText = (state.captureOwner == id && state.capture == State::Capture::WaitingPress) ? "PRESS ANY KEY"
         : (state.captureOwner == id && state.capture == State::Capture::WaitingRelease) ? "RELEASE ALL"
         : Bind::displayName(*bindValue);
@@ -1534,10 +1842,27 @@ void toggleVar(const char* label, int id) noexcept
     if (toggle(label, &value, id, &rightClicked))
         ui_config::set<ConfigVar>(typename ConfigVar::ValueType{value});
 
-    // Feature-bind integration: for toggles registered in FeatureBinds, right-click opens the
-    // bind popup (at the cursor - a context menu, not an anchored dropdown).
+    // Bind affordance: the right-click bind system is invisible otherwise - rows with a
+    // registered key show a small keyboard glyph + key name right after the label.
+    if (const auto* entry = feature_binds::entryFor<ConfigVar>(); entry && entry->key != Bind::kOff) {
+        ImDrawList* d = ImGui::GetWindowDrawList();
+        const float glyphX = card.origin.x + s(13) + card.lastLabelWidth + s(7);
+        const float gy = card.origin.y + (card.row - 1) * kRowHeight;
+        textY(d, glyphX, gy, kRowHeight, (g_accent & 0x00FFFFFFu) | (140u << IM_COL32_A_SHIFT), kIconKeyboard, kTextCaption, iconFont());
+        const float glyphWidth = iconFont()->CalcTextSizeA(kTextCaption, FLT_MAX, 0.0f, kIconKeyboard).x;
+        textY(d, glyphX + glyphWidth + s(4), gy, kRowHeight, kTextFaint, Bind::displayName(entry->key), s(10), nullptr);
+    }
+
+    // Feature-bind integration: right-click opens the bind popup. ANY toggle can be bound:
+    // if the var is not registered yet, a right-click registers it on the spot (the registry
+    // persists to feature_binds.txt and the binds HUD list picks it up immediately).
     if (rightClicked) {
-        if (auto* entry = feature_binds::entryFor<ConfigVar>()) {
+        auto* entry = feature_binds::entryFor<ConfigVar>();
+        if (!entry) {
+            feature_binds::registerToggle<ConfigVar>(label);
+            entry = feature_binds::entryFor<ConfigVar>();
+        }
+        if (entry) {
             state.featureBindOpen = true;
             state.featureBindOpenedFrame = ImGui::GetFrameCount();
             state.featureBindIndex = static_cast<int>(entry - feature_binds::entries);
@@ -1562,6 +1887,164 @@ void selectVar(const char* label, const char* const* options, int count, int id)
     const auto current = ui_config::get<ConfigVar>();
     int index = static_cast<int>(current);
     select(label, &index, options, count, id, &selectApply<ConfigVar>);
+}
+
+// Script dropdown (gui.dropdown): rendered with the same selectList popup as config vars, but
+// the value lives in lua::GuiItem and the deferred popup commit routes through static open-time
+// indices (the applier must be a plain static function - same pattern as paintKitApply).
+static int scriptDropdownOwnerScript = -1;
+static int scriptDropdownOwnerItem = -1;
+
+void scriptDropdownApply(int index) noexcept
+{
+    if (scriptDropdownOwnerScript < 0 || scriptDropdownOwnerScript >= lua::kMaxScripts)
+        return;
+    lua::Script& script = lua::scripts[scriptDropdownOwnerScript];
+    if (!script.L || scriptDropdownOwnerItem < 0 || scriptDropdownOwnerItem >= script.guiItemCount)
+        return;
+    lua::GuiItem& item = script.guiItems[scriptDropdownOwnerItem];
+    if (item.type != lua::GuiItem::Type::Dropdown || item.optionCount <= 0)
+        return;
+    item.intValue = index < 0 ? 0 : (index >= item.optionCount ? item.optionCount - 1 : index);
+}
+
+void scriptDropdownRow(lua::Script& script, int scriptIndex, int itemIndex, int id) noexcept
+{
+    lua::GuiItem& item = script.guiItems[itemIndex];
+    if (item.optionCount <= 0)
+        return;
+    scriptDropdownOwnerScript = scriptIndex;
+    scriptDropdownOwnerItem = itemIndex;
+    selectList(item.label, &item.intValue, item.optionPtrs, item.optionCount, id, &scriptDropdownApply);
+}
+
+// Paint-kit row: same visual as select(), but the popup lists the weapon's PaintKitDatabase
+// finishes (searchable, scrollable) and commits a raw kit id into the config var (uint16, 0 =
+// None). The commit is deferred to a later frame via the popup layer, so both the config var
+// type and the defIndex must be encoded in static state: the applier is a static template
+// function, the defIndex/current value are copied into state.popup at open time.
+template <typename ConfigVar>
+void paintKitApply(int kitId) noexcept
+{
+    ui_config::set<ConfigVar>(static_cast<typename ConfigVar::ValueType>(kitId));
+}
+
+template <typename ConfigVar>
+void paintKitRow(const char* label, std::uint16_t defIndex, int id) noexcept
+{
+    const auto current = ui_config::get<ConfigVar>();
+    const int currentId = static_cast<int>(current);
+    const auto* kit = currentId != 0 ? cs2::paintKitById(currentId) : nullptr;
+
+    ImDrawList* d = ImGui::GetWindowDrawList();
+    const float controlWidth = ImMin(s(134.0f), card.width * 0.48f);
+    card.labelReserve = controlWidth + s(13.0f);
+    beginRow(d, label);
+
+    ImVec2 cp = rowControlPos(controlWidth + s(13.0f));
+    cp.y += rowCentered(s(23.0f));
+
+    ImGui::PushID(id);
+    const bool click = hit("##paintkit", cp, ImVec2(controlWidth, s(23)));
+    const float response = motion(animKey(0x6161u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f);
+    ImGui::PopID();
+
+    if (click) {
+        state.popup.open = !(state.popup.open && state.popup.owner == id);
+        state.popup.owner = id;
+        state.popup.options = nullptr;
+        state.popup.count = 0;
+        state.popup.apply = &paintKitApply<ConfigVar>;
+        state.popup.anchor = cp;
+        state.popup.width = controlWidth;
+        state.popup.openedFrame = ImGui::GetFrameCount();
+        state.popup.paintKitMode = true;
+        state.popup.paintKitDefIndex = defIndex;
+        state.popup.itemList = nullptr;
+        state.popup.itemCount = 0;
+        state.popup.paintKitCurrentId = currentId;
+        state.popup.paintKitScroll = 0.0f;
+        state.popup.paintKitSearch[0] = '\0';
+    }
+
+    d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(kPillBg, kPillBgHover, response), s(5));
+    d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(kHairlineSoft, g_accent, response), s(5));
+    // Clip to the pill: finish/agent names routinely exceed the 134px control.
+    d->PushClipRect(cp + ImVec2(s(7), 0.0f), cp + ImVec2(controlWidth - s(14), s(23)), true);
+    textY(d, cp.x + s(7), cp.y, s(23), currentId == 0 ? C(120, 124, 134) : C(200, 203, 212), kit ? kit->name : currentId == 0 ? "None" : "?", kTextControl, nullptr);
+    d->PopClipRect();
+    d->AddLine(cp + ImVec2(controlWidth - s(13), s(9)), cp + ImVec2(controlWidth - s(9), s(13)), C(139, 143, 154), 1.0f);
+    d->AddLine(cp + ImVec2(controlWidth - s(9), s(13)), cp + ImVec2(controlWidth - s(5), s(9)), C(139, 143, 154), 1.0f);
+}
+
+// Case/key picker row (Inventory page LOCAL ITEMS): same pill as paintKitRow, but the popup
+// lists an arbitrary ItemDefEntry table (cases / keys) and apply receives the raw def index.
+template <typename ConfigVar>
+void itemDefRow(const char* label, const cs2::ItemDefEntry* list, int count, int id) noexcept
+{
+    const auto current = ui_config::get<ConfigVar>();
+    const int currentId = static_cast<int>(current);
+    const auto* entry = currentId != 0 ? cs2::itemDefById(list, count, static_cast<std::uint16_t>(currentId)) : nullptr;
+
+    ImDrawList* d = ImGui::GetWindowDrawList();
+    const float controlWidth = ImMin(s(134.0f), card.width * 0.48f);
+    card.labelReserve = controlWidth + s(13.0f);
+    beginRow(d, label);
+
+    ImVec2 cp = rowControlPos(controlWidth + s(13.0f));
+    cp.y += rowCentered(s(23.0f));
+
+    ImGui::PushID(id);
+    const bool click = hit("##itemdef", cp, ImVec2(controlWidth, s(23)));
+    const float response = motion(animKey(0x6161u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f);
+    ImGui::PopID();
+
+    if (click) {
+        state.popup.open = !(state.popup.open && state.popup.owner == id);
+        state.popup.owner = id;
+        state.popup.options = nullptr;
+        state.popup.count = 0;
+        state.popup.apply = &paintKitApply<ConfigVar>;
+        state.popup.anchor = cp;
+        state.popup.width = controlWidth;
+        state.popup.openedFrame = ImGui::GetFrameCount();
+        state.popup.paintKitMode = true;
+        state.popup.paintKitDefIndex = 0;
+        state.popup.itemList = list;
+        state.popup.itemCount = count;
+        state.popup.paintKitCurrentId = currentId;
+        state.popup.paintKitScroll = 0.0f;
+        state.popup.paintKitSearch[0] = '\0';
+    }
+
+    d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(kPillBg, kPillBgHover, response), s(5));
+    d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(kHairlineSoft, g_accent, response), s(5));
+    d->PushClipRect(cp + ImVec2(s(7), 0.0f), cp + ImVec2(controlWidth - s(14), s(23)), true);
+    textY(d, cp.x + s(7), cp.y, s(23), currentId == 0 ? C(120, 124, 134) : C(200, 203, 212), entry ? entry->name : currentId == 0 ? "None" : "?", kTextControl, nullptr);
+    d->PopClipRect();
+    d->AddLine(cp + ImVec2(controlWidth - s(13), s(9)), cp + ImVec2(controlWidth - s(9), s(13)), C(139, 143, 154), 1.0f);
+    d->AddLine(cp + ImVec2(controlWidth - s(9), s(13)), cp + ImVec2(controlWidth - s(5), s(9)), C(139, 143, 154), 1.0f);
+}
+
+// Wear row: the config var stores permille (0-1000 = 0.000-1.000 wear); the pill shows the
+// permille value (70 = 0.070).
+template <typename ConfigVar>
+void wearRow(const char* label, int id) noexcept
+{
+    const auto current = ui_config::get<ConfigVar>();
+    int permille = static_cast<int>(current);
+    if (sliderRow(label, &permille, 0, 1000, id, nullptr))
+        ui_config::set<ConfigVar>(static_cast<typename ConfigVar::ValueType>(permille));
+}
+
+// Pattern seed row (0-1000, the engine's seed domain).
+template <typename ConfigVar>
+void seedRow(const char* label, int id) noexcept
+{
+    const auto current = ui_config::get<ConfigVar>();
+    int seed = static_cast<int>(current);
+    if (sliderRow(label, &seed, 0, 1000, id, nullptr))
+        ui_config::set<ConfigVar>(static_cast<typename ConfigVar::ValueType>(seed));
 }
 
 // 'Enemies / All Players / Off': two bool vars (PlayerInfoInWorldDropdownSelectionChangeHandler
@@ -1631,15 +2114,235 @@ void keybindVar(const char* label, int id) noexcept
 
 // --- select popup layer ------------------------------------------------------------
 
-void popupLayer(ImDrawList* d) noexcept
+// --- paint-kit picker (Inventory page) ----------------------------------------------
+//
+// Row control + popup for picking a paint kit from the weapon's PaintKitDatabase list. Unlike
+// the generic select() dropdown the list is searchable and wheel-scrollable: the big weapons
+// have 60+ finishes, so a plain dropdown would be twice the menu's height.
+
+// ASCII case-insensitive substring match - this TU keeps to a minimal libc surface, and the
+// finish names are ASCII (the localized weapon names may not be, but they aren't searched).
+bool containsCaseInsensitive(const char* haystack, const char* needle) noexcept
 {
-    if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
-        state.popup.open = false;
+    if (!*needle)
+        return true;
+    for (const char* h = haystack; *h; ++h) {
+        int i = 0;
+        while (needle[i]) {
+            char a = h[i];
+            const char b = needle[i];
+            if (!a)
+                return false;
+            if (a >= 'A' && a <= 'Z')
+                a = static_cast<char>(a - 'A' + 'a');
+            const char lb = b >= 'A' && b <= 'Z' ? static_cast<char>(b - 'A' + 'a') : b;
+            if (a != lb)
+                break;
+            ++i;
+        }
+        if (!needle[i])
+            return true;
+    }
+    return false;
+}
+
+void paintKitPopupLayer(ImDrawList* d) noexcept
+{
     const float open = motion(ImGui::GetID("##popup_open"), state.popup.open ? 1.0f : 0.0f, 20.0f, 0.0f);
     if (open < 0.002f || !state.popup.apply)
         return;
 
-    const ImVec2 size(state.popup.width, state.popup.count * s(32.0f) + s(8.0f));
+    const auto* list = state.popup.paintKitDefIndex != 0 ? cs2::paintKitListFor(state.popup.paintKitDefIndex) : nullptr;
+    if (state.popup.paintKitDefIndex != 0 && !state.popup.itemList && !list && !state.popup.stringList) {
+        state.popup.open = false;
+        return;
+    }
+
+    // Virtual row 0 = "None", then the source list - an ItemDefEntry list (cases / keys,
+    // item-def picker mode) when itemList is set, otherwise the weapon's kits (or, in generic
+    // mode - paintKitDefIndex 0 with no itemList, used when no knife model is impersonated and
+    // the real equipped knife type is unknown - the SkinChangerData generic-knife set),
+    // filtered by the search text. The per-row ids and the filtered rows are plain
+    // zero-initialized statics (no dynamic init - this project links -nostdlib and
+    // function-local statics with guards fail the link).
+    constexpr int kMaxRows = 160; // the agent list is the largest (141 entries)
+    static int rows[kMaxRows];
+    int rowCount = 0;
+    if (!state.popup.omitNone)
+        rows[rowCount++] = 0; // "None"
+    if (state.popup.itemList) {
+        for (int i = 0; i < state.popup.itemCount && rowCount < kMaxRows; ++i) {
+            const auto& entry = state.popup.itemList[i];
+            if (state.popup.paintKitSearch[0] == '\0'
+                || containsCaseInsensitive(entry.name, state.popup.paintKitSearch))
+                rows[rowCount++] = entry.defIndex;
+        }
+    } else if (list) {
+        for (int i = 0; i < list->kitCount && rowCount < kMaxRows; ++i) {
+            const int kitId = cs2::kPaintKits[list->kitIndices[i]].id;
+            if (state.popup.paintKitSearch[0] == '\0'
+                || containsCaseInsensitive(cs2::kPaintKits[list->kitIndices[i]].name, state.popup.paintKitSearch))
+                rows[rowCount++] = kitId;
+        }
+    } else if (state.popup.stringList) {
+        for (int i = 0; i < state.popup.stringCount && rowCount < kMaxRows; ++i) {
+            if (state.popup.paintKitSearch[0] == '\0'
+                || containsCaseInsensitive(state.popup.stringList[i], state.popup.paintKitSearch))
+                rows[rowCount++] = i; // the row id IS the option index - apply receives it
+        }
+    } else {
+        for (const auto& kit : cs2::kPaintKits) {
+            if (rowCount >= kMaxRows)
+                break;
+            if (!SkinChangerData::isGenericKnifePaintKit(kit.id))
+                continue;
+            if (state.popup.paintKitSearch[0] == '\0' || containsCaseInsensitive(kit.name, state.popup.paintKitSearch))
+                rows[rowCount++] = kit.id;
+        }
+    }
+
+    constexpr float kRowHeight = 32.0f;
+    constexpr int kMaxVisibleRows = 11;
+    const float width = s(196.0f);
+    const float searchHeight = s(30.0f);
+    const float listHeight = ImMin(rowCount, kMaxVisibleRows) * s(kRowHeight);
+    const ImVec2 size(width, searchHeight + s(12.0f) + listHeight + s(8.0f));
+    // Drop DOWN from the control (a list this tall centered on the anchor would cover it).
+    ImVec2 p(state.popup.anchor.x - s(28.0f), state.popup.anchor.y + s(27.0f));
+    const ImVec2 clipMin = d->GetClipRectMin();
+    const ImVec2 clipMax = d->GetClipRectMax();
+    p.x = ImClamp(p.x, clipMin.x + s(10.0f), clipMax.x - size.x - s(10.0f));
+    p.y = ImClamp(p.y, clipMin.y + s(10.0f), ImMax(clipMin.y + s(10.0f), clipMax.y - size.y - s(10.0f)));
+    recordPopupRect(PopupDropdown, p, p + size);
+    const int first = d->VtxBuffer.Size;
+    softShadow(d, p, p + size, s(16.0f));
+    d->AddRectFilled(p - ImVec2(s(5), s(2)), p + size + ImVec2(s(5), s(8)), C(0, 0, 0, 55), s(18));
+    d->AddRectFilled(p, p + size, kPopupBg, s(16));
+    d->AddRect(p, p + size, kPopupBorder, s(16));
+    d->AddLine(p + ImVec2(s(16), s(1)), p + ImVec2(size.x - s(16), s(1)), C(255, 255, 255, 22));
+
+    // Search field (raw-mouse popover interior - see the color picker's InputText pattern).
+    {
+        const ImVec2 sp(p.x + s(6), p.y + s(8));
+        ImGui::PushID(9071);
+        ImGui::SetCursorScreenPos(sp);
+        if (ImGui::GetFrameCount() == state.popup.openedFrame)
+            ImGui::SetKeyboardFocusHere(0);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, kPillBg);
+        ImGui::PushStyleColor(ImGuiCol_Border, C(54, 54, 60));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(6), s(3)));
+        ImGui::PushItemWidth(size.x - s(12));
+        ImGui::InputTextWithHint("##kit_search", "search...", state.popup.paintKitSearch, sizeof(state.popup.paintKitSearch));
+        ImGui::PopItemWidth();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(2);
+        ImGui::PopID();
+    }
+
+    const float listTop = p.y + searchHeight + s(12.0f);
+    const float fullListHeight = rowCount * s(kRowHeight);
+    const float maxScroll = ImMax(0.0f, fullListHeight - listHeight);
+    // Wheel-scroll while the cursor is inside the list area.
+    if (ImGui::IsMouseHoveringRect(ImVec2(p.x, listTop), ImVec2(p.x + size.x, listTop + listHeight)) && ImGui::GetIO().MouseWheel != 0.0f)
+        state.popup.paintKitScroll = ImClamp(state.popup.paintKitScroll - ImGui::GetIO().MouseWheel * s(48.0f), 0.0f, maxScroll);
+    else
+        state.popup.paintKitScroll = ImClamp(state.popup.paintKitScroll, 0.0f, maxScroll);
+
+    // Popup scrollbar: thin thumb on the right edge of the list, visible while scrollable,
+    // draggable to scroll long lists (141 agents) without the wheel.
+    {
+        const float maxListScroll = ImMax(0.0f, rowCount * s(kRowHeight) - listHeight);
+        if (maxListScroll > 1.0f) {
+            const float track = listHeight - s(6.0f);
+            const float th = ImClamp(listHeight * listHeight / (listHeight + maxListScroll), s(18.0f), track);
+            const float tt = maxListScroll > 0.0f ? state.popup.paintKitScroll / maxListScroll : 0.0f;
+            float thumbY = listTop + s(3.0f) + tt * (track - th);
+            const ImVec2 tMin(p.x + size.x - s(7.0f), listTop);
+            const ImVec2 tMax(p.x + size.x, listTop + listHeight);
+            static bool draggingPopupScroll = false;
+            static float grabPopup = 0.0f;
+            const bool hoveredPopup = ImGui::IsMouseHoveringRect(ImVec2(tMin.x, thumbY), ImVec2(tMax.x, thumbY + th));
+            if ((hoveredPopup || ImGui::IsMouseHoveringRect(tMin, tMax)) && ImGui::IsMouseClicked(0)) {
+                draggingPopupScroll = true;
+                grabPopup = ImClamp(ImGui::GetIO().MousePos.y, thumbY, thumbY + th) - thumbY;
+            }
+            if (!ImGui::IsMouseDown(0))
+                draggingPopupScroll = false;
+            if (draggingPopupScroll)
+                state.popup.paintKitScroll = ImClamp((ImGui::GetIO().MousePos.y - grabPopup - (listTop + s(3.0f))) / (track - th), 0.0f, 1.0f) * maxListScroll;
+            const float tNow = maxListScroll > 0.0f ? state.popup.paintKitScroll / maxListScroll : 0.0f;
+            const float yNow = listTop + s(3.0f) + tNow * (track - th);
+            d->AddRectFilled(ImVec2(p.x + size.x - s(5.0f), yNow), ImVec2(p.x + size.x - s(1.0f), yNow + th),
+                C(200, 203, 212, draggingPopupScroll ? 150 : 95), s(2));
+        }
+    }
+    d->PushClipRect(ImVec2(p.x + s(2), listTop), ImVec2(p.x + size.x - s(2), listTop + listHeight), true);
+    const bool accepts = ImGui::GetFrameCount() > state.popup.openedFrame;
+    const int currentKit = state.popup.paintKitCurrentId;
+    for (int j = 0; j < rowCount; ++j) {
+        const int kitId = rows[j];
+        const float rowY = listTop + j * s(kRowHeight) - state.popup.paintKitScroll;
+        if (rowY + s(kRowHeight) < listTop || rowY > listTop + listHeight)
+            continue;
+        const char* label = nullptr;
+        if (state.popup.stringList)
+            label = state.popup.stringList[kitId];
+        else if (kitId == 0)
+            label = "None";
+        else if (state.popup.itemList) {
+            const auto* entry = cs2::itemDefById(state.popup.itemList, state.popup.itemCount, static_cast<std::uint16_t>(kitId));
+            label = entry ? entry->name : "?";
+        } else
+            label = cs2::paintKitById(kitId)->name;
+        const ImVec2 rp(p.x + s(4), rowY);
+        ImGui::PushID(9200 + kitId);
+        const bool clicked = hitPopupRow("##kit_row", rp, ImVec2(size.x - s(8), s(kRowHeight)), PopupDropdown);
+        const float hover = motion(animKey(0x9921u, 9200 + kitId), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
+        ImGui::PopID();
+        if (hover > 0.001f)
+            d->AddRectFilled(rp, rp + ImVec2(size.x - s(8), s(kRowHeight)), (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(25 * hover) << IM_COL32_A_SHIFT), s(10));
+        const bool selected = kitId == currentKit;
+        // Clip to the row: agent names especially ("'Medium Rare' Crasswater | Guerrilla
+        // Warfare") are far wider than the popup.
+        d->PushClipRect(ImVec2(rp.x + s(12), rp.y - 2.0f), ImVec2(p.x + size.x - s(6), rp.y + s(kRowHeight) + 2.0f), true);
+        textY(d, rp.x + s(12), rp.y, s(kRowHeight), selected ? g_accent : C(182, 185, 196), label, kTextControl, nullptr);
+        d->PopClipRect();
+        if (accepts && clicked) {
+            state.popup.apply(kitId);
+            state.popup.open = false;
+        }
+    }
+    d->PopClipRect();
+
+    if (accepts && clickedOutside(p, p + size))
+        state.popup.open = false;
+    const float eased = 1.0f - std::pow(1.0f - open, 3.0f);
+    const ImVec2 pivot(p.x + size.x * 0.5f, p.y + size.y * 0.5f);
+    for (int i = first; i < d->VtxBuffer.Size; ++i) {
+        ImDrawVert& v = d->VtxBuffer[i];
+        v.pos = pivot + (v.pos - pivot) * ImLerp(0.96f, 1.0f, eased) + ImVec2(s(4.0f) * (1.0f - eased), 0);
+        const ImU32 a = (v.col >> IM_COL32_A_SHIFT) & 255u;
+        v.col = (v.col & 0x00ffffffu) | ((ImU32)(a * eased) << IM_COL32_A_SHIFT);
+    }
+}
+
+void popupLayer(ImDrawList* d) noexcept
+{
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+        state.popup.open = false;
+    if (state.popup.paintKitMode) {
+        paintKitPopupLayer(d);
+        return;
+    }
+    const float open = motion(ImGui::GetID("##popup_open"), state.popup.open ? 1.0f : 0.0f, 20.0f, 0.0f);
+    if (open < 0.002f || !state.popup.apply)
+        return;
+
+    // Cap tall lists (26 persona presets) and wheel-scroll like the kit popup. Scroll resets
+    // when the dropdown (re)opens.
+    constexpr int kMaxDropdownRows = 10;
+    const int visibleRows = ImMin(state.popup.count, kMaxDropdownRows);
+    const ImVec2 size(state.popup.width, visibleRows * s(32.0f) + s(8.0f));
     ImVec2 p(state.popup.anchor.x, state.popup.anchor.y + (s(23.0f) - size.y) * 0.5f);
     // Clamp to the window's clip rect (the shell), not the display - this draw list is clipped
     // at the shell edge, so a display-based clamp still lets the list clip in half (same bug
@@ -1650,26 +2353,42 @@ void popupLayer(ImDrawList* d) noexcept
     p.y = ImClamp(p.y, clipMin.y + s(10.0f), clipMax.y - size.y - s(10.0f));
     recordPopupRect(PopupDropdown, p, p + size);
     const int first = d->VtxBuffer.Size;
+
+    // Wheel-scroll for lists taller than the visible cap; scroll resets on (re)open.
+    const float maxDropdownScroll = ImMax(0.0f, (state.popup.count - visibleRows) * s(32.0f));
+    if (ImGui::GetFrameCount() == state.popup.openedFrame)
+        dropdownScroll = 0.0f;
+    if (ImGui::IsMouseHoveringRect(p, p + size) && ImGui::GetIO().MouseWheel != 0.0f)
+        dropdownScroll = ImClamp(dropdownScroll - ImGui::GetIO().MouseWheel * s(48.0f), 0.0f, maxDropdownScroll);
+    else
+        dropdownScroll = ImClamp(dropdownScroll, 0.0f, maxDropdownScroll);
+
     softShadow(d, p, p + size, s(16.0f));
     d->AddRectFilled(p - ImVec2(s(5), s(2)), p + size + ImVec2(s(5), s(8)), C(0, 0, 0, 55), s(18));
-    d->AddRectFilled(p, p + size, C(18, 18, 20, 240), s(16));
-    d->AddRect(p, p + size, C(54, 54, 60, 205), s(16));
+    d->AddRectFilled(p, p + size, kPopupBg, s(16));
+    d->AddRect(p, p + size, kPopupBorder, s(16));
     d->AddLine(p + ImVec2(s(16), s(1)), p + ImVec2(size.x - s(16), s(1)), C(255, 255, 255, 22));
     const bool accepts = ImGui::GetFrameCount() > state.popup.openedFrame;
+    d->PushClipRect(p + ImVec2(s(1), s(1)), p + size - ImVec2(s(1), s(1)), true);
     for (int i = 0; i < state.popup.count; ++i) {
-        ImVec2 rp = p + ImVec2(s(4), s(4) + i * s(32.0f));
+        ImVec2 rp = p + ImVec2(s(4), s(4) + i * s(32.0f) - dropdownScroll);
+        if (rp.y + s(32) < p.y + s(1) || rp.y > p.y + size.y - s(1))
+            continue;
         ImGui::PushID(5000 + i);
         const bool clicked = hitPopupRow("##popup_row", rp, ImVec2(size.x - s(8), s(32)), PopupDropdown);
-        const float hover = motion(ImGui::GetItemID() ^ 0x9921u, ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
+        const float hover = motion(animKey(0x9921u, 5000 + i), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
         ImGui::PopID();
         if (hover > 0.001f)
             d->AddRectFilled(rp, rp + ImVec2(size.x - s(8), s(32)), (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(25 * hover) << IM_COL32_A_SHIFT), s(10));
+        d->PushClipRect(ImVec2(rp.x + s(10), rp.y - 2.0f), ImVec2(p.x + size.x - s(6), rp.y + s(32) + 2.0f), true);
         textY(d, rp.x + s(12), rp.y, s(32), C(182, 185, 196), state.popup.options[i], kTextControl, nullptr);
+        d->PopClipRect();
         if (accepts && clicked) {
             state.popup.apply(i);
             state.popup.open = false;
         }
     }
+    d->PopClipRect();
     // click anywhere outside the dropdown closes it (the clicked control still receives the
     // click - it is not covered by this popup, so hit() let it through)
     if (accepts && clickedOutside(p, p + size))
@@ -1696,10 +2415,21 @@ constexpr const char* const kHealthTextColors[] = {"Health-based", "White"};
 float columnYs[2] = {};
 int controlId = 0;
 
+// Page-switch stagger: resetContent() detects the page change and arms the clock; each card
+// fades/rises in with a small incremental delay. Suppressed by Reduce Motion.
+double pageSwitchTime = 0.0;
+Page lastRenderedPage = Page::Rage;
+int pageCardIndex = 0;
+
 void resetContent() noexcept
 {
     columnYs[0] = columnYs[1] = 0.0f;
     controlId = static_cast<int>(state.page) * 1000;
+    if (state.page != lastRenderedPage) {
+        pageSwitchTime = ImGui::GetTime();
+        lastRenderedPage = state.page;
+    }
+    pageCardIndex = 0;
 }
 
 void addCard(const char* title, int rowCount, void (*renderRows)()) noexcept
@@ -1712,25 +2442,59 @@ void addCard(const char* title, int rowCount, void (*renderRows)()) noexcept
     const float x = shellBase.x + kSidebarWidth + s(9.0f) + column * (columnWidth + s(10.0f));
     const float y = shellBase.y + kToolbarHeight + s(24.0f) + columnYs[column] - scrollOffset;
 
+    // Per-card entrance on page switches: 40ms stagger per card, fade + rise.
+    const float staggerDelay = 0.04f * pageCardIndex++;
+    const float staggerT = g_reduceMotion ? 1.0f : ImSaturate(static_cast<float>((ImGui::GetTime() - pageSwitchTime - staggerDelay) / 0.30));
+    const float stagger = 1.0f - std::pow(1.0f - staggerT, 3.0f);
+    const float rise = (1.0f - stagger) * s(10.0f);
+
+    constexpr float kHeaderHeight = 32.0f; // design units: title band inside the card
+
     // Self-healing card sizing: the rows render FIRST (channel 1), the frame afterwards
     // (channel 0) using the height the rows ACTUALLY took. The channels keep the frame painted
     // underneath the row content regardless of submission order. The declared rowCount becomes
     // a floor - a stale hand-count can only make a card too TALL, never clip rows.
+    const int vtxBegin = d->VtxBuffer.Size;
     d->ChannelsSplit(2);
     d->ChannelsSetCurrent(1);
-    card = CardContext{ImVec2(x, y + s(6.0f)), columnWidth, 0};
+    card = CardContext{ImVec2(x, y + s(6.0f + kHeaderHeight) + rise), columnWidth, 0.0f};
     renderRows();
-    const float height = ImMax(static_cast<float>(rowCount) * kRowHeight, static_cast<float>(card.row) * kRowHeight) + s(12.0f);
+    const float height = ImMax(static_cast<float>(rowCount) * kRowHeight, card.row * kRowHeight) + s(12.0f + kHeaderHeight);
 
     d->ChannelsSetCurrent(0);
-    text(d, ImVec2(x, y - s(16.0f)), C(89, 94, 106), title, kTextCaption, nullptr);
-    const ImVec2 p(x, y);
+    const ImVec2 p(x, y + rise);
     softShadow(d, p, p + ImVec2(columnWidth, height), s(14.0f));
-    d->AddRectFilled(p, p + ImVec2(columnWidth, height), C(16, 16, 18, 224), s(14.0f));
-    d->AddRect(p, p + ImVec2(columnWidth, height), C(30, 30, 33), s(14.0f));
-    d->ChannelsMerge();
+    d->AddRectFilled(p, p + ImVec2(columnWidth, height), kCardBg, s(14.0f));
+    // top-light: a soft white wash fading down the header area + a 1px inner highlight along
+    // the top edge (inset past the rounded corners) - reads as "machined" instead of flat. The
+    // highlight wraps around the rounded corners: the same rounded path stroked inside corner-
+    // local clips, tangent-joined to the straight line, so the light follows the rounding.
+    d->AddRectFilledMultiColor(p + ImVec2(s(14), s(1)), p + ImVec2(columnWidth - s(14), s(30)), C(255, 255, 255, 9), C(255, 255, 255, 9), 0, 0);
+    d->AddLine(p + ImVec2(s(12), s(0.75f)), p + ImVec2(columnWidth - s(12), s(0.75f)), C(255, 255, 255, 16), 1.0f);
+    for (int corner = 0; corner < 2; ++corner) {
+        constexpr float arcSpan = 13.25f; // inset-path radius: where its arc meets the straight edge
+        const float x0 = corner == 0 ? 0.0f : columnWidth - s(arcSpan);
+        d->PushClipRect(p + ImVec2(x0, 0.0f), p + ImVec2(x0 + s(arcSpan), s(15.0f)), true);
+        d->AddRect(p + ImVec2(0.75f, 0.75f), p + ImVec2(columnWidth - 0.75f, height - 0.75f), C(255, 255, 255, 16), s(14.0f) - 0.75f, ImDrawFlags_RoundCornersTop);
+        d->PopClipRect();
+    }
 
-    columnYs[column] += height + s(30.0f); // card + title band + gap
+    // header band: accent dot + semibold title + hairline divider
+    pulsingDot(d, p + ImVec2(s(17), s(15)), s(2.2f), g_accent);
+    text(d, p + ImVec2(s(25), s(9)), C(196, 199, 208), title, kTextSmall, strongFont());
+    d->AddLine(p + ImVec2(s(12), s(31)), p + ImVec2(columnWidth - s(12), s(31)), kHairline, 1.0f);
+    d->AddRect(p, p + ImVec2(columnWidth, height), kHairlineSoft, s(14.0f));
+    d->ChannelsMerge();
+    const int vtxEnd = d->VtxBuffer.Size;
+    if (stagger < 0.999f) {
+        for (int i = vtxBegin; i < vtxEnd; ++i) {
+            ImDrawVert& v = d->VtxBuffer[i];
+            const ImU32 a = (v.col >> IM_COL32_A_SHIFT) & 255u;
+            v.col = (v.col & 0x00ffffffu) | ((ImU32)(a * stagger) << IM_COL32_A_SHIFT);
+        }
+    }
+
+    columnYs[column] += height + s(20.0f); // card + gap (the title band lives inside now)
 }
 
 // --- page content (bindings 1:1 with the Panorama inventory) ------------------------
@@ -1747,9 +2511,10 @@ void pageRage() noexcept
         toggleVar<Backtrack>("Backtrack", ++controlId);
         toggleVar<AutoStop>("Auto Stop", ++controlId);
     });
-    addCard("TIMING", 2, [] {
+    addCard("TIMING", 3, [] {
         sliderVar<BacktrackTicks>("Backtrack Ticks", ++controlId);
         sliderVar<ExtrapolateTicks>("Lead Ticks", ++controlId);
+        sliderVar<ForceShotWaitTicks>("Auto Shoot Wait", ++controlId);
     });
     addCard("TARGETS", 2, [] {
         toggleVar<SpreadCircleFov>("Spread FOV", ++controlId);
@@ -1766,16 +2531,18 @@ void pageRage() noexcept
         toggleVar<SeedFallback>("Fire Lucky Seeds", ++controlId);
         toggleVar<RecoilCompensation>("Compensate Recoil", ++controlId);
     });
-    addCard("AUTO SHOOT", 6, [] {
+    addCard("AUTO SHOOT", 7, [] {
         toggleVar<ForceShot>("Auto Shoot Ground", ++controlId);
         toggleVar<ForceShotAir>("Auto Shoot Air", ++controlId);
+        toggleVar<ForceShotWait>("Wait For Accuracy", ++controlId);
         sliderVar<Hitchance>("Min Hitchance", ++controlId, "%");
         sliderVar<MinDamage>("Min Damage", ++controlId);
         toggleVar<WallCheck>("Shoot Visible", ++controlId);
         toggleVar<Autowall>("Shoot Walls", ++controlId);
     });
-    addCard("PREDICTION", 1, [] {
+    addCard("EXTRAS", 2, [] {
         toggleVar<Extrapolate>("Lead Targets", ++controlId);
+        toggleVar<autopeek_vars::Enabled>("Auto Peek", ++controlId);
     });
 }
 
@@ -1798,16 +2565,19 @@ void pageLegit() noexcept
         toggleVar<HitArms>("Target Arms", ++controlId);
         toggleVar<HitLegs>("Target Legs", ++controlId);
     });
-    addCard("TRIGGERBOT", 13, [] {
+    addCard("TRIGGERBOT", 6, [] {
         toggleVar<triggerbot_vars::Enabled>("Triggerbot", ++controlId);
         keybindVar<triggerbot_vars::HoldKey>("Hold Key", ++controlId);
         sliderVar<triggerbot_vars::DelayMilliseconds>("Min Reaction Delay", ++controlId, " ms");
         sliderVar<triggerbot_vars::DelayMillisecondsMax>("Max Reaction Delay", ++controlId, " ms");
+        cardDivider("ACCURACY");
         toggleVar<triggerbot_vars::AccuracyCheck>("Shoot When Accurate", ++controlId);
         sliderVar<triggerbot_vars::AccuracyRadius>("Max Bullet Deviation", ++controlId, " u");
         toggleVar<triggerbot_vars::HeadOnly>("Shoot At The Head", ++controlId);
         sliderVar<triggerbot_vars::Hitchance>("Minimum Hitchance", ++controlId, "%");
         toggleVar<triggerbot_vars::MaxAccuracyOnly>("Shoot At Max Accuracy", ++controlId);
+    });
+    addCard("TRIGGERBOT VISIBILITY", 4, [] {
         toggleVar<triggerbot_vars::WallCheck>("Shoot Visible", ++controlId);
         toggleVar<triggerbot_vars::Autowall>("Shoot Walls", ++controlId);
         sliderVar<triggerbot_vars::AutowallMaxThickness>("Max Wall Thickness", ++controlId, " u");
@@ -1882,9 +2652,8 @@ void glowSubTabPills(ImDrawList* d) noexcept
         const ImVec2 p(x + i * (pillWidth + gap), y);
         ImGui::PushID(9700 + i);
         const bool clicked = hit("##glow_subtab", p, ImVec2(pillWidth, pillHeight));
-        const ImGuiID iid = ImGui::GetItemID();
         const bool active = glowSubTab == i;
-        const float r = motion(iid ^ 0x671cu, active ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+        const float r = motion(animKey(0x671cu, 9700 + i), active ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
         ImGui::PopID();
         if (clicked && !active) {
             glowSubTab = i;
@@ -1895,7 +2664,7 @@ void glowSubTabPills(ImDrawList* d) noexcept
             styleSelect.open = false;
         }
         d->AddRectFilled(p, p + ImVec2(pillWidth, pillHeight), mix(C(16, 16, 18, 0), C(37, 37, 41), r), pillHeight * 0.5f);
-        d->AddRect(p, p + ImVec2(pillWidth, pillHeight), mix(C(30, 30, 33), g_accent, r), pillHeight * 0.5f);
+        d->AddRect(p, p + ImVec2(pillWidth, pillHeight), mix(kHairlineSoft, g_accent, r), pillHeight * 0.5f);
         textY(d, p.x + s(16), p.y, pillHeight, mix(C(137, 142, 153), g_accent, r), kSubTabs[i].icon, kTextIcon, iconFont());
         textY(d, p.x + s(38), p.y, pillHeight, mix(C(145, 149, 159), C(226, 228, 235), r), kSubTabs[i].label, kTextControl, nullptr);
     }
@@ -1946,22 +2715,22 @@ void pageOutlineGlow() noexcept
     addCard("WEAPONS & GRENADES", 6, [] {
         toggleVar<GlowWeapons>("Glow Weapons on Ground", ++controlId);
         toggleVar<GlowGrenadeProjectiles>("Glow Grenade Projectiles", ++controlId);
-        hueVar<FlashbangHue>("Flashbang", ++controlId);
-        hueVar<HEGrenadeHue>("HE Grenade", ++controlId);
-        hueVar<SmokeGrenadeHue>("Smoke Grenade", ++controlId);
-        hueVar<MolotovHue>("Molotov / Incendiary", ++controlId);
+        colorVar<model_glow_vars::FlashbangColor>("Flashbang", ++controlId);
+        colorVar<model_glow_vars::HEGrenadeColor>("HE Grenade", ++controlId);
+        colorVar<model_glow_vars::SmokeGrenadeColor>("Smoke Grenade", ++controlId);
+        colorVar<model_glow_vars::MolotovColor>("Molotov / Incendiary", ++controlId);
     });
     addCard("BOMB & DEFUSE KIT", 6, [] {
         toggleVar<GlowDroppedBomb>("Glow Dropped Bomb", ++controlId);
         toggleVar<GlowTickingBomb>("Glow Ticking Bomb", ++controlId);
         toggleVar<GlowDefuseKits>("Glow Defuse Kits", ++controlId);
-        hueVar<DroppedBombHue>("Dropped Bomb", ++controlId);
-        hueVar<TickingBombHue>("Ticking Bomb", ++controlId);
-        hueVar<DefuseKitHue>("Defuse Kit", ++controlId);
+        colorVar<model_glow_vars::DroppedBombColor>("Dropped Bomb", ++controlId);
+        colorVar<model_glow_vars::TickingBombColor>("Ticking Bomb", ++controlId);
+        colorVar<model_glow_vars::DefuseKitColor>("Defuse Kit", ++controlId);
     });
     addCard("HOSTAGES", 2, [] {
         toggleVar<GlowHostages>("Glow Hostages", ++controlId);
-        hueVar<HostageHue>("Hostage", ++controlId);
+        colorVar<outline_glow_vars::HostageColor>("Hostage", ++controlId);
     });
 }
 
@@ -1981,18 +2750,18 @@ void pageModelGlow() noexcept
     addCard("WEAPONS & GRENADES", 6, [] {
         toggleVar<GlowWeapons>("Glow Weapon Models on Ground", ++controlId);
         toggleVar<GlowGrenadeProjectiles>("Glow Grenade Projectile Models", ++controlId);
-        hueVar<FlashbangHue>("Flashbang", ++controlId);
-        hueVar<HEGrenadeHue>("HE Grenade", ++controlId);
-        hueVar<SmokeGrenadeHue>("Smoke Grenade", ++controlId);
-        hueVar<MolotovHue>("Molotov / Incendiary", ++controlId);
+        colorVar<outline_glow_vars::FlashbangColor>("Flashbang", ++controlId);
+        colorVar<outline_glow_vars::HEGrenadeColor>("HE Grenade", ++controlId);
+        colorVar<outline_glow_vars::SmokeGrenadeColor>("Smoke Grenade", ++controlId);
+        colorVar<outline_glow_vars::MolotovColor>("Molotov / Incendiary", ++controlId);
     });
     addCard("BOMB & DEFUSE KIT", 6, [] {
         toggleVar<GlowDroppedBomb>("Glow Dropped Bomb Model", ++controlId);
         toggleVar<GlowTickingBomb>("Glow Ticking Bomb Model", ++controlId);
         toggleVar<GlowDefuseKits>("Glow Defuse Kit Models", ++controlId);
-        hueVar<DroppedBombHue>("Dropped Bomb", ++controlId);
-        hueVar<TickingBombHue>("Ticking Bomb", ++controlId);
-        hueVar<DefuseKitHue>("Defuse Kit", ++controlId);
+        colorVar<outline_glow_vars::DroppedBombColor>("Dropped Bomb", ++controlId);
+        colorVar<outline_glow_vars::TickingBombColor>("Ticking Bomb", ++controlId);
+        colorVar<outline_glow_vars::DefuseKitColor>("Defuse Kit", ++controlId);
     });
 }
 
@@ -2030,6 +2799,10 @@ void pageEffects() noexcept
         toggleVar<RemoveLegs>("Remove First-Person Legs", ++controlId);
         toggleVar<RemoveFlashOverlay>("Remove Flash Overlay", ++controlId);
         toggleVar<RemoveMenuAds>("Remove Main Menu Ads", ++controlId);
+    });
+    addCard("CHAMS", 2, [] {
+        toggleVar<chams_vars::Enabled>("Enemy Chams", ++controlId);
+        colorVar<chams_vars::EnemyColor>("Enemy Color", ++controlId);
     });
     addCard("WORLD COLORS", 16, [] {
         toggleVar<WorldColorsInfernoEnabled>("Recolor Fire", ++controlId);
@@ -2113,6 +2886,19 @@ void pageSound() noexcept
         toggleVar<WeaponScopeSoundVisualizationEnabled>("Weapon Scope Sound", ++controlId);
         toggleVar<WeaponReloadSoundVisualizationEnabled>("Weapon Reload Sound", ++controlId);
     });
+    // Airhorn: event gags routed into voice chat through the radio's FIFO machinery (Radio tab
+    // owns the Voice Key + Broadcast To Voice rows - the mic routing lives there).
+    addCard("AIRHORN", 5, [] {
+        toggleVar<radio_vars::AirhornEnabled>("Airhorn", ++controlId);
+        toggleVar<radio_vars::AirhornFirstBlood>("First Blood", ++controlId);
+        toggleVar<radio_vars::AirhornHeadshot>("Headshot", ++controlId);
+        toggleVar<radio_vars::AirhornRoundWin>("Round Win", ++controlId);
+        ImDrawList* d = ImGui::GetWindowDrawList();
+        beginRow(d, "Clip");
+        const ImVec2 row = card.origin + ImVec2(0, (card.row - 1) * kRowHeight);
+        textY(d, card.origin.x + s(96), row.y, kRowHeight, C(110, 114, 124),
+              "<configDir>/sounds/airhorn.wav - voice key on Radio tab", kTextSmall, nullptr);
+    });
 }
 
 // --- movement (dedicated tab): automation + the edge/speed suite ---------------------
@@ -2125,13 +2911,31 @@ void pageMovement() noexcept
         toggleVar<AutoStrafeEnabled>("Auto Strafe", ++controlId);
         toggleVar<TestStraferEnabled>("Test Strafer", ++controlId);
     });
-    addCard("EDGE & SPEED", 6, [] {
+    addCard("EDGE & SPEED", 7, [] {
         toggleVar<movement_vars::EdgeJump>("Edge Jump", ++controlId);
         toggleVar<movement_vars::EdgeStop>("Edge Stop", ++controlId);
         toggleVar<movement_vars::SlowWalk>("Slow Walk", ++controlId);
         sliderVar<movement_vars::SlowWalkSpeed>("Slow Walk Speed", ++controlId, "%");
         toggleVar<movement_vars::FastLadder>("Fast Ladder", ++controlId);
         toggleVar<movement_vars::JumpBug>("Jump Bug", ++controlId);
+        toggleVar<movement_vars::Desubtick>("Desubtick", ++controlId);
+    });
+    addCard("NET LAG", 8, [] {
+        toggleVar<net_lag_vars::Enabled>("Net Lag Master", ++controlId);
+        toggleVar<net_lag_vars::FakelagAlways>("Fakelag Always", ++controlId);
+        keybindVar<net_lag_vars::ChokeKeyBind>("Choke Key", ++controlId);
+        sliderVar<net_lag_vars::ChokeTicks>("Choke Ticks", ++controlId);
+        sliderVar<net_lag_vars::BlipCount>("Blip Count", ++controlId);
+        sliderVar<net_lag_vars::DupCount>("Dup Count", ++controlId);
+        toggleVar<net_lag_vars::DelayEnabled>("Delay", ++controlId);
+        sliderVar<net_lag_vars::DelayMs>("Delay Ms", ++controlId);
+    });
+    addCard("FLOOD", 5, [] {
+        sliderVar<net_lag_vars::FloodBurstCount>("Flood Burst", ++controlId);
+        keybindVar<net_lag_vars::FloodKeyBind>("Flood Key", ++controlId);
+        sliderVar<net_lag_vars::ConnlessFloodCount>("Connless Flood", ++controlId);
+        keybindVar<net_lag_vars::ConnlessKeyBind>("Connless Key", ++controlId);
+        toggleVar<net_lag_vars::StatsEnabled>("Stats File", ++controlId);
     });
 }
 
@@ -2140,6 +2944,7 @@ void pageMovement() noexcept
 void discordRpcTemplateRow(const char* label, bool details, int id) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
+    card.labelReserve = s(96.0f); // InputText starts at a fixed x
     beginRow(d, label);
 
     char* buffer = nullptr;
@@ -2157,7 +2962,7 @@ void discordRpcTemplateRow(const char* label, bool details, int id) noexcept
     ImGui::SetCursorScreenPos(ImVec2(row.x + s(96), row.y + rowCentered(s(25))));
     ImGui::PushItemWidth(card.width - s(96) - s(13));
     ImGui::PushStyleColor(ImGuiCol_FrameBg, C(23, 23, 25));
-    ImGui::PushStyleColor(ImGuiCol_Text, C(207, 209, 218));
+    ImGui::PushStyleColor(ImGuiCol_Text, kTextBodyCol);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(8), s(5)));
     ImGui::PushID(id);
     ImGui::InputText("##rpc_template", buffer, 192);
@@ -2172,13 +2977,295 @@ void discordRpcTemplateRow(const char* label, bool details, int id) noexcept
         }));
 }
 
+// Kick reason picker: the searchable list popup with the full ENetworkDisconnectReason
+// table (ChatTools.h kKickReasonEntries); defIndex = the code the server receives.
+void kickReasonApply(int defIndex) noexcept
+{
+    if (defIndex < 1 || defIndex > 255)
+        return;
+    ui_config::set<chat_vars::KickReason>(chat_vars::KickReason::ValueType{static_cast<std::uint8_t>(defIndex)});
+}
+
+void kickReasonRow(const char* label, int id) noexcept
+{
+    const auto current = static_cast<int>(static_cast<chat_vars::KickReason::ValueType::ValueType>(ui_config::get<chat_vars::KickReason>()));
+
+    ImDrawList* d = ImGui::GetWindowDrawList();
+    const float controlWidth = ImMin(s(134.0f), card.width * 0.48f);
+    card.labelReserve = controlWidth + s(13.0f);
+    beginRow(d, label);
+
+    ImVec2 cp = rowControlPos(controlWidth + s(13.0f));
+    cp.y += rowCentered(s(23.0f));
+
+    ImGui::PushID(id);
+    const bool click = hit("##kick_reason", cp, ImVec2(controlWidth, s(23)));
+    const float response = motion(animKey(0x6161u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f);
+    ImGui::PopID();
+
+    if (click) {
+        state.popup.open = !(state.popup.open && state.popup.owner == id);
+        state.popup.owner = id;
+        state.popup.options = nullptr;
+        state.popup.count = 0;
+        state.popup.apply = &kickReasonApply;
+        state.popup.anchor = cp;
+        state.popup.width = controlWidth;
+        state.popup.openedFrame = ImGui::GetFrameCount();
+        state.popup.paintKitMode = true;
+        state.popup.paintKitDefIndex = 0;
+        state.popup.itemList = chat_tools::kKickReasonEntries;
+        state.popup.itemCount = chat_tools::kKickReasonCount;
+        state.popup.omitNone = true;
+        state.popup.paintKitCurrentId = current;
+        state.popup.paintKitScroll = 0.0f;
+        state.popup.paintKitSearch[0] = '\0';
+    }
+
+    d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(kPillBg, kPillBgHover, response), s(5));
+    d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(kHairlineSoft, g_accent, response), s(5));
+    const char* display = "?";
+    for (int i = 0; i < chat_tools::kKickReasonCount; ++i) {
+        if (static_cast<int>(chat_tools::kKickReasonEntries[i].defIndex) == current) {
+            display = chat_tools::kKickReasonEntries[i].name;
+            break;
+        }
+    }
+    textY(d, cp.x + s(7), cp.y, s(23), C(182, 185, 196), display, kTextControl, nullptr);
+    d->AddLine(cp + ImVec2(controlWidth - s(13), s(9)), cp + ImVec2(controlWidth - s(9), s(13)), C(139, 143, 154), 1.0f);
+    d->AddLine(cp + ImVec2(controlWidth - s(9), s(13)), cp + ImVec2(controlWidth - s(5), s(9)), C(139, 143, 154), 1.0f);
+}
+
+// Radio phrase picker: opens the searchable/scrollable list popup in itemList mode with the
+
+// Radio phrase picker: opens the searchable/scrollable list popup in itemList mode with the
+// chat-wheel phrase entries (ChatTools.h kWheelRadioEntries); the apply writes the phrase
+// index into the config. Selecting sets it for the Radio Spam loop instantly.
+void radioPhraseApply(int defIndex) noexcept
+{
+    // defIndex is 1-based (0 was the suppressed None row); the config stores it directly
+    if (defIndex < 1 || defIndex > chat_tools::kRadioPhraseCount)
+        return;
+    ui_config::set<chat_vars::RadioPhrase>(chat_vars::RadioPhrase::ValueType{static_cast<std::uint8_t>(defIndex)});
+}
+
+void radioPhraseRow(const char* label, int id) noexcept
+{
+    const auto current = ui_config::get<chat_vars::RadioPhrase>();
+    const int currentIndex = static_cast<int>(current);
+    const char* display = currentIndex >= 0 && currentIndex < chat_tools::kRadioPhraseCount
+        ? chat_tools::kRadioPhrases[currentIndex].display
+        : "?";
+
+    ImDrawList* d = ImGui::GetWindowDrawList();
+    const float controlWidth = ImMin(s(134.0f), card.width * 0.48f);
+    card.labelReserve = controlWidth + s(13.0f);
+    beginRow(d, label);
+
+    ImVec2 cp = rowControlPos(controlWidth + s(13.0f));
+    cp.y += rowCentered(s(23.0f));
+
+    ImGui::PushID(id);
+    const bool click = hit("##radio_phrase", cp, ImVec2(controlWidth, s(23)));
+    const float response = motion(animKey(0x6161u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f);
+    ImGui::PopID();
+
+    if (click) {
+        state.popup.open = !(state.popup.open && state.popup.owner == id);
+        state.popup.owner = id;
+        state.popup.options = nullptr;
+        state.popup.count = 0;
+        state.popup.apply = &radioPhraseApply;
+        state.popup.anchor = cp;
+        state.popup.width = controlWidth;
+        state.popup.openedFrame = ImGui::GetFrameCount();
+        state.popup.paintKitMode = true;
+        state.popup.paintKitDefIndex = 0;
+        state.popup.itemList = chat_tools::kWheelRadioEntries;
+        state.popup.itemCount = chat_tools::kRadioPhraseCount;
+        state.popup.omitNone = true; // the radio picker has no "none" - and entry 1-based
+        state.popup.paintKitCurrentId = currentIndex + 1;
+        state.popup.paintKitScroll = 0.0f;
+        state.popup.paintKitSearch[0] = '\0';
+    }
+
+    d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(kPillBg, kPillBgHover, response), s(5));
+    d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(kHairlineSoft, g_accent, response), s(5));
+    textY(d, cp.x + s(7), cp.y, s(23), C(182, 185, 196), display, kTextControl, nullptr);
+    d->AddLine(cp + ImVec2(controlWidth - s(13), s(9)), cp + ImVec2(controlWidth - s(9), s(13)), C(139, 143, 154), 1.0f);
+    d->AddLine(cp + ImVec2(controlWidth - s(9), s(13)), cp + ImVec2(controlWidth - s(5), s(9)), C(139, 143, 154), 1.0f);
+}
+
+// Chat tools sidecar template row
+// Chat tools sidecar template row: InputText over ChatTools' static buffer, flushed to
+// <configDir>/<sidecar> when the edit deactivates (DiscordRpc template pattern).
+void chatTemplateRow(const char* label, int kind, int id) noexcept
+{
+    ImDrawList* d = ImGui::GetWindowDrawList();
+    card.labelReserve = s(96.0f); // InputText starts at a fixed x
+    beginRow(d, label);
+
+    char* buffer = nullptr;
+    static_cast<void>(ui_config::withContext([&](auto&& hookContext) {
+        buffer = hookContext.template make<ChatTools>().buffer(kind);
+    }));
+    if (!buffer) {
+        const ImVec2 row = card.origin + ImVec2(0, (card.row - 1) * kRowHeight);
+        textY(d, card.origin.x + s(96), row.y, kRowHeight, C(110, 114, 124), "unavailable", kTextSmall, nullptr);
+        return;
+    }
+
+    const ImVec2 row = card.origin + ImVec2(0, (card.row - 1) * kRowHeight);
+    ImGui::SetCursorScreenPos(ImVec2(row.x + s(96), row.y + rowCentered(s(25))));
+    ImGui::PushItemWidth(card.width - s(96) - s(13));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, C(23, 23, 25));
+    ImGui::PushStyleColor(ImGuiCol_Text, kTextBodyCol);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(8), s(5)));
+    ImGui::PushID(id);
+    ImGui::InputText("##chat_sidecar", buffer, chat_tools::kBufferTextSize);
+    ImGui::PopID();
+    const bool deactivated = ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
+    ImGui::PopItemWidth();
+    if (deactivated)
+        static_cast<void>(ui_config::withContext([&](auto&& hookContext) {
+            if (kind == chat_tools::kNameBuffer)
+                hookContext.template make<ChatTools>().template saveBufferToFile<chat_tools::kNameBuffer>();
+            else if (kind == chat_tools::kSpamBuffer)
+                hookContext.template make<ChatTools>().template saveBufferToFile<chat_tools::kSpamBuffer>();
+            else if (kind == chat_tools::kWheelBuffer)
+                hookContext.template make<ChatTools>().template saveBufferToFile<chat_tools::kWheelBuffer>();
+            else if (kind == chat_tools::kAnimatorBuffer)
+                hookContext.template make<ChatTools>().template saveBufferToFile<chat_tools::kAnimatorBuffer>();
+            else
+                hookContext.template make<ChatTools>().template saveBufferToFile<chat_tools::kIntelBuffer>();
+        }));
+}
+
+// Name stealer (CHAT card): the dropdown lists the CURRENT players, refreshed from the
+// player-list snapshot every frame. Picking one stages the sanitized name through ChatTools'
+// apply pipeline - the same `name "<text>"` + Steam-persona path as APPLY NAME. Steam itself
+// rate-limits persona renames (see ChatTools setSteamPersonaName) - a rejected rename is
+// Steam's cooldown, not a broken feature. The option table is file-scope because select()'s
+// popover commits through the applier in a LATER frame.
+constexpr int kStealMax = player_list::kMaxRows;
+char stealNameBufs[kStealMax][40]{};
+const char* stealOptions[kStealMax]{};
+player_list::Row stealRowCache[kStealMax]{};
+int stealRowCount = 0;
+int stealSelected = 0;
+
+void refreshStealList() noexcept
+{
+    const auto snap = player_list::snapshot();
+    stealRowCount = 0;
+    for (int i = 0; i < snap.count && stealRowCount < kStealMax; ++i) {
+        if (snap.rows[i].isLocalPlayer || snap.rows[i].name[0] == '\0')
+            continue;
+        stealRowCache[stealRowCount] = snap.rows[i];
+        std::snprintf(stealNameBufs[stealRowCount], sizeof(stealNameBufs[0]), "%s", snap.rows[i].name);
+        stealOptions[stealRowCount] = stealNameBufs[stealRowCount];
+        ++stealRowCount;
+    }
+}
+
+void stolenNameApply(int index) noexcept
+{
+    if (index < 0 || index >= stealRowCount)
+        return;
+    char* buffer = nullptr;
+    static_cast<void>(ui_config::withContext([&](auto&& hookContext) {
+        buffer = hookContext.template make<ChatTools>().buffer(chat_tools::kNameBuffer);
+    }));
+    if (!buffer)
+        return;
+    static_cast<void>(chat_tools::sanitizeInto(stealRowCache[index].name, buffer, chat_tools::kBufferTextSize));
+    std::memcpy(chat_tools::pendingNameText, buffer, chat_tools::kBufferTextSize);
+    chat_tools::pendingNameApply.store(1, std::memory_order_release);
+}
+
+// Chat tools one-shot action row: mode 0 = APPLY NAME (stage buffer + apply), 1 = clone the
+// top-fragger's name, 2 = ban theater. All publish request atomics; the game thread acts.
+void chatActionRow(const char* label, const char* buttonText, int id, int action) noexcept
+{
+    ImDrawList* d = ImGui::GetWindowDrawList();
+    const float controlWidth = ImMin(s(134.0f), card.width * 0.48f);
+    card.labelReserve = controlWidth + s(13.0f);
+    beginRow(d, label);
+
+    ImVec2 cp = rowControlPos(controlWidth + s(13.0f));
+    cp.y += rowCentered(s(23.0f));
+
+    ImGui::PushID(id);
+    const bool clicked = hit("##chat_action", cp, ImVec2(controlWidth, s(23)));
+    const float response = motion(animKey(0x7c21u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f);
+    ImGui::PopID();
+
+    if (clicked) {
+        if (action == 0) {
+            // stage the buffer text for the game thread (one-click path, no sidecar read needed)
+            static_cast<void>(ui_config::withContext([](auto&& hookContext) {
+                char* buffer = hookContext.template make<ChatTools>().buffer(chat_tools::kNameBuffer);
+                std::memcpy(chat_tools::pendingNameText, buffer, chat_tools::kBufferTextSize);
+            }));
+            chat_tools::pendingNameApply.store(1, std::memory_order_release);
+        } else if (action == 1) {
+            chat_tools::pendingCloneFragger.store(1, std::memory_order_release);
+        } else if (action == 2) {
+            chat_tools::pendingBanTheater.store(1, std::memory_order_release);
+        }
+    }
+
+    d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(kPillBg, kPillBgHover, response), s(5));
+    d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(kHairlineSoft, g_accent, response), s(5));
+    const float textWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, buttonText).x;
+    textY(d, cp.x + (controlWidth - textWidth) * 0.5f, cp.y, s(23), mix(C(170, 173, 184), C(226, 228, 235), response), buttonText, kTextControl, nullptr);
+}
+
+// Name animator modes (order = name_animator_vars::Mode values).
+constexpr const char* const kAnimatorModeNames[] = {"Typewriter", "Glitch", "Marquee", "Scramble", "Binary", "Flicker", "Backwards"};
+
+// Persona preset dropdown: commits the chosen recipe into the name buffer, stages it for the
+// game thread and fires the apply in one click. Session-static selection index.
+constexpr const char* const kPersonaPresetNames[] = {
+    "cat Enjoyer", "s1mple", "Valve Employee", "VAC Live", "VAC Live (plain)", "Fake VAC Ban", "Invisible", "Fullwidth", "Reversed",
+    "Server Restart", "Cooldown", "Vote Kick", "Admin Msg", "GOTV",
+    "Long Excuse", "Long Discord", "Long Baiter", "Long GG Next",
+    "Report Confirm", "Overwatch Verdict", "Rank Update", "Premier Drop", "Trust Factor", "Item Drop", "Reconnecting", "Trade Ban",
+};
+int chatPresetIndex = -1;
+
+// Fake-kick reason names (order = chat_vars::KickReason; the codes live in
+// chat_tools::kKickReasonCodes)
+
+void chatPresetApply(int index) noexcept
+{
+    if (index < 0 || index >= chat_tools::kNamePresetCount)
+        return;
+    char* buffer = nullptr;
+    static_cast<void>(ui_config::withContext([&](auto&& hookContext) {
+        buffer = hookContext.template make<ChatTools>().buffer(chat_tools::kNameBuffer);
+    }));
+    if (!buffer)
+        return;
+    std::snprintf(buffer, chat_tools::kBufferTextSize, "%s", chat_tools::kNamePresets[index]);
+    std::memcpy(chat_tools::pendingNameText, buffer, chat_tools::kBufferTextSize);
+    chat_tools::pendingNameApply.store(1, std::memory_order_release);
+}
+
 void pageMisc() noexcept
 {
-    addCard("LOGGING", 4, [] {
+    addCard("INTERFACE", 1, [] {
+        toggleVar<MenuReduceMotion>("Reduce Motion", ++controlId);
+    });
+
+    addCard("LOGGING", 5, [] {
         toggleVar<HitLogEnabled>("Log Hits", ++controlId);
         toggleVar<TeamDamageTrackerEnabled>("Team Damage Tracker", ++controlId);
         toggleVar<VoteRevealerEnabled>("Vote Revealer", ++controlId);
         toggleVar<CooldownRevealerEnabled>("Cooldown Revealer", ++controlId);
+        toggleVar<reveal_radar_vars::Enabled>("Reveal Radar", ++controlId);
     });
 
     addCard("ACCOUNT", 4, [] {
@@ -2187,8 +3274,58 @@ void pageMisc() noexcept
         sliderVar<FakeLevelValue>("Level", ++controlId);
         toggleVar<MatchAutoAcceptEnabled>("Match Auto Accept", ++controlId);
     });
-    addCard("KILLSAY", 1, [] {
+
+    // chat tools: everything here is NETWORKED (`say` / `playerchatwheel` / the `name`
+    // userinfo convar) - the server relays it to every player. Text lives in sidecar files
+    // (chat_name.txt / chat_spam.txt / chatwheel.txt / chat_names.txt next to the configs),
+    // edited in-place. {nl} in any text becomes a real line break in chat (U+2028).
+    addCard("CHAT", 12, [] {
+        chatTemplateRow("Fake Name", chat_tools::kNameBuffer, ++controlId);
+        chatActionRow("Apply Name", "APPLY NAME", ++controlId, 0);
+        selectList("Persona Preset", &chatPresetIndex, kPersonaPresetNames, static_cast<int>(sizeof(kPersonaPresetNames) / sizeof(kPersonaPresetNames[0])), ++controlId, &chatPresetApply);
+        chatActionRow("Impersonate", "CLONE TOP FRAGGER", ++controlId, 1);
+        refreshStealList();
+        static const char* const kStealPlaceholder[1] = {"no players - live match needed"};
+        select("Steal Name", &stealSelected, stealRowCount > 0 ? stealOptions : kStealPlaceholder,
+               stealRowCount > 0 ? stealRowCount : 1, ++controlId, &stolenNameApply);
+        // CS2 servers read the name at connect: with this on, a successful rename runs `retry`
+        // so the server picks the new name up immediately.
+        toggleVar<chat_vars::NameForceReconnect>("Force Reconnect", ++controlId);
+        toggleVar<chat_vars::NameCycleEnabled>("Name Cycle", ++controlId);
+        sliderVar<chat_vars::NameCycleInterval>("Cycle Every", ++controlId, "s");
+        toggleVar<name_animator_vars::Enabled>("Name Animator", ++controlId);
+        chatTemplateRow("Animate Text", chat_tools::kAnimatorBuffer, ++controlId);
+        selectVar<name_animator_vars::Mode>("Animate Mode", kAnimatorModeNames,
+                                            static_cast<int>(sizeof(kAnimatorModeNames) / sizeof(kAnimatorModeNames[0])), ++controlId);
+        sliderVar<name_animator_vars::Speed>("Animate Speed", ++controlId);
+    });
+
+    addCard("PRANKS", 7, [] {
+        chatActionRow("Ban Theater", "RUN IT", ++controlId, 2);
+        sliderVar<chat_vars::TheaterDelay>("Retry After", ++controlId, "s");
+        chatTemplateRow("Intel Text", chat_tools::kIntelBuffer, ++controlId);
+        toggleVar<chat_vars::IntelEnabled>("Fake Intel", ++controlId);
+        keybindVar<chat_vars::IntelBind>("Intel Key", ++controlId);
+        kickReasonRow("Kick Reason", ++controlId);
+        keybindVar<chat_vars::KickKey>("Fake Kick Key", ++controlId);
+    });
+
+    addCard("CHAT SPAM", 5, [] {
+        chatTemplateRow("Spam Text", chat_tools::kSpamBuffer, ++controlId);
+        toggleVar<chat_vars::SpamEnabled>("Chat Spam", ++controlId);
+        sliderVar<chat_vars::SpamCount>("Burst Lines", ++controlId);
+        sliderVar<chat_vars::SpamInterval>("Spam Interval", ++controlId, "00ms");
         toggleVar<KillsayEnabled>("Killsay From File", ++controlId);
+    });
+
+    addCard("CHAT FUN", 7, [] {
+        radioPhraseRow("Radio Phrase", ++controlId);
+        toggleVar<chat_vars::WheelEnabled>("Radio Spam", ++controlId);
+        sliderVar<chat_vars::WheelInterval>("Radio Interval", ++controlId, "00ms");
+        toggleVar<chat_vars::HudColorCycle>("Fast Color Cycle", ++controlId);
+        sliderVar<chat_vars::HudColorCycleSpeed>("Cycle Speed", ++controlId, " /s");
+        toggleVar<chat_vars::StreakRadioEnabled>("Killstreak Radio", ++controlId);
+        toggleVar<chat_vars::LiveBadgeEnabled>("Stream Live Badge", ++controlId);
     });
     addCard("VIEW ANGLES", 7, [] {
         toggleVar<FvaEnabled>("FVA Rotation Chains", ++controlId);
@@ -2210,14 +3347,13 @@ void pageMisc() noexcept
 }
 
 // --- inventory (skin changer) ---------------------------------------------------------
-// Six category pills over one per-category card, plus a live knife preview card. Only the
-// active category's selects exist per frame, so the 40+ dropdown rows never render at once
-// (and the card area stays scannable instead of a wall of selects).
+// Six category pills over one per-category card. Every weapon row is a full skin triple:
+// a searchable PaintKitDatabase finish picker + wear + pattern seed. Only the active
+// category's rows exist per frame, so the ~100 rows never render at once.
 
 int inventoryCategory = 0;
 
 constexpr const char* const kKnifeModels[] = {"None", "Bayonet", "Bowie Knife", "Butterfly Knife", "Classic Knife", "Falchion Knife", "Flip Knife", "Gut Knife", "Huntsman Knife", "Karambit", "Kukri Knife", "M9 Bayonet", "Navaja Knife", "Nomad Knife", "Paracord Knife", "Shadow Daggers", "Skeleton Knife", "Stiletto Knife", "Survival Knife", "Talon Knife", "Ursus Knife"};
-constexpr const char* const kKnifeFinishes[] = {"None", "Fade", "Marble Fade", "Doppler", "Doppler Ruby", "Doppler Sapphire", "Doppler Black Pearl", "Tiger Tooth", "Damascus Steel", "Rust Coat", "Crimson Web"};
 
 void inventoryPills(ImDrawList* d) noexcept
 {
@@ -2234,9 +3370,8 @@ void inventoryPills(ImDrawList* d) noexcept
         const ImVec2 p(x + i * (pillWidth + gap), y);
         ImGui::PushID(9800 + i);
         const bool clicked = hit("##inv_category", p, ImVec2(pillWidth, pillHeight));
-        const ImGuiID iid = ImGui::GetItemID();
         const bool active = inventoryCategory == i;
-        const float r = motion(iid ^ 0x1acau, active ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+        const float r = motion(animKey(0x1acau, 9800 + i), active ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
         ImGui::PopID();
         if (clicked && !active) {
             inventoryCategory = i;
@@ -2247,7 +3382,7 @@ void inventoryPills(ImDrawList* d) noexcept
             styleSelect.open = false;
         }
         d->AddRectFilled(p, p + ImVec2(pillWidth, pillHeight), mix(C(16, 16, 18, 0), C(37, 37, 41), r), pillHeight * 0.5f);
-        d->AddRect(p, p + ImVec2(pillWidth, pillHeight), mix(C(30, 30, 33), g_accent, r), pillHeight * 0.5f);
+        d->AddRect(p, p + ImVec2(pillWidth, pillHeight), mix(kHairlineSoft, g_accent, r), pillHeight * 0.5f);
         const float labelWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, kNames[i]).x;
         textY(d, p.x + (pillWidth - labelWidth) * 0.5f, p.y, pillHeight, mix(C(145, 149, 159), C(226, 228, 235), r), kNames[i], kTextControl, nullptr);
     }
@@ -2255,166 +3390,109 @@ void inventoryPills(ImDrawList* d) noexcept
     columnYs[0] = columnYs[1] = s(4.0f) + pillHeight + s(30.0f);
 }
 
+// One weapon's skin triple: finish picker (raw paint kit id, validated against the weapon's
+// PaintKitDatabase list by the apply path too) + wear + pattern seed.
+template <typename SkinVar, typename WearVar, typename SeedVar>
+void weaponSkinRows(std::uint16_t defIndex) noexcept
+{
+    const auto* list = cs2::paintKitListFor(defIndex);
+    paintKitRow<SkinVar>(list ? list->weaponName : "?", defIndex, ++controlId);
+    wearRow<WearVar>("Wear", ++controlId);
+    seedRow<SeedVar>("Seed", ++controlId);
+}
+
 void pageInventoryCategory(int category) noexcept
 {
     using namespace skin_changer_vars;
     switch (category) {
-    case 0:
-        addCard("KNIVES", 2, [] {
+    case 0: {
+        // Knife finish ids are validated against the IMPERSONATED model's list (per-model
+        // finish kits exist). With no model selected only the generic-knife finishes are
+        // offered (defIndex 0 = the popup's generic mode), since the real equipped knife type
+        // is unknown at config time. addCard takes a plain function pointer, so the resolved
+        // def index goes through a static instead of a lambda capture.
+        const auto knifeModel = static_cast<KnifeModelSelection>(ui_config::get<KnifeModel>());
+        static std::uint16_t knifeFinishDefIndex = 0;
+        knifeFinishDefIndex = SkinChangerData::resolveKnifeModel(knifeModel).has_value()
+            ? static_cast<std::uint16_t>(*SkinChangerData::resolveKnifeModel(knifeModel))
+            : std::uint16_t{0};
+        addCard("KNIVES", 6, [] {
             selectVar<KnifeModel>("Knife Model", kKnifeModels, 21, ++controlId);
-            selectVar<KnifeSkin>("Knife Finish", kKnifeFinishes, 11, ++controlId);
+            paintKitRow<KnifeSkin>("Knife Finish", knifeFinishDefIndex, ++controlId);
+            wearRow<KnifeSkinWear>("Wear", ++controlId);
+            seedRow<KnifeSkinSeed>("Seed", ++controlId);
+            toggleVar<StatTrakEnabled>("StatTrak", ++controlId);
+            {
+                const auto value = ui_config::get<StatTrakValue>();
+                int statTrak = static_cast<int>(value);
+                if (sliderRow("StatTrak Value", &statTrak, 0, 9999, ++controlId, nullptr))
+                    ui_config::set<StatTrakValue>(static_cast<std::uint16_t>(statTrak));
+            }
         });
         break;
+    }
     case 1:
-        addCard("PISTOLS", 10, [] {
-            static const char* const cz75[] = {"None", "Army Sheen", "Copper Fiber", "Emerald Quartz", "Polymer", "Tread Plate", "The Fuschia Is Now", "Twist", "Poison Dart", "Chalice", "Emerald"};
-            selectVar<CZ75AutoSkin>("CZ75-Auto", cz75, 11, ++controlId);
-            static const char* const deagle[] = {"None", "Blaze", "Hypnotic", "Cobalt Disruption", "Bronze Deco", "Meteorite", "Night Heist", "Emerald Jörmungandr", "The Bronze", "Golden Koi", "Sunset Storm 壱"};
-            selectVar<DesertEagleSkin>("Desert Eagle", deagle, 11, ++controlId);
-            static const char* const dualBerettas[] = {"None", "Cobalt Quartz", "Heist", "Hemoglobin", "Emerald", "Anodized Navy", "Cartel", "Stained", "Flora Carnivora", "Twin Turbo", "Dualing Dragons"};
-            selectVar<DualBerettasSkin>("Dual Berettas", dualBerettas, 11, ++controlId);
-            static const char* const fiveSeven[] = {"None", "Berries And Cherries", "Copper Galaxy", "Silver Quartz", "Anodized Gunmetal", "Fowl Play", "Heat Treated", "Scumbria", "Angry Mob", "Violent Daimyo", "Fairy Tale"};
-            selectVar<FiveSeveNSkin>("Five-SeveN", fiveSeven, 11, ++controlId);
-            static const char* const glock18[] = {"None", "Fade", "Dragon Tattoo", "Steel Disruption", "Moonrise", "High Beam", "Twilight Galaxy", "Reactor", "Nuclear Garden", "Brass", "Bunsen Burner"};
-            selectVar<Glock18Skin>("Glock-18", glock18, 11, ++controlId);
-            static const char* const p2000[] = {"None", "Amber Fade", "Space Race", "Panther Camo", "Chainmail", "Dispatch", "Ocean Foam", "Imperial", "Scorpion", "Silver", "Acid Etched"};
-            selectVar<P2000Skin>("P2000", p2000, 11, ++controlId);
-            static const char* const p250[] = {"None", "Nevermore", "Digital Architect", "Steel Disruption", "Undertow", "Ripple", "Dark Filigree", "Metallic DDPAT", "Cartel", "Valence", "Verdigris"};
-            selectVar<P250Skin>("P250", p250, 11, ++controlId);
-            static const char* const r8[] = {"None", "Amber Fade", "Fade", "Blaze", "Phoenix Marker", "Leafhopper", "Reboot", "Survivalist", "Skull Crusher", "Banana Cannon", "Bone Forged"};
-            selectVar<R8RevolverSkin>("R8 Revolver", r8, 11, ++controlId);
-            static const char* const tec9[] = {"None", "Red Quartz", "Titanium Bit", "Ossified", "Re-Entry", "Ice Cap", "Blue Titanium", "Brass", "Cut Out", "Isaac", "Avalanche"};
-            selectVar<Tec9Skin>("Tec-9", tec9, 11, ++controlId);
-            static const char* const usps[] = {"None", "Serum", "Stainless", "Dark Water", "Purple DDPAT", "Target Acquired", "Orange Anolis", "Caiman", "Business Class", "Black Lotus", "Cortex"};
-            selectVar<USPSSkin>("USP-S", usps, 11, ++controlId);
+        addCard("PISTOLS", 30, [] {
+            weaponSkinRows<DesertEagleSkin, DesertEagleSkinWear, DesertEagleSkinSeed>(1);
+            weaponSkinRows<DualBerettasSkin, DualBerettasSkinWear, DualBerettasSkinSeed>(2);
+            weaponSkinRows<FiveSeveNSkin, FiveSeveNSkinWear, FiveSeveNSkinSeed>(3);
+            weaponSkinRows<Glock18Skin, Glock18SkinWear, Glock18SkinSeed>(4);
+            weaponSkinRows<P2000Skin, P2000SkinWear, P2000SkinSeed>(32);
+            weaponSkinRows<P250Skin, P250SkinWear, P250SkinSeed>(36);
+            weaponSkinRows<Tec9Skin, Tec9SkinWear, Tec9SkinSeed>(30);
+            weaponSkinRows<CZ75AutoSkin, CZ75AutoSkinWear, CZ75AutoSkinSeed>(63);
+            weaponSkinRows<R8RevolverSkin, R8RevolverSkinWear, R8RevolverSkinSeed>(64);
+            weaponSkinRows<USPSSkin, USPSSkinWear, USPSSkinSeed>(61);
         });
         break;
     case 2:
-        addCard("SMGS", 7, [] {
-            static const char* const mac10[] = {"None", "Fade", "Amber Fade", "Last Dive", "Gold Brick", "Copper Borre", "Aloha", "Lapis Gator", "Malachite", "Oceanic", "Nuclear Garden"};
-            selectVar<MAC10Skin>("MAC-10", mac10, 11, ++controlId);
-            static const char* const mp5sd[] = {"None", "Co-Processor", "Desert Strike", "Liquidation", "Condition Zero", "Acid Wash", "Agent", "Phosphor", "Necro Jr.", "Oxide Oasis", "Gauss"};
-            selectVar<MP5SDSkin>("MP5-SD", mp5sd, 11, ++controlId);
-            static const char* const mp7[] = {"None", "Fade", "Motherboard", "Vault Heist", "Ocean Foam", "Anodized Navy", "Armor Core", "Urban Hazard", "Special Delivery", "Abyssal Apparition", "Guerrilla"};
-            selectVar<MP7Skin>("MP7", mp7, 11, ++controlId);
-            static const char* const mp9[] = {"None", "Sand Scale", "Mount Fuji", "Pandora's Box", "Hypnotic", "Army Sheen", "Dark Age", "Music Box", "Bioleak", "Ruby Poison Dart", "Stained Glass"};
-            selectVar<MP9Skin>("MP9", mp9, 11, ++controlId);
-            static const char* const p90[] = {"None", "Ancient Earth", "Astral Jörmungandr", "Cold Blooded", "Tiger Pit", "Baroque Red", "Module", "Leather", "Death by Kitty", "Emerald Dragon", "Run and Hide"};
-            selectVar<P90Skin>("P90", p90, 11, ++controlId);
-            static const char* const ppBizon[] = {"None", "Breaker Box", "Carbon Fiber", "Cobalt Halftone", "Brass", "Rust Coat", "RMX", "Traitor", "Osiris", "High Roller", "Antique"};
-            selectVar<PPBizonSkin>("PP-Bizon", ppBizon, 11, ++controlId);
-            static const char* const ump45[] = {"None", "Mechanism", "Fade", "Blaze", "Moonrise", "Carbon Fiber", "Oscillator", "Grand Prix", "Metal Flowers", "Minotaur's Labyrinth", "Briefing"};
-            selectVar<UMP45Skin>("UMP-45", ump45, 11, ++controlId);
+        addCard("SMGS", 21, [] {
+            weaponSkinRows<MAC10Skin, MAC10SkinWear, MAC10SkinSeed>(17);
+            weaponSkinRows<MP5SDSkin, MP5SDSkinWear, MP5SDSkinSeed>(23);
+            weaponSkinRows<MP7Skin, MP7SkinWear, MP7SkinSeed>(33);
+            weaponSkinRows<MP9Skin, MP9SkinWear, MP9SkinSeed>(34);
+            weaponSkinRows<P90Skin, P90SkinWear, P90SkinSeed>(19);
+            weaponSkinRows<PPBizonSkin, PPBizonSkinWear, PPBizonSkinSeed>(26);
+            weaponSkinRows<UMP45Skin, UMP45SkinWear, UMP45SkinSeed>(24);
         });
         break;
     case 3:
-        addCard("HEAVY", 6, [] {
-            static const char* const m249[] = {"None", "Aztec", "Magma", "Deep Relief", "Downtown", "Submerged", "System Lock", "Spectre", "O.S.I.P.R.", "Nebula Crusader", "Warbird"};
-            selectVar<M249Skin>("M249", m249, 11, ++controlId);
-            static const char* const mag7[] = {"None", "Carbon Fiber", "Chainmail", "Hard Water", "Sonar", "Navy Sheen", "Metallic DDPAT", "Silver", "SWAG-7", "Rust Coat", "Heaven Guard"};
-            selectVar<MAG7Skin>("MAG-7", mag7, 11, ++controlId);
-            static const char* const negev[] = {"None", "Army Sheen", "Man-o'-war", "Anodized Navy", "Bratatat", "Loudmouth", "Drop Me", "dev_texture", "Power Loader", "Prototype", "Desert-Strike"};
-            selectVar<NegevSkin>("Negev", negev, 11, ++controlId);
-            static const char* const nova[] = {"None", "Army Sheen", "Graphite", "Red Quartz", "Gila", "Caged Steel", "Baroque Orange", "Exo", "Rust Coat", "Antique", "Plume"};
-            selectVar<NovaSkin>("Nova", nova, 11, ++controlId);
-            static const char* const sawedOff[] = {"None", "Amber Fade", "Brake Light", "Copper", "Morris", "Highwayman", "Zander", "Rust Coat", "First Class", "Limelight", "Apocalypto"};
-            selectVar<SawedOffSkin>("Sawed-Off", sawedOff, 11, ++controlId);
-            static const char* const xm1014[] = {"None", "Ancient Lore", "Charter", "Frost Borre", "Elegant Vines", "Bone Machine", "Zombie Offensive", "Blue Steel", "Teclu Burner", "XOXO", "Scumbria"};
-            selectVar<XM1014Skin>("XM1014", xm1014, 11, ++controlId);
+        addCard("HEAVY", 18, [] {
+            weaponSkinRows<M249Skin, M249SkinWear, M249SkinSeed>(14);
+            weaponSkinRows<MAG7Skin, MAG7SkinWear, MAG7SkinSeed>(27);
+            weaponSkinRows<NegevSkin, NegevSkinWear, NegevSkinSeed>(28);
+            weaponSkinRows<NovaSkin, NovaSkinWear, NovaSkinSeed>(35);
+            weaponSkinRows<SawedOffSkin, SawedOffSkinWear, SawedOffSkinSeed>(29);
+            weaponSkinRows<XM1014Skin, XM1014SkinWear, XM1014SkinSeed>(25);
         });
         break;
     case 4:
-        addCard("RIFLES", 7, [] {
-            static const char* const ak47[] = {"None", "The Outsiders", "Hydroponic", "Searing Rage", "AUTOEXEC", "Crane Flight", "Consequence of the Jinn", "The Oligarch", "Inheritance", "Cartel", "Phantom Disruptor"};
-            selectVar<AK47Skin>("AK-47", ak47, 11, ++controlId);
-            static const char* const aug[] = {"None", "Amber Fade", "Death by Puppy", "Ricochet", "Midnight Lily", "Random Access", "Surveillance", "Carved Jade", "Flame Jörmungandr", "Anodized Navy", "Hot Rod"};
-            selectVar<AUGSkin>("AUG", aug, 11, ++controlId);
-            static const char* const famas[] = {"None", "Faulty Wiring", "Neural Net", "Meltdown", "Styx", "Prime Conspiracy", "Dark Water", "Sergeant", "Valence", "Djinn", "Afterimage"};
-            selectVar<FamasSkin>("FAMAS", famas, 11, ++controlId);
-            static const char* const galil[] = {"None", "Amber Fade", "Aqua Terrace", "Blue Titanium", "Rainbow Spoon", "Cerberus", "Chatterbox", "Black Sand", "Sugar Rush", "Chromatic Aberration", "Destroyer"};
-            selectVar<GalilARSkin>("Galil AR", galil, 11, ++controlId);
-            static const char* const m4a1s[] = {"None", "Fade", "Moss Quartz", "Atomic Alloy", "Blue Phosphor", "Knight", "Dark Water", "Hot Rod", "Basilisk", "Guardian", "Master Piece"};
-            selectVar<M4A1SSkin>("M4A1-S", m4a1s, 11, ++controlId);
-            static const char* const m4a4[] = {"None", "Asiimov", "Daybreak", "Bullet Rain", "Mainframe", "Global Offensive", "Howl", "龙王 (Dragon King)", "Cyber Security", "Desolate Space", "Poly Mag"};
-            selectVar<M4A4Skin>("M4A4", m4a4, 11, ++controlId);
-            static const char* const sg553[] = {"None", "Desert Blossom", "Lush Ruins", "Hypnotic", "Army Sheen", "Anodized Navy", "Damascus Steel", "Traveler", "Aerial", "Atlas", "Hazard Pay"};
-            selectVar<SG553Skin>("SG 553", sg553, 11, ++controlId);
+        addCard("RIFLES", 21, [] {
+            weaponSkinRows<AK47Skin, AK47SkinWear, AK47SkinSeed>(7);
+            weaponSkinRows<AUGSkin, AUGSkinWear, AUGSkinSeed>(8);
+            weaponSkinRows<FamasSkin, FamasSkinWear, FamasSkinSeed>(10);
+            weaponSkinRows<GalilARSkin, GalilARSkinWear, GalilARSkinSeed>(13);
+            weaponSkinRows<M4A1SSkin, M4A1SSkinWear, M4A1SSkinSeed>(60);
+            weaponSkinRows<M4A4Skin, M4A4SkinWear, M4A4SkinSeed>(16);
+            weaponSkinRows<SG553Skin, SG553SkinWear, SG553SkinSeed>(39);
         });
         break;
     case 5:
-        addCard("SNIPER RIFLES", 4, [] {
-            static const char* const awp[] = {"None", "Graphite", "Worm God", "Man-o'-war", "Fade", "PAW", "Lightning Strike", "Silk Tiger", "Black Box", "Ice Coaled", "LongDog"};
-            selectVar<AWPSkin>("AWP", awp, 11, ++controlId);
-            static const char* const g3sg1[] = {"None", "Ancient Ritual", "Murky", "Violet Murano", "Chronos", "Black Sand", "The Executioner", "Dream Glade", "Keeping Tabs", "High Seas", "Hunter"};
-            selectVar<G3SG1Skin>("G3SG1", g3sg1, 11, ++controlId);
-            static const char* const scar20[] = {"None", "Army Sheen", "Carbon Fiber", "Emerald", "Brass", "Grotto", "Blueprint", "Wild Berry", "Cardiac", "Assault", "Cyrex"};
-            selectVar<SCAR20Skin>("SCAR-20", scar20, 11, ++controlId);
-            static const char* const ssg08[] = {"None", "Acid Fade", "Carbon Fiber", "Threat Detected", "Dark Water", "Abyss", "Blood in the Water", "Parallax", "Death's Head", "Dragonfire", "Fever Dream"};
-            selectVar<SSG08Skin>("SSG 08", ssg08, 11, ++controlId);
+        addCard("SNIPER RIFLES", 12, [] {
+            weaponSkinRows<AWPSkin, AWPSkinWear, AWPSkinSeed>(9);
+            weaponSkinRows<G3SG1Skin, G3SG1SkinWear, G3SG1SkinSeed>(11);
+            weaponSkinRows<SCAR20Skin, SCAR20SkinWear, SCAR20SkinSeed>(38);
+            weaponSkinRows<SSG08Skin, SSG08SkinWear, SSG08SkinSeed>(40);
         });
         break;
     }
 }
 
-// The knife preview: the selected model + finish with a finish-derived color swatch (the colors
-// are hashed from the finish name - a real paint image needs a VPK -> texture pipeline, this is
-// the honest stand-in). Updates live as the Knives category selects change.
-void pageInventoryPreview() noexcept
+void pageInventoryAgent() noexcept
 {
-    using namespace skin_changer_vars;
-    addCard("KNIFE PREVIEW", 3, [] {
-        ImDrawList* d = ImGui::GetWindowDrawList();
-        const int model = static_cast<int>(ui_config::get<KnifeModel>());
-        const int finish = static_cast<int>(ui_config::get<KnifeSkin>());
-        const bool none = model <= 0 || finish <= 0 || model >= static_cast<int>(sizeof(kKnifeModels) / sizeof(kKnifeModels[0])) || finish >= static_cast<int>(sizeof(kKnifeFinishes) / sizeof(kKnifeFinishes[0]));
-
-        // row 1: star + model name, large
-        {
-            const float rowY = card.origin.y + card.row * kRowHeight;
-            if (card.row)
-                d->AddLine(ImVec2(card.origin.x + s(12), rowY), ImVec2(card.origin.x + card.width - s(12), rowY), C(26, 26, 30));
-            if (none) {
-                textY(d, card.origin.x + s(13), rowY, kRowHeight, C(110, 114, 124), "pick a knife and a finish", kTextControl, nullptr);
-            } else {
-                textY(d, card.origin.x + s(13), rowY, kRowHeight, g_accent, kIconStar, s(14.0f), iconFont()); // star
-                textY(d, card.origin.x + s(36), rowY, kRowHeight, C(226, 228, 235), kKnifeModels[model], kTextTitle, strongFont());
-            }
-            ++card.row;
-        }
-        // row 2: finish name in the accent
-        {
-            const float rowY = card.origin.y + card.row * kRowHeight;
-            if (none) {
-                textY(d, card.origin.x + s(13), rowY, kRowHeight, C(110, 114, 124), "nothing equipped", kTextControl, nullptr);
-            } else {
-                textY(d, card.origin.x + s(13), rowY, kRowHeight, g_accent, kKnifeFinishes[finish], kTextControl, nullptr);
-                const char* tag = "FINISH";
-                const float tagWidth = ImGui::GetFont()->CalcTextSizeA(kTextCaption, FLT_MAX, 0.0f, tag).x;
-                textY(d, card.origin.x + card.width - s(13) - tagWidth, rowY, kRowHeight, C(91, 96, 108), tag, kTextCaption, nullptr);
-            }
-            ++card.row;
-        }
-        // row 3: finish swatch - deterministic two-hue gradient hashed from the finish name
-        {
-            const float rowY = card.origin.y + card.row * kRowHeight;
-            float r1 = 0.45f, g1 = 0.45f, b1 = 0.48f, r2 = 0.25f, g2 = 0.25f, b2 = 0.28f;
-            if (!none) {
-                std::uint32_t hash = 2166136261u;
-                for (const char* p = kKnifeFinishes[finish]; *p; ++p) {
-                    hash ^= static_cast<std::uint8_t>(*p);
-                    hash *= 16777619u;
-                }
-                ImGui::ColorConvertHSVtoRGB(static_cast<float>(hash & 0xFFu) / 255.0f, 0.62f, 1.0f, r1, g1, b1);
-                ImGui::ColorConvertHSVtoRGB(static_cast<float>((hash >> 8) & 0xFFu) / 255.0f, 0.62f, 1.0f, r2, g2, b2);
-            }
-            const ImVec2 sw(card.origin.x + s(13), rowY + rowCentered(s(16)));
-            const float swWidth = card.width - s(26);
-            const ImU32 c1 = C(static_cast<int>(r1 * 255), static_cast<int>(g1 * 255), static_cast<int>(b1 * 255));
-            const ImU32 c2 = C(static_cast<int>(r2 * 255), static_cast<int>(g2 * 255), static_cast<int>(b2 * 255));
-            d->AddRectFilledMultiColor(sw, ImVec2(sw.x + swWidth, sw.y + s(16)), c1, c2, c2, c1);
-            d->AddRect(sw, ImVec2(sw.x + swWidth, sw.y + s(16)), C(30, 30, 33), s(4));
-            ++card.row;
-        }
+    using namespace agent_changer_vars;
+    addCard("AGENT", 1, [] {
+        itemDefRow<AgentDef>("Agent Model", cs2::kAgentItems, static_cast<int>(sizeof(cs2::kAgentItems) / sizeof(cs2::kAgentItems[0])), ++controlId);
     });
 }
 
@@ -2424,8 +3502,7 @@ void pageInventory() noexcept
         inventoryPills(ImGui::GetWindowDrawList());
         controlId += inventoryCategory * 500; // per-category control-id ranges
         pageInventoryCategory(inventoryCategory);
-        if (inventoryCategory == 0)
-            pageInventoryPreview(); // the preview is knife-specific - knives tab only
+        pageInventoryAgent();
         return;
     }
 
@@ -2437,8 +3514,7 @@ void pageInventory() noexcept
         if (category)
             controlId += 500;
         pageInventoryCategory(category);
-        if (category == 0)
-            pageInventoryPreview();
+        pageInventoryAgent();
         columnYs[0] = columnYs[1] = 0;
     }
 }
@@ -2540,7 +3616,7 @@ void pageRadio() noexcept
     });
 
     ImDrawList* d = ImGui::GetWindowDrawList();
-    constexpr int kFixedRows = 4; // search / now playing / volume / results header
+    constexpr int kFixedRows = 6; // search / now playing / volume / broadcast / voice key / results header
     const int favRows = favCount > 0 ? favCount + 1 : 0; // + section header
     const int recRows = recCount > 0 ? recCount + 1 : 0; // + section header
     const int listRows = stationCount > 0 ? stationCount : 1;
@@ -2553,18 +3629,18 @@ void pageRadio() noexcept
     text(d, ImVec2(x, y - s(16.0f)), C(89, 94, 106), "WEB RADIO", kTextCaption, nullptr);
     const ImVec2 p(x, y);
     softShadow(d, p, p + ImVec2(width, height), s(14.0f));
-    d->AddRectFilled(p, p + ImVec2(width, height), C(16, 16, 18, 224), s(14.0f));
-    d->AddRect(p, p + ImVec2(width, height), C(30, 30, 33), s(14.0f));
+    d->AddRectFilled(p, p + ImVec2(width, height), kCardBg, s(14.0f));
+    d->AddRect(p, p + ImVec2(width, height), kHairlineSoft, s(14.0f));
 
     card = CardContext{p + ImVec2(0, s(6.0f)), width, 0};
 
     auto pillButton = [&](int id, const char* label, ImVec2 pos, float buttonWidth, ImFont* font, float fontSize) {
         ImGui::PushID(id);
         const bool clicked = hit("##pill_btn", pos, ImVec2(buttonWidth, s(23)));
-        const float hover = motion(ImGui::GetItemID() ^ 0x3a11u, ImGui::IsItemHovered() ? 1.0f : 0.0f);
+        const float hover = motion(animKey(0x3a11u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f);
         ImGui::PopID();
-        d->AddRectFilled(pos, pos + ImVec2(buttonWidth, s(23)), mix(C(24, 24, 26), C(32, 32, 36), hover), s(5));
-        d->AddRect(pos, pos + ImVec2(buttonWidth, s(23)), mix(C(30, 30, 33), g_accent, hover), s(5));
+        d->AddRectFilled(pos, pos + ImVec2(buttonWidth, s(23)), mix(kPillBg, kPillBgHover, hover), s(5));
+        d->AddRect(pos, pos + ImVec2(buttonWidth, s(23)), mix(kHairlineSoft, g_accent, hover), s(5));
         const float labelWidth = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, label).x;
         textY(d, pos.x + (buttonWidth - labelWidth) * 0.5f, pos.y, s(23), C(170, 173, 184), label, fontSize, font);
         return clicked;
@@ -2579,7 +3655,7 @@ void pageRadio() noexcept
         ImGui::SetCursorScreenPos(inputPos);
         ImGui::PushItemWidth(inputWidth);
         ImGui::PushStyleColor(ImGuiCol_FrameBg, C(23, 23, 25));
-        ImGui::PushStyleColor(ImGuiCol_Text, C(207, 209, 218));
+        ImGui::PushStyleColor(ImGuiCol_Text, kTextBodyCol);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(8), s(5)));
         const bool submitted = ImGui::InputTextWithHint("##radio_search", "search stations...", searchBuf, sizeof(searchBuf), ImGuiInputTextFlags_EnterReturnsTrue);
         ImGui::PopStyleVar();
@@ -2621,14 +3697,21 @@ void pageRadio() noexcept
     sliderVar<radio_vars::Volume>("Volume", ++controlId, "%");
 
     // Row 3: mic broadcast - while a station plays, CS2's mic capture is switched to the radio
-    // (host-side pactl move-source-output); on stop/toggle-off the real mic comes back.
+    // (host-side pactl move-source-output) and the game goes to voice-activation (voice_vox 1)
+    // so the music transmits whenever it has signal; on stop/toggle-off the real mic comes back
+    // and PTT behavior is restored.
     toggleVar<radio_vars::MicBroadcast>("Broadcast To Voice", ++controlId);
+
+    // Voice key row: the CS2 "Use Voice" bind, pressed SYNTHETICALLY (SDL keymap write) for the
+    // broadcast / airhorn-clip lifetime - that is what actually transmits. The airhorn trigger
+    // toggles live on the SOUND tab; the mic routing machinery lives here with the broadcast.
+    keybindVar<radio_vars::VoiceKeyBind>("Voice Key", ++controlId);
 
     // Sections: persisted favorites (star toggles back off) and this session's recently played.
     auto sectionHeader = [&](const char* title, const char* right) {
         const float rowY = card.origin.y + card.row * kRowHeight;
         if (card.row)
-            d->AddLine(ImVec2(card.origin.x + s(12), rowY), ImVec2(card.origin.x + width - s(12), rowY), C(26, 26, 30));
+            d->AddLine(ImVec2(card.origin.x + s(12), rowY), ImVec2(card.origin.x + width - s(12), rowY), kHairline);
         textY(d, card.origin.x + s(13), rowY, kRowHeight, C(150, 154, 165), title, kTextControl, nullptr);
         if (right && right[0] != '\0') {
             const float rightWidth = ImGui::GetFont()->CalcTextSizeA(kTextSmall, FLT_MAX, 0.0f, right).x;
@@ -2639,13 +3722,13 @@ void pageRadio() noexcept
 
     auto savedStationRow = [&](int idSalt, const char* id, const char* name, bool starred, bool playing) {
         const float rowY = card.origin.y + card.row * kRowHeight;
-        d->AddLine(ImVec2(card.origin.x + s(12), rowY), ImVec2(card.origin.x + width - s(12), rowY), C(26, 26, 30));
+        d->AddLine(ImVec2(card.origin.x + s(12), rowY), ImVec2(card.origin.x + width - s(12), rowY), kHairline);
 
         // star toggle at the right edge: on favorites rows it removes; on result rows it adds
         const float starX = p.x + width - s(13) - s(22);
         ImGui::PushID(idSalt);
         const bool starClicked = hit("##radio_star", ImVec2(starX, rowY + rowCentered(s(22))), ImVec2(s(22), s(22))) && !searchIndexing;
-        const float starHover = motion(ImGui::GetItemID() ^ 0x5a27u, ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
+        const float starHover = motion(animKey(0x5a27u, idSalt), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
         ImGui::PopID();
         if (starClicked)
             withRadio([&](auto&& radio) { radio.toggleFavorite(id, name); });
@@ -2653,13 +3736,13 @@ void pageRadio() noexcept
         // name area plays the station
         ImGui::PushID(idSalt + 10000);
         const bool clicked = hit("##radio_saved", ImVec2(p.x + s(4), rowY), ImVec2(width - s(8) - s(26), kRowHeight));
-        const float hover = motion(ImGui::GetItemID() ^ 0xbe22u, ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
+        const float hover = motion(animKey(0xbe22u, idSalt + 10000), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
         ImGui::PopID();
         if (hover > 0.001f)
             d->AddRectFilled(ImVec2(p.x + s(4), rowY), ImVec2(p.x + width - s(4) - s(26), rowY + kRowHeight), (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(14 * hover) << IM_COL32_A_SHIFT), s(6));
 
         textY(d, p.x + s(13), rowY, kRowHeight, starred ? g_accent : mix(C(110, 114, 124), C(190, 194, 204), starHover), kIconStar, s(12.0f), iconFont()); // star
-        textY(d, p.x + s(38), rowY, kRowHeight, playing ? g_accent : C(207, 209, 218), name, kTextControl, nullptr);
+        textY(d, p.x + s(38), rowY, kRowHeight, playing ? g_accent : kTextBodyCol, name, kTextControl, nullptr);
         return clicked;
     };
 
@@ -2690,7 +3773,7 @@ void pageRadio() noexcept
     {
         const float rowY = card.origin.y + card.row * kRowHeight;
         if (card.row)
-            d->AddLine(ImVec2(card.origin.x + s(12), rowY), ImVec2(card.origin.x + width - s(12), rowY), C(26, 26, 30));
+            d->AddLine(ImVec2(card.origin.x + s(12), rowY), ImVec2(card.origin.x + width - s(12), rowY), kHairline);
         textY(d, card.origin.x + s(13), rowY, kRowHeight, C(150, 154, 165), headerText, kTextControl, nullptr);
         char right[32];
         if (fetching)
@@ -2717,11 +3800,11 @@ void pageRadio() noexcept
             const RadioStation& st = stations[i];
             const bool playing = playingId != nullptr && playingId[0] != '\0' && std::strcmp(playingId, st.id) == 0;
             const float rowY = card.origin.y + card.row * kRowHeight;
-            d->AddLine(ImVec2(card.origin.x + s(12), rowY), ImVec2(card.origin.x + width - s(12), rowY), C(26, 26, 30));
+            d->AddLine(ImVec2(card.origin.x + s(12), rowY), ImVec2(card.origin.x + width - s(12), rowY), kHairline);
 
             ImGui::PushID(4200 + i);
             const bool clicked = hit("##station", ImVec2(p.x + s(4), rowY), ImVec2(width - s(8) - s(26), kRowHeight));
-            const float hover = motion(ImGui::GetItemID() ^ (0xbe21u + i), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
+            const float hover = motion(animKey(0xbe21u, 4200 + i), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
             ImGui::PopID();
             if (hover > 0.001f)
                 d->AddRectFilled(ImVec2(p.x + s(4), rowY), ImVec2(p.x + width - s(4) - s(26), rowY + kRowHeight), (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(14 * hover) << IM_COL32_A_SHIFT), s(6));
@@ -2732,7 +3815,7 @@ void pageRadio() noexcept
                 const bool fav = i < kStationSnap && stationFavSnap[i];
                 ImGui::PushID(4400 + i);
                 const bool starClicked = hit("##radio_star", ImVec2(starX, rowY + rowCentered(s(22))), ImVec2(s(22), s(22))) && !searchIndexing;
-                const float starHover = motion(ImGui::GetItemID() ^ (0x5a27u + i), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
+                const float starHover = motion(animKey(0x5a27u, 4400 + i), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
                 ImGui::PopID();
                 if (starClicked) {
                     const RadioStation& stRef = stations[i];
@@ -2744,7 +3827,7 @@ void pageRadio() noexcept
             constexpr float iconX = 13.0f;
             constexpr float nameX = 38.0f;
             textY(d, p.x + s(iconX), rowY, kRowHeight, playing ? g_accent : mix(C(120, 124, 134), C(226, 228, 235), hover), "\xEF\x81\x8B", s(11.0f), iconFont()); // play
-            textY(d, p.x + s(nameX), rowY, kRowHeight, playing ? g_accent : C(207, 209, 218), st.text, kTextControl, nullptr);
+            textY(d, p.x + s(nameX), rowY, kRowHeight, playing ? g_accent : kTextBodyCol, st.text, kTextControl, nullptr);
 
             if (st.subtext[0] != '\0') {
                 const float subRight = card.origin.x + width - s(39); // clears the favorite star
@@ -3189,10 +4272,10 @@ void drawScriptEditorWindow() noexcept
         auto editorButton = [&](int id, const char* label, float x, float width) {
             ImGui::PushID(id);
             const bool clicked = hit("##editor_btn", ImVec2(x, y), ImVec2(width, s(25)));
-            const float hover = motion(ImGui::GetItemID() ^ 0x5eedu, ImGui::IsItemHovered() ? 1.0f : 0.0f);
+            const float hover = motion(animKey(0x5eedu, id), ImGui::IsItemHovered() ? 1.0f : 0.0f);
             ImGui::PopID();
-            d->AddRectFilled(ImVec2(x, y), ImVec2(x + width, y + s(25)), mix(C(24, 24, 26), C(32, 32, 36), hover), s(5));
-            d->AddRect(ImVec2(x, y), ImVec2(x + width, y + s(25)), mix(C(30, 30, 33), g_accent, hover), s(5));
+            d->AddRectFilled(ImVec2(x, y), ImVec2(x + width, y + s(25)), mix(kPillBg, kPillBgHover, hover), s(5));
+            d->AddRect(ImVec2(x, y), ImVec2(x + width, y + s(25)), mix(kHairlineSoft, g_accent, hover), s(5));
             const float labelWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, label).x;
             textY(d, x + (width - labelWidth) * 0.5f, y, s(25), C(170, 173, 184), label, kTextControl, nullptr);
             return clicked;
@@ -3259,18 +4342,18 @@ void pageScripts() noexcept
     text(d, ImVec2(x, y - s(16.0f)), C(89, 94, 106), "LUA SCRIPTS", kTextCaption, nullptr);
     const ImVec2 p(x, y);
     softShadow(d, p, p + ImVec2(width, height), s(14.0f));
-    d->AddRectFilled(p, p + ImVec2(width, height), C(16, 16, 18, 224), s(14.0f));
-    d->AddRect(p, p + ImVec2(width, height), C(30, 30, 33), s(14.0f));
+    d->AddRectFilled(p, p + ImVec2(width, height), kCardBg, s(14.0f));
+    d->AddRect(p, p + ImVec2(width, height), kHairlineSoft, s(14.0f));
 
     card = CardContext{p + ImVec2(0, s(6.0f)), width, 0};
 
     auto pillButton = [&](int id, const char* label, ImVec2 pos, float buttonWidth) {
         ImGui::PushID(id);
         const bool clicked = hit("##pill_btn", pos, ImVec2(buttonWidth, s(23)));
-        const float hover = motion(ImGui::GetItemID() ^ 0x1ea7u, ImGui::IsItemHovered() ? 1.0f : 0.0f);
+        const float hover = motion(animKey(0x1ea7u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f);
         ImGui::PopID();
-        d->AddRectFilled(pos, pos + ImVec2(buttonWidth, s(23)), mix(C(24, 24, 26), C(32, 32, 36), hover), s(5));
-        d->AddRect(pos, pos + ImVec2(buttonWidth, s(23)), mix(C(30, 30, 33), g_accent, hover), s(5));
+        d->AddRectFilled(pos, pos + ImVec2(buttonWidth, s(23)), mix(kPillBg, kPillBgHover, hover), s(5));
+        d->AddRect(pos, pos + ImVec2(buttonWidth, s(23)), mix(kHairlineSoft, g_accent, hover), s(5));
         const float labelWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, label).x;
         textY(d, pos.x + (buttonWidth - labelWidth) * 0.5f, pos.y, s(23), C(170, 173, 184), label, kTextControl, nullptr);
         return clicked;
@@ -3296,7 +4379,7 @@ void pageScripts() noexcept
         ImGui::SetCursorScreenPos(ImVec2(row.x + s(105), row.y + rowCentered(s(25))));
         ImGui::PushItemWidth(inputWidth);
         ImGui::PushStyleColor(ImGuiCol_FrameBg, C(23, 23, 25));
-        ImGui::PushStyleColor(ImGuiCol_Text, C(207, 209, 218));
+        ImGui::PushStyleColor(ImGuiCol_Text, kTextBodyCol);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(8), s(5)));
         const bool submitted = ImGui::InputTextWithHint("##script_new", "name.lua (creates a template)", newScriptName, sizeof(newScriptName), ImGuiInputTextFlags_EnterReturnsTrue);
         ImGui::PopStyleVar();
@@ -3329,13 +4412,12 @@ void pageScripts() noexcept
 
     // Row 2: hint.
     beginRow(d, "Scripts");
-    textY(d, card.origin.x + s(140), card.origin.y + 2 * kRowHeight, kRowHeight, C(110, 114, 124), "events: paint, createmove, game events | ffi available", kTextSmall, nullptr);
-    ++card.row;
+
 
     // Rows 3+: one row per .lua file in the scripts folder.
     for (int i = 0; i < fileCount; ++i) {
         const float rowY = card.origin.y + (3 + i) * kRowHeight;
-        d->AddLine(ImVec2(card.origin.x + s(12), rowY), ImVec2(card.origin.x + width - s(12), rowY), C(26, 26, 30));
+        d->AddLine(ImVec2(card.origin.x + s(12), rowY), ImVec2(card.origin.x + width - s(12), rowY), kHairline);
 
         const int loaded = lua::loadedIndex(entries[i].name);
         const lua::Script* scriptState = loaded >= 0 ? &lua::scripts[loaded] : nullptr;
@@ -3364,7 +4446,7 @@ void pageScripts() noexcept
         // file icon + indented name (radio-row style) so the names don't sit flush against the
         // left edge where they read as one blob with the "Scripts" label above them.
         textY(d, card.origin.x + s(16), rowY, kRowHeight, scriptState ? g_accent : C(120, 124, 134), "\xEF\x84\xA1", s(12.0f), iconFont()); // code
-        textY(d, card.origin.x + s(38), rowY, kRowHeight, scriptState ? g_accent : C(207, 209, 218), entries[i].name, kTextControl, nullptr);
+        textY(d, card.origin.x + s(38), rowY, kRowHeight, scriptState ? g_accent : kTextBodyCol, entries[i].name, kTextControl, nullptr);
         if (scriptState && scriptState->errored) {
             d->PushClipRect(ImVec2(card.origin.x + s(220), rowY), ImVec2(editX - s(8), rowY + kRowHeight), true);
             textY(d, card.origin.x + s(220), rowY, kRowHeight, C(232, 96, 96), scriptState->lastError, kTextSmall, nullptr);
@@ -3397,9 +4479,6 @@ void pageScripts() noexcept
             if (lua::scripts[i].L && lua::scripts[i].guiItemCount > 0)
                 guiRows += 1 + lua::scripts[i].guiItemCount; // script caption + item rows
         }
-        const bool hasItems = guiRows > 1;
-        if (!hasItems)
-            ++guiRows; // hint row
 
         const float controlsHeight = guiRows * kRowHeight + s(12.0f);
         const float cy = shellBase.y + kToolbarHeight + s(24.0f) + columnYs[0] - scrollOffset;
@@ -3407,36 +4486,26 @@ void pageScripts() noexcept
         text(d, ImVec2(x, cy - s(16.0f)), C(89, 94, 106), "SCRIPT CONTROLS", kTextCaption, nullptr);
         const ImVec2 cp(x, cy);
         softShadow(d, cp, cp + ImVec2(width, controlsHeight), s(14.0f));
-        d->AddRectFilled(cp, cp + ImVec2(width, controlsHeight), C(16, 16, 18, 224), s(14.0f));
-        d->AddRect(cp, cp + ImVec2(width, controlsHeight), C(30, 30, 33), s(14.0f));
+        d->AddRectFilled(cp, cp + ImVec2(width, controlsHeight), kCardBg, s(14.0f));
+        d->AddRect(cp, cp + ImVec2(width, controlsHeight), kHairlineSoft, s(14.0f));
         card = CardContext{cp + ImVec2(0, s(6.0f)), width, 0};
 
-        {
-            const float rowY = card.origin.y + 0 * kRowHeight;
-            textY(d, card.origin.x + s(13), rowY, kRowHeight, C(89, 94, 106), "MENU ITEMS CREATED BY LOADED SCRIPTS (GUI.*)", kTextCaption, nullptr);
+        for (int i = 0; i < lua::kMaxScripts; ++i) {
+            lua::Script& script = lua::scripts[i];
+            if (!script.L || script.guiItemCount == 0)
+                continue;
+            const float rowY = card.origin.y + card.row * kRowHeight;
+            textY(d, card.origin.x + s(13), rowY, kRowHeight, g_accent, script.name, kTextCaption, nullptr);
             ++card.row;
-        }
-
-        if (!hasItems) {
-            const float rowY = card.origin.y + 1 * kRowHeight;
-            textY(d, card.origin.x + s(13), rowY, kRowHeight, C(110, 114, 124), "scripts add rows here with gui.checkbox / gui.slider", kTextControl, nullptr);
-            ++card.row;
-        } else {
-            for (int i = 0; i < lua::kMaxScripts; ++i) {
-                lua::Script& script = lua::scripts[i];
-                if (!script.L || script.guiItemCount == 0)
-                    continue;
-                const float rowY = card.origin.y + card.row * kRowHeight;
-                textY(d, card.origin.x + s(13), rowY, kRowHeight, g_accent, script.name, kTextCaption, nullptr);
-                ++card.row;
-                for (int itemIndex = 0; itemIndex < script.guiItemCount; ++itemIndex) {
-                    lua::GuiItem& item = script.guiItems[itemIndex];
-                    const int id = kScriptGuiControlBase + i * lua::kMaxGuiItems + itemIndex;
-                    if (item.type == lua::GuiItem::Type::Checkbox)
-                        toggle(item.label, &item.boolValue, id);
-                    else
-                        sliderRow(item.label, &item.intValue, item.minValue, item.maxValue, id, "");
-                }
+            for (int itemIndex = 0; itemIndex < script.guiItemCount; ++itemIndex) {
+                lua::GuiItem& item = script.guiItems[itemIndex];
+                const int id = kScriptGuiControlBase + i * lua::kMaxGuiItems + itemIndex;
+                if (item.type == lua::GuiItem::Type::Checkbox)
+                    toggle(item.label, &item.boolValue, id);
+                else if (item.type == lua::GuiItem::Type::Dropdown)
+                    scriptDropdownRow(script, i, itemIndex, id);
+                else
+                    sliderRow(item.label, &item.intValue, item.minValue, item.maxValue, id, "");
             }
         }
 
@@ -3550,64 +4619,96 @@ void searchOverlay(ImDrawList* d, ImVec2 b) noexcept
         return;
     }
 
-    // results
+    // results: collect matches first so keyboard selection has a stable list
     const float rowHeight = s(30.0f);
     const float listTop = contentMin.y + s(56.0f);
-    int shown = 0;
-    int firstMatch = -1;
-    for (int i = 0; i < searchIndexCount && shown < 9; ++i) {
-        if (!searchMatches(searchIndex[i].label, searchQuery))
-            continue;
+    constexpr int kMaxShown = 9;
+    int matches[kMaxShown];
+    int matchCount = 0;
+    for (int i = 0; i < searchIndexCount && matchCount < kMaxShown; ++i) {
+        if (searchMatches(searchIndex[i].label, searchQuery))
+            matches[matchCount++] = i;
+    }
 
-        if (firstMatch < 0)
-            firstMatch = i;
+    // reset the selection when the query changes
+    static char lastSelectedQuery[sizeof(searchQuery)] = "";
+    if (std::strcmp(searchQuery, lastSelectedQuery) != 0) {
+        std::memcpy(lastSelectedQuery, searchQuery, sizeof(lastSelectedQuery));
+        searchSelected = 0;
+    }
+    if (searchSelected >= matchCount)
+        searchSelected = matchCount - 1;
+    if (searchSelected < 0)
+        searchSelected = 0;
+    if (matchCount > 0) {
+        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow, true))
+            searchSelected = (searchSelected + 1) % matchCount;
+        if (ImGui::IsKeyPressed(ImGuiKey_UpArrow, true))
+            searchSelected = (searchSelected + matchCount - 1) % matchCount;
+    }
+
+    auto activateSearchMatch = [&](int matchIndex) {
+        const SearchEntry& entry = searchIndex[matches[matchIndex]];
+        const bool visualsPage = entry.page >= Page::PlayerInfo && entry.page <= Page::Sound;
+        if (entry.page == Page::Glow)
+            glowSubTab = entry.subTab;
+        else if (entry.page == Page::Inventory)
+            inventoryCategory = entry.subTab; // subTab doubles as the category tag
+        changePage(entry.page);
+        if (visualsPage)
+            state.visualsExpanded = true;
+        scrollOffset = ImMax(0.0f, entry.contentY - s(60.0f));
+        scrollTarget = scrollOffset; // search jumps snap, no glide
+        searchOpen = false;
+    };
+
+    for (int shown = 0; shown < matchCount; ++shown) {
+        const int i = matches[shown];
+        const bool selected = shown == searchSelected;
+
         const ImVec2 rp(contentMin.x + s(12), listTop + shown * rowHeight);
         ImGui::PushID(7000 + i);
         const bool clicked = hit("##search_row", rp, ImVec2(contentMax.x - contentMin.x - s(24), rowHeight));
-        const float hover = motion(ImGui::GetItemID() ^ 0x9e21u, ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
+        const float hover = motion(animKey(0x9e21u, 7000 + i), (selected || ImGui::IsItemHovered()) ? 1.0f : 0.0f, 22.0f);
         ImGui::PopID();
         if (hover > 0.001f)
             d->AddRectFilled(rp, rp + ImVec2(contentMax.x - contentMin.x - s(24), rowHeight), (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(22 * hover) << IM_COL32_A_SHIFT), s(8));
-        textY(d, rp.x + s(10), rp.y, rowHeight, C(207, 209, 218), searchIndex[i].label, kTextControl, nullptr);
+        if (selected)
+            d->AddRectFilled(rp, rp + ImVec2(s(2.5f), rowHeight), g_accent, s(1.5f));
+
+        // label with the matched substring highlighted in the accent color
+        const char* label = searchIndex[i].label;
+        const char* matchPos = searchMatchPosition(label, searchQuery);
+        const float textHeight = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, label).y;
+        const float labelY = rp.y + std::floor((rowHeight - textHeight) * 0.5f);
+        if (matchPos) {
+            const char* matchEnd = matchPos + std::strlen(searchQuery);
+            const float preWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, label, matchPos).x;
+            const float matchWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, matchPos, matchEnd).x;
+            const float labelX = rp.x + s(10);
+            d->AddText(ImGui::GetFont(), kTextControl, ImVec2(labelX, labelY), C(150, 154, 165), label, matchPos);
+            d->AddText(ImGui::GetFont(), kTextControl, ImVec2(labelX + preWidth, labelY), g_accent, matchPos, matchEnd);
+            d->AddText(ImGui::GetFont(), kTextControl, ImVec2(labelX + preWidth + matchWidth, labelY), kTextBodyCol, matchEnd);
+        } else {
+            textY(d, rp.x + s(10), rp.y, rowHeight, kTextBodyCol, label, kTextControl, nullptr);
+        }
+
         const char* pageName = kPageNames[static_cast<int>(searchIndex[i].page)];
         const float pageNameWidth = ImGui::GetFont()->CalcTextSizeA(kTextSmall, FLT_MAX, 0.0f, pageName).x;
         textY(d, rp.x + (contentMax.x - contentMin.x - s(24)) - pageNameWidth - s(10), rp.y, rowHeight, C(110, 114, 124), pageName, kTextSmall, nullptr);
 
-        if (clicked) {
-            const bool visualsPage = searchIndex[i].page >= Page::PlayerInfo && searchIndex[i].page <= Page::Sound;
-            if (searchIndex[i].page == Page::Glow)
-                glowSubTab = searchIndex[i].subTab;
-            else if (searchIndex[i].page == Page::Inventory)
-                inventoryCategory = searchIndex[i].subTab; // subTab doubles as the category tag
-            changePage(searchIndex[i].page);
-            if (visualsPage)
-                state.visualsExpanded = true;
-            scrollOffset = ImMax(0.0f, searchIndex[i].contentY - s(60.0f));
-            scrollTarget = scrollOffset; // search jumps snap, no glide
-            searchOpen = false;
-        }
-        ++shown;
+        if (clicked)
+            activateSearchMatch(shown);
     }
 
-    if (shown == 0)
+    if (matchCount == 0)
         textY(d, contentMin.x + s(16), listTop, rowHeight, C(110, 114, 124), "no matches", kTextSmall, nullptr);
 
-    // enter jumps to the first match
-    if ((ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) && firstMatch >= 0) {
-        const bool visualsPage = searchIndex[firstMatch].page >= Page::PlayerInfo && searchIndex[firstMatch].page <= Page::Sound;
-        if (searchIndex[firstMatch].page == Page::Glow)
-            glowSubTab = searchIndex[firstMatch].subTab;
-        else if (searchIndex[firstMatch].page == Page::Inventory)
-            inventoryCategory = searchIndex[firstMatch].subTab;
-        changePage(searchIndex[firstMatch].page);
-        if (visualsPage)
-            state.visualsExpanded = true;
-        scrollOffset = ImMax(0.0f, searchIndex[firstMatch].contentY - s(60.0f));
-        scrollTarget = scrollOffset; // search jumps snap, no glide
-        searchOpen = false;
-    }
+    // enter jumps to the selected match (up/down move the selection above)
+    if ((ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) && matchCount > 0)
+        activateSearchMatch(searchSelected);
 
-    if (searchIndexCount >= kSearchIndexCap && shown < 9)
+    if (searchIndexCount >= kSearchIndexCap && matchCount < 9)
         textY(d, contentMin.x + s(16), contentMax.y - s(20), rowHeight, C(90, 94, 104), "(index full)", kTextCaption, nullptr);
 }
 
@@ -3659,8 +4760,8 @@ bool changePage(Page next) noexcept
 
 void sidebar(ImDrawList* d, ImVec2 base) noexcept
 {
-    d->AddRectFilled(base, base + ImVec2(kSidebarWidth, kShellHeight), C(16, 16, 18, 231), s(17.0f), ImDrawFlags_RoundCornersLeft);
-    d->AddRectFilled(base + ImVec2(s(145), 0), base + ImVec2(kSidebarWidth, kShellHeight), C(16, 16, 18, 231));
+    d->AddRectFilled(base, base + ImVec2(kSidebarWidth, kShellHeight), kSidebarBg, s(17.0f), ImDrawFlags_RoundCornersLeft);
+    d->AddRectFilled(base + ImVec2(s(145), 0), base + ImVec2(kSidebarWidth, kShellHeight), kSidebarBg);
     d->AddLine(base + ImVec2(kSidebarWidth, 0), base + ImVec2(kSidebarWidth, kShellHeight), C(30, 33, 43));
 
     d->AddRectFilled(base + ImVec2(s(15), s(11)), base + ImVec2(s(45), s(43)), C(22, 22, 25), s(7));
@@ -3675,14 +4776,21 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
     } else {
         text(d, base + ImVec2(s(21), s(18)), g_accent, "NS", kTextTitle, strongFont());
     }
-    text(d, base + ImVec2(s(53), s(14)), C(228, 230, 236), "Neversneeze", kTextTitle, strongFont());
-    text(d, base + ImVec2(s(53), s(33)), C(91, 96, 108), "Counter-Strike 2", s(8));
-    d->AddLine(base + ImVec2(s(10), s(56)), base + ImVec2(s(147), s(56)), C(26, 26, 30));
+    text(d, base + ImVec2(s(53), s(14)), C(228, 230, 236), "Neversnooze", kTextTitle, strongFont());
+    text(d, base + ImVec2(s(53), s(33)), kTextFaint, "Counter-Strike 2", s(8));
+    // build/status chip: pulsing green dot + compile date
+    {
+        const float pulse = 0.65f + 0.35f * std::sin(static_cast<float>(ImGui::GetTime()) * 2.4f);
+        d->AddCircleFilled(base + ImVec2(s(21), s(50)), s(4.2f), C(84, 214, 120, static_cast<int>(26 * pulse)));
+        d->AddCircleFilled(base + ImVec2(s(21), s(50)), s(2.2f), C(84, 214, 120, static_cast<int>(110 + 110 * pulse)));
+        text(d, base + ImVec2(s(29), s(46)), kTextFaint, "build " __DATE__, s(9), nullptr);
+    }
+    d->AddLine(base + ImVec2(s(10), s(56)), base + ImVec2(s(147), s(56)), kHairline);
 
     int id = 100;
 
     auto eyebrow = [&](const char* label) {
-        text(d, base + ImVec2(s(16), y_nav), C(91, 96, 108), label, kTextCaption, nullptr);
+        text(d, base + ImVec2(s(16), y_nav), kTextFaint, label, kTextCaption, nullptr);
         y_nav += s(20.0f);
     };
 
@@ -3690,14 +4798,16 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
         const ImVec2 p = base + ImVec2(s(7.0f + indent), y_nav);
         ImGui::PushID(++id);
         const bool clicked = hit("##nav", p, ImVec2(s(140.0f - indent), s(30.0f)));
-        const ImGuiID iid = ImGui::GetItemID();
         const bool selected = state.page == target;
-        const float r = motion(iid ^ 0x7771u, selected ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+        const float r = motion(animKey(0x7771u, id), selected ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
         ImGui::PopID();
         if (clicked)
             changePage(target);
         if (r > 0.001f)
             d->AddRectFilled(p, p + ImVec2(s(140.0f - indent), s(30.0f)), mix(C(16, 16, 18, 0), C(37, 37, 41), r), s(6));
+        // selected-page accent rail on the row's left edge
+        if (selected)
+            d->AddRectFilled(p, p + ImVec2(s(2.5f), s(30.0f)), (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(255 * r) << IM_COL32_A_SHIFT), s(1.5f));
         textY(d, p.x + s(10), p.y, s(30), mix(C(137, 142, 153), g_accent, r), icon, kTextIcon, iconFont());
         textY(d, p.x + s(31), p.y, s(30), mix(C(145, 149, 159), C(226, 228, 235), r), label, kTextBody, nullptr);
         y_nav += s(32.0f);
@@ -3705,18 +4815,17 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
 
     // The expanded Visuals sub-list (8 pages) can outgrow the rail space between the logo and
     // the account bar - clamp the nav content with a clip rect and wheel-scroll it instead of
-    // letting Misc slide behind the Neversneeze chip.
+    // letting Misc slide behind the Neversnooze chip.
     const float expand = motion(ImGui::GetID("##visual_expand"), state.visualsExpanded ? 1.0f : 0.0f, 18.0f);
     const float navTop = base.y + s(58.0f);
     const float navBottom = base.y + kShellHeight - s(45.0f) - s(4.0f);
     float navMaxScroll = 0.0f;
     {
-        const float contentEnd = base.y + s(64.0f)
-            + s(20.0f) + 2 * s(32.0f) + 2.0f          // AIMBOT group
-            + s(20.0f) + s(32.0f)                      // FEATURES header
-            + 7 * s(32.0f) * expand + s(2.0f)          // expanded sub-list
-            + s(20.0f) + 3 * s(32.0f);                 // OTHER group
-        navMaxScroll = contentEnd > navBottom ? contentEnd - navBottom : 0.0f;
+        // Measured from LAST frame's laid-out nav content (navContentEnd, recorded after the
+        // items below). The old hand-counted estimate drifted every time a nav item was added
+        // (it assumed 2 rows in COMBAT / 3 in OTHER) and could never scroll the last items
+        // into view once the adaptive shell shrunk the rail.
+        navMaxScroll = navContentEnd > navBottom ? navContentEnd - navBottom : 0.0f;
         if (navMaxScroll > 0.0f && ImGui::IsMouseHoveringRect(ImVec2(base.x, navTop), ImVec2(base.x + kSidebarWidth, navBottom)))
             navScroll -= ImGui::GetIO().MouseWheel * s(24.0f);
         navScroll = ImClamp(navScroll, 0.0f, navMaxScroll);
@@ -3726,7 +4835,7 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
 
     y_nav = s(64.0f) - navScroll;
     d->PushClipRect(ImVec2(base.x, navTop), ImVec2(base.x + kSidebarWidth, navBottom), true);
-    eyebrow("AIMBOT");
+    eyebrow("COMBAT");
     nav("\xEF\x81\x9B", "Rage", Page::Rage);   // crosshairs
     nav("\xEF\xA3\x8C", "Legit", Page::Legit); // mouse
     nav("\xEF\x9C\x8C", "Movement", Page::Movement); // person-running
@@ -3738,9 +4847,8 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
         const ImVec2 p = base + ImVec2(s(7), y_nav);
         ImGui::PushID(++id);
         const bool clicked = hit("##nav", p, ImVec2(s(140), s(30)));
-        const ImGuiID iid = ImGui::GetItemID();
         const bool visuals = state.page >= Page::PlayerInfo && state.page <= Page::Sound;
-        const float r = motion(iid ^ 0x7772u, visuals ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+        const float r = motion(animKey(0x7772u, id), visuals ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
         ImGui::PopID();
         if (clicked) {
             const bool wasVisuals = visuals;
@@ -3779,6 +4887,12 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
     nav("\xEF\x80\x93", "Misc", Page::Misc);           // cog
     d->PopClipRect();
 
+    // record the true laid-out nav bottom for next frame's rail scroll clamp - see the
+    // navMaxScroll block above. y_nav is laid out ALREADY SHIFTED by -navScroll, so the scroll
+    // offset must be added back or the measurement shrinks as the user scrolls (the clamp then
+    // pulls the rail back up and caps the scroll at half the real overflow).
+    navContentEnd = base.y + y_nav + navScroll + s(6.0f);
+
     // Scroll affordance for the rail: bottom fade + thin thumb whenever the sub-list overflows.
     if (navMaxScroll > 1.0f) {
         const ImU32 bgFade = C(16, 16, 18, 231);
@@ -3799,7 +4913,7 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
 
 void toolbar(ImDrawList* d, ImVec2 base) noexcept
 {
-    d->AddRectFilled(base + ImVec2(kSidebarWidth, 0), base + ImVec2(kShellWidth, kToolbarHeight), C(10, 10, 11, 225), s(17.0f), ImDrawFlags_RoundCornersTopRight);
+    d->AddRectFilled(base + ImVec2(kSidebarWidth, 0), base + ImVec2(kShellWidth, kToolbarHeight), C(10, 10, 11, 216), s(17.0f), ImDrawFlags_RoundCornersTopRight);
     d->AddLine(base + ImVec2(kSidebarWidth, kToolbarHeight), base + ImVec2(kShellWidth, kToolbarHeight), C(26, 26, 29));
 
     // Toolbar background doubles as the drag handle. Buttons are excluded so their clicks never
@@ -3817,7 +4931,7 @@ void toolbar(ImDrawList* d, ImVec2 base) noexcept
     if (draggingWindow) {
         if (ImGui::IsMouseDown(0)) {
             const ImVec2 display = ImGui::GetIO().DisplaySize;
-            const ImVec2 defaultPos((display.x - kShellWidth) * 0.5f, (display.y - kShellHeight) * 0.5f);
+            const ImVec2 defaultPos((display.x - kShellWidth) * 0.5f, (display.y - shellHeightBase) * 0.5f);
             menuOffset = dragStartOffset + (ImGui::GetIO().MousePos - dragStartMouse);
             // keep the shell on screen
             menuOffset.x = ImClamp(menuOffset.x, -defaultPos.x + s(8), display.x - kShellWidth - defaultPos.x + s(8));
@@ -3833,17 +4947,22 @@ void toolbar(ImDrawList* d, ImVec2 base) noexcept
     configChipMax = profile + ImVec2(s(180), s(30));
     ImGui::PushID(9000);
     const bool chipClicked = hit("##config_chip", profile, configChipMax - configChipMin);
-    const ImGuiID iid = ImGui::GetItemID();
-    const float response = motion(iid ^ 0x51e7u, (configPopoverOpen || ImGui::IsItemHovered()) ? 1.0f : 0.0f);
+    const float response = motion(animKey(0x51e7u, 9000), (configPopoverOpen || ImGui::IsItemHovered()) ? 1.0f : 0.0f);
     ImGui::PopID();
     if (chipClicked) {
         configPopoverOpen = !configPopoverOpen;
         configPopoverOpenedFrame = ImGui::GetFrameCount();
     }
-    d->AddRectFilled(profile, configChipMax, mix(C(16, 16, 18), C(23, 23, 25), response), s(6));
-    d->AddRect(profile, configChipMax, mix(C(26, 26, 30), g_accent, response), s(6));
+    d->AddRectFilled(profile, configChipMax, mix(C(16, 16, 18), C(23, 23, 25), response), s(8));
+    d->AddRect(profile, configChipMax, mix(kHairline, g_accent, response), s(8));
     textY(d, profile.x + s(12), profile.y, s(30), g_accent, "\xEF\x83\x87", kTextIcon, iconFont()); // save
     textY(d, profile.x + s(34), profile.y, s(30), C(184, 187, 197), ui_config::activeConfigNameForDisplay(), kTextControl, nullptr);
+    // unsaved-changes dot: ui_config::set() bumps changeEpoch; the clean epoch is armed by
+    // save/switch/restore in the config popover
+    if (ui_config::changeEpoch.load(std::memory_order_relaxed) != lastCleanConfigEpoch) {
+        const float pulse = 0.65f + 0.35f * std::sin(static_cast<float>(ImGui::GetTime()) * 3.2f);
+        d->AddCircleFilled(profile + ImVec2(s(170), s(15)), s(2.4f), (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(90 + 130 * pulse) << IM_COL32_A_SHIFT));
+    }
     chevron(d, profile + ImVec2(s(160), s(11)), C(130, 135, 146));
 
     // Global search button, left of Unload.
@@ -3853,8 +4972,7 @@ void toolbar(ImDrawList* d, ImVec2 base) noexcept
     searchButtonMax = searchBtn + searchSize;
     ImGui::PushID(9002);
     const bool searchClicked = hit("##search", searchBtn, searchSize);
-    const ImGuiID searchIid = ImGui::GetItemID();
-    const float searchHover = motion(searchIid ^ 0x5eabu, (searchOpen || ImGui::IsItemHovered()) ? 1.0f : 0.0f);
+    const float searchHover = motion(animKey(0x5eabu, 9002), (searchOpen || ImGui::IsItemHovered()) ? 1.0f : 0.0f);
     ImGui::PopID();
     if (searchClicked) {
         searchOpen = !searchOpen;
@@ -3862,8 +4980,8 @@ void toolbar(ImDrawList* d, ImVec2 base) noexcept
         if (searchOpen)
             searchQuery[0] = '\0';
     }
-    d->AddRectFilled(searchBtn, searchBtn + searchSize, mix(C(16, 16, 18), C(23, 23, 25), searchHover), s(6));
-    d->AddRect(searchBtn, searchBtn + searchSize, mix(C(26, 26, 30), g_accent, searchHover), s(6));
+    d->AddRectFilled(searchBtn, searchBtn + searchSize, mix(C(16, 16, 18), C(23, 23, 25), searchHover), s(8));
+    d->AddRect(searchBtn, searchBtn + searchSize, mix(kHairline, g_accent, searchHover), s(8));
     const char searchIcon[] = "\xEF\x80\x82";
     const float searchIconWidth = iconFont()->CalcTextSizeA(kTextIcon, FLT_MAX, 0.0f, searchIcon).x;
     textY(d, searchBtn.x + (searchSize.x - searchIconWidth) * 0.5f, searchBtn.y, searchSize.y, mix(C(170, 173, 184), C(226, 228, 235), searchHover), searchIcon, kTextIcon, iconFont());
@@ -3875,11 +4993,10 @@ void toolbar(ImDrawList* d, ImVec2 base) noexcept
     unloadButtonMax = unload + unloadSize;
     ImGui::PushID(9001);
     const bool unloadClicked = hit("##unload", unload, unloadSize);
-    const ImGuiID uid = ImGui::GetItemID();
-    const float unloadHover = motion(uid ^ 0x0ea1u, ImGui::IsItemHovered() ? 1.0f : 0.0f);
+    const float unloadHover = motion(animKey(0x0ea1u, 9001), ImGui::IsItemHovered() ? 1.0f : 0.0f);
     ImGui::PopID();
-    d->AddRectFilled(unload, unload + unloadSize, mix(C(30, 17, 20), C(120, 34, 40), unloadHover), s(6));
-    d->AddRect(unload, unload + unloadSize, mix(C(50, 28, 32), C(190, 60, 66), unloadHover), s(6));
+    d->AddRectFilled(unload, unload + unloadSize, mix(C(30, 17, 20), C(120, 34, 40), unloadHover), s(8));
+    d->AddRect(unload, unload + unloadSize, mix(C(50, 28, 32), C(190, 60, 66), unloadHover), s(8));
     const char* unloadText = "Unload";
     const float unloadTextWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, unloadText).x;
     textY(d, unload.x + (unloadSize.x - unloadTextWidth) * 0.5f, unload.y, unloadSize.y, mix(C(199, 164, 168), C(245, 214, 216), unloadHover), unloadText, kTextControl, nullptr);
@@ -3895,8 +5012,7 @@ void accountBar(ImDrawList* d, ImVec2 base) noexcept
     accountBarMax = account + ImVec2(barWidth, s(38));
     ImGui::PushID(8800);
     const bool clicked = hit("##account", account, ImVec2(barWidth, s(38)));
-    const ImGuiID iid = ImGui::GetItemID();
-    const float r = motion(iid ^ 0x1932u, state.profileOpen ? 1.0f : ImGui::IsItemHovered() ? 0.5f : 0.0f);
+    const float r = motion(animKey(0x1932u, 8800), state.profileOpen ? 1.0f : ImGui::IsItemHovered() ? 0.5f : 0.0f);
     ImGui::PopID();
     if (clicked) {
         state.profileOpen = !state.profileOpen;
@@ -3951,7 +5067,7 @@ void accountBar(ImDrawList* d, ImVec2 base) noexcept
         }
         d->AddCircle(center, avatarRadius, g_accent, 0, s(1.2f));
     }
-    textY(d, account.x + s(43), account.y, s(38), C(225, 227, 233), steam_persona::name()[0] ? steam_persona::name() : "Neversneeze", kTextControl, nullptr);
+    textY(d, account.x + s(43), account.y, s(38), C(225, 227, 233), steam_persona::name()[0] ? steam_persona::name() : "Neversnooze", kTextControl, nullptr);
     chevron(d, account + ImVec2(barWidth - s(9), s(16)), C(181, 185, 195));
 }
 
@@ -3963,7 +5079,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
 
     const float width = s(210.0f);
     const float rowHeight = s(30.0f);
-    const float height = rowHeight * 15.0f + s(16.0f) + s(26.0f); // scale block, style, 3 theme colors, 6 glow rows, style rainbow, esp, about
+    const float height = rowHeight * 14.0f + s(16.0f) + s(26.0f); // scale block, style, 3 theme colors, 6 glow rows, style rainbow, about
     const ImVec2 p = base + ImVec2(s(7.0f), kShellHeight - s(45.0f) - height * open - s(6.0f));
     const ImVec2 size(width, height);
     recordPopupRect(PopupProfile, p, p + size);
@@ -4015,12 +5131,12 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
     {
         const ImVec2 pill(p.x + width - s(56.0f), y + rowCentered(s(21.0f)));
         const bool editing = state.editingSlider == kScaleEditId;
-        d->AddRectFilled(pill, pill + ImVec2(s(44), s(21)), C(24, 24, 26), s(5));
+        d->AddRectFilled(pill, pill + ImVec2(s(44), s(21)), kPillBg, s(5));
 
         ImGui::PushID(kScaleEditId);
         if (editing) {
             ImGui::SetCursorScreenPos(pill + ImVec2(s(4), s(3)));
-            ImGui::PushStyleColor(ImGuiCol_FrameBg, C(30, 30, 33));
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, kHairlineSoft);
             ImGui::PushStyleColor(ImGuiCol_Border, g_accent);
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(4), s(2)));
             ImGui::PushItemWidth(s(44) - s(8));
@@ -4075,9 +5191,9 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
             state.multiSelectOpen = false;
             openStylePresetPopup(preset, sp, s(72.0f)); // int& param; -1 (custom) is fine, popup highlights index 0
         }
-        const float hover = motion(ImGui::GetItemID() ^ 0x57e1u, ImGui::IsItemHovered() ? 1.0f : 0.0f);
+        const float hover = motion(animKey(0x57e1u, 8802), ImGui::IsItemHovered() ? 1.0f : 0.0f);
         ImGui::PopID();
-        d->AddRectFilled(sp, sp + ImVec2(s(72.0f), s(20.0f)), mix(C(24, 24, 26), C(32, 32, 36), hover), s(5));
+        d->AddRectFilled(sp, sp + ImVec2(s(72.0f), s(20.0f)), mix(kPillBg, kPillBgHover, hover), s(5));
         textY(d, sp.x + s(7), sp.y, s(20.0f), C(170, 173, 184), preset >= 0 ? kStylePresets[preset].name : "Custom", kTextSmall, nullptr);
         d->AddCircleFilled(sp + ImVec2(s(62.0f), s(10.0f)), s(4.0f), g_accent);
     }
@@ -4095,9 +5211,9 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
             const ImVec2 sp(p.x + width - s(84.0f), y + rowCentered(s(20.0f)));
             ImGui::PushID(id);
             const bool clicked = hitPopupRow("##theme_color", sp, ImVec2(s(72.0f), s(20.0f)), PopupProfile);
-            const float hover = motion(ImGui::GetItemID() ^ (0x6d10u + static_cast<unsigned>(id)), ImGui::IsItemHovered() ? 1.0f : 0.0f);
+            const float hover = motion(animKey(0x6d10u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f);
             ImGui::PopID();
-            d->AddRectFilled(sp, sp + ImVec2(s(72.0f), s(20.0f)), mix(C(24, 24, 26), C(32, 32, 36), hover), s(5));
+            d->AddRectFilled(sp, sp + ImVec2(s(72.0f), s(20.0f)), mix(kPillBg, kPillBgHover, hover), s(5));
             const ImVec2 swatch = sp + ImVec2(s(5), s(4));
             d->AddRectFilled(swatch, swatch + ImVec2(s(16), s(12)), current, s(3));
             char hex[8];
@@ -4129,7 +5245,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
             const ImVec2 tp(p.x + width - s(43.0f), y + rowCentered(s(18.0f)));
             ImGui::PushID(8713);
             const bool clicked = hitPopupRow("##glow_toggle", tp, ImVec2(s(29.0f), s(18.0f)), PopupProfile);
-            const float r = motion(ImGui::GetItemID() ^ 0x6d13u, glowOn ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+            const float r = motion(animKey(0x6d13u, 8713), glowOn ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
             ImGui::PopID();
             if (r > 0.001f)
                 d->AddRectFilled(tp, tp + ImVec2(s(29), s(18)), mix(C(27, 27, 29), g_buttonAccent, r), s(9));
@@ -4148,7 +5264,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
             const ImVec2 tp(p.x + width - s(43.0f), y + rowCentered(s(18.0f)));
             ImGui::PushID(8715);
             const bool clicked = hitPopupRow("##glow_rainbow", tp, ImVec2(s(29.0f), s(18.0f)), PopupProfile);
-            const float r = motion(ImGui::GetItemID() ^ 0x6d14u, rainbow ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+            const float r = motion(animKey(0x6d14u, 8715), rainbow ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
             ImGui::PopID();
             if (r > 0.001f)
                 d->AddRectFilled(tp, tp + ImVec2(s(29), s(18)), mix(C(27, 27, 29), g_buttonAccent, r), s(9));
@@ -4166,7 +5282,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
             const ImVec2 tp(p.x + width - s(43.0f), y + rowCentered(s(18.0f)));
             ImGui::PushID(8718);
             const bool clicked = hitPopupRow("##style_rainbow", tp, ImVec2(s(29.0f), s(18.0f)), PopupProfile);
-            const float r = motion(ImGui::GetItemID() ^ 0x6d17u, styleRainbow ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+            const float r = motion(animKey(0x6d17u, 8718), styleRainbow ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
             ImGui::PopID();
             if (r > 0.001f)
                 d->AddRectFilled(tp, tp + ImVec2(s(29), s(18)), mix(C(27, 27, 29), g_buttonAccent, r), s(9));
@@ -4192,7 +5308,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
                 value = min + ImClamp((ImGui::GetIO().MousePos.x - start.x) / trackWidth, 0.0f, 1.0f) * (max - min);
                 ui_config::set<MenuGlowSpeed>(MenuGlowSpeed::ValueType{value});
             }
-            const float shown = motion(ImGui::GetItemID() ^ 0x6d15u, (value - min) / (max - min), 16.0f, (value - min) / (max - min));
+            const float shown = motion(animKey(0x6d15u, 8716), (value - min) / (max - min), 16.0f, (value - min) / (max - min));
             ImGui::PopID();
             d->AddRectFilled(start, start + ImVec2(trackWidth, s(6)), C(44, 44, 47), s(3));
             d->AddRect(start, start + ImVec2(trackWidth, s(6)), C(66, 66, 72), s(3));
@@ -4215,7 +5331,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
                 value = min + ImClamp((ImGui::GetIO().MousePos.x - start.x) / trackWidth, 0.0f, 1.0f) * (max - min);
                 ui_config::set<MenuGlowSize>(MenuGlowSize::ValueType{value});
             }
-            const float shown = motion(ImGui::GetItemID() ^ 0x6d16u, (value - min) / (max - min), 16.0f, (value - min) / (max - min));
+            const float shown = motion(animKey(0x6d16u, 8717), (value - min) / (max - min), 16.0f, (value - min) / (max - min));
             ImGui::PopID();
             d->AddRectFilled(start, start + ImVec2(trackWidth, s(6)), C(44, 44, 47), s(3));
             d->AddRect(start, start + ImVec2(trackWidth, s(6)), C(66, 66, 72), s(3));
@@ -4231,7 +5347,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
             const ImVec2 tp(p.x + width - s(43.0f), y + rowCentered(s(18.0f)));
             ImGui::PushID(8718);
             const bool clicked = hitPopupRow("##glow_debug", tp, ImVec2(s(29.0f), s(18.0f)), PopupProfile);
-            const float r = motion(ImGui::GetItemID() ^ 0x6d17u, debug ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+            const float r = motion(animKey(0x6d17u, 8719), debug ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
             ImGui::PopID();
             if (r > 0.001f)
                 d->AddRectFilled(tp, tp + ImVec2(s(29), s(18)), mix(C(27, 27, 29), g_buttonAccent, r), s(9));
@@ -4242,16 +5358,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
         y += rowHeight;
     }
 
-    // ESP Scale: placeholder until ImGui-based ESP rendering exists.
-    textY(d, p.x + s(14), y, rowHeight, C(92, 96, 107), "ESP Scale", kTextControl, nullptr);
-    {
-        const ImVec2 soonPill(p.x + width - s(66.0f), y + rowCentered(s(20.0f)));
-        d->AddRectFilled(soonPill, soonPill + ImVec2(s(48.0f), s(20.0f)), C(24, 24, 26), s(5));
-        textY(d, soonPill.x, soonPill.y, s(20.0f), C(110, 114, 124), "Soon", kTextSmall, nullptr);
-    }
-    y += rowHeight;
-
-    textY(d, p.x + s(14), y, rowHeight, C(150, 154, 165), "Neversneeze", kTextSmall, nullptr);
+    // (the dead "ESP Scale / Soon" placeholder row was removed - visible stubs read as unfinished)
 
     const float eased = 1.0f - std::pow(1.0f - open, 3.0f);
     const ImVec2 pivot(p.x + size.x * 0.5f, p.y + size.y);
@@ -4312,8 +5419,8 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
     recordPopupRect(PopupConfig, p, p + size);
     const int first = d->VtxBuffer.Size;
     softShadow(d, p, p + size, s(16.0f));
-    d->AddRectFilled(p, p + size, C(18, 18, 20, 240), s(16));
-    d->AddRect(p, p + size, C(54, 54, 60, 205), s(16));
+    d->AddRectFilled(p, p + size, kPopupBg, s(16));
+    d->AddRect(p, p + size, kPopupBorder, s(16));
     d->AddLine(p + ImVec2(s(12), searchHeight), p + ImVec2(size.x - s(12), searchHeight), C(38, 38, 42));
 
     // search input (inside the panel, top row)
@@ -4331,7 +5438,7 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
         ImVec2 rp = p + ImVec2(s(4), searchHeight + s(4) + v * s(28.0f));
         ImGui::PushID(9100 + i);
         const bool clicked = hitPopupRow("##cfg_row", rp, ImVec2(width - s(8), s(28)), PopupConfig);
-        const float hover = motion(ImGui::GetItemID() ^ (0x51e1u + i), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
+        const float hover = motion(animKey(0x51e1u, 9100 + i), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
         ImGui::PopID();
         if (hover > 0.001f && i != activeIndex)
             d->AddRectFilled(rp, rp + ImVec2(width - s(8), s(28)), (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(25 * hover) << IM_COL32_A_SHIFT), s(8));
@@ -4339,8 +5446,13 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
         if (active)
             d->AddRectFilled(rp + ImVec2(s(2), s(5)), rp + ImVec2(s(5), s(23)), g_accent, s(3));
         textY(d, rp.x + s(12), rp.y, s(28), active ? C(224, 229, 243) : C(182, 185, 196), ui_config::listedConfigName(i), kTextControl, nullptr);
-        if (clicked && !active)
+        if (clicked && !active) {
             ui_config::switchToConfig(i);
+            lastCleanConfigEpoch = ui_config::changeEpoch.load(std::memory_order_relaxed);
+            char toastText[96];
+            std::snprintf(toastText, sizeof(toastText), "Switched to %s", ui_config::activeConfigNameForDisplay());
+            pushToast(toastText, g_accent);
+        }
 
         if (!active) {
             // visual circle stays s(18); the hit box is s(26) centered on it - an 18px target
@@ -4355,8 +5467,14 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
                 d->AddCircleFilled(xc, s(9), C(190, 60, 66, 90));
             d->AddLine(xc - ImVec2(s(3), s(3)), xc + ImVec2(s(3), s(3)), xcol, 1.4f);
             d->AddLine(xc + ImVec2(s(3), -s(3)), xc + ImVec2(-s(3), s(3)), xcol, 1.4f);
-            if (deleted && !ui_config::deleteConfig(i))
-                gui_log::write("config: failed to delete '%s'", ui_config::listedConfigName(i));
+            if (deleted) {
+                if (ui_config::deleteConfig(i))
+                    pushToast("Config deleted", g_accent);
+                else {
+                    gui_log::write("config: failed to delete '%s'", ui_config::listedConfigName(i));
+                    pushToast("Delete failed", C(229, 72, 77));
+                }
+            }
         }
     }
 
@@ -4366,19 +5484,30 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
         const ImVec2 bp = p + ImVec2(s(8), ay - p.y);
         ImGui::PushID(id);
         const bool clicked = hitPopupRow("##cfg_action", bp, ImVec2(width - s(16), s(26)), PopupConfig);
-        const float hover = motion(ImGui::GetItemID() ^ (0xa1a1u + static_cast<unsigned>(id)), ImGui::IsItemHovered() ? 1.0f : 0.0f);
+        const float hover = motion(animKey(0xa1a1u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f);
         ImGui::PopID();
-        d->AddRectFilled(bp, bp + ImVec2(width - s(16), s(26)), mix(C(24, 24, 26), C(37, 37, 41), hover), s(6));
+        d->AddRectFilled(bp, bp + ImVec2(width - s(16), s(26)), mix(kPillBg, C(37, 37, 41), hover), s(6));
         textY(d, bp.x + s(10), bp.y, s(26), C(182, 185, 196), label, kTextControl, nullptr);
         ay += s(30.0f);
         return clicked;
     };
-    if (actionButton(0, "SAVE"))
+    if (actionButton(0, "SAVE")) {
         ui_config::saveActive();
-    if (actionButton(1, "DUPLICATE"))
-        static_cast<void>(ui_config::duplicateActiveConfig()); // switches to "<active>_copy.cfg" on success
-    if (actionButton(2, "RESTORE DEFAULTS"))
+        lastCleanConfigEpoch = ui_config::changeEpoch.load(std::memory_order_relaxed);
+        pushToast("Config saved", g_accent);
+    }
+    if (actionButton(1, "DUPLICATE")) {
+        if (ui_config::duplicateActiveConfig()) {
+            lastCleanConfigEpoch = ui_config::changeEpoch.load(std::memory_order_relaxed);
+            pushToast("Config duplicated", g_accent);
+        } else
+            pushToast("Duplicate failed", C(229, 72, 77));
+    }
+    if (actionButton(2, "RESTORE DEFAULTS")) {
         ui_config::restoreDefaults();
+        lastCleanConfigEpoch = ui_config::changeEpoch.load(std::memory_order_relaxed);
+        pushToast("Defaults restored", g_accent);
+    }
 
     // NEW / RENAME: text input + buttons acting on the typed name (stock InputText, our theme)
     const ImVec2 inputPos = p + ImVec2(s(8), ay - p.y + s(2.0f));
@@ -4390,13 +5519,20 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
     ImGui::PopItemWidth();
     ImGui::SameLine(0.0f, s(4));
     if (ImGui::Button("NEW", ImVec2(s(52.0f), 0.0f))) {
-        if (ui_config::createAndSwitchToConfig(newConfigName))
+        if (ui_config::createAndSwitchToConfig(newConfigName)) {
             newConfigName[0] = '\0';
+            lastCleanConfigEpoch = ui_config::changeEpoch.load(std::memory_order_relaxed);
+            pushToast("Config created", g_accent);
+        } else
+            pushToast("Create failed", C(229, 72, 77));
     }
     ImGui::SameLine(0.0f, s(4));
     if (ImGui::Button("RENAME", ImVec2(s(70.0f), 0.0f))) {
-        if (ui_config::renameActiveConfig(newConfigName))
+        if (ui_config::renameActiveConfig(newConfigName)) {
             newConfigName[0] = '\0';
+            pushToast("Config renamed", g_accent);
+        } else
+            pushToast("Rename failed", C(229, 72, 77));
     }
     ImGui::SetCursorScreenPos(ImVec2(0.0f, 0.0f)); // park the cursor; nothing flow-laid-out follows
 
@@ -4437,8 +5573,31 @@ void neverlose::render() noexcept
     }
 
     const ImVec2 display = ImGui::GetIO().DisplaySize;
-    const ImVec2 defaultPos((display.x - kShellWidth) * 0.5f, (display.y - kShellHeight) * 0.5f);
+    const ImVec2 defaultPos((display.x - kShellWidth) * 0.5f, (display.y - shellHeightBase) * 0.5f);
     const ImVec2 shellPos(defaultPos + menuOffset);
+
+    g_reduceMotion = ui_config::get<MenuReduceMotion>();
+
+    // Adaptive shell height: fit the shell to the page's content so light pages don't leave
+    // dead space and heavy pages scroll less. The target uses LAST frame's content height
+    // (layout is stable frame-to-frame), clamped so the nav rail + account bar always fit and
+    // the shell never exceeds ~90% of the screen. Content layout does not depend on the shell
+    // height, so there is no feedback loop.
+    {
+        const float chrome = kToolbarHeight + s(24.0f) + s(6.0f) + s(6.0f);
+        const float minH = ImMin(500.0f * menuScale, display.y * 0.9f);
+        const float maxH = ImMin(700.0f * menuScale, display.y * 0.9f);
+        const float target = lastContentHeight > 0.0f
+            ? ImClamp(lastContentHeight + chrome, minH, maxH)
+            : shellHeightBase; // first frame: design default until content was measured
+        if (g_reduceMotion)
+            kShellHeight = target;
+        else {
+            kShellHeight = ImLerp(kShellHeight, target, 1.0f - std::exp(-10.0f * ImGui::GetIO().DeltaTime));
+            if (std::fabs(kShellHeight - target) < 0.5f)
+                kShellHeight = target;
+        }
+    }
 
     ImGui::SetNextWindowPos(shellPos, ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(kShellWidth, kShellHeight), ImGuiCond_Always);
@@ -4459,10 +5618,12 @@ void neverlose::render() noexcept
         // hit() gates page controls against the popups recorded LAST frame (see the popup
         // occlusion tracking block) - covered controls are inert, uncovered ones stay live.
 
-        softShadow(d, b, b + ImVec2(kShellWidth, kShellHeight), s(17.0f));
+        softShadow(d, b, b + ImVec2(kShellWidth, kShellHeight), s(17.0f), s(16.0f));
 
-        d->AddRectFilled(b, b + ImVec2(kShellWidth, kShellHeight), C(12, 12, 13, 248), s(17.0f));
-        d->AddRect(b, b + ImVec2(kShellWidth, kShellHeight), C(30, 30, 33), s(17.0f));
+        d->AddRectFilled(b, b + ImVec2(kShellWidth, kShellHeight), C(12, 12, 13, 238), s(17.0f));
+        d->AddRect(b, b + ImVec2(kShellWidth, kShellHeight), kHairlineSoft, s(17.0f));
+        // faint outer highlight lets the shell read as a floating pane over the game
+        d->AddRect(b - ImVec2(1.0f, 1.0f), b + ImVec2(kShellWidth, kShellHeight) + ImVec2(1.0f, 1.0f), C(255, 255, 255, 14), s(18.0f));
 
         sidebar(d, b);
         toolbar(d, b);
@@ -4492,10 +5653,14 @@ void neverlose::render() noexcept
         }
 
         const float contentHeight = ImMax(columnYs[0], columnYs[1]);
+        lastContentHeight = contentHeight; // adaptive shell height target (read next frame)
         const float visibleHeight = contentMax.y - contentMin.y;
         const float previousScrollOffset = scrollOffset;
         maxScroll = ImMax(0.0f, contentHeight - visibleHeight);
-        if (ImGui::IsMouseHoveringRect(contentMin, contentMax) && ImGui::GetIO().MouseWheel != 0.0f)
+        if (ImGui::IsMouseHoveringRect(contentMin, contentMax) && ImGui::GetIO().MouseWheel != 0.0f
+            // While the paint-kit picker is open the wheel belongs to its list (the popup has
+            // its own scroll) - and any page scroll would close the popup as a stale anchor.
+            && !(state.popup.open && state.popup.paintKitMode))
             scrollTarget = ImClamp(scrollTarget - ImGui::GetIO().MouseWheel * 40.0f, 0.0f, maxScroll);
         if (scrollTarget > maxScroll)
             scrollTarget = maxScroll;
@@ -4504,12 +5669,17 @@ void neverlose::render() noexcept
         scrollOffset = ImLerp(scrollOffset, scrollTarget, 1.0f - std::exp(-14.0f * ImGui::GetIO().DeltaTime));
         if (std::fabs(scrollTarget - scrollOffset) < 0.3f)
             scrollOffset = scrollTarget;
-        // the hand-drawn popups anchor to screen positions of the rows that opened them - once
-        // the content scrolls those anchors are stale, so close them
-        if (std::fabs(scrollOffset - previousScrollOffset) > 0.5f) {
-            state.popup.open = false;
-            state.colorPickerOpen = false;
-            state.multiSelectOpen = false;
+        // the hand-drawn popups anchor to screen positions of the rows that opened them - when
+        // the content scrolls, MOVE the open popups with their rows instead of closing them
+        // (the popup layers re-clamp into the shell every frame, so a scrolled-away row leaves
+        // the popup docked at the edge rather than gone)
+        {
+            const float scrollDelta = scrollOffset - previousScrollOffset;
+            if (std::fabs(scrollDelta) > 0.001f) {
+                state.popup.anchor.y -= scrollDelta;
+                state.multiSelectAnchor.y -= scrollDelta;
+                state.colorPickerAnchor.y -= scrollDelta;
+            }
         }
 
         // page transition: slide + fade the content in. Suppressed while the reveal is still
@@ -4527,8 +5697,8 @@ void neverlose::render() noexcept
         d->PopClipRect();
 
         // Scroll affordances for the content region (drawn unclipped, before the popups): an
-        // edge fade wherever more content hides beyond the edge, plus a thin position thumb on
-        // the right edge while the page overflows.
+        // edge fade wherever more content hides beyond the edge, plus a DRAGGABLE position
+        // scrollbar on the right edge while the page overflows.
         {
             const ImU32 bgFade = C(12, 12, 13, 246);
             const ImU32 clear = bgFade & 0x00FFFFFFu;
@@ -4541,8 +5711,32 @@ void neverlose::render() noexcept
                 const float track = visibleHeight - s(8.0f);
                 const float thumbHeight = ImClamp(visibleHeight * visibleHeight / contentHeight, s(30.0f), track);
                 const float t = maxScroll > 0.0f ? scrollOffset / maxScroll : 0.0f;
-                const float thumbY = contentMin.y + s(4.0f) + t * (track - thumbHeight);
-                d->AddRectFilled(ImVec2(contentMax.x - s(5.0f), thumbY), ImVec2(contentMax.x - s(2.0f), thumbY + thumbHeight), C(255, 255, 255, 26), s(2));
+                float thumbY = contentMin.y + s(4.0f) + t * (track - thumbHeight);
+                // Thin thumb tucked into the region's right padding: AUTO-HIDDEN unless the
+                // cursor is near it or a drag is active - a permanently visible bar overlapped
+                // the row pills on the right column.
+                const ImVec2 trackMin(contentMax.x - s(9.0f), contentMin.y);
+                const ImVec2 trackMax(contentMax.x, contentMax.y);
+                static bool dragging = false;
+                static float grabOffset = 0.0f;
+                const ImVec2 mouse = ImGui::GetIO().MousePos;
+                const bool nearTrack = ImGui::IsMouseHoveringRect(trackMin - ImVec2(s(14), 0), trackMax);
+                const bool hovered = ImGui::IsMouseHoveringRect(ImVec2(trackMin.x, thumbY), ImVec2(trackMax.x, thumbY + thumbHeight));
+                if ((hovered || (nearTrack && ImGui::IsMouseClicked(0))) && ImGui::IsMouseClicked(0)) {
+                    dragging = true;
+                    grabOffset = ImClamp(mouse.y, thumbY, thumbY + thumbHeight) - thumbY;
+                }
+                if (!ImGui::IsMouseDown(0))
+                    dragging = false;
+                if (dragging)
+                    scrollTarget = scrollOffset = ImClamp((mouse.y - grabOffset - (contentMin.y + s(4.0f))) / (track - thumbHeight), 0.0f, 1.0f) * maxScroll;
+
+                if (hovered || dragging) {
+                    const float tNow = maxScroll > 0.0f ? scrollOffset / maxScroll : 0.0f;
+                    const float yNow = contentMin.y + s(4.0f) + tNow * (track - thumbHeight);
+                    d->AddRectFilled(ImVec2(contentMax.x - s(5.0f), yNow), ImVec2(contentMax.x - s(1.0f), yNow + thumbHeight),
+                        C(200, 203, 212, dragging ? 150 : 95), s(2));
+                }
             }
         }
 
@@ -4602,13 +5796,13 @@ void neverlose::render() noexcept
             sp.y = ImClamp(sp.y, d->GetClipRectMin().y + s(10.0f), d->GetClipRectMax().y - size.y - s(10.0f));
             const bool accepts = ImGui::GetFrameCount() > styleSelect.openedFrame;
             recordPopupRect(PopupStyle, sp, sp + size);
-            d->AddRectFilled(sp, sp + size, C(18, 18, 20, 240), s(12));
-            d->AddRect(sp, sp + size, C(54, 54, 60, 205), s(12));
+            d->AddRectFilled(sp, sp + size, kPopupBg, s(12));
+            d->AddRect(sp, sp + size, kPopupBorder, s(12));
             for (int i = 0; i < count; ++i) {
                 ImVec2 rp = sp + ImVec2(s(5), s(5) + i * s(28.0f));
                 ImGui::PushID(8900 + i);
                 const bool clicked = hitModal("##style_row", rp, ImVec2(size.x - s(10), s(28)));
-                const float hover = motion(ImGui::GetItemID() ^ (0x77e1u + i), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
+                const float hover = motion(animKey(0x77e1u, 8900 + i), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
                 ImGui::PopID();
                 if (hover > 0.001f)
                     d->AddRectFilled(rp, rp + ImVec2(size.x - s(10), s(28)), C(255, 255, 255, static_cast<int>(14 * hover)), s(8));
@@ -4640,6 +5834,8 @@ void neverlose::render() noexcept
             popupPrev[i] = popupCur[i];
             popupCur[i].valid = false;
         }
+
+        drawToasts(d, b); // topmost layer inside the shell
     }
     ImGui::End();
     ImGui::PopStyleColor();
@@ -4651,6 +5847,7 @@ void neverlose::render() noexcept
 void drawPlayerListWindow() noexcept; // defined below
 void drawBindsListWindow(float extraYOffset) noexcept; // defined below
 void drawSpectatorListWindow(float& yOffsetForBindsList) noexcept; // defined below
+void drawLiveBadge() noexcept; // defined below
 
 // Outer menu glow, drawn on the FOREGROUND draw list: the menu window clips its own draw list to
 // the shell rect, which is why the in-window version was invisible (only leaked out during the
@@ -4679,7 +5876,7 @@ void neverlose::drawMenuGlow(float menuAlpha) noexcept
 
     ImDrawList* fg = ImGui::GetForegroundDrawList();
     const ImVec2 display = ImGui::GetIO().DisplaySize;
-    const ImVec2 shellPos((display.x - kShellWidth) * 0.5f + menuOffset.x, (display.y - kShellHeight) * 0.5f + menuOffset.y);
+    const ImVec2 shellPos((display.x - kShellWidth) * 0.5f + menuOffset.x, (display.y - shellHeightBase) * 0.5f + menuOffset.y);
     const ImVec2 shellEnd = shellPos + ImVec2(kShellWidth, kShellHeight);
 
     // Nested rounded-rect rings around the shell: every ring keeps the shell's own corner
@@ -4821,7 +6018,7 @@ void neverlose::renderGameOverlay() noexcept
 
     // Mic broadcast follows the radio's play state every frame (not only while the Radio tab is
     // open), so stopping a station always hands the microphone back - wherever the user is.
-    withRadio([](auto&& radio) { radio.updateMicBroadcast(); });
+    withRadio([](auto&& radio) { radio.updateMicBroadcast(); radio.updateAirhorn(); });
 
     // Discord Rich Presence: 1Hz throttled inside, cheap gates outside; runs with the menu open
     // or closed so the presence tracks the match.
@@ -4874,6 +6071,7 @@ void neverlose::renderGameOverlay() noexcept
     float bindsListOffset = 0.0f;
     drawSpectatorListWindow(bindsListOffset);
     drawBindsListWindow(bindsListOffset);
+    drawLiveBadge();
 
     // Lua scripts last: their paint callbacks draw on top of everything else. Each call is
     // pcall'd and instruction-budgeted inside the manager - a bad script errors, never crashes.
@@ -4884,6 +6082,45 @@ void neverlose::renderGameOverlay() noexcept
 // The friend-client port: boxed list of who is watching the POV - ours when alive, the
 // spectated player's when dead. Names come from SpectatorSnapshot (game thread collects,
 // this pass draws); hidden while nobody is spectating.
+
+// LIVE badge: local-only by physics (an overlay lives in OUR process - spectators render
+// their own game and can never see it; the networked half is ChatTools' spectator-joined
+// say). Drawn as a streamer-style pill so the user knows when they are being watched and
+// can play into it / screenshot it.
+void drawLiveBadge() noexcept
+{
+    if (!ui_config::get<chat_vars::LiveBadgeEnabled>())
+        return;
+    const auto snap = spectator_list::snapshot();
+    if (snap.count <= 0 || snap.spectatingOthers)
+        return;
+
+    constexpr ImGuiWindowFlags badgeFlags = ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove
+        | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse
+        | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_AlwaysAutoResize
+        | ImGuiWindowFlags_NoBackground;
+
+    const float displayWidth = ImGui::GetIO().DisplaySize.x;
+    ImGui::SetNextWindowPos(ImVec2(displayWidth * 0.5f - s(60.0f), s(10.0f)), ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(s(10), s(5)));
+    if (ImGui::Begin("##ns_live_badge", nullptr, badgeFlags)) {
+        ImDrawList* d = ImGui::GetWindowDrawList();
+        const ImVec2 p = ImGui::GetWindowPos();
+        const float h = ImGui::GetWindowHeight();
+        const float w = ImGui::GetWindowWidth();
+
+        char label[48];
+        std::snprintf(label, sizeof(label), "LIVE  %d watching", snap.count);
+
+        const float pulse = 0.65f + 0.35f * std::sin(static_cast<float>(ImGui::GetTime()) * 4.0f);
+        d->AddRectFilled(p, p + ImVec2(w, h), C(20, 10, 12, 225), h * 0.5f);
+        d->AddRect(p, p + ImVec2(w, h), C(190, 60, 66, 180), h * 0.5f);
+        d->AddCircleFilled(p + ImVec2(s(14), h * 0.5f), s(4.0f), C(229, 72, 77, static_cast<int>(110 + 130 * pulse)));
+        textY(d, p.x + s(24), p.y, h, C(244, 226, 228), label, kTextControl, nullptr);
+    }
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
 
 void drawSpectatorListWindow(float& yOffsetForBindsList) noexcept
 {
@@ -4919,7 +6156,7 @@ void drawSpectatorListWindow(float& yOffsetForBindsList) noexcept
         float y = winPos.y + s(32.0f);
         const float rowHeight = s(24.0f);
         for (int i = 0; i < snap.count; ++i) {
-            textY(d, winPos.x + s(12), y, rowHeight, C(207, 209, 218), snap.names[i], kTextControl, nullptr);
+            textY(d, winPos.x + s(12), y, rowHeight, kTextBodyCol, snap.names[i], kTextControl, nullptr);
             y += rowHeight;
         }
         yOffsetForBindsList = (y + s(6.0f)) - s(52.0f);
@@ -4945,70 +6182,103 @@ void drawBindsListWindow(float extraYOffset) noexcept
     if (!ui_config::get<binds_list_vars::Enabled>())
         return;
 
-    const BindListEntry entries[] = {
+    struct BindRowEntry { const char* label; int key; };
+    const BindRowEntry entries[] = {
         {"Legit Aim", static_cast<int>(static_cast<legit_aimbot_vars::AimKey::ValueType::ValueType>(ui_config::get<legit_aimbot_vars::AimKey>()))},
         {"Triggerbot", static_cast<int>(static_cast<triggerbot_vars::HoldKey::ValueType::ValueType>(ui_config::get<triggerbot_vars::HoldKey>()))},
         {"Combat Panic", static_cast<int>(static_cast<panic_vars::Bind::ValueType::ValueType>(ui_config::get<panic_vars::Bind>()))},
+        {"Net Lag Choke", static_cast<int>(static_cast<net_lag_vars::ChokeKeyBind::ValueType::ValueType>(ui_config::get<net_lag_vars::ChokeKeyBind>()))},
+        {"Net Lag Flood", static_cast<int>(static_cast<net_lag_vars::FloodKeyBind::ValueType::ValueType>(ui_config::get<net_lag_vars::FloodKeyBind>()))},
+        {"Fake Intel", static_cast<int>(static_cast<chat_vars::IntelBind::ValueType::ValueType>(ui_config::get<chat_vars::IntelBind>()))},
+        {"Fake Kick", static_cast<int>(static_cast<chat_vars::KickKey::ValueType::ValueType>(ui_config::get<chat_vars::KickKey>()))},
     };
+
+    // collect the rows that HAVE a key - Off/none entries never make the list
+    BindRowEntry rows[24];
+    int rowCount = 0;
+    for (const auto& e : entries)
+        if (e.key != Bind::kOff)
+            rows[rowCount++] = e;
+    for (std::size_t i = 0; i < feature_binds::entryCount && rowCount < static_cast<int>(sizeof(rows) / sizeof(rows[0])); ++i) {
+        const auto& entry = feature_binds::entries[i];
+        if (entry.key != Bind::kOff && entry.label)
+            rows[rowCount++] = {entry.label, entry.key};
+    }
 
     constexpr ImGuiWindowFlags menuClosedFlags = ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove
         | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse
-        | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_AlwaysAutoResize;
+        | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing;
     constexpr ImGuiWindowFlags menuOpenFlags = (ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav
-        | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing
-        | ImGuiWindowFlags_AlwaysAutoResize);
+        | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing);
 
     const float displayWidth = ImGui::GetIO().DisplaySize.x;
-    const float windowWidth = s(190.0f);
+    const float windowWidth = s(232.0f);
+    const float headerHeight = s(38.0f);
+    const float rowHeight = s(30.0f);
+    const float listHeight = headerHeight + static_cast<float>(rowCount) * rowHeight + s(8.0f);
+
+    // empty list (no bound keys at all) = no window at all
+    if (rowCount == 0)
+        return;
+
     // top-right, below the watermark band (the watermark itself is user-movable via Hud offsets)
     ImGui::SetNextWindowPos(ImVec2(displayWidth - windowWidth - s(12.0f), s(52.0f) + extraYOffset), ImGuiCond_FirstUseEver);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(10.0f));
+    ImGui::SetNextWindowSize(ImVec2(windowWidth, listHeight));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(14.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(s(12), s(8)));
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, C(12, 12, 13, 248));
-    ImGui::PushStyleColor(ImGuiCol_Border, C(30, 30, 33, 210));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, C(16, 16, 18, 226));
+    ImGui::PushStyleColor(ImGuiCol_Border, C(52, 52, 58, 220));
 
     if (ImGui::Begin("Keybind list", nullptr, GUI::isMenuOpen() ? menuOpenFlags : menuClosedFlags)) {
         ImDrawList* d = ImGui::GetWindowDrawList();
         const ImVec2 winPos = ImGui::GetWindowPos();
         const float winWidth = ImGui::GetWindowWidth();
+        const float winHeight = ImGui::GetWindowHeight();
 
-        textY(d, winPos.x + s(12), winPos.y + s(6), s(16), C(137, 142, 153), "KEYBINDS", kTextCaption, nullptr);
-        d->AddLine(ImVec2(winPos.x + s(3), winPos.y + s(26)), ImVec2(winPos.x + winWidth - s(3), winPos.y + s(26)), (g_accent & 0x00FFFFFFu) | (200u << IM_COL32_A_SHIFT), 1.2f);
+        // the menu's card depth: WIDE top-light wash fading down + 1px inner highlight
+        d->PushClipRect(winPos, winPos + ImVec2(winWidth, winHeight), true);
+        d->AddRectFilledMultiColor(winPos + ImVec2(s(14), s(1)), winPos + ImVec2(winWidth - s(14), s(42)), C(255, 255, 255, 18), C(255, 255, 255, 18), 0, 0);
+        d->AddLine(winPos + ImVec2(s(12), s(0.75f)), winPos + ImVec2(winWidth - s(12), s(0.75f)), C(255, 255, 255, 22), 1.0f);
 
-        float y = winPos.y + s(32.0f);
-        const float rowHeight = s(28.0f);
+        // header band: accent dot + semibold caption + hairline divider
+        pulsingDot(d, winPos + ImVec2(s(17), s(17)), s(2.4f), g_accent);
+        textY(d, winPos.x + s(25), winPos.y + s(10), s(14), C(196, 199, 208), "KEYBINDS", kTextCaption, strongFont());
+        d->AddLine(winPos + ImVec2(s(12), headerHeight - s(2)), winPos + ImVec2(winWidth - s(12), headerHeight - s(2)), kHairline, 1.0f);
+
+        float y = winPos.y + headerHeight;
         const auto drawBindRow = [&](const char* label, int key) {
-            textY(d, winPos.x + s(12), y, rowHeight, C(207, 209, 218), label, kTextControl, nullptr);
+            d->AddLine(ImVec2(winPos.x + s(12), y), ImVec2(winPos.x + winWidth - s(12), y), kHairline, 1.0f);
+
+            textY(d, winPos.x + s(14), y, rowHeight, kTextBodyCol, label, kTextControl, nullptr);
 
             const bool held = key != Bind::kOff && Bind::isDown(key);
             const float pillWidth = s(76.0f);
-            const float pillHeight = s(19.0f);
-            const ImVec2 pill(winPos.x + winWidth - s(12) - pillWidth, y + (rowHeight - pillHeight) * 0.5f);
-            d->AddRectFilled(pill, pill + ImVec2(pillWidth, pillHeight), held ? g_buttonAccent : C(24, 24, 26), s(5));
-            d->AddRect(pill, pill + ImVec2(pillWidth, pillHeight), held ? g_buttonAccent : C(30, 30, 33), s(5));
+            const float pillHeight = s(21.0f);
+            const ImVec2 pill(winPos.x + winWidth - s(13) - pillWidth, y + (rowHeight - pillHeight) * 0.5f);
+            // soft accent halo while the key is held (the menu's lit-toggle recipe)
+            if (held) {
+                d->AddRectFilled(pill - ImVec2(s(3), s(3)), pill + ImVec2(pillWidth + s(3), pillHeight + s(3)), (g_buttonAccent & 0x00FFFFFFu) | (26u << IM_COL32_A_SHIFT), s(12));
+                d->AddRectFilled(pill - ImVec2(s(6), s(6)), pill + ImVec2(pillWidth + s(6), pillHeight + s(6)), (g_buttonAccent & 0x00FFFFFFu) | (10u << IM_COL32_A_SHIFT), s(15));
+            }
+            d->AddRectFilled(pill, pill + ImVec2(pillWidth, pillHeight), held ? g_buttonAccent : kPillBg, pillHeight * 0.5f);
+            d->AddRect(pill, pill + ImVec2(pillWidth, pillHeight), held ? g_buttonAccent : kPillBgHover, pillHeight * 0.5f);
             const char* keyName = Bind::displayName(key);
             const float keyWidth = ImGui::GetFont()->CalcTextSizeA(kTextSmall, FLT_MAX, 0.0f, keyName).x;
             textY(d, pill.x + ImMax(s(6), (pillWidth - keyWidth) * 0.5f), pill.y, pillHeight, held ? C(18, 18, 20) : C(170, 173, 184), keyName, kTextSmall, nullptr);
             y += rowHeight;
         };
 
-        for (const auto& entry : entries)
-            drawBindRow(entry.label, entry.value);
-
-        // feature binds (right-click binds): every registered entry with a key
-        for (std::size_t i = 0; i < feature_binds::entryCount; ++i) {
-            const auto& entry = feature_binds::entries[i];
-            if (entry.key != Bind::kOff && entry.label)
-                drawBindRow(entry.label, entry.key);
-        }
+        for (int i = 0; i < rowCount; ++i)
+            drawBindRow(rows[i].label, rows[i].key);
+        d->PopClipRect();
     }
     ImGui::End();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(3);
 }
 
-// --- player list (FrameworkCS2 port) ---------------------------------------------------
+// --- player list (FrameworkCS2 port) -----------------------------------------------------
 // Present-thread ImGui table fed by PlayerList's game-thread snapshot. Interactive only while
 // the menu is open; otherwise a click-through always-on-back display.
 
@@ -5028,26 +6298,28 @@ void drawPlayerListWindow() noexcept
         | ImGuiWindowFlags_AlwaysAutoResize;
     constexpr ImGuiWindowFlags menuOpenFlags = menuClosedFlags | ImGuiWindowFlags_NoMove;
 
-    // Pinned to anchor + offsets every frame (the watermark's model): position truth lives in
-    // the two sliders/config, never in a drag.
-    const float posX = s(10.0f) + static_cast<float>(ui_config::get<PlayerListOffsetX>());
-    const float posY = s(64.0f) + static_cast<float>(ui_config::get<PlayerListOffsetY>());
+    // Pinned to the offsets every frame (the watermark's model): position truth lives in the
+    // two sliders/config, never in a drag. Offset 0 = the window is FLUSH with the screen
+    // border (older builds baked a hidden 10/64px margin into the base - that read as "offset 0
+    // is not at the border").
+    const float posX = static_cast<float>(ui_config::get<PlayerListOffsetX>());
+    const float posY = static_cast<float>(ui_config::get<PlayerListOffsetY>());
     ImGui::SetNextWindowPos(ImVec2(posX, posY), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(520.0f, 0.0f), ImGuiCond_Always);
 
-    // Same shell palette as the menu: dark panel, hairline borders, theme accent, muted text.
-    // WindowBg/Border/CellPadding shape the window; the table colors mirror the shell's rows.
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(10.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(s(2), s(4)));
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(s(9), s(4)));
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, C(12, 12, 13, 248));
-    ImGui::PushStyleColor(ImGuiCol_Border, C(30, 30, 33, 210));
+    // Same shell palette as the menu: dark rounded panel, theme accent, muted text. The window
+    // auto-fits BOTH axes and the table uses content-fit columns, so long names/teams widen the
+    // window instead of truncating ("Te...", "Mo..." cells).
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(12.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(s(8), s(6)));
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(s(10), s(5)));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, C(12, 12, 13, 246));
+    ImGui::PushStyleColor(ImGuiCol_Border, C(30, 30, 33, 0));
     ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, C(16, 16, 18, 240));
-    ImGui::PushStyleColor(ImGuiCol_TableBorderStrong, C(38, 42, 54));
-    ImGui::PushStyleColor(ImGuiCol_TableBorderLight, C(26, 26, 29));
+    ImGui::PushStyleColor(ImGuiCol_TableBorderStrong, C(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_TableBorderLight, C(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_TableRowBg, C(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt, C(255, 255, 255, 7));
+    ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt, C(255, 255, 255, 6));
 
     if (ImGui::Begin("Player list", nullptr, GUI::isMenuOpen() ? menuOpenFlags : menuClosedFlags)) {
         const auto snap = player_list::snapshot();
@@ -5055,7 +6327,7 @@ void drawPlayerListWindow() noexcept
         // Muted header text; a theme-accent underline sits under the header row.
         ImGui::PushStyleColor(ImGuiCol_Text, C(137, 142, 153));
         if (ImGui::BeginTable("##player_list_rows", 8,
-                ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+                ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
             ImGui::TableSetupColumn("Name");
             ImGui::TableSetupColumn("Team");
             ImGui::TableSetupColumn("Health");

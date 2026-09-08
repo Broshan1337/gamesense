@@ -1,6 +1,6 @@
 #pragma once
 
-// Neversneeze Lua scripting framework (LuaJIT 2.1, vendored in Source/ThirdParty/luajit).
+// Neversnooze Lua scripting framework (LuaJIT 2.1, vendored in Source/ThirdParty/luajit).
 //
 // Scripts live in <home>/OsirisCS2/scripts/*.lua and are managed from the menu's Scripts tab.
 //
@@ -50,6 +50,7 @@ inline constexpr std::size_t kMaxScriptBytes = 256 * 1024;
 inline constexpr std::size_t kMaxHttpBytes = 256 * 1024;
 inline constexpr int kMaxGuiItems = 32;            // menu items one script may create via gui.*
 inline constexpr std::size_t kMaxGuiLabel = 48;
+inline constexpr int kMaxGuiOptions = 64;          // options per gui.dropdown (48 SDR regions + spare)
 // VM instructions one callback may burn before being aborted. Generous on purpose: this is not
 // a frame-time limiter, it is a "while true do end does not freeze the game" guard.
 inline constexpr int kInstructionBudget = 50'000'000;
@@ -63,17 +64,23 @@ struct HttpSlot {
     char outPath[64] = {};
 };
 
-// One menu control a script created with gui.checkbox / gui.slider. Values are mutated by the
-// menu (present thread) and read by the script under the framework mutex; bool/int writes are
-// the same benign single-word tearing class the menu already accepts on scripts[] elsewhere.
+// One menu control a script created with gui.checkbox / gui.slider / gui.dropdown. Values are
+// mutated by the menu (present thread) and read by the script under the framework mutex; bool/int
+// writes are the same benign single-word tearing class the menu already accepts on scripts[]
+// elsewhere. Dropdown options are copied into optionStorage at creation and optionPtrs points at
+// them, so the popup layer can keep rendering across frames while the script stays loaded.
 struct GuiItem {
-    enum class Type : unsigned char { Checkbox, Slider };
+    enum class Type : unsigned char { Checkbox, Slider, Dropdown };
     Type type = Type::Checkbox;
     char label[kMaxGuiLabel] = {};
     bool boolValue = false; // checkbox current value
-    int intValue = 0;       // slider current value
+    int intValue = 0;       // slider current value / dropdown selected index
     int minValue = 0;
     int maxValue = 100;
+    // dropdown-only state
+    int optionCount = 0;
+    char optionStorage[kMaxGuiOptions][kMaxGuiLabel] = {};
+    const char* optionPtrs[kMaxGuiOptions] = {};
 };
 
 // Numeric fields passed to a script's game-event callbacks as an `event` table (see
@@ -140,6 +147,23 @@ extern void* (*entityFromIndexQuery)(int entityIndex) noexcept;
 extern int (*schemaFieldOffsetQuery)(const char* className, const char* fieldName) noexcept;
 // Enumerates players that currently have a pawn; returns the entry count (0 = unavailable).
 extern int (*playerListQuery)(PlayerListEntry* out, int max) noexcept;
+// Runs a console command through the engine's client command buffer (queued, next frame).
+// Game thread only - the caller (client.exec binding) enforces the callback context.
+extern void (*engineCommandQuery)(const char* command) noexcept;
+// API v2 bridges (installed in EntryPoints finishInit, null in unit tests - bindings then
+// return nil/false, never crash):
+// Reads a runtime int32/float32 cvar by name. False = not found / wrong type / unavailable.
+extern bool (*cvarIntQuery)(const char* name, int* out) noexcept;
+extern bool (*cvarFloatQuery)(const char* name, float* out) noexcept;
+// Writes through a runtime cvar's resolved value pointer (forceFloatConVar/forceBoolConVar).
+extern bool (*cvarFloatSetQuery)(const char* name, float value) noexcept;
+extern bool (*cvarBoolSetQuery)(const char* name, bool value) noexcept;
+// World -> normalized device coordinates through the per-frame worldToProjection matrix.
+// False = off screen (w <= 0) / matrix unresolved. Pixels are derived in the binding.
+extern bool (*worldToScreenQuery)(float x, float y, float z, float* ndcX, float* ndcY) noexcept;
+// Which thread is currently dispatching Lua callbacks: 0 = none, 1 = game thread
+// (createmove / game events), 2 = present thread (paint). Set around the dispatch loops.
+extern std::atomic<int> dispatchThreadKind;
 
 // ---- lifecycle / file IO (called from the menu thread or the render thread) ----
 

@@ -192,8 +192,8 @@ protected:
 TEST_F(ModelGlowActiveTest, DefuseKitUpdateInMainThread) {
     mockConfig.expectGetVariable<model_glow_vars::GlowDefuseKits>()
         .WillRepeatedly(testing::Return(true));
-    mockConfig.expectGetVariable<model_glow_vars::DefuseKitHue>(model_glow_vars::DefuseKitHue::ValueType{color::HueInteger{123}});
-    EXPECT_CALL(mockBaseEntity, applySpawnProtectionEffectRecursively(cs2::Color{0, 255, 12}));
+    mockConfig.expectGetVariable<model_glow_vars::DefuseKitColor>(model_glow_vars::DefuseKitColor::ValueType{color::Rgba{0, 213, 255, 255}});
+    EXPECT_CALL(mockBaseEntity, applySpawnProtectionEffectRecursively(cs2::Color{0, 213, 255}));
     modelGlow.updateInMainThread()(
         DefuseKitModelGlow{mockHookContext},
         mockBaseEntity,
@@ -219,8 +219,8 @@ TEST_F(ModelGlowActiveTest, DroppedBombUpdateInMainThread) {
 TEST_F(ModelGlowActiveTest, GrenadeProjectileUpdateInMainThread) {
     mockConfig.expectGetVariable<model_glow_vars::GlowGrenadeProjectiles>()
         .WillRepeatedly(testing::Return(true));
-    mockConfig.expectGetVariable<model_glow_vars::SmokeGrenadeHue>(model_glow_vars::SmokeGrenadeHue::ValueType{color::HueInteger{133}});
-    EXPECT_CALL(mockBaseEntity, applySpawnProtectionEffectRecursively(cs2::Color{0, 255, 55}));
+    mockConfig.expectGetVariable<model_glow_vars::SmokeGrenadeColor>(model_glow_vars::SmokeGrenadeColor::ValueType{color::Rgba{64, 255, 64, 255}});
+    EXPECT_CALL(mockBaseEntity, applySpawnProtectionEffectRecursively(cs2::Color{64, 255, 64}));
     modelGlow.updateInMainThread()(
         GrenadeProjectileModelGlow{mockHookContext},
         mockBaseEntity,
@@ -250,10 +250,10 @@ TEST_F(ModelGlowActiveTest, PlayerUpdateInMainThread) {
 TEST_F(ModelGlowActiveTest, TickingBombUpdateInMainThread) {
     mockConfig.expectGetVariable<model_glow_vars::GlowTickingBomb>()
         .WillRepeatedly(testing::Return(true));
-    mockConfig.expectGetVariable<model_glow_vars::TickingBombHue>(model_glow_vars::TickingBombHue::ValueType{color::HueInteger{255}});
+    mockConfig.expectGetVariable<model_glow_vars::TickingBombColor>(model_glow_vars::TickingBombColor::ValueType{color::Rgba{255, 0, 0, 255}});
     EXPECT_CALL(mockPlantedC4, isTicking()).WillOnce(testing::Return(true));
     EXPECT_CALL(mockPlantedC4, baseEntity()).WillOnce(testing::ReturnRef(mockBaseEntity));
-    EXPECT_CALL(mockBaseEntity, applySpawnProtectionEffectRecursively(cs2::Color{63, 0, 255}));
+    EXPECT_CALL(mockBaseEntity, applySpawnProtectionEffectRecursively(cs2::Color{255, 0, 0}));
     modelGlow.updateInMainThread()(
         TickingBombModelGlow{mockHookContext},
         mockPlantedC4,
@@ -278,11 +278,11 @@ TEST_F(ModelGlowActiveTest, WeaponUpdateInMainThread) {
 
 TEST_F(ModelGlowActiveTest, DroppedBombUpdateInSceneObjectUpdater) {
     mockConfig.expectGetVariable<model_glow_vars::GlowDroppedBomb>(true);
-    mockConfig.expectGetVariable<model_glow_vars::DroppedBombHue>(model_glow_vars::DroppedBombHue::ValueType{color::HueInteger{72}});
+    mockConfig.expectGetVariable<model_glow_vars::DroppedBombColor>(model_glow_vars::DroppedBombColor::ValueType{color::Rgba{255, 213, 77, 255}});
     
     EXPECT_CALL(mockBaseWeapon, baseEntity()).WillRepeatedly(testing::ReturnRef(mockBaseEntity));
     EXPECT_CALL(mockBaseEntity, hasOwner()).WillOnce(testing::Return(false));
-    EXPECT_CALL(mockBaseEntity, applySpawnProtectionEffectRecursively(cs2::Color{203, 255, 0}));
+    EXPECT_CALL(mockBaseEntity, applySpawnProtectionEffectRecursively(cs2::Color{255, 213, 77}));
 
     modelGlow.updateInSceneObjectUpdater()(
         DroppedBombModelGlow{mockHookContext},
@@ -331,11 +331,11 @@ TEST_F(ModelGlowActiveTest, ImmunePlayerUpdateInSceneObjectUpdater) {
 
 TEST_F(ModelGlowActiveTest, WeaponUpdateInSceneObjectUpdater) {
     mockConfig.expectGetVariable<model_glow_vars::GlowWeapons>(true);
-    mockConfig.expectGetVariable<model_glow_vars::MolotovHue>(model_glow_vars::MolotovHue::ValueType{color::HueInteger{43}});
+    mockConfig.expectGetVariable<model_glow_vars::MolotovColor>(model_glow_vars::MolotovColor::ValueType{color::Rgba{255, 128, 0, 255}});
 
     EXPECT_CALL(mockBaseWeapon, baseEntity()).WillRepeatedly(testing::ReturnRef(mockBaseEntity));
     EXPECT_CALL(mockBaseEntity, hasOwner()).WillOnce(testing::Return(false));
-    EXPECT_CALL(mockBaseEntity, applySpawnProtectionEffectRecursively(cs2::Color{255, 182, 0}));
+    EXPECT_CALL(mockBaseEntity, applySpawnProtectionEffectRecursively(cs2::Color{255, 128, 0}));
 
     modelGlow.updateInSceneObjectUpdater()(
         WeaponModelGlow{mockHookContext},

@@ -79,7 +79,7 @@ void request(const void* pixelsRgba, int width, int height) noexcept;
 
 }
 
-// Menu logo (the Neversneeze swirl cutout, embedded as a PNG byte array in the UI): identical
+// Menu logo (the Neversnooze swirl cutout, embedded as a PNG byte array in the UI): identical
 // machinery to avatar_texture. Present-thread only.
 namespace logo_texture
 {

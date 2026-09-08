@@ -199,11 +199,22 @@ public:
         for (int i = 0; i < primitiveCount; ++i, prim += kSkyPrimitiveStride) {
             std::memcpy(prim + kParticleColorOffset, &value, sizeof(value));
 
-            auto* object = static_cast<std::byte*>(readPointer(prim + kSkyAnimatableObjectOffset));
-            if (!isPlausibleObjectPointer(object))
-                continue;
-            std::memcpy(object + kSceneObjectLightColorOffset, &value, sizeof(value));
-            std::memcpy(object + kSceneObjectLightColorOffset + 4, &value, sizeof(value));
+            // OBJECT LIGHT-COLOR WRITES ARE DISABLED (2026-09-06 inject crash, twice, 100% repro):
+            // the +0x50/+0x54 writes were re-derived against the SKY DrawArray's object pointer
+            // (prim+0x00) and applied to the AGGREGATE path - but the crash is inside
+            // CAggregateSceneObjectDesc::DrawArray (libscenesystem sub_3C2C80, TinyBVH leaf walk,
+            // fault 0) reading a pointer that these writes corrupted. The aggregate objects'
+            // layout was NOT re-derived; the object pointer at prim+0x00 and/or the +0x50 offset
+            // is wrong for this desc family. Until that is re-derived against LIVE aggregate
+            // objects (the scenesystem .i64 exists), this stays a prim-color-only recolor: the
+            // file's own rule is "a stale offset must cost a missing recolor, never a crash".
+            //
+            // auto* object = readPointer(prim + kSkyAnimatableObjectOffset);
+            // if (!isPlausibleObjectPointer(object))
+            //     continue;
+            // auto* objectBytes = static_cast<std::byte*>(object);
+            // std::memcpy(objectBytes + kSceneObjectLightColorOffset, &value, sizeof(value));
+            // std::memcpy(objectBytes + kSceneObjectLightColorOffset + 4, &value, sizeof(value));
         }
     }
 
@@ -483,7 +494,10 @@ private:
     static constexpr auto kParticleSystemNameOffset = 0x8;        // ParticleSystemDefinition::name (guarded)
     static constexpr auto kLightColorOffset = 0xD4;               // SceneLightObject r/g/b (disassembly-verified)
     static constexpr auto kSkyPrimitiveStride = 0x70;             // same 0x70 CMeshDrawPrimitive stride
-    static constexpr auto kSkyAnimatableObjectOffset = 0x18;      // prim -> scene object pointer
+    static constexpr auto kSkyAnimatableObjectOffset = 0x00;      // prim -> scene object pointer
+                                                                  // (Sept build: the sky DrawArray reads
+                                                                  // r15 = qword[prim + i*0x70]; the old
+                                                                  // +0x18 indirection is stale)
     static constexpr auto kSceneObjectLightColorOffset = 0x50;    // scene object light-tint dwords (draw path 0x40E300 copies these into the light entries)
 
     [[nodiscard]] static void* readPointer(const std::byte* address) noexcept

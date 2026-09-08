@@ -16,6 +16,7 @@
 #include <Features/Game/FvaEmulator.h>
 #include <GameClient/Hitboxes.h>
 #include <GameClient/Lagcomp.h>
+#include <GameClient/MultiPoint.h>
 #include <Features/Combat/Aimbot/AimbotConfigVariables.h>
 #include <GameClient/Entities/BaseEntity.h>
 #include <GameClient/Entities/PlayerPawn.h>
@@ -161,10 +162,36 @@ public:
             auto&& lagcomp = hookContext.template make<Lagcomp>();
             Optional<typename Lagcomp<HookContext>::Result> picked;
             if (backtrackEnabled) {
-                picked = lagcomp.bestRecord(chosen.entity, eye.value(), chosen.angles.pitch, chosen.angles.yaw, flags.head, flags.chest, flags.stomach, flags.arms, flags.legs, static_cast<int>(GET_CONFIG_VAR(aimbot_vars::BacktrackTicks)));
+                // Capsule-true record scan (skeet rage parity): score REAL hitbox capsule points on
+                // each record (damage + lethal bonus - backtrack-age penalty, FOV- and min-damage
+                // gated, winner visibility-checked). Falls back to the bone-FOV pick when the hitbox
+                // chain or the scan yields nothing (see bestRecordPoint).
+                picked = bestRecordPoint(localPawn, eye.value(), currentPitch.value(), currentYaw.value(), chosen.entity, flags, maxFov, static_cast<int>(GET_CONFIG_VAR(aimbot_vars::BacktrackTicks)));
+                if (!picked.hasValue())
+                    picked = lagcomp.bestRecord(chosen.entity, eye.value(), chosen.angles.pitch, chosen.angles.yaw, flags.head, flags.chest, flags.stomach, flags.arms, flags.legs, static_cast<int>(GET_CONFIG_VAR(aimbot_vars::BacktrackTicks)));
             }
             if (!picked.hasValue() && extrapolateEnabled) {
-                picked = lagcomp.extrapolatedResult(chosen.entity, eye.value(), chosen.angles.pitch, chosen.angles.yaw, flags.head, flags.chest, flags.stomach, flags.arms, flags.legs, static_cast<int>(GET_CONFIG_VAR(aimbot_vars::ExtrapolateTicks)));
+                // Same capsule scan over the EXTRAPOLATED future record when one can be built; the
+                // bone-FOV extrapolatedResult stays as the fallback.
+                auto extrapolated = lagcomp.extrapolate(chosen.entity, static_cast<int>(GET_CONFIG_VAR(aimbot_vars::ExtrapolateTicks)));
+                if (extrapolated.hasValue()) {
+                    auto&& extrapNode = hookContext.template make<BaseEntity>(chosen.entity).gameSceneNode();
+                    if (extrapNode) {
+                        const auto hitboxSet = Hitboxes::query(extrapNode.raw());
+                        float targetHealth = 100.0f;
+                        auto&& targetPawn = hookContext.template make<BaseEntity>(chosen.entity).template as<PlayerPawn>();
+                        if (targetPawn)
+                            if (const auto hp = targetPawn.health(); hp.hasValue())
+                                targetHealth = static_cast<float>(hp.value());
+                        int budget = kMaxScanPoints;
+                        auto scored = bestPointOnSkeleton(localPawn, eye.value(), currentPitch.value(), currentYaw.value(), chosen.entity, flags, maxFov, hitboxSet, extrapolated.value(), 0, targetHealth, budget);
+                        if (scored.hasValue())
+                            picked = scored.value().result;
+                    }
+                }
+                if (!picked.hasValue()) {
+                    picked = lagcomp.extrapolatedResult(chosen.entity, eye.value(), chosen.angles.pitch, chosen.angles.yaw, flags.head, flags.chest, flags.stomach, flags.arms, flags.legs, static_cast<int>(GET_CONFIG_VAR(aimbot_vars::ExtrapolateTicks)));
+                }
             }
             if (picked.hasValue()) {
                 const auto angles = shot_geometry::anglesTo(eye.value(), picked.value().aimPoint);
@@ -260,7 +287,32 @@ public:
         // command on the subtick path (see AttackCommand.h); slot 6 runs between the two hooks and
         // would overwrite anything pressed now. With force-shot off nothing is staged and the user's
         // own click still fires untouched.
-        const bool forceDown = forceShotEnabled && shouldForceShoot(localPawn, eye.value(), chosen);
+        // skeet's wait-for-accuracy gate: when the stance/min-damage arms pass but the accuracy arm
+        // does not, ForceShotWait keeps the engagement alive for up to ForceShotWaitTicks ticks and
+        // fires the first tick the measured accuracy clears (shouldForceShoot re-evaluated every
+        // tick) instead of dropping the shot this tick. Time going backwards (map change) disarms.
+        bool forceDown = false;
+        if (forceShotEnabled) {
+            if (shouldForceShoot(localPawn, eye.value(), chosen)) {
+                waitArmed = false;
+                forceDown = true;
+            } else if (GET_CONFIG_VAR(aimbot_vars::ForceShotWait)) {
+                const auto tick = hookContext.localPlayerController().tickBase();
+                if (!tick.hasValue() || tick.value() <= 0) {
+                    waitArmed = false;
+                } else {
+                    if (!waitArmed || tick.value() < waitArmedAtTick) {
+                        waitArmed = true;
+                        waitArmedAtTick = tick.value();
+                        waitFireAtTick = tick.value() + static_cast<int>(GET_CONFIG_VAR(aimbot_vars::ForceShotWaitTicks));
+                    }
+                    if (tick.value() >= waitFireAtTick)
+                        waitArmed = false; // grace expired - give up until the next engagement
+                }
+            } else {
+                waitArmed = false;
+            }
+        }
         forceShotThisTick = forceDown;
     }
 
@@ -392,6 +444,9 @@ public:
         forceShotThisTick = false;
         shotStagedThisTick = false;
         lastTargetHandleValue = 0;
+        waitArmed = false;
+        waitArmedAtTick = -1;
+        waitFireAtTick = -1;
     }
 
 private:
@@ -474,6 +529,12 @@ private:
 
     [[nodiscard]] typename AimTarget<HookContext>::Target refineMultipoint(auto&& localPawn, const cs2::Vector& eye, const typename AimTarget<HookContext>::Target& target) const noexcept
     {
+        // Capsule-true refinement first: REAL hitbox geometry (live-verified Hitboxes chain + live
+        // bone transforms, points from MultiPoint::generate). Falls back to the tangent-plane ring
+        // below whenever the chain does not resolve (missing model/bones).
+        if (auto capsule = refineMultipointCapsule(localPawn, eye, target); capsule.hasValue())
+            return capsule.value();
+
         const float radius = (target.hitgroup == 1) ? kMultipointHeadRadius : kMultipointBodyRadius;
         const auto basis = shot_geometry::angleVectors(target.angles.pitch, target.angles.yaw);
 
@@ -515,6 +576,236 @@ private:
         stickyMultipointHitgroup = target.hitgroup;
         stickyMultipointSlot = bestSlot;
         return best;
+    }
+
+    // Capsule-true multipoint refinement: for the aimed hitbox of the target's REAL hitbox set,
+    // generate the capsule-anchored candidate points (MultiPoint, velocity's generate_multipoints)
+    // on the LIVE skeleton and pick whichever has the highest predicted hitchance - same contest
+    // shape (and stickiness) as the ring fallback, but the points sit on the actual capsule instead
+    // of a fixed-radius ring around the bone centre. {} = chain unusable, caller uses the ring.
+    [[nodiscard]] Optional<typename AimTarget<HookContext>::Target> refineMultipointCapsule(auto&& localPawn, const cs2::Vector& eye, const typename AimTarget<HookContext>::Target& target) const noexcept
+    {
+        auto&& node = hookContext.template make<BaseEntity>(target.entity).gameSceneNode();
+        if (!node)
+            return {};
+        const auto hitboxSet = Hitboxes::query(node.raw());
+        if (hitboxSet.count == 0)
+            return {};
+
+        // The aimed hitbox: the entry of the same (canonical) hitgroup whose bone centre sits
+        // closest to the selector's aim point. Groups contain several entries (chest = 4-6 etc.);
+        // the closest one is the body region the selector meant.
+        const Hitboxes::Entry* aimed = nullptr;
+        float bestDistSq = 1.0e9f;
+        for (int h = 0; h < hitboxSet.count; ++h) {
+            const auto& entry = hitboxSet.entries[h];
+            if (canonicalHitgroup(Hitboxes::hitgroupFromHitbox(entry.index)) != target.hitgroup)
+                continue;
+            const auto centre = node.boneTransform(entry.bone);
+            if (!centre.hasValue())
+                continue;
+            const auto& p = centre.value().position;
+            const float dx = p.x - target.aimPoint.x;
+            const float dy = p.y - target.aimPoint.y;
+            const float dz = p.z - target.aimPoint.z;
+            const float distSq = dx * dx + dy * dy + dz * dz;
+            if (distSq < bestDistSq) {
+                bestDistSq = distSq;
+                aimed = &entry;
+            }
+        }
+        if (!aimed)
+            return {};
+
+        const auto bone = node.boneTransform(aimed->bone);
+        if (!bone.hasValue())
+            return {};
+
+        MultiPoint::Point points[MultiPoint::kMaxPoints];
+        const int pointCount = MultiPoint::generate(*aimed, bone.value().position, bone.value().rotation,
+                                                    static_cast<float>(GET_CONFIG_VAR(aimbot_vars::PointScale)), eye,
+                                                    hookContext.localPlayerBulletInaccuracy().valueOr(0.0f),
+                                                    GET_CONFIG_VAR(aimbot_vars::DynamicPointscale), points);
+        if (pointCount <= 0)
+            return {};
+
+        const bool incumbent = stickyMultipointEntity == target.entity && stickyMultipointHitgroup == target.hitgroup;
+
+        auto best = target;
+        int bestSlot = 0; // 0 = the selector's point, 1..pointCount = generated capsule points
+        int bestFraction = hitchanceFraction(localPawn, eye, target, kMultipointSamples);
+        if (incumbent && stickyMultipointSlot == bestSlot)
+            bestFraction += kMultipointStickyBonus;
+
+        for (int i = 0; i < pointCount; ++i) {
+            const auto& point = points[i].position;
+            const auto angles = shot_geometry::anglesTo(eye, point);
+            const typename AimTarget<HookContext>::Target candidate{{angles.pitch, angles.yaw}, point, target.entity, target.hitgroup};
+            int fraction = hitchanceFraction(localPawn, eye, candidate, kMultipointSamples);
+            if (incumbent && stickyMultipointSlot == i + 1)
+                fraction += kMultipointStickyBonus;
+            if (fraction > bestFraction) {
+                bestFraction = fraction;
+                best = candidate;
+                bestSlot = i + 1;
+            }
+        }
+
+        stickyMultipointEntity = target.entity;
+        stickyMultipointHitgroup = target.hitgroup;
+        stickyMultipointSlot = bestSlot;
+        return best;
+    }
+
+    // Skeet-style record scanning (rage upgrade, see memory reference_pastoskeet_dump): score REAL
+    // hitbox capsule points on the record skeletons instead of picking a bone by FOV. A point's
+    // score is its damage + a lethal-shot bonus - a backtrack-age penalty; FOV- and min-damage
+    // gated. The whole sweep is bounded by a shared evaluation budget, and the winning point must
+    // still pass the visibility rules before it can be staged.
+    struct ScoredAim {
+        typename Lagcomp<HookContext>::Result result;
+        float score;
+    };
+
+    [[nodiscard]] static bool hitgroupAllowed(int canonicalHitgroupId, const typename AimTarget<HookContext>::HitboxFlags& flags) noexcept
+    {
+        switch (canonicalHitgroupId) {
+        case 1: return flags.head;
+        case 2: return flags.chest;
+        case 3: return flags.stomach;
+        case 4: return flags.arms;
+        case 6: return flags.legs;
+        default: return false;
+        }
+    }
+
+    // Folds the game hitgroup ids the hitboxes carry (neck 8, right leg 7, right arm 5) onto the
+    // canonical ids AimTarget/the damage model use (chest 2, leg 6, arm 4) - damage-neutral.
+    [[nodiscard]] static int canonicalHitgroup(int hitgroup) noexcept
+    {
+        switch (hitgroup) {
+        case 8: return 2;
+        case 7: return 6;
+        case 5: return 4;
+        default: return hitgroup;
+        }
+    }
+
+    // Best scored capsule point on ONE skeleton (a backtrack record or an extrapolated future
+    // record). Weapon and armor inputs are read once per skeleton, not per point.
+    [[nodiscard]] Optional<ScoredAim> bestPointOnSkeleton(auto&& localPawn, const cs2::Vector& eye, float pitch, float yaw,
+                                                          cs2::C_BaseEntity* entity,
+                                                          const typename AimTarget<HookContext>::HitboxFlags& flags,
+                                                          float maxFov, const Hitboxes::Set& hitboxSet,
+                                                          const typename Lagcomp<HookContext>::Record& record,
+                                                          int ageTicks, float targetHealth, int& evaluationsLeft) const noexcept
+    {
+        Optional<ScoredAim> best;
+        if (hitboxSet.count == 0 || evaluationsLeft <= 0)
+            return best;
+
+        auto&& weapon = localPawn.getActiveWeapon();
+        const auto base = weapon.baseDamage();
+        const auto rangeMod = weapon.rangeModifier();
+        const auto armorRatio = weapon.armorRatio();
+        const auto headshotMultiplier = weapon.headshotMultiplier();
+        const bool haveWeapon = base.hasValue() && rangeMod.hasValue() && armorRatio.hasValue() && headshotMultiplier.hasValue();
+        int armor = 0;
+        bool hasHelmet = false;
+        readTargetArmor(entity, armor, hasHelmet);
+        const int minDamage = GET_CONFIG_VAR(aimbot_vars::MinDamage);
+
+        for (int h = 0; h < hitboxSet.count && evaluationsLeft > 0; ++h) {
+            const auto& entry = hitboxSet.entries[h];
+            const int hitgroup = canonicalHitgroup(Hitboxes::hitgroupFromHitbox(entry.index));
+            if (!hitgroupAllowed(hitgroup, flags))
+                continue;
+            if (entry.bone < 0 || entry.bone >= record.boneCount)
+                continue;
+            const auto& bone = record.bones[entry.bone];
+
+            MultiPoint::Point points[MultiPoint::kMaxPoints];
+            const int pointCount = MultiPoint::generate(entry, bone.position, bone.rotation,
+                                                        static_cast<float>(GET_CONFIG_VAR(aimbot_vars::PointScale)), eye, 0.0f, false, points);
+
+            for (int p = 0; p < pointCount && evaluationsLeft > 0; ++p) {
+                --evaluationsLeft;
+                const auto& point = points[p].position;
+
+                // FOV gate: points the acceptance cone cannot reach are never candidates.
+                const auto angles = shot_geometry::anglesTo(eye, point);
+                const float dPitch = angles.pitch - pitch;
+                const float dYaw = trig::normalizeDegrees(angles.yaw - yaw);
+                if (dPitch * dPitch + dYaw * dYaw > maxFov * maxFov)
+                    continue;
+
+                float damage = kUnknownDamage;
+                if (haveWeapon) {
+                    const float dx = point.x - eye.x;
+                    const float dy = point.y - eye.y;
+                    const float dz = point.z - eye.z;
+                    const float distance = trig::squareRoot(dx * dx + dy * dy + dz * dz);
+                    damage = base.value() * fastmath::powf(rangeMod.value(), distance / 500.0f);
+                    scaleDamage(damage, hitgroup, armor, hasHelmet, armorRatio.value(), headshotMultiplier.value());
+                }
+                if (minDamage > 0 && damage < static_cast<float>(minDamage))
+                    continue;
+
+                float score = damage;
+                if (damage >= targetHealth)
+                    score += kLethalBonus;
+                score -= static_cast<float>(ageTicks) * kBacktrackTickPenalty;
+                if (!best.hasValue() || score > best.value().score)
+                    best = ScoredAim{typename Lagcomp<HookContext>::Result{point, hitgroup, record.simulationTime}, score};
+            }
+        }
+        return best;
+    }
+
+    // Multi-record sweep: newest record first, hard age preference through the score, one shared
+    // evaluation budget. The winner is visibility-gated (skeet's safe flag, bounded to one trace).
+    [[nodiscard]] Optional<typename Lagcomp<HookContext>::Result> bestRecordPoint(auto&& localPawn, const cs2::Vector& eye, float pitch, float yaw,
+                                                                                  cs2::C_BaseEntity* entity,
+                                                                                  const typename AimTarget<HookContext>::HitboxFlags& flags,
+                                                                                  float maxFov, int maxTicks) const noexcept
+    {
+        auto&& node = hookContext.template make<BaseEntity>(entity).gameSceneNode();
+        if (!node)
+            return {};
+        const auto hitboxSet = Hitboxes::query(node.raw());
+        if (hitboxSet.count == 0)
+            return {};
+
+        auto&& lagcomp = hookContext.template make<Lagcomp>();
+        const typename Lagcomp<HookContext>::Record* records[Lagcomp<HookContext>::kMaxRecords];
+        const int recordCount = lagcomp.pickRecords(entity, maxTicks, records, Lagcomp<HookContext>::kMaxRecords);
+        if (recordCount <= 0)
+            return {};
+
+        float targetHealth = 100.0f;
+        auto&& targetPawn = hookContext.template make<BaseEntity>(entity).template as<PlayerPawn>();
+        if (targetPawn)
+            if (const auto hp = targetPawn.health(); hp.hasValue())
+                targetHealth = static_cast<float>(hp.value());
+
+        Optional<ScoredAim> best;
+        int evaluationsLeft = kMaxScanPoints;
+        for (int r = 0; r < recordCount && evaluationsLeft > 0; ++r) {
+            const auto& record = *records[r];
+            const int ageTicks = records[0]->tick - record.tick;
+            auto scored = bestPointOnSkeleton(localPawn, eye, pitch, yaw, entity, flags, maxFov, hitboxSet, record, ageTicks, targetHealth, evaluationsLeft);
+            if (scored.hasValue() && (!best.hasValue() || scored.value().score > best.value().score))
+                best = scored;
+        }
+        if (!best.hasValue())
+            return {};
+
+        const auto& result = best.value().result;
+        const auto angles = shot_geometry::anglesTo(eye, result.aimPoint);
+        const typename AimTarget<HookContext>::Target winner{{angles.pitch, angles.yaw}, result.aimPoint, entity, result.hitgroup};
+        if (!passesVisibility(localPawn, eye, winner))
+            return {};
+        return result;
     }
 
     // Estimated damage a shot to the aimed point would do: base weapon damage with distance falloff
@@ -745,6 +1036,14 @@ private:
     static constexpr float kMultipointHeadRadius = 3.5f;
     static constexpr float kMultipointBodyRadius = 10.0f;
 
+    // Record-scan tuning (skeet rage scoring, see reference_pastoskeet_dump): a lethal shot beats
+    // any non-lethal one, every tick of backtrack age costs damage points (prefers fresh records
+    // like skeet's 12-per-tick term, scaled to our damage range), and the whole sweep is capped so
+    // 16 records x 19 hitboxes can never blow the tick budget.
+    static constexpr float kLethalBonus = 25.0f;
+    static constexpr float kBacktrackTickPenalty = 4.0f;
+    static constexpr int kMaxScanPoints = 64;
+
     // Force-shot decision made during onCreateMove, consumed (and cleared) by this tick's
     // onWriteMoveCrc. Static for the same reason the triggerbot's armed/fireAtTime are: hookContext
     // builds a fresh feature instance per hook call, so cross-hook state must outlive it.
@@ -766,6 +1065,11 @@ private:
     inline static float stagedPunchYaw{0.0f};
     inline static float stagedBacktrackSimTime{0.0f};
     inline static bool stagedSpreadCompensation{false};
+    // Wait-for-accuracy state (skeet's fire gate): armed while a force-shot engagement is waiting
+    // for the measured accuracy to clear, with the grace window bounds.
+    inline static bool waitArmed{false};
+    inline static int waitArmedAtTick{-1};
+    inline static int waitFireAtTick{-1};
     // Seed-mode fallback inputs: where the staged shot's eye and aimed hitbox point are, so the
     // WriteMoveCrc-side luck check can test the deflected ray against the real target geometry.
     inline static cs2::Vector stagedEye{};

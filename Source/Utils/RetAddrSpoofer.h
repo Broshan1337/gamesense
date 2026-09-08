@@ -203,7 +203,7 @@ inline void init(std::span<const std::byte> executableSection) noexcept
         auto builder = storage.builder();
         builder.put("Return address spoofer: couldn't find a 'pop rcx; ret' gadget in the client's "
                     "executable section, spoofed invocations are disabled.");
-        SimpleMessageBox{}.showWarning("Neversneeze", builder.cstring());
+        SimpleMessageBox{}.showWarning("Neversnooze", builder.cstring());
         return;
     }
 

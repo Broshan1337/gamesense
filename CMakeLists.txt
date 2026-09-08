@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 # C is enabled for the vendored LuaJIT static library (Source/ThirdParty/luajit) - it is a C
 # codebase; without the C language enabled CMake silently generates an EMPTY archive.
-project(Neversneeze LANGUAGES CXX C)
+project(Neversnooze LANGUAGES CXX C)
 
 # No build type configured (bare `cmake -B build`, or an IDE defaulting to Debug) must never
 # silently produce a -O0 debug binary: besides being ~4x larger, a Debug build asserts at

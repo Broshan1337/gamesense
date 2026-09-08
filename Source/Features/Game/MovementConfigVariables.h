@@ -28,6 +28,12 @@ CONFIG_VARIABLE(EdgeJump, bool, false);
 // reference treats them as mutually exclusive).
 CONFIG_VARIABLE(EdgeStop, bool, false);
 
+// skeet's desubtick end-stage: strip the analog movement components from the outgoing command's
+// subtick steps (at the last writer position), so the server receives no subtick movement and
+// moves the player purely on tick boundaries. Button/angle steps (shots, jumps, strafer steering)
+// survive. NOTE: with this on, AutoPeek's subtick counter-drive degrades to its button half.
+CONFIG_VARIABLE(Desubtick, bool, false);
+
 // Scale the player's analog movement down while held-walking on the ground, so the wish speed
 // stays under the audible/visible run threshold: SlowWalkSpeed percent of full movement.
 CONFIG_VARIABLE(SlowWalk, bool, false);

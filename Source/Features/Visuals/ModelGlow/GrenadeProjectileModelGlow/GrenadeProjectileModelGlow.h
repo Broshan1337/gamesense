@@ -37,6 +37,17 @@ public:
         }
     }
 
+    [[nodiscard]] cs2::Color color(EntityTypeInfo entityTypeInfo, auto&& /* entity */) const noexcept
+    {
+        switch (entityTypeInfo.typeIndex) {
+        case EntityTypeInfo::indexOf<cs2::C_FlashbangProjectile>(): { const auto c = GET_CONFIG_VAR(model_glow_vars::FlashbangColor); return cs2::Color{c.r(), c.g(), c.b(), c.a()}; }
+        case EntityTypeInfo::indexOf<cs2::C_HEGrenadeProjectile>(): { const auto c = GET_CONFIG_VAR(model_glow_vars::HEGrenadeColor); return cs2::Color{c.r(), c.g(), c.b(), c.a()}; }
+        case EntityTypeInfo::indexOf<cs2::C_MolotovProjectile>(): { const auto c = GET_CONFIG_VAR(model_glow_vars::MolotovColor); return cs2::Color{c.r(), c.g(), c.b(), c.a()}; }
+        case EntityTypeInfo::indexOf<cs2::C_SmokeGrenadeProjectile>(): { const auto c = GET_CONFIG_VAR(model_glow_vars::SmokeGrenadeColor); return cs2::Color{c.r(), c.g(), c.b(), c.a()}; }
+        }
+        return cs2::Color{150, 150, 150, 255};
+    }
+
 private:
     [[nodiscard]] auto& state() const
     {

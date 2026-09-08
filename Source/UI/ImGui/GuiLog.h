@@ -11,11 +11,23 @@
 // the early menu/Vulkan-hook stages run, and StatusReport only dumps once - this file answers
 // "how far did the chain get" from outside the game. Best-effort: open+write+close per line,
 // failures ignored. Temporary verification scaffolding for the UI migration.
+//
+// Lines carry [unix-time.ms] [P<pid>:T<tid>] prefixes (multi-thread init debugging: the Vulkan
+// hook, the menu and the game-side features all log here from different threads). The previous
+// session's log is rotated to /tmp/gamesense_gui.log.old on the first write of a session, so a
+// crash's last lines survive the next injection.
 namespace gui_log
 {
 
+inline bool rotated{false};
+
 inline void write(const char* fmt, ...) noexcept
 {
+    if (!rotated) {
+        rotated = true;
+        (void)LinuxPlatformApi::rename("/tmp/gamesense_gui.log", "/tmp/gamesense_gui.log.old");
+    }
+
     // O_WRONLY | O_APPEND | O_CREAT, 0644 - numeric because fcntl flags under -nostdlib.
     const auto fd = LinuxPlatformApi::open("/tmp/gamesense_gui.log", 0x441, 0644);
     if (fd < 0)
@@ -25,7 +37,8 @@ inline void write(const char* fmt, ...) noexcept
     clock_gettime(CLOCK_MONOTONIC, &ts);
 
     char line[320];
-    int length = std::snprintf(line, sizeof(line), "[%ld.%03ld] ", ts.tv_sec, ts.tv_nsec / 1'000'000);
+    int length = std::snprintf(line, sizeof(line), "[%ld.%03ld] [P%d:T%d] ", ts.tv_sec, ts.tv_nsec / 1'000'000,
+                               LinuxPlatformApi::processId(), LinuxPlatformApi::threadId());
     if (length > 0 && length < static_cast<int>(sizeof(line))) {
         va_list args;
         va_start(args, fmt);

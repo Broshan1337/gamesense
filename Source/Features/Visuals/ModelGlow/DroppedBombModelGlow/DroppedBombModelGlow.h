@@ -6,7 +6,9 @@
 #include <Features/Visuals/ModelGlow/ModelGlowConfigVariables.h>
 #include <Features/Visuals/ModelGlow/ModelGlowParams.h>
 #include <Features/Visuals/ModelGlow/ModelGlowState.h>
+#include <GameClient/Entities/EntityClassifier.h>
 #include <HookContext/HookContextMacros.h>
+#include <Utils/ColorUtils.h>
 
 std::uint64_t Weapon_sceneObjectUpdater(cs2::C_CSWeaponBase* weapon, void* unknown, bool unknownBool) noexcept;
 
@@ -46,6 +48,11 @@ public:
     [[nodiscard]] color::HueInteger hue() const
     {
         return GET_CONFIG_VAR(model_glow_vars::DroppedBombHue);
+    }
+    [[nodiscard]] cs2::Color color(EntityTypeInfo /* entityTypeInfo */, auto&& /* entity */) const noexcept
+    {
+        const auto picked = GET_CONFIG_VAR(model_glow_vars::DroppedBombColor);
+        return cs2::Color{picked.r(), picked.g(), picked.b(), picked.a()};
     }
 
 private:

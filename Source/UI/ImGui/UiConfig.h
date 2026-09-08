@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <optional>
 
 #include <Utils/ManuallyDestructible.h> // load-bearing order: GlobalContext.h relies on it (see dllmain.cpp)
@@ -36,14 +37,20 @@ template <typename ConfigVariable>
 }
 
 // Widgets may ignore the return value (false = context unavailable during teardown, click
-// was dropped).
+// was dropped). Every successful set() bumps changeEpoch - the menu's config-dirty dot diffs
+// this against the epoch at the last explicit save/switch.
+inline std::atomic<std::uint64_t> changeEpoch{0};
+
 template <typename ConfigVariable>
 bool set(typename ConfigVariable::ValueType newValue) noexcept
 {
     if (!HookContext<GlobalContext>::isGlobalContextComplete() || HookQuiesce::isShuttingDown())
         return false;
     HookContext<GlobalContext> hookContext;
-    return hookContext.config().template setVariable<ConfigVariable>(newValue);
+    const bool changed = hookContext.config().template setVariable<ConfigVariable>(newValue);
+    if (changed)
+        changeEpoch.fetch_add(1, std::memory_order_relaxed);
+    return changed;
 }
 
 // Direct context access for the rare UI feature that needs more than config vars (the avatar

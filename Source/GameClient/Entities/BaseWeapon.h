@@ -311,9 +311,14 @@ public:
         // ownership-toggle nudge) were both tested live and disproven; the reference is
         // confirmed to render both the skin AND the holding animation correctly, so porting
         // its full field set faithfully - not just the 3 skin attributes - is the next real
-        // step. m_iItemIDHigh marks this as a non-real/local item ID; m_iAccountID ties it to
-        // the weapon's real original owner rather than defaulting to 0/unowned.
-        offsets.itemIDHigh.of(item) = 0xFFFFFFFFu;
+        // step. The reference's item id is a FAUX id (high 0xf0000000 / low 0x10), not
+        // 0xFFFFFFFF: the HUD (weapon-select row icon/name) resolves item details through the
+        // item id, and an invalid/zero id leaves the row on the generic fallback ("Knife") -
+        // m_bInitialized=true is required for the same reason (the reference sets it on every
+        // apply; leaving the view "uninitialized" makes the HUD treat it as having no item).
+        offsets.itemIDHigh.of(item) = 0xF0000000u;
+        offsets.itemIDLow.of(item) = 0x10u;
+        offsets.initialized.of(item) = true;
         offsets.accountID.of(item) = offsets.originalOwnerXuidLow.of(baseWeapon).valueOr(0u);
         offsets.disallowSOC.of(item) = true;
         offsets.restoreCustomMaterialAfterPrecache.of(item) = true;
@@ -538,6 +543,14 @@ public:
     [[nodiscard]] Optional<float> maxSpeed() const noexcept
     {
         return vDataFloat("m_flMaxSpeed");
+    }
+
+    // Speed multiplier while attacking with this weapon (CCSWeaponBaseVData::m_flAttackMovespeedFactor,
+    // schema-confirmed at vdata +0x7E4; 1.0 for most guns, < 1 for heavies like the Negev/AUG). The
+    // game's movement setup multiplies the max speed by this while IN_ATTACK is held.
+    [[nodiscard]] Optional<float> attackMovespeedFactor() const noexcept
+    {
+        return vDataFloat("m_flAttackMovespeedFactor");
     }
 
     // The in-air inaccuracy floor at jump apex (CCSWeaponBaseVData::m_flInaccuracyJumpApex). The air

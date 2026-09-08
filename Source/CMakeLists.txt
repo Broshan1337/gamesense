@@ -1,6 +1,6 @@
-add_library(Neversneeze SHARED dllmain.cpp)
+add_library(Neversnooze SHARED dllmain.cpp)
 
-set_target_properties(Neversneeze PROPERTIES
+set_target_properties(Neversnooze PROPERTIES
   # Output file name must stay libMangoHud.so: it is disguised as the legit MangoHud overlay
   # library (a normal thing to see in a game's maps), and inject.sh, inject_memfd, self-unload
   # (SONAME matching) plus the module-hiding code all key on it. The CMake target keeps the
@@ -10,8 +10,8 @@ set_target_properties(Neversneeze PROPERTIES
   C_VISIBILITY_PRESET hidden
   POSITION_INDEPENDENT_CODE ON)
 
-target_include_directories(Neversneeze PRIVATE "${CMAKE_SOURCE_DIR}/Source" "${CMAKE_SOURCE_DIR}/Source/hooks")
-target_link_libraries(Neversneeze PRIVATE ${CMAKE_DL_LIBS})
+target_include_directories(Neversnooze PRIVATE "${CMAKE_SOURCE_DIR}/Source" "${CMAKE_SOURCE_DIR}/Source/hooks")
+target_link_libraries(Neversnooze PRIVATE ${CMAKE_DL_LIBS})
 
 # ---- Steam Module (separate target for Steam process injection) --------------------
 add_library(SteamModule SHARED SteamModule/steam_module.cpp)
@@ -29,9 +29,9 @@ target_link_libraries(SteamModule PRIVATE ${CMAKE_DL_LIBS} pthread)
 # Built in its OWN tree (build-steam, see inject.sh), NOT here: both modules use the source file
 # and output name, so defining both targets in one build directory makes two rules generate
 # Source/libSteamModule.so - ninja aborts every build of the tree on it. Configure with
-# -DNEVERSNEEZE_BUILD_STEAM_MODULE32=ON (as build-steam is) to get this target.
-option(NEVERSNEEZE_BUILD_STEAM_MODULE32 "Also define the 32-bit SteamModule target (build-steam tree only)" OFF)
-if(NEVERSNEEZE_BUILD_STEAM_MODULE32 AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+# -DNEVERSNOOZE_BUILD_STEAM_MODULE32=ON (as build-steam is) to get this target.
+option(NEVERSNOOZE_BUILD_STEAM_MODULE32 "Also define the 32-bit SteamModule target (build-steam tree only)" OFF)
+if(NEVERSNOOZE_BUILD_STEAM_MODULE32 AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
   add_library(SteamModule32 SHARED SteamModule/steam_module.cpp)
   
   set_target_properties(SteamModule32 PROPERTIES
@@ -65,7 +65,7 @@ FetchContent_MakeAvailable(sdl3)
 
 add_library(sdl3_headers INTERFACE)
 target_include_directories(sdl3_headers INTERFACE "${sdl3_SOURCE_DIR}/include")
-target_link_libraries(Neversneeze PRIVATE sdl3_headers)
+target_link_libraries(Neversnooze PRIVATE sdl3_headers)
 
 # ---- Dear ImGui (freestanding bridging model) ------------------------------------------
 #
@@ -132,7 +132,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
   endif()
 endif()
 
-target_link_libraries(Neversneeze PRIVATE imgui m)
+target_link_libraries(Neversnooze PRIVATE imgui m)
 
 # ---- LuaJIT 2.1 (vendored, pre-generated codegen) ---------------------------------------
 # Vendored copy of github.com/LuaJIT/LuaJIT (commit 1ee778a4, 2026-08-19, rolling 2.1) in
@@ -173,11 +173,11 @@ set_target_properties(luajit PROPERTIES
 # pthread: lj_profile.c (referenced once the profiler path is pulled in); m: LuaJIT's own math;
 # gcc_s: the _Unwind_* external-unwinder functions LUAJIT_UNWIND_EXTERNAL binds to.
 target_link_libraries(luajit PUBLIC m pthread gcc_s)
-target_link_libraries(Neversneeze PRIVATE luajit)
+target_link_libraries(Neversnooze PRIVATE luajit)
 
 # UI / hook translation units (the tree is otherwise header-only; these carry the ImGui menu
 # implementation and the Vulkan presentation hook).
-target_sources(Neversneeze PRIVATE
+target_sources(Neversnooze PRIVATE
   UI/ImGui/GUI.cpp
   UI/ImGui/Neverlose/Neverlose.cpp
   Hooks/Graphics/VulkanHook.cpp
@@ -193,7 +193,7 @@ target_sources(Neversneeze PRIVATE
 # the target flags, so these win.
 set_source_files_properties(Features/Lua/Lua.cpp PROPERTIES
   COMPILE_OPTIONS "-funwind-tables;-fasynchronous-unwind-tables")
-target_sources(Neversneeze PRIVATE Features/Lua/Lua.cpp)
+target_sources(Neversnooze PRIVATE Features/Lua/Lua.cpp)
 
 # Neverlose menu fonts, embedded into the binary (objcopy) so the UI has no filesystem
 # dependency. Symbols follow the objcopy convention: _binary_<name with ./- replaced>_start/_end.
@@ -206,27 +206,27 @@ if(UNIX)
       WORKING_DIRECTORY "${NL_FONT_DIR}" # relative input -> short _binary_<name>_start symbols
       DEPENDS "${NL_FONT_DIR}/${FONT}.ttf"
       VERBATIM)
-    target_sources(Neversneeze PRIVATE "${FONT_OBJ}")
+    target_sources(Neversnooze PRIVATE "${FONT_OBJ}")
     set_source_files_properties("${FONT_OBJ}" PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
   endforeach()
 endif()
 
 if(WIN32)
-  target_sources(Neversneeze PRIVATE Platform/Windows/Syscalls/WindowsSyscall.asm)
+  target_sources(Neversnooze PRIVATE Platform/Windows/Syscalls/WindowsSyscall.asm)
 endif()
 
 if(MSVC)
-  set_target_properties(Neversneeze PROPERTIES MSVC_RUNTIME_LIBRARY "$<$<CONFIG:Debug>:MultiThreadedDebugDLL>")
+  set_target_properties(Neversnooze PROPERTIES MSVC_RUNTIME_LIBRARY "$<$<CONFIG:Debug>:MultiThreadedDebugDLL>")
   string(REGEX REPLACE "/EH[a-z]+" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
-  target_sources(Neversneeze PRIVATE $<$<CONFIG:Release>:Platform/Windows/CRTWindows.cpp>)
-  target_compile_options(Neversneeze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W4 $<$<CONFIG:Release>:/sdl- /GS->>)
-  target_compile_definitions(Neversneeze PRIVATE $<$<CONFIG:Release>:_USE_STD_VECTOR_ALGORITHMS=0>)
-  target_link_options(Neversneeze PRIVATE $<$<CONFIG:Release>:/nodefaultlib /ENTRY:"DllMain">)
+  target_sources(Neversnooze PRIVATE $<$<CONFIG:Release>:Platform/Windows/CRTWindows.cpp>)
+  target_compile_options(Neversnooze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W4 $<$<CONFIG:Release>:/sdl- /GS->>)
+  target_compile_definitions(Neversnooze PRIVATE $<$<CONFIG:Release>:_USE_STD_VECTOR_ALGORITHMS=0>)
+  target_link_options(Neversnooze PRIVATE $<$<CONFIG:Release>:/nodefaultlib /ENTRY:"DllMain">)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   if(NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
-    target_compile_options(Neversneeze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall>)
+    target_compile_options(Neversnooze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall>)
     # -fno-gnu-unique is load-bearing for unload. GCC emits static template variables (e.g. the
     # inline std::atomic/atomic_flag objects in Utils/RetAddrSpoofer.h) with the STB_GNU_UNIQUE
     # symbol binding, which -fvisibility=hidden does NOT suppress. glibc marks any DSO that
@@ -236,22 +236,22 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU
     # existing copy and never re-runs .init_array. With this flag those symbols are emitted as
     # ordinary weak COMDAT symbols instead, weak definitions do not pin the DSO, and the unmap
     # works. Verified offline (see the unload repro): UNIQUE bind -> stays mapped; WEAK -> clean.
-    target_compile_options(Neversneeze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -fno-gnu-unique>)
-    target_link_options(Neversneeze PRIVATE LINKER:--no-undefined -z noexecstack)
+    target_compile_options(Neversnooze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -fno-gnu-unique>)
+    target_link_options(Neversnooze PRIVATE LINKER:--no-undefined -z noexecstack)
   endif()
 
-  target_compile_options(Neversneeze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-missing-braces>)
+  target_compile_options(Neversnooze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-missing-braces>)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14.0)
-  target_compile_options(Neversneeze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-dangling-reference>) # false positive
+  target_compile_options(Neversnooze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-dangling-reference>) # false positive
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   if(UNIX)
-    target_compile_options(Neversneeze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-stack-protector -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-math-errno>)
-    target_link_options(Neversneeze PRIVATE -nostdlib)
-    target_link_libraries(Neversneeze PRIVATE c)
+    target_compile_options(Neversnooze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-stack-protector -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-math-errno>)
+    target_link_options(Neversnooze PRIVATE -nostdlib)
+    target_link_libraries(Neversnooze PRIVATE c)
 
     target_compile_options(SteamModule PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-stack-protector -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables>)
     if(TARGET SteamModule32)
@@ -259,7 +259,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     endif()
     
     if(CMAKE_STRIP)
-      add_custom_command(TARGET Neversneeze POST_BUILD COMMAND ${CMAKE_STRIP} "$<TARGET_FILE:Neversneeze>")
+      add_custom_command(TARGET Neversnooze POST_BUILD COMMAND ${CMAKE_STRIP} "$<TARGET_FILE:Neversnooze>")
       add_custom_command(TARGET SteamModule POST_BUILD COMMAND ${CMAKE_STRIP} "$<TARGET_FILE:SteamModule>")
       if(TARGET SteamModule32)
         add_custom_command(TARGET SteamModule32 POST_BUILD COMMAND ${CMAKE_STRIP} "$<TARGET_FILE:SteamModule32>")

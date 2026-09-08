@@ -35,4 +35,11 @@ CONFIG_VARIABLE_HUE(DroppedBombHue, model_glow_params::kDroppedBombHue);
 CONFIG_VARIABLE_HUE(TickingBombHue, model_glow_params::kTickingBombHue);
 CONFIG_VARIABLE_HUE(DefuseKitHue, model_glow_params::kDefuseKitHue);
 
+CONFIG_VARIABLE(FlashbangColor, color::Rgba, (color::Rgba{64, 131, 255, 255}));
+CONFIG_VARIABLE(HEGrenadeColor, color::Rgba, (color::Rgba{255, 64, 64, 255}));
+CONFIG_VARIABLE(SmokeGrenadeColor, color::Rgba, (color::Rgba{64, 255, 64, 255}));
+CONFIG_VARIABLE(MolotovColor, color::Rgba, (color::Rgba{255, 128, 0, 255}));
+CONFIG_VARIABLE(DroppedBombColor, color::Rgba, (color::Rgba{255, 213, 77, 255}));
+CONFIG_VARIABLE(TickingBombColor, color::Rgba, (color::Rgba{255, 0, 0, 255}));
+CONFIG_VARIABLE(DefuseKitColor, color::Rgba, (color::Rgba{0, 213, 255, 255}));
 }

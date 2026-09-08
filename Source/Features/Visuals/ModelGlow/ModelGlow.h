@@ -132,8 +132,11 @@ private:
     [[nodiscard]] cs2::Color getGlowColor(auto&& glow, auto&& entity, [[maybe_unused]] EntityTypeInfo entityTypeInfo) const
     {
         // Glows exposing a ready-made color() (the player glow, which mixes hue-based and full
-        // RGBA color modes) use it as-is; every other glow still derives its color from a hue.
-        if constexpr (requires { { glow.color(entity) }; })
+        // RGBA color modes, and the color-picker-driven object glows) use it as-is; every other
+        // glow still derives its color from a hue.
+        if constexpr (requires { { glow.color(entityTypeInfo, entity) }; })
+            return glow.color(entityTypeInfo, entity);
+        else if constexpr (requires { { glow.color(entity) }; })
             return glow.color(entity);
         else if constexpr (requires { { glow.hue(entity) }; })
             return getColor(glow.hue(entity), getSaturation(glow, entity));

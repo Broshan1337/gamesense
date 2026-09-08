@@ -34,6 +34,6 @@ struct PatternNotFoundLogger {
 
         builder.put('\n');
 
-        SimpleMessageBox{}.showWarning("Neversneeze", builder.cstring());
+        SimpleMessageBox{}.showWarning("Neversnooze", builder.cstring());
     }
 };

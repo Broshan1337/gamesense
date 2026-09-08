@@ -37,7 +37,7 @@ if [ ! -f "$steam_module" ]; then
 fi
 
 if [ ! -f "$cheat_module" ]; then
-    echo "[Build] Neversneeze module not found"
+    echo "[Build] Neversnooze module not found"
     need_build=1
 fi
 
@@ -62,8 +62,8 @@ if [ "$need_build" -eq 1 ]; then
         cmake --build "$project_dir/build-steam" --target SteamModule32 2>&1 | tail -5
         
         echo ""
-        echo "[Build] Building Neversneeze (64-bit)..."
-        cmake --build "$project_dir/build" --target Neversneeze 2>&1 | tail -5
+        echo "[Build] Building Neversnooze (64-bit)..."
+        cmake --build "$project_dir/build" --target Neversnooze 2>&1 | tail -5
         
         echo ""
         echo "[Build] Done"
@@ -175,7 +175,7 @@ fi
 
 if [ ! -f "$build_lib" ]; then
     echo "[CS2] Error: Built library not found at '$build_lib'"
-    echo "[CS2] Build it first: cmake --build build --target Neversneeze"
+    echo "[CS2] Build it first: cmake --build build --target Neversnooze"
     exit 1
 fi
 

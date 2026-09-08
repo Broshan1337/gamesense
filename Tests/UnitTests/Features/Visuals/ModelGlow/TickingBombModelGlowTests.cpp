@@ -38,7 +38,7 @@ class TickingBombModelGlowHueTest
 
 TEST_P(TickingBombModelGlowHueTest, CorrectHueIsReturned) {
     EXPECT_CALL(mockHookContext, config()).WillOnce(testing::ReturnRef(mockConfig));
-    mockConfig.expectGetVariable<model_glow_vars::TickingBombHue>(model_glow_vars::TickingBombHue::ValueType{GetParam()});
+    mockConfig.expectGetVariable<model_glow_vars::TickingBombHue>(model_glow_vars::TickingBombHue::ValueType{color::HueInteger{GetParam()}});
     EXPECT_EQ(tickingBombModelGlow.hue(), GetParam());
 }
 

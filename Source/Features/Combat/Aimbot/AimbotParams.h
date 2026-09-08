@@ -33,6 +33,10 @@ constexpr auto kMinDamage = RangeConstrainedVariableParams<std::uint8_t>{.min = 
 // ring (16). Only meaningful against real players with latency; ~no effect on a local server.
 constexpr auto kBacktrackTicks = RangeConstrainedVariableParams<std::uint8_t>{.min = 1, .max = 16, .def = 12};
 
+// skeet's wait-for-accuracy fire gate cap: how long the force-shot may keep waiting for the weapon's
+// measured accuracy to clear before giving up on the engagement (skeet projects up to 34 ticks ahead).
+constexpr auto kForceShotWaitTicks = RangeConstrainedVariableParams<std::uint8_t>{.min = 1, .max = 34, .def = 34};
+
 // Multipoint point scale percent (velocity's `pointscale`, default 85): candidates may sit up to this
 // fraction of the hitbox capsule radius off its centre.
 constexpr auto kPointScale = RangeConstrainedVariableParams<std::uint8_t>{.min = 0, .max = 100, .def = 85};

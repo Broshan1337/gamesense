@@ -90,8 +90,9 @@ public:
             captureValid = true;
 
         // One-per-second in-game state line while airborne (the [strafe] verification harness).
-        VerifyConsole::write(1.0f, "[strafe]", "r=%s spd=%d q=%d inj=%d",
-            skipReasonText(reason), static_cast<int>(diagSpeed), diagQuantized, lastInjectedCount);
+        // max= is the layered effective max speed - meaningful when r=captured.
+        VerifyConsole::write(1.0f, "[strafe]", "r=%s spd=%d max=%.0f q=%d inj=%d",
+            skipReasonText(reason), static_cast<int>(diagSpeed), capturedMaxSpeed, diagQuantized, lastInjectedCount);
 
         if (reason == SkipReason::none)
             return;
@@ -300,7 +301,7 @@ private:
         capturedTargetYaw = trig::normalizeDegrees(commandYaw.value() + baseYawOffset);
         capturedBaseYawOffset = baseYawOffset;
         capturedAirAccelerate = airAccelerate.value();
-        capturedMaxSpeed = maxSpeed.value();
+        capturedMaxSpeed = effectiveMaxSpeed(maxSpeed.value(), userCmd.isButtonDown(kAttackButton));
         capturedAirMaxWishSpeed = airMaxWishSpeed.value();
         capturedFriction = friction;
         capturedTickInterval = tickInterval.value();
@@ -474,27 +475,136 @@ private:
         return velocity;
     }
 
-    // m_pMovementServices / m_flSurfaceFriction off the pawn's movement services - the
-    // multiplier the game itself puts into air acceleration (see Bunnyhop for the trail).
-    [[nodiscard]] Optional<float> surfaceFriction() const noexcept
+    // m_pMovementServices off the pawn - the component the friction and max-speed reads share.
+    // Null when the field or the pointer is unavailable.
+    [[nodiscard]] void* movementServices() const noexcept
     {
         auto&& localPawn = hookContext.localPlayerController().pawn().template as<PlayerPawn>();
         if (!localPawn)
-            return {};
+            return nullptr;
 
         const auto servicesOffset = hookContext.schemaSystem().getFieldOffset("C_BasePlayerPawn", "m_pMovementServices");
-        const auto frictionOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayer_MovementServices", "m_flSurfaceFriction");
-        if (!servicesOffset.has_value() || *servicesOffset <= 0 || !frictionOffset.has_value() || *frictionOffset <= 0)
-            return {};
+        if (!servicesOffset.has_value() || *servicesOffset <= 0)
+            return nullptr;
 
         void* services = nullptr;
         std::memcpy(&services, reinterpret_cast<const std::byte*>(static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity())) + *servicesOffset, sizeof(services));
+        return services;
+    }
+
+    // m_flSurfaceFriction off the movement services - the
+    // multiplier the game itself puts into air acceleration (see Bunnyhop for the trail).
+    [[nodiscard]] Optional<float> surfaceFriction() const noexcept
+    {
+        void* services = movementServices();
         if (!services)
+            return {};
+
+        const auto frictionOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayer_MovementServices", "m_flSurfaceFriction");
+        if (!frictionOffset.has_value() || *frictionOffset <= 0)
             return {};
 
         float friction{};
         std::memcpy(&friction, reinterpret_cast<const std::byte*>(services) + *frictionOffset, sizeof(friction));
         return friction;
+    }
+
+    // The effective max speed the game's own movement code would use this tick, layered on top
+    // of the plain sv_maxspeed cvar the reference originally simulated with:
+    //   1. the movement services' own m_flMaxspeed cap (cvar, whichever is lower),
+    //   2. the active weapon's base run speed (weapon vdata m_flMaxSpeed - knives/pistols/rifles
+    //      all differ, and holding a rifle out makes the simulated gain angle wrong by minutes),
+    //   3. the post-activity stamina penalty, applied squared exactly as the game does,
+    //   4. the modern-jump landing speed-regen: right after a landing, max speed is reduced and
+    //      climbs back over the next ticks - the classic hop-chain speed decay. Skipping it made
+    //      the simulated angle optimistic on the first airborne ticks after every hop.
+    // Not ported: the surface-properties max_speed_factor - m_surfaceProps on the movement
+    // services is only a CUtlStringToken, and turning it into surface data needs an
+    // IPhysicsSurfaceProps::GetSurfaceData anchor in libphysics; the factor is 1.0 on
+    // effectively every playable CS2 surface, so the complexity buys nothing measurable.
+    // The reload/clip refinement on the attack factor (the reference also requires an loaded,
+    // non-reloading weapon) is skipped for the same reason - IN_ATTACK while airborne with an
+    // empty mag is a corner of a corner.
+    [[nodiscard]] float effectiveMaxSpeed(float convarMaxSpeed, bool attacking) noexcept
+    {
+        float maxSpeed = convarMaxSpeed;
+        void* services = movementServices();
+        if (services) {
+            if (const auto maxspeedOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayer_MovementServices", "m_flMaxspeed"); maxspeedOffset.has_value() && *maxspeedOffset > 0) {
+                float servicesMax{};
+                std::memcpy(&servicesMax, reinterpret_cast<const std::byte*>(services) + *maxspeedOffset, sizeof(servicesMax));
+                if (servicesMax > 0.0f && servicesMax < maxSpeed)
+                    maxSpeed = servicesMax;
+            }
+        }
+
+        auto&& localPawn = hookContext.localPlayerController().pawn().template as<PlayerPawn>();
+        auto&& weapon = localPawn.getActiveWeapon();
+        const auto weaponMax = weapon.maxSpeed();
+        if (weaponMax.hasValue() && weaponMax.value() > 0.0f && weaponMax.value() < maxSpeed)
+            maxSpeed = weaponMax.value();
+
+        // While attacking, the weapon's own speed multiplier applies on top (verified in the
+        // binary: the movement setup multiplies its max-speed accumulator by the vdata field).
+        if (attacking) {
+            const auto attackFactor = weapon.attackMovespeedFactor();
+            if (attackFactor.hasValue() && attackFactor.value() > 0.0f)
+                maxSpeed *= attackFactor.value();
+        }
+
+        if (services) {
+            if (const auto staminaOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayer_MovementServices", "m_flStamina"); staminaOffset.has_value() && *staminaOffset > 0) {
+                float stamina{};
+                std::memcpy(&stamina, reinterpret_cast<const std::byte*>(services) + *staminaOffset, sizeof(stamina));
+                if (stamina > 0.0f) {
+                    const float scale = std::clamp(1.0f - stamina / 100.0f, 0.0f, 1.0f);
+                    maxSpeed *= scale * scale;
+                }
+            }
+        }
+
+        // Landing speed-regen, verified against the game's own implementation (two sites in
+        // libclient, 0x1551eb0 / 0x1552050, the latter writing the move-data max-speed slot):
+        //   base = clamp(1 + m_flLastLandedVelocityZ * 0.0005, 0.2, 1)   [const @0xB025E4]
+        //   regained = base^2 + elapsed_ticks * (1/64) * 1.1111894        [consts @0xB02450,
+        //   max_speed *= min(regained, 1.0)                                @0xB02228]
+        // where elapsed is a taia subtraction of the landed tick/frac from "now". Known
+        // approximation: the game sources "now" through a pause-duration helper (freeze time
+        // does not count toward the climb); the raw tickCount used here starts counting again
+        // one freeze period early, which only over-estimates regen while nobody can move.
+        const auto legacyJump = hookContext.template make<CvarSystem>().readBoolConVar("sv_legacy_jump");
+        if (services && legacyJump.has_value() && !legacyJump.value()) {
+            const auto jumpOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayer_MovementServices", "m_ModernJump");
+            const auto landedTickOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayerModernJump", "m_nLastLandedTick");
+            const auto landedFracOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayerModernJump", "m_flLastLandedFrac");
+            const auto landedVelZOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayerModernJump", "m_flLastLandedVelocityZ");
+            const auto nowTick = hookContext.globalVars().tickCount();
+            if (jumpOffset.has_value() && *jumpOffset > 0
+                && landedTickOffset.has_value() && *landedTickOffset > 0
+                && landedFracOffset.has_value() && *landedFracOffset > 0
+                && landedVelZOffset.has_value() && *landedVelZOffset > 0
+                && nowTick.hasValue()) {
+                const auto* jump = reinterpret_cast<const std::byte*>(services) + *jumpOffset;
+                int landedTick{};
+                float landedFrac{};
+                float landedVelZ{};
+                std::memcpy(&landedTick, jump + *landedTickOffset, sizeof(landedTick));
+                std::memcpy(&landedFrac, jump + *landedFracOffset, sizeof(landedFrac));
+                std::memcpy(&landedVelZ, jump + *landedVelZOffset, sizeof(landedVelZ));
+
+                const float base = std::clamp(1.0f + landedVelZ * 0.0005f, 0.2f, 1.0f);
+                // Elapsed in ticks (the game's taia subtraction floors to its tick part);
+                // the sub-tick fraction of "now" is not readable at capture time and costs at
+                // most one 1/64 step of the climb term.
+                const float elapsed = static_cast<float>(nowTick.value()) - (static_cast<float>(landedTick) + landedFrac);
+                const int elapsedTicks = elapsed > 0.0f ? static_cast<int>(elapsed) : 0;
+                const float regained = base * base + static_cast<float>(elapsedTicks) * (1.0f / 64.0f) * 1.1111894f;
+                if (regained < 1.0f)
+                    maxSpeed *= regained;
+            }
+        }
+
+        return maxSpeed;
     }
 
     template <typename ConVarType>
@@ -540,6 +650,9 @@ private:
     // IN_SPRINT (shift-walk), 1 << 16 in the game's own button mask table. Sprinting is a
     // deliberate slow-movement choice, so it opts the player out of acceleration steering.
     static constexpr std::uint64_t kSprintButton = 0x10000;
+
+    // IN_ATTACK (1 << 0, same mask table) - gates the weapon's attack-movespeed factor.
+    static constexpr std::uint64_t kAttackButton = 0x1;
 
     // True from capture until the slot-7 write consumes it (one-shot per tick).
     inline static bool captureValid{false};

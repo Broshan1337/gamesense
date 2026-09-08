@@ -112,6 +112,43 @@ public:
         return true;
     }
 
+    // ---- flags patching (live `name` renames) --------------------------------------------
+    //
+    // CS2 registers the `name` convar WITHOUT FCVAR_USERINFO (hidden/dev/protected instead), so
+    // `name "x"` never reaches the server - mid-match renames silently do nothing. The fix:
+    // patch the flags (|= USERINFO, clear DEV|PROTECTED - friend-verified layout below), then
+    // `setinfo name "x"` pushes a real userinfo update: live rename, no Steam, no rate limit.
+    //
+    // CConVar layout (friend's Windows dump, cross-checked: nType@0x28 is the SAME offset our
+    // OffsetToConVarValueType pattern resolves, and the enum ordering matches our
+    // ConVarValueType exactly):
+    //   name@0x00, defaultValue@0x08, description@0x20, type u32@0x28, registered u32@0x2C,
+    //   flags u32@0x30, value union@0x58
+    //
+    // Sanity gate before touching anything: `name` is a STRING cvar, so the type field at 0x28
+    // must read ConVarValueType::string (9). Flag values (S1-style enum CS2 kept):
+    //   DEVELOPMENTONLY = (1<<1), PROTECTED = (1<<5), USERINFO = (1<<9).
+    [[nodiscard]] bool patchUserInfoFlag(const char* name) const noexcept
+    {
+        const auto conVar = findConVar(name);
+        if (!conVar)
+            return false;
+
+        constexpr std::uintptr_t kTypeOffset = 0x28;
+        constexpr std::uintptr_t kFlagsOffset = 0x30;
+        const auto* type = reinterpret_cast<const std::uint32_t*>(reinterpret_cast<std::uintptr_t>(conVar) + kTypeOffset);
+        if (*type != static_cast<std::uint32_t>(cs2::ConVarValueType::string))
+            return false; // not a string cvar - layout shifted, fail closed
+
+        auto* flags = reinterpret_cast<std::uint32_t*>(reinterpret_cast<std::uintptr_t>(conVar) + kFlagsOffset);
+        constexpr std::uint32_t kFlagDevelopmentOnly = 0x2;  // (1 << 1)
+        constexpr std::uint32_t kFlagProtected = 0x20;       // (1 << 5)
+        constexpr std::uint32_t kFlagUserInfo = 0x200;       // (1 << 9)
+        *flags |= kFlagUserInfo;
+        *flags &= ~(kFlagDevelopmentOnly | kFlagProtected);
+        return true;
+    }
+
     template <typename ConVarType>
     [[nodiscard]] auto getConVarValue() const
     {

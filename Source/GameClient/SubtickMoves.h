@@ -247,6 +247,45 @@ public:
         std::memcpy(field + Field::kCurrentSizeOffset, &empty, sizeof(empty));
     }
 
+    // skeet's desubtick END-stage: strip the ANALOG movement components from every existing step
+    // (clear the two has-bits; the floats then read back as unset) while leaving button and
+    // view-angle steps untouched. Run at the last writer position (WriteMoveCrc pre-original), so
+    // the outgoing command carries no subtick movement and the server moves the player purely on
+    // tick boundaries - the "desubtick" the movement scene asks for. Shots, jumps and yaw steering
+    // survive because those are button/angle steps.
+    static void stripAnalog(std::byte* baseMessage) noexcept
+    {
+        if (!baseMessage)
+            return;
+
+        using Field = cs2::CUserCmd::BaseMessage::SubtickMoves;
+        auto* const field = baseMessage + Field::kFieldOffset;
+
+        int currentSize{};
+        std::memcpy(&currentSize, field + Field::kCurrentSizeOffset, sizeof(currentSize));
+        std::byte* rep = nullptr;
+        std::memcpy(&rep, field + Field::kRepOffset, sizeof(rep));
+        if (!rep || currentSize <= 0)
+            return;
+
+        constexpr std::uint32_t kAnalogBits = cs2::CSubtickMoveStep::kAnalogForwardDeltaHasBit
+            | cs2::CSubtickMoveStep::kAnalogLeftDeltaHasBit;
+        const int size = currentSize > Field::kMaxSteps ? Field::kMaxSteps : currentSize;
+        for (int i = 0; i < size; ++i) {
+            std::byte* step = nullptr;
+            std::memcpy(&step, rep + Field::kRepElementsOffset + static_cast<std::ptrdiff_t>(i) * sizeof(step), sizeof(step));
+            if (!step)
+                continue;
+
+            std::uint32_t hasBits{};
+            std::memcpy(&hasBits, step + cs2::CSubtickMoveStep::kHasBitsOffset, sizeof(hasBits));
+            if ((hasBits & kAnalogBits) == 0)
+                continue;
+            hasBits &= ~kAnalogBits;
+            std::memcpy(step + cs2::CSubtickMoveStep::kHasBitsOffset, &hasBits, sizeof(hasBits));
+        }
+    }
+
     // Stable-sorts the command's subtick steps by their `when` timestamp.
     //
     // Appending is not enough when other writers already populated the timeline: quantized mouse

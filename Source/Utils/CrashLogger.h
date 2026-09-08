@@ -45,10 +45,11 @@ namespace CrashLogger
     // motivated this printed a raw pc because it sat in the Vulkan ICD, a module the two
     // hardcoded entries below never knew about). Merged per basename across the many mapping
     // lines one file produces.
-    // 512: a Steam-runtime CS2 maps several hundred files, and the old 160 overflowed - the
+    // 4096: a Steam-runtime CS2 maps several hundred files, and the old 160 overflowed - the
     // 2026-08-29 device-lost crash then dumped a raw pc because its module (high address,
-    // recorded late) never made the table.
-    inline constexpr std::size_t kMaxModules = 512;
+    // recorded late) never made the table. 512 overflowed AGAIN with the 2026-09-06 inject
+    // crash (pc in our own late-mapped memfd DSO printed raw). 4096 x 96B = ~393KB of BSS.
+    inline constexpr std::size_t kMaxModules = 4096;
     struct MappedModule {
         std::uintptr_t base{0};
         std::uintptr_t end{0};
@@ -149,8 +150,12 @@ namespace CrashLogger
     {
         if (low == 0 || high == 0 || low >= high)
             return;
+        // Memfd-loaded modules end in " (deleted)" (e.g. "/memfd:libMangoHud.so (deleted)"),
+        // so the suffix match below misses our own DSO - match it by prefix instead.
         if (lineMatches(pathStart, pathLength, "/libclient.so"))
             updateSpecialModule(clientModule, low, high);
+        else if (pathLength >= 21 && std::memcmp(pathStart, "/memfd:libMangoHud.so", 21) == 0)
+            updateSpecialModule(ourModule, low, high);
         else if (lineMatches(pathStart, pathLength, "libMangoHud.so"))
             updateSpecialModule(ourModule, low, high);
 
@@ -276,6 +281,24 @@ namespace CrashLogger
         LinuxPlatformApi::close(fd);
     }
 
+    // Appends a decimal integer (signal-safety: no printf).
+    [[nodiscard]] inline char* appendDecimal(char* out, int value) noexcept
+    {
+        if (value < 0) {
+            *out++ = '-';
+            value = -value;
+        }
+        char digits[12];
+        int count = 0;
+        do {
+            digits[count++] = static_cast<char>('0' + value % 10);
+            value /= 10;
+        } while (value != 0);
+        while (count > 0)
+            *out++ = digits[--count];
+        return out;
+    }
+
     [[nodiscard]] inline std::uintptr_t contextInstructionPointer(void* ucontextVoid) noexcept
     {
 #if defined(__x86_64__)
@@ -295,16 +318,73 @@ namespace CrashLogger
     {
         const std::uintptr_t pc = contextInstructionPointer(ucontextVoid);
 
-        const int fd = LinuxPlatformApi::open("/tmp/gamesense_crash.txt", /* O_WRONLY|O_CREAT|O_TRUNC */ 0x41 | 01000);
+        // Per-THREAD file: two threads can fault near-simultaneously (seen 2026-09-06: two
+        // physics-event spew threads) and a shared path interleaved their writes line-by-line,
+        // producing a self-contradictory report (crash A's pc + crash B's registers).
+        char path[64];
+        {
+            char* w = path;
+            std::memcpy(w, "/tmp/gamesense_crash_", 21);
+            w += 21;
+            w = appendDecimal(w, LinuxPlatformApi::processId());
+            *w++ = '_';
+            w = appendDecimal(w, LinuxPlatformApi::threadId());
+            std::memcpy(w, ".txt", 5);
+        }
+        const int fd = LinuxPlatformApi::open(path, /* O_WRONLY|O_CREAT|O_TRUNC */ 0x41 | 01000);
         if (fd >= 0) {
-            appendString(fd, "Neversneeze crash: signal ");
+            appendString(fd, "Neversnooze crash: signal ");
             appendHex(fd, static_cast<std::uint32_t>(signalNumber));
+            appendString(fd, " (si_code ");
+            appendHex(fd, info ? static_cast<std::uint32_t>(info->si_code) : 0);
+            appendString(fd, ")");
             appendString(fd, "\npc = ");
             describeAddress(fd, pc);
             appendString(fd, "\nfault address = ");
             describeAddress(fd, info ? reinterpret_cast<std::uintptr_t>(info->si_addr) : 0);
+            // raw values + the two module bases that matter most: the table can still miss a
+            // module (mapped after the install scan, or the table overflowed) and these make
+            // the crash site computable by hand either way.
+            appendString(fd, "\npc raw = ");
+            appendHex(fd, pc);
+            appendString(fd, "\nfault raw = ");
+            appendHex(fd, info ? reinterpret_cast<std::uintptr_t>(info->si_addr) : 0);
             appendString(fd, "\nclient base = ");
             appendHex(fd, clientModule.base);
+            appendString(fd, "\nour base = ");
+            appendHex(fd, ourModule.base);
+            appendString(fd, "\nmodules recorded = ");
+            appendHex(fd, moduleCount);
+
+            // General-purpose registers (resolved like pc) - with the disassembly of the faulting
+            // site this names exactly WHICH pointer was null and where it came from.
+            if (auto* ucontext = static_cast<ucontext_t*>(ucontextVoid)) {
+                static constexpr const char* kRegNames[] = {"r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "rdi", "rsi", "rbp", "rbx", "rdx", "rax", "rcx", "rsp"};
+                for (int reg = 0; reg <= REG_RSP; ++reg) {
+                    appendString(fd, "\n");
+                    appendString(fd, kRegNames[reg]);
+                    appendString(fd, " = ");
+                    describeAddress(fd, static_cast<std::uintptr_t>(ucontext->uc_mcontext.gregs[reg]));
+                }
+                appendString(fd, "\nrip = ");
+                describeAddress(fd, static_cast<std::uintptr_t>(ucontext->uc_mcontext.gregs[REG_RIP]));
+
+                // Poor-man's stack walk: the return-address chain lives on the stack; dumping the
+                // top of it resolved to module+offset usually shows who called into the faulting
+                // code (our hook frames would show as libMangoHud+... entries between game frames).
+                appendString(fd, "\nstack:");
+                const auto* sp = reinterpret_cast<std::uintptr_t*>(ucontext->uc_mcontext.gregs[REG_RSP]);
+                for (int word = 0; word < 96; ++word) {
+                    if (word % 8 == 0) {
+                        appendString(fd, "\n");
+                        appendHex(fd, reinterpret_cast<std::uintptr_t>(sp + word));
+                        appendString(fd, ":");
+                    }
+                    appendString(fd, " ");
+                    describeAddress(fd, sp[word]);
+                }
+                appendString(fd, "\n");
+            }
 
             const std::uint32_t written = traceWriteIndex;
             const std::uint32_t shown = written < kTraceCapacity ? written : 32;
@@ -330,6 +410,18 @@ namespace CrashLogger
     inline void install() noexcept
     {
         scanMappedModules();
+        // Name-agnostic self-resolution: the generic table merged by basename can miss the
+        // memfd-loaded DSO (its maps line ends in " (deleted)", and OTHER deleted files merge
+        // into the same basename entry). Find whichever recorded module contains one of our
+        // own function addresses - that IS our module, whatever it is called in maps.
+        const auto selfAddress = reinterpret_cast<std::uintptr_t>(&install);
+        for (std::size_t i = 0; i < moduleCount; ++i) {
+            if (modules[i].base <= selfAddress && selfAddress < modules[i].end) {
+                ourModule.base = modules[i].base;
+                ourModule.extent = modules[i].end - modules[i].base;
+                break;
+            }
+        }
         struct sigaction sa{};
         sa.sa_sigaction = &handleSignal;
         sa.sa_flags = SA_SIGINFO | SA_ONSTACK;

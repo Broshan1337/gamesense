@@ -60,7 +60,7 @@ class DroppedBombOutlineGlowHueTest
 
 TEST_P(DroppedBombOutlineGlowHueTest, CorrectGlowHueIsReturned) {
     EXPECT_CALL(mockHookContext, config()).WillOnce(testing::ReturnRef(mockConfig));
-    mockConfig.expectGetVariable<outline_glow_vars::DroppedBombHue>(outline_glow_vars::DroppedBombHue::ValueType{GetParam()});
+    mockConfig.expectGetVariable<outline_glow_vars::DroppedBombHue>(outline_glow_vars::DroppedBombHue::ValueType{color::HueInteger{GetParam()}});
     EXPECT_EQ(droppedBombOutlineGlow.hue(), GetParam());
 }
 

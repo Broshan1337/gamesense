@@ -116,6 +116,44 @@ public:
         return position;
     }
 
+    // Full transform of one bone cache entry: world position + unit rotation quaternion (the same
+    // (x, y, z, w) layout MultiPoint.rotateVector expects). Consumers: capsule-true multipoint, which
+    // rotates hitbox-local capsule endpoints into world space around the bone position. Same guards
+    // and the same non-schema offsets as bonePosition above.
+    struct BoneTransform {
+        cs2::Vector position;
+        float rotation[4];
+    };
+
+    [[nodiscard]] Optional<BoneTransform> boneTransform(int boneIndex) const noexcept
+    {
+        if (!gameSceneNode || boneIndex < 0)
+            return {};
+
+        const auto modelStateOffset = hookContext->schemaSystem().getFieldOffset("CSkeletonInstance", "m_modelState");
+        if (!modelStateOffset.has_value() || *modelStateOffset <= 0)
+            return {};
+
+        auto* const modelState = reinterpret_cast<std::byte*>(gameSceneNode) + *modelStateOffset;
+
+        std::uint32_t boneCount{};
+        std::memcpy(&boneCount, modelState + kModelStateBoneCountOffset, sizeof(boneCount));
+        if (boneCount == 0 || boneCount > kMaxSaneBoneCount || static_cast<std::uint32_t>(boneIndex) >= boneCount)
+            return {};
+
+        std::byte* bones{};
+        std::memcpy(&bones, modelState + kModelStateBonesOffset, sizeof(bones));
+        if (!bones)
+            return {};
+
+        BoneTransform transform{};
+        std::memcpy(&transform.position, bones + static_cast<std::ptrdiff_t>(boneIndex) * kBoneStride, sizeof(transform.position));
+        // The cache entry is pos(12) + scale(4) + quat(16); the struct packs position and rotation
+        // adjacent (28 bytes), so the quaternion is copied from the entry's +16 explicitly.
+        std::memcpy(&transform.rotation, bones + static_cast<std::ptrdiff_t>(boneIndex) * kBoneStride + 16, sizeof(transform.rotation));
+        return transform;
+    }
+
 private:
     // Non-schema offsets inside CModelState (see bonePosition). Build-specific - re-check in-game.
     static constexpr std::ptrdiff_t kModelStateBoneCountOffset = 0x5C;

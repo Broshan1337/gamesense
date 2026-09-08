@@ -5,6 +5,8 @@
 #include <link.h>
 #include <signal.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
+#include <sys/uio.h>
 #include <stdlib.h>
 
 #include "LinuxPlatformApi.h"
@@ -72,6 +74,24 @@ int LinuxPlatformApi::unlink(const char* pathname) noexcept
 int LinuxPlatformApi::rename(const char* oldPath, const char* newPath) noexcept
 {
     return ::rename(oldPath, newPath);
+}
+
+int LinuxPlatformApi::processId() noexcept
+{
+    return ::getpid();
+}
+
+// gettid(2) - no glibc wrapper guarantee across target libcs, go through the raw syscall.
+int LinuxPlatformApi::threadId() noexcept
+{
+    return static_cast<int>(::syscall(SYS_gettid));
+}
+
+bool LinuxPlatformApi::safeRead(const void* address, void* out, std::size_t size) noexcept
+{
+    iovec local{out, size};
+    iovec remote{const_cast<void*>(address), size};
+    return ::syscall(SYS_process_vm_readv, ::getpid(), &local, 1, &remote, 1, 0) == static_cast<long>(size);
 }
 
 int LinuxPlatformApi::close(int fd) noexcept

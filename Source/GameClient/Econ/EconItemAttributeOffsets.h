@@ -25,6 +25,8 @@ struct EconItemAttributeOffsets {
         , disallowSOC{resolve(schemaSystem, "C_EconItemView", "m_bDisallowSOC")}
         , restoreCustomMaterialAfterPrecache{resolve(schemaSystem, "C_EconItemView", "m_bRestoreCustomMaterialAfterPrecache")}
         , itemIDHigh{resolve(schemaSystem, "C_EconItemView", "m_iItemIDHigh")}
+        , itemIDLow{resolve(schemaSystem, "C_EconItemView", "m_iItemIDLow")}
+        , initialized{resolve(schemaSystem, "C_EconItemView", "m_bInitialized")}
         , originalOwnerXuidLow{resolve(schemaSystem, "C_EconEntity", "m_OriginalOwnerXuidLow")}
     {
     }
@@ -44,13 +46,16 @@ struct EconItemAttributeOffsets {
     FieldOffset<cs2::CEconItemView, cs2::CEconItemView::m_bDisallowSOC, std::int32_t> disallowSOC;
     FieldOffset<cs2::CEconItemView, cs2::CEconItemView::m_bRestoreCustomMaterialAfterPrecache, std::int32_t> restoreCustomMaterialAfterPrecache;
     FieldOffset<cs2::CEconItemView, cs2::CEconItemView::m_iItemIDHigh, std::int32_t> itemIDHigh;
+    FieldOffset<cs2::CEconItemView, cs2::CEconItemView::m_iItemIDLow, std::int32_t> itemIDLow;
+    FieldOffset<cs2::CEconItemView, cs2::CEconItemView::m_bInitialized, std::int32_t> initialized;
     FieldOffset<cs2::C_EconEntity, cs2::C_EconEntity::m_OriginalOwnerXuidLow, std::int32_t> originalOwnerXuidLow;
 
     [[nodiscard]] bool isFullyResolved() const noexcept
     {
         return attributeManager && item && attributeList && networkedDynamicAttributes
             && itemDefinitionIndex && entityQuality && attributes && accountID && disallowSOC
-            && restoreCustomMaterialAfterPrecache && itemIDHigh && originalOwnerXuidLow;
+            && restoreCustomMaterialAfterPrecache && itemIDHigh && itemIDLow && initialized
+            && originalOwnerXuidLow;
     }
 
 private:

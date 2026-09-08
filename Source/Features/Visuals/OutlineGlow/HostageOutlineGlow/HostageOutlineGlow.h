@@ -23,6 +23,11 @@ public:
     {
         return GET_CONFIG_VAR(outline_glow_vars::HostageHue);
     }
+    [[nodiscard]] cs2::Color color(EntityTypeInfo /* entityTypeInfo */, auto&& /* entity */) const noexcept
+    {
+        const auto picked = GET_CONFIG_VAR(outline_glow_vars::HostageColor);
+        return cs2::Color{picked.r(), picked.g(), picked.b(), picked.a()};
+    }
 
 private:
     HookContext& hookContext;

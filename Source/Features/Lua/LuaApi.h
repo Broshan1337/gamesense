@@ -6,7 +6,7 @@
 // open a namespace: everything this file needs (lua.h, imgui.h, VerifyConsole,
 // LinuxDynamicLibrary, the state structs and helpers) is already visible at the include point.
 //
-// API surface v1:
+// API surface v2:
 //   client.set_event_callback(name, fn)   - events: "paint" (present thread, every frame,
 //                                           renderer valid inside), "createmove" (game thread,
 //                                           once per input tick), plus any game event name
@@ -17,10 +17,20 @@
 //                                           armor, dmg_armor, hitgroup), player_death (userid/
 //                                           attacker/assister/headshot/dominated), weapon_fire
 //                                           (userid), bullet_impact + *_detonate (userid,
-//                                           x/y/z floats). Other events pass nil.
+//                                           x/y/z floats). Other events pass no arguments.
 //   client.log(message)                   - engine console (VerifyConsole, throttled)
+//   client.exec(command)                  - run a console command through the engine's client
+//                                           command buffer (game-thread callbacks only) - chat
+//                                           ("say ..."), radio ("playerchatwheel ..."), cvars,
+//                                           "pause" on sv_pausable servers, anything console-able
+//   client.get_time()                     - steady-clock seconds since module load; the only
+//                                           timing source (os.clock is sandboxed away)
 //   client.get_screen_size()              - width, height
 //   client.is_menu_open()
+//   cvar.get_int(name) / cvar.get_float(name) - read a runtime convar (nil = absent/wrong type)
+//   cvar.set_float(name, value) / cvar.set_bool(name, value) - write through the convar's
+//                                           resolved value pointer (same force* path C++
+//                                           features use). false = not found / wrong type.
 //   renderer.text(x, y, text, r, g, b, a)
 //   renderer.text_size(text)              - width, height
 //   renderer.line(x1, y1, x2, y2, r, g, b, a [, thickness])
@@ -28,6 +38,8 @@
 //   renderer.filled_rect(x, y, w, h, r, g, b, a)
 //   renderer.circle(x, y, radius, r, g, b, a [, segments])
 //   renderer.circle_filled(x, y, radius, r, g, b, a [, segments])
+//   renderer.world_to_screen(x, y, z)     - screen px, py, or nil when behind the camera /
+//                                           matrix unavailable (drawn coords, y grows down)
 //   memory.module_base(module)            - load base of a loaded module ("libclient.so", ...)
 //   memory.pattern_scan(module, pattern)  - IDA-style "48 8B 05 ?? ?? ?? ??" scan of .text,
 //                                           returns the match address as lightuserdata or nil
@@ -42,12 +54,32 @@
 //   entity.get_prop_float(...)            - float variant,
 //   entity.get_prop_string(...)           - string variant for fixed char arrays (printable
 //                                           check; nil when the bytes are not a clean string)
+//   entity.set_prop(index, class, field, value)      - int32 WRITE (game-thread callbacks only)
+//   entity.set_prop_float(index, class, field, value) - float32 WRITE (game-thread callbacks only)
 //   gui.checkbox(label [, default])       - menu checkbox in the script's section; 1-based id
 //   gui.slider(label, min, max [, default]) - menu slider; 1-based id
+//   gui.dropdown(label, options [, defaultIndex]) - menu dropdown (searchable popup when the
+//                                           option list is long); gui.get returns the INDEX
 //   gui.get(id)                           - current value (boolean / integer)
 //   gui.set(id, value)                    - set from the script; values persist per script
 //                                           (sidecar <scriptsDir>/<name>.gui, applied by label
 //                                           on load, written on unload)
+//   net.server()                          - fd, ip, port of the game server as observed from the
+//                                           datagram hook, or nil when not connected
+//   net.send_raw(data [, count])          - send `count` copies (default 1, max 256) of a
+//                                           binary-safe string (max 1400 bytes) to the game
+//                                           server through the original sendto - bypasses the
+//                                           C++ net-lag hook entirely. Returns packets sent,
+//                                           nil when not connected.
+//   net.stats()                           - the hook's counters: sends/passed/dropped/duped/
+//                                           flooded/connless/raw/blips/delayed/flushed/overflow/
+//                                           region_blocked
+//   net.set_blocked_ips(table)            - publish a block list of IPv4 strings ("1.2.3.4",
+//                                           optional "/prefix" length); datagrams to these
+//                                           addresses are silently swallowed in the send hook
+//                                           EXCEPT datagrams to the currently-connected game
+//                                           server. Capped at 512 entries. Returns entries kept.
+//   net.clear_blocked_ips()               - drop the block list (traffic resumes untouched)
 //
 // FFI is available as a global (ffi.cast / ffi.C / ffi.load, LuaJIT GC64 build) for raw memory
 // work; memory.module_base + memory.pattern_scan give scripts the same anchors our C++ uses.
@@ -145,6 +177,75 @@ inline int l_isMenuOpen(lua_State* L)
     return 1;
 }
 
+// Steady-clock seconds since boot - the sandbox strips os.clock, so scripts time their cadences
+// (chat bursts, snitch cooldowns) through this instead. Direct clock_gettime (the project-wide
+// monotonicSeconds pattern): std::chrono::steady_clock::now is an out-of-line libstdc++ symbol
+// and the release target links -nostdlib.
+inline int l_getTime(lua_State* L)
+{
+    timespec ts{};
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    lua_pushnumber(L, static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) * 1e-9);
+    return 1;
+}
+
+// ---- cvar (runtime convar reads/writes through the CvarSystem bridges) ----
+
+inline int l_cvarGetInt(lua_State* L)
+{
+    int value = 0;
+    if (cvarIntQuery && cvarIntQuery(luaL_checkstring(L, 1), &value))
+        lua_pushinteger(L, value);
+    else
+        lua_pushnil(L);
+    return 1;
+}
+
+inline int l_cvarGetFloat(lua_State* L)
+{
+    float value = 0.0f;
+    if (cvarFloatQuery && cvarFloatQuery(luaL_checkstring(L, 1), &value))
+        lua_pushnumber(L, value);
+    else
+        lua_pushnil(L);
+    return 1;
+}
+
+inline int l_cvarSetFloat(lua_State* L)
+{
+    const char* name = luaL_checkstring(L, 1);
+    const float value = static_cast<float>(luaL_checknumber(L, 2));
+    lua_pushboolean(L, cvarFloatSetQuery && cvarFloatSetQuery(name, value) ? 1 : 0);
+    return 1;
+}
+
+inline int l_cvarSetBool(lua_State* L)
+{
+    const char* name = luaL_checkstring(L, 1);
+    const bool value = lua_toboolean(L, 2) != 0;
+    lua_pushboolean(L, cvarBoolSetQuery && cvarBoolSetQuery(name, value) ? 1 : 0);
+    return 1;
+}
+
+// Runs a console command through the engine's client command buffer - the same path ChatTools /
+// RadioManager use for say / chatwheel / cvars. Game-thread callbacks only: the engine command
+// buffer is not thread-safe, so calling from a paint callback errors instead of racing it.
+inline int l_clientExec(lua_State* L)
+{
+    if (dispatchThreadKind.load(std::memory_order_relaxed) != 1)
+        return luaL_error(L, "client.exec is only available inside createmove / game event callbacks");
+    const char* command = luaL_checkstring(L, 1);
+    const std::size_t length = std::strlen(command);
+    if (length == 0 || length >= 256)
+        return luaL_error(L, "client.exec: command must be 1-255 characters");
+    if (std::strchr(command, '\n') || std::strchr(command, '\r'))
+        return luaL_error(L, "client.exec: newlines would inject extra commands");
+    if (!engineCommandQuery)
+        return luaL_error(L, "client.exec: engine bridge not installed");
+    engineCommandQuery(command);
+    return 0;
+}
+
 // ---- renderer (foreground draw list; only valid inside a "paint" callback) ----
 
 inline constexpr float kScriptFontSize = 14.0f;
@@ -235,6 +336,23 @@ inline int l_renderCircleFilled(lua_State* L)
     const int segments = lua_isnoneornil(L, 8) ? 0 : static_cast<int>(luaL_checknumber(L, 8));
     drawList->AddCircleFilled(ImVec2{x, y}, radius, color, segments);
     return 0;
+}
+
+// World point -> screen pixels, or nil when the point is behind the camera or the view-projection
+// matrix is not available this frame. The bridge returns NDC (-1..1, y up); this converts to
+// drawn coordinates (y grows down) using the ImGui display size.
+inline int l_worldToScreen(lua_State* L)
+{
+    float ndcX = 0.0f;
+    float ndcY = 0.0f;
+    if (!worldToScreenQuery
+        || !worldToScreenQuery(static_cast<float>(luaL_checknumber(L, 1)), static_cast<float>(luaL_checknumber(L, 2)),
+            static_cast<float>(luaL_checknumber(L, 3)), &ndcX, &ndcY))
+        return 0; // nil
+    const ImVec2 display = ImGui::GetIO().DisplaySize;
+    lua_pushnumber(L, (ndcX + 1.0f) * 0.5f * display.x);
+    lua_pushnumber(L, (1.0f - ndcY) * 0.5f * display.y);
+    return 2;
 }
 
 // ---- memory ----
@@ -384,6 +502,44 @@ inline int l_guiSlider(lua_State* L)
     if (const auto* saved = findPendingGuiDefault(script.name, label)) {
         const int value = saved->intValue;
         item.intValue = value < min ? min : (value > max ? max : value);
+    }
+    lua_pushinteger(L, script.guiItemCount);
+    return 1;
+}
+
+// gui.dropdown(label, options [, defaultIndex]) - a select row in the script's menu section.
+// Options are copied into the GuiItem (both the char storage and a pointer table, so the popup
+// layer can render across frames); gui.get returns the selected INDEX. The saved sidecar value
+// is applied by label like every other gui item.
+inline int l_guiDropdown(lua_State* L)
+{
+    Script& script = selfScript(L);
+    const char* label = checkGuiLabel(L, 1);
+    luaL_checktype(L, 2, LUA_TTABLE);
+    const int optionCount = static_cast<int>(lua_objlen(L, 2));
+    if (optionCount < 1)
+        return luaL_error(L, "gui.dropdown: options table must not be empty");
+    if (optionCount > kMaxGuiOptions)
+        return luaL_error(L, "gui.dropdown: too many options (max %d)", kMaxGuiOptions);
+    const int defaultValue = lua_isnoneornil(L, 3) ? 0 : static_cast<int>(luaL_checkinteger(L, 3));
+    if (script.guiItemCount >= kMaxGuiItems)
+        return luaL_error(L, "too many gui items (max %d)", kMaxGuiItems);
+    GuiItem& item = script.guiItems[script.guiItemCount++];
+    item = GuiItem{};
+    item.type = GuiItem::Type::Dropdown;
+    std::strncpy(item.label, label, kMaxGuiLabel - 1);
+    item.optionCount = optionCount;
+    for (int i = 1; i <= optionCount; ++i) {
+        lua_rawgeti(L, 2, i);
+        const char* option = luaL_checkstring(L, -1);
+        std::strncpy(item.optionStorage[i - 1], option, kMaxGuiLabel - 1);
+        item.optionPtrs[i - 1] = item.optionStorage[i - 1];
+        lua_pop(L, 1);
+    }
+    item.intValue = defaultValue < 0 ? 0 : (defaultValue >= optionCount ? optionCount - 1 : defaultValue);
+    if (const auto* saved = findPendingGuiDefault(script.name, label)) {
+        const int value = saved->intValue;
+        item.intValue = value < 0 ? 0 : (value >= optionCount ? optionCount - 1 : value);
     }
     lua_pushinteger(L, script.guiItemCount);
     return 1;
@@ -545,6 +701,177 @@ inline int l_getPropString(lua_State* L)
     return 1;
 }
 
+// The write counterparts to get_prop/get_prop_float - same 4-byte poke, same schema-verified
+// offset. Writes land in live game memory, so they are enforced to the game thread only (the
+// same rule client.exec follows); reads stay callable from any callback.
+inline int l_setProp(lua_State* L)
+{
+    if (dispatchThreadKind.load(std::memory_order_relaxed) != 1)
+        return luaL_error(L, "entity.set_prop is only available inside createmove / game event callbacks");
+    const std::byte* entity = nullptr;
+    int offset = 0;
+    if (!resolveEntityProp(L, &entity, &offset))
+        return 1;
+    const std::int32_t value = static_cast<std::int32_t>(luaL_checkinteger(L, 4));
+    std::memcpy(const_cast<std::byte*>(entity) + offset, &value, sizeof(value));
+    return 0;
+}
+
+inline int l_setPropFloat(lua_State* L)
+{
+    if (dispatchThreadKind.load(std::memory_order_relaxed) != 1)
+        return luaL_error(L, "entity.set_prop_float is only available inside createmove / game event callbacks");
+    const std::byte* entity = nullptr;
+    int offset = 0;
+    if (!resolveEntityProp(L, &entity, &offset))
+        return 1;
+    const float value = static_cast<float>(luaL_checknumber(L, 4));
+    std::memcpy(const_cast<std::byte*>(entity) + offset, &value, sizeof(value));
+    return 0;
+}
+
+// ---- net (game-server endpoint + raw datagram send through the original sendto) ----
+
+inline int l_netServer(lua_State* L)
+{
+    int fd = -1;
+    sockaddr_storage addr{};
+    socklen_t addrLen = 0;
+    if (!netlag_hook::getServerEndpoint(&fd, &addr, &addrLen))
+        return 0; // nil - no endpoint captured (not connected)
+
+    char ip[INET6_ADDRSTRLEN] = {};
+    int port = 0;
+    if (addr.ss_family == AF_INET) {
+        const auto* sin = reinterpret_cast<const sockaddr_in*>(&addr);
+        inet_ntop(AF_INET, &sin->sin_addr, ip, sizeof(ip));
+        port = ntohs(sin->sin_port);
+    } else if (addr.ss_family == AF_INET6) {
+        const auto* sin6 = reinterpret_cast<const sockaddr_in6*>(&addr);
+        inet_ntop(AF_INET6, &sin6->sin6_addr, ip, sizeof(ip));
+        port = ntohs(sin6->sin6_port);
+    } else {
+        return 0;
+    }
+    lua_pushinteger(L, fd);
+    lua_pushstring(L, ip);
+    lua_pushinteger(L, port);
+    return 3;
+}
+
+inline int l_netSendRaw(lua_State* L)
+{
+    std::size_t length = 0;
+    const char* data = luaL_checklstring(L, 1, &length);
+    const int count = lua_isnoneornil(L, 2) ? 1 : static_cast<int>(luaL_checkinteger(L, 2));
+    if (count < 1)
+        return luaL_error(L, "net.send_raw: count must be >= 1");
+    if (length == 0 || length > netlag_hook::kMaxDatagram)
+        return luaL_error(L, "net.send_raw: payload must be 1-%d bytes", static_cast<int>(netlag_hook::kMaxDatagram));
+
+    int fd = -1;
+    sockaddr_storage addr{};
+    socklen_t addrLen = 0;
+    if (!netlag_hook::getServerEndpoint(&fd, &addr, &addrLen))
+        return 0; // nil - not connected
+    lua_pushinteger(L, netlag_hook::sendRawToServer(reinterpret_cast<const unsigned char*>(data), length, static_cast<std::uint32_t>(count)));
+    return 1;
+}
+
+// Parses "a.b.c.d" or "a.b.c.d/prefix" into a host-byte-order IPv4 (host bits masked off).
+// Returns false on anything else - malformed input just does not join the block list.
+inline bool parseIpv4Cidr(const char* text, std::uint32_t* out) noexcept
+{
+    unsigned parts[4] = {};
+    int part = 0;
+    int digits = 0;
+    const char* p = text;
+    for (; *p != '\0' && *p != '/'; ++p) {
+        if (*p >= '0' && *p <= '9') {
+            parts[part] = parts[part] * 10 + static_cast<unsigned>(*p - '0');
+            if (parts[part] > 255)
+                return false;
+            if (++digits > 3)
+                return false;
+        } else if (*p == '.' && part < 3 && digits > 0) {
+            ++part;
+            digits = 0;
+        } else {
+            return false;
+        }
+    }
+    if (part != 3 || digits == 0)
+        return false;
+    int prefix = 32;
+    if (*p == '/') {
+        prefix = 0;
+        for (++p; *p >= '0' && *p <= '9'; ++p)
+            prefix = prefix * 10 + (*p - '0');
+        if (*p != '\0' || prefix < 0 || prefix > 32)
+            return false;
+    }
+    std::uint32_t value = (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3];
+    if (prefix == 0)
+        value = 0;
+    else if (prefix < 32)
+        value &= ~((1u << (32 - prefix)) - 1);
+    *out = value;
+    return true;
+}
+
+// net.set_blocked_ips({"155.133.248.36", ...}) - publish the region-filter block list. String
+// table entries are parsed (deduped, sorted) into the seqlock-protected list the send hook
+// consults; see NetLag.h net_region. Returns the number of entries kept.
+inline int l_netSetBlockedIps(lua_State* L)
+{
+    luaL_checktype(L, 1, LUA_TTABLE);
+    const int count = static_cast<int>(lua_objlen(L, 1));
+    if (count > static_cast<int>(net_region::kMaxBlockedIps))
+        return luaL_error(L, "net.set_blocked_ips: too many entries (max %d)", static_cast<int>(net_region::kMaxBlockedIps));
+
+    std::uint32_t ips[net_region::kMaxBlockedIps];
+    int kept = 0;
+    for (int i = 1; i <= count; ++i) {
+        lua_rawgeti(L, 1, i);
+        const char* entry = luaL_checkstring(L, -1);
+        std::uint32_t value = 0;
+        if (parseIpv4Cidr(entry, &value))
+            ips[kept++] = value;
+        lua_pop(L, 1);
+    }
+    net_region::publishBlockedIps(ips, static_cast<std::size_t>(kept));
+    lua_pushinteger(L, kept);
+    return 1;
+}
+
+inline int l_netClearBlockedIps(lua_State* L)
+{
+    net_region::clearBlockedIps();
+    return 0;
+}
+
+inline int l_netStats(lua_State* L)
+{
+    lua_newtable(L);
+    const auto set = [L](const char* key, const std::atomic<std::uint64_t>& counter) {
+        lua_pushinteger(L, static_cast<lua_Integer>(counter.load(std::memory_order_relaxed)));
+        lua_setfield(L, -2, key);
+    };
+    set("sends", net_lag::statSends);
+    set("passed", net_lag::statPassed);
+    set("dropped", net_lag::statDropped);
+    set("duped", net_lag::statDuped);
+    set("flooded", net_lag::statFlooded);
+    set("connless", net_lag::statConnless);
+    set("raw", net_lag::statRaw);
+    set("blips", net_lag::statBlips);
+    set("delayed", net_lag::statDelayed);
+    set("flushed", net_lag::statFlushed);
+    set("overflow", net_lag::statOverflow);
+    set("region_blocked", net_region::statRegionBlocked);
+    return 1;
+}
+
 // ---- registration ----
 
 inline void registerApi(lua_State* L, int scriptIndex)
@@ -560,9 +887,18 @@ inline void registerApi(lua_State* L, int scriptIndex)
     lua_newtable(L);
     pushClosure(l_setEventCallback); lua_setfield(L, -2, "set_event_callback");
     pushClosure(l_clientLog);        lua_setfield(L, -2, "log");
+    pushClosure(l_clientExec);       lua_setfield(L, -2, "exec");
+    pushClosure(l_getTime);          lua_setfield(L, -2, "get_time");
     pushClosure(l_getScreenSize);    lua_setfield(L, -2, "get_screen_size");
     pushClosure(l_isMenuOpen);       lua_setfield(L, -2, "is_menu_open");
     lua_setglobal(L, "client");
+
+    lua_newtable(L);
+    pushClosure(l_cvarGetInt);    lua_setfield(L, -2, "get_int");
+    pushClosure(l_cvarGetFloat);  lua_setfield(L, -2, "get_float");
+    pushClosure(l_cvarSetFloat);  lua_setfield(L, -2, "set_float");
+    pushClosure(l_cvarSetBool);   lua_setfield(L, -2, "set_bool");
+    lua_setglobal(L, "cvar");
 
     lua_newtable(L);
     pushFunction(l_renderText);         lua_setfield(L, -2, "text");
@@ -572,6 +908,7 @@ inline void registerApi(lua_State* L, int scriptIndex)
     pushFunction(l_renderFilledRect);   lua_setfield(L, -2, "filled_rect");
     pushFunction(l_renderCircle);       lua_setfield(L, -2, "circle");
     pushFunction(l_renderCircleFilled); lua_setfield(L, -2, "circle_filled");
+    pushFunction(l_worldToScreen);      lua_setfield(L, -2, "world_to_screen");
     lua_setglobal(L, "renderer");
 
     lua_newtable(L);
@@ -580,17 +917,20 @@ inline void registerApi(lua_State* L, int scriptIndex)
     lua_setglobal(L, "memory");
 
     lua_newtable(L);
-    pushClosure(l_getLocalPlayer); lua_setfield(L, -2, "get_local_player");
-    pushClosure(l_getPlayers);     lua_setfield(L, -2, "get_players");
-    pushClosure(l_getPlayerPawn);  lua_setfield(L, -2, "get_player_pawn");
-    pushClosure(l_getProp);        lua_setfield(L, -2, "get_prop");
-    pushClosure(l_getPropFloat);   lua_setfield(L, -2, "get_prop_float");
-    pushClosure(l_getPropString);  lua_setfield(L, -2, "get_prop_string");
+    pushClosure(l_getLocalPlayer);  lua_setfield(L, -2, "get_local_player");
+    pushClosure(l_getPlayers);      lua_setfield(L, -2, "get_players");
+    pushClosure(l_getPlayerPawn);   lua_setfield(L, -2, "get_player_pawn");
+    pushClosure(l_getProp);         lua_setfield(L, -2, "get_prop");
+    pushClosure(l_getPropFloat);    lua_setfield(L, -2, "get_prop_float");
+    pushClosure(l_getPropString);   lua_setfield(L, -2, "get_prop_string");
+    pushClosure(l_setProp);         lua_setfield(L, -2, "set_prop");
+    pushClosure(l_setPropFloat);    lua_setfield(L, -2, "set_prop_float");
     lua_setglobal(L, "entity");
 
     lua_newtable(L);
     pushClosure(l_guiCheckbox); lua_setfield(L, -2, "checkbox");
     pushClosure(l_guiSlider);   lua_setfield(L, -2, "slider");
+    pushClosure(l_guiDropdown); lua_setfield(L, -2, "dropdown");
     pushClosure(l_guiGet);      lua_setfield(L, -2, "get");
     pushClosure(l_guiSet);      lua_setfield(L, -2, "set");
     lua_setglobal(L, "gui");
@@ -598,4 +938,12 @@ inline void registerApi(lua_State* L, int scriptIndex)
     lua_newtable(L);
     pushClosure(l_httpGet); lua_setfield(L, -2, "get");
     lua_setglobal(L, "http");
+
+    lua_newtable(L);
+    pushClosure(l_netServer);          lua_setfield(L, -2, "server");
+    pushClosure(l_netSendRaw);         lua_setfield(L, -2, "send_raw");
+    pushClosure(l_netSetBlockedIps);   lua_setfield(L, -2, "set_blocked_ips");
+    pushClosure(l_netClearBlockedIps); lua_setfield(L, -2, "clear_blocked_ips");
+    pushClosure(l_netStats);           lua_setfield(L, -2, "stats");
+    lua_setglobal(L, "net");
 }

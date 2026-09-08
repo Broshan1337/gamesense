@@ -692,7 +692,11 @@ VkResult VKAPI_CALL hkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreat
 
 VkResult VKAPI_CALL hkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPresentInfo) noexcept
 {
+    // breadcrumb 0x100 = present entry; 0x107 = renderImGui returned; 0x108 = original present
+    // returned (see the 0x1xx present-path breadcrumb block inside renderImGui)
+    CrashLogger::trace(0x100);
     const VkSemaphore menuDone = renderImGui(queue, pPresentInfo);
+    CrashLogger::trace(0x107);
 
     // Make the original present wait on our menu pass IN ADDITION to the game's own wait
     // semaphores. APPEND, never replace: the game's binary semaphores must keep their single
@@ -714,6 +718,7 @@ VkResult VKAPI_CALL hkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPr
 
     if (originalQueuePresentKHR) {
         const VkResult result = originalQueuePresentKHR(queue, pPresentInfo);
+        CrashLogger::trace(0x108);
         if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
             gui_log::write("hook: present returned %d (swapchain recreation refreshes semaphores)", static_cast<int>(result));
         return result;

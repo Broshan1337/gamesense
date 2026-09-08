@@ -40,7 +40,7 @@ extern "C" char** environ;
 //     2=Handshake, 3=Ping. Handshake {"v":1,"client_id":...}, then SET_ACTIVITY frames.
 //
 // Template placeholders (both lines): {mode} {t} {ct} {alive} {dead} {talive} {tdead}
-// {ctalive} {ctdead} {tdmg} {myteam}. Unknown {names} are passed through literally.
+// {ctalive} {ctdead} {tdmg} {myteam} {kills}. Unknown {names} are passed through literally.
 // The two lines persist in <configDir>/discord_rpc.txt (sidecar pattern like killsay).
 template <typename HookContext>
 class DiscordRpc {
@@ -143,7 +143,7 @@ private:
     static constexpr const char* kRelayScriptPath = "/tmp/ns_discord_rpc.py";
     static constexpr const char* kLaunchClientPath = "/usr/bin/steam-runtime-launch-client";
     static constexpr const char* kLargeImageKey = "ns2";
-    static constexpr const char* kLargeImageText = "Neversneeze";
+    static constexpr const char* kLargeImageText = "Neversnooze";
     static constexpr const char* kSmallImageKey = "cs2";
     static constexpr const char* kSmallImageText = "nonprime.club";
     static constexpr const char* kDefaultDetails = "{mode} | {t}v{ct} | alive {alive} | dead {dead} | team dmg {tdmg}";
@@ -157,6 +157,7 @@ private:
         int tDead = 0;
         int ctDead = 0;
         int teamDamage = 0;
+        int kills = 0;
         bool inMatch = false;
         const char* mode = "Match";
     };
@@ -206,6 +207,7 @@ private:
             if (row.isLocalPlayer) {
                 match.inMatch = true;
                 match.teamDamage = row.teamDamage;
+                match.kills = row.kills;
                 const auto gameType = hookContext.cvarSystem().readIntConVar("game_type");
                 const auto gameMode = hookContext.cvarSystem().readIntConVar("game_mode");
                 match.mode = modeName(gameType.value_or(0), gameMode.value_or(0));
@@ -252,6 +254,7 @@ private:
             else if (nameIs("ctalive")) putInt(match.ctAlive);
             else if (nameIs("ctdead")) putInt(match.ctDead);
             else if (nameIs("tdmg")) putInt(match.teamDamage);
+            else if (nameIs("kills")) putInt(match.kills);
             else if (nameIs("mode")) put(match.mode);
             else if (nameIs("myteam")) put(match.tCount >= match.ctCount ? "T" : "CT");
             else {
@@ -314,7 +317,7 @@ private:
             if (hasRadio) {
                 char stationEscaped[256];
                 jsonEscape(stationEscaped, sizeof(stationEscaped), station);
-                std::snprintf(radioPart, sizeof(radioPart), "{\"details\":\"%s\",\"state\":\"Neversneeze Web Radio\",\"large\":\"listening to fire while tapping NNs\"}", stationEscaped);
+                std::snprintf(radioPart, sizeof(radioPart), "{\"details\":\"%s\",\"state\":\"Neversnooze Web Radio\",\"large\":\"listening to fire while tapping NNs\"}", stationEscaped);
             }
             std::snprintf(rendered, sizeof(rendered), "{\"match\":%s,\"radio\":%s}", matchPart, radioPart);
         }
@@ -529,7 +532,7 @@ def main():
                         "details": radio.get("details", ""),
                         "state": radio.get("state", ""),
                         "assets": {"large_image": "ns2",
-                                   "large_text": radio.get("large", "Neversneeze"),
+                                   "large_text": radio.get("large", "Neversnooze"),
                                    "small_image": "cs2", "small_image_text": "nonprime.club"},
                         "instance": True,
                     }
@@ -540,7 +543,7 @@ def main():
                         "details": match.get("details", ""),
                         "state": match.get("state", ""),
                         "assets": {"large_image": "ns2",
-                                   "large_text": "Neversneeze",
+                                   "large_text": "Neversnooze",
                                    "small_image": "cs2", "small_image_text": "nonprime.club"},
                         "instance": True,
                     }

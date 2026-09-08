@@ -37,7 +37,7 @@ class DefuseKitModelGlowHueTest
 
 TEST_P(DefuseKitModelGlowHueTest, CorrectHueIsReturned) {
     EXPECT_CALL(mockHookContext, config()).WillOnce(testing::ReturnRef(mockConfig));
-    mockConfig.expectGetVariable<model_glow_vars::DefuseKitHue>(model_glow_vars::DefuseKitHue::ValueType{GetParam()});
+    mockConfig.expectGetVariable<model_glow_vars::DefuseKitHue>(model_glow_vars::DefuseKitHue::ValueType{color::HueInteger{GetParam()}});
     EXPECT_EQ(defuseKitModelGlow.hue(), GetParam());
 }
 

@@ -105,30 +105,30 @@ protected:
 
 TEST_F(OutlineGlowActiveTest, DefuseKit) {
     mockConfig.expectGetVariable<outline_glow_vars::GlowDefuseKits>(true);
-    mockConfig.expectGetVariable<outline_glow_vars::DefuseKitHue>(outline_glow_vars::DefuseKitHue::ValueType{color::HueInteger{190}});
-    EXPECT_CALL(mockBaseEntity, applyGlowRecursively(cs2::Color{127, 233, 255, outline_glow_params::kGlowAlpha}, outline_glow_params::kDefuseKitGlowRange));
+    mockConfig.expectGetVariable<outline_glow_vars::DefuseKitColor>(outline_glow_vars::DefuseKitColor::ValueType{color::Rgba{0, 213, 255, 255}});
+    EXPECT_CALL(mockBaseEntity, applyGlowRecursively(cs2::Color{0, 213, 255}, outline_glow_params::kDefuseKitGlowRange));
     outlineGlow.applyGlow()(DefuseKitOutlineGlow{mockHookContext}, mockBaseEntity, EntityTypeInfo{EntityTypeInfo::indexOf<cs2::CBaseAnimGraph>()});
 }
 
 TEST_F(OutlineGlowActiveTest, DroppedBomb) {
     mockConfig.expectGetVariable<outline_glow_vars::GlowDroppedBomb>(true);
-    mockConfig.expectGetVariable<outline_glow_vars::DroppedBombHue>(outline_glow_vars::DroppedBombHue::ValueType{color::HueInteger{102}});
+    mockConfig.expectGetVariable<outline_glow_vars::DroppedBombColor>(outline_glow_vars::DroppedBombColor::ValueType{color::Rgba{255, 213, 77, 255}});
     EXPECT_CALL(mockBaseEntity, hasOwner()).WillOnce(testing::Return(false));
-    EXPECT_CALL(mockBaseEntity, applyGlowRecursively(cs2::Color{165, 255, 127, outline_glow_params::kGlowAlpha}, 0));
+    EXPECT_CALL(mockBaseEntity, applyGlowRecursively(cs2::Color{255, 213, 77}, 0));
     outlineGlow.applyGlow()(DroppedBombOutlineGlow{mockHookContext}, mockBaseEntity, EntityTypeInfo{EntityTypeInfo::indexOf<cs2::C_C4>()});
 }
 
 TEST_F(OutlineGlowActiveTest, GrenadeProjectile) {
     mockConfig.expectGetVariable<outline_glow_vars::GlowGrenadeProjectiles>(true);
-    mockConfig.expectGetVariable<outline_glow_vars::FlashbangHue>(outline_glow_vars::FlashbangHue::ValueType{color::HueInteger{240}});
-    EXPECT_CALL(mockBaseEntity, applyGlowRecursively(cs2::Color{127, 127, 255, outline_glow_params::kGlowAlpha}, 0));
+    mockConfig.expectGetVariable<outline_glow_vars::FlashbangColor>(outline_glow_vars::FlashbangColor::ValueType{color::Rgba{64, 131, 255, 255}});
+    EXPECT_CALL(mockBaseEntity, applyGlowRecursively(cs2::Color{64, 131, 255, 255}, 0));
     outlineGlow.applyGlow()(GrenadeProjectileOutlineGlow{mockHookContext}, mockBaseEntity, EntityTypeInfo{EntityTypeInfo::indexOf<cs2::C_FlashbangProjectile>()});
 }
 
 TEST_F(OutlineGlowActiveTest, Hostage) {
     mockConfig.expectGetVariable<outline_glow_vars::GlowHostages>(true);
-    mockConfig.expectGetVariable<outline_glow_vars::HostageHue>(outline_glow_vars::HostageHue::ValueType{color::HueInteger{50}});
-    EXPECT_CALL(mockBaseEntity, applyGlowRecursively(cs2::Color{255, 233, 127, outline_glow_params::kGlowAlpha}, 0));
+    mockConfig.expectGetVariable<outline_glow_vars::HostageColor>(outline_glow_vars::HostageColor::ValueType{color::Rgba{255, 200, 50, 255}});
+    EXPECT_CALL(mockBaseEntity, applyGlowRecursively(cs2::Color{255, 200, 50, 255}, 0));
     outlineGlow.applyGlow()(HostageOutlineGlow{mockHookContext}, mockBaseEntity, EntityTypeInfo{EntityTypeInfo::indexOf<cs2::C_Hostage>()});
 }
 
@@ -151,10 +151,10 @@ TEST_F(OutlineGlowActiveTest, Player) {
 
 TEST_F(OutlineGlowActiveTest, TickingBomb) {
     mockConfig.expectGetVariable<outline_glow_vars::GlowTickingBomb>(true);
-    mockConfig.expectGetVariable<outline_glow_vars::TickingBombHue>(outline_glow_vars::TickingBombHue::ValueType{color::HueInteger{87}});
+    mockConfig.expectGetVariable<outline_glow_vars::TickingBombColor>(outline_glow_vars::TickingBombColor::ValueType{color::Rgba{255, 0, 0, 255}});
     EXPECT_CALL(mockPlantedC4, baseEntity()).WillRepeatedly(testing::ReturnRef(mockBaseEntity));
     EXPECT_CALL(mockPlantedC4, isTicking()).WillOnce(testing::Return(true));
-    EXPECT_CALL(mockBaseEntity, applyGlowRecursively(cs2::Color{197, 255, 127, outline_glow_params::kGlowAlpha}, 0));
+    EXPECT_CALL(mockBaseEntity, applyGlowRecursively(cs2::Color{255, 0, 0}, 0));
     outlineGlow.applyGlow()(TickingBombOutlineGlow{mockHookContext}, mockPlantedC4, EntityTypeInfo{EntityTypeInfo::indexOf<cs2::CPlantedC4>()});
 }
 
@@ -206,17 +206,17 @@ class OutlineGlowNonDefaultRangeTest : public OutlineGlowActiveTest {
 
 TEST_F(OutlineGlowNonDefaultRangeTest, NonDefaultGlowRangeIsUsedForDefuseKits) {
     mockConfig.expectGetVariable<outline_glow_vars::GlowDefuseKits>(true);
-    mockConfig.expectGetVariable<outline_glow_vars::DefuseKitHue>(outline_glow_vars::DefuseKitHue::ValueType{color::HueInteger{188}});
+    mockConfig.expectGetVariable<outline_glow_vars::DefuseKitColor>(outline_glow_vars::DefuseKitColor::ValueType{color::Rgba{0, 213, 255, 255}});
 
-    EXPECT_CALL(mockBaseEntity, applyGlowRecursively(cs2::Color{127, 238, 255, outline_glow_params::kGlowAlpha}, outline_glow_params::kDefuseKitGlowRange));
+    EXPECT_CALL(mockBaseEntity, applyGlowRecursively(cs2::Color{0, 213, 255, 255}, outline_glow_params::kDefuseKitGlowRange));
     outlineGlow.applyGlow()(DefuseKitOutlineGlow{mockHookContext}, mockBaseEntity, EntityTypeInfo{EntityTypeInfo::indexOf<cs2::CBaseAnimGraph>()});
 }
 
 TEST_F(OutlineGlowNonDefaultRangeTest, NonDefaultGlowRangeIsUsedForWeapons) {
     mockConfig.expectGetVariable<outline_glow_vars::GlowWeapons>(true);
-    mockConfig.expectGetVariable<outline_glow_vars::MolotovHue>(outline_glow_vars::MolotovHue::ValueType{color::HueInteger{50}});
+    mockConfig.expectGetVariable<outline_glow_vars::MolotovColor>(outline_glow_vars::MolotovColor::ValueType{color::Rgba{255, 128, 0, 255}});
 
     EXPECT_CALL(mockBaseEntity, hasOwner()).WillOnce(testing::Return(false));
-    EXPECT_CALL(mockBaseEntity, applyGlowRecursively(cs2::Color{255, 233, 127, outline_glow_params::kGlowAlpha}, outline_glow_params::kWeaponGlowRange));
+    EXPECT_CALL(mockBaseEntity, applyGlowRecursively(cs2::Color{255, 128, 0, 255}, outline_glow_params::kWeaponGlowRange));
     outlineGlow.applyGlow()(WeaponOutlineGlow{mockHookContext}, mockBaseEntity, EntityTypeInfo{EntityTypeInfo::indexOf<cs2::C_MolotovGrenade>()});
 }

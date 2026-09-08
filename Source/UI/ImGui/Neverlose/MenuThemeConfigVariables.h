@@ -33,7 +33,7 @@ constexpr color::Rgba readableOnDark(color::Rgba color) noexcept
     return color;
 }
 
-// "Default v2": the Neversneeze logo's light purple, sampled from the swirl's highlight band.
+// "Default v2": the Neversnooze logo's light purple, sampled from the swirl's highlight band.
 // Everything accent-tinted (nav, controls, glow defaults, HUD counters) keys off these.
 inline constexpr color::Rgba kDefaultAccent{150, 127, 238, 255};
 inline constexpr auto kDefaultButtonColor = color::Rgba{150, 127, 238, 255};
@@ -65,3 +65,7 @@ CONFIG_VARIABLE(MenuGlowDebug, bool, false);
 // clock as the glow rainbow, so both fade in sync when both are on). Alpha channels of the
 // configured colors are kept.
 CONFIG_VARIABLE(MenuStyleRainbow, bool, false);
+
+// Accessibility: snaps every menu animation (motion(), page transitions, popovers) straight to
+// its target instead of easing - no slides, glows or stagger.
+CONFIG_VARIABLE(MenuReduceMotion, bool, false);

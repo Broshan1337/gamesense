@@ -12,13 +12,19 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <spawn.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
+
+#include <atomic>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 
 extern "C" {
 #include <lualib.h>
@@ -26,6 +32,7 @@ extern "C" {
 #include <lua.h>
 }
 
+#include <Features/Game/NetLag.h>
 #include <Platform/Linux/LinuxDynamicLibrary.h>
 #include <Utils/VerifyConsole.h>
 
@@ -45,6 +52,13 @@ int (*localPlayerIndexQuery)() noexcept = nullptr;
 void* (*entityFromIndexQuery)(int) noexcept = nullptr;
 int (*schemaFieldOffsetQuery)(const char*, const char*) noexcept = nullptr;
 int (*playerListQuery)(PlayerListEntry*, int) noexcept = nullptr;
+void (*engineCommandQuery)(const char*) noexcept = nullptr;
+bool (*cvarIntQuery)(const char*, int*) noexcept = nullptr;
+bool (*cvarFloatQuery)(const char*, float*) noexcept = nullptr;
+bool (*cvarFloatSetQuery)(const char*, float) noexcept = nullptr;
+bool (*cvarBoolSetQuery)(const char*, bool) noexcept = nullptr;
+bool (*worldToScreenQuery)(float, float, float, float*, float*) noexcept = nullptr;
+std::atomic<int> dispatchThreadKind{0};
 
 // posix_spawn environment (unistd.h only declares it under feature macros - mirror RadioManager)
 extern "C" char** environ;
@@ -132,14 +146,16 @@ static void loadGuiDefaults(const char* name) noexcept
     ::close(fd);
     buffer[total] = '\0';
 
-    // Lines: "c\t<label>\t<0|1>" (checkbox) / "s\t<label>\t<value>\t<min>\t<max>" (slider).
+    // Lines: "c\t<label>\t<0|1>" (checkbox) / "s\t<label>\t<value>\t<min>\t<max>" (slider) /
+    // "d\t<label>\t<index>" (dropdown - options come from the script itself).
     for (char* line = buffer; line && pendingGuiDefaultCount < kMaxGuiItems;) {
         char* next = std::strchr(line, '\n');
         if (next)
             *next++ = '\0';
         const bool isCheckbox = line[0] == 'c' && line[1] == '\t';
         const bool isSlider = line[0] == 's' && line[1] == '\t';
-        if (isCheckbox || isSlider) {
+        const bool isDropdown = line[0] == 'd' && line[1] == '\t';
+        if (isCheckbox || isSlider || isDropdown) {
             char* label = line + 2;
             char* rest = std::strchr(label, '\t');
             if (rest) {
@@ -150,6 +166,9 @@ static void loadGuiDefaults(const char* name) noexcept
                     std::strncpy(parsed.label, label, kMaxGuiLabel - 1);
                     if (isCheckbox) {
                         parsed.boolValue = rest[0] == '1';
+                        pendingGuiDefaults[pendingGuiDefaultCount++] = parsed;
+                    } else if (isDropdown) {
+                        parsed.intValue = std::atoi(rest);
                         pendingGuiDefaults[pendingGuiDefaultCount++] = parsed;
                     } else {
                         // sliders: value, min, max (ints)
@@ -190,6 +209,8 @@ static void saveGuiState(const Script& script) noexcept
         int length = 0;
         if (item.type == GuiItem::Type::Checkbox)
             length = std::snprintf(line, sizeof(line), "c\t%s\t%d\n", item.label, item.boolValue ? 1 : 0);
+        else if (item.type == GuiItem::Type::Dropdown)
+            length = std::snprintf(line, sizeof(line), "d\t%s\t%d\n", item.label, item.intValue);
         else
             length = std::snprintf(line, sizeof(line), "s\t%s\t%d\t%d\t%d\n", item.label, item.intValue, item.minValue, item.maxValue);
         if (length <= 0)
@@ -651,6 +672,10 @@ void unloadScript(int index) noexcept
         lua_close(script.L);
         script.L = nullptr;
     }
+    // A region-filter block list is script-owned state published into the datagram hook - a
+    // dead script can no longer manage it, so it must not survive the unload. (A reloading
+    // script re-applies its list on the next tick.)
+    net_region::clearBlockedIps();
     killPendingHttpFor(index);
     if (std::strcmp(pendingGuiOwner, script.name) == 0)
         pendingGuiDefaultCount = 0; // no stale defaults for a different script
@@ -751,7 +776,7 @@ bool writeScript(const char* name, const char* content, std::size_t length) noex
 bool createScript(const char* name) noexcept
 {
     static constexpr char kTemplate[] =
-        "-- Neversneeze script\n\n"
+        "-- Neversnooze script\n\n"
         "client.set_event_callback(\"paint\", function()\n"
         "    renderer.text(20, 200, \"hello from lua\", 255, 255, 255, 255)\n"
         "end)\n";
@@ -792,6 +817,8 @@ void dispatchEvent(const char* eventName, const EventArg* args, int argCount) no
         ~MutexUnlock() { pthread_mutex_unlock(&m); }
     } mutexUnlock{mutex};
 
+    // Game events fire on the game thread - unlock client.exec while we are here.
+    dispatchThreadKind.store(1, std::memory_order_relaxed);
     for (int i = 0; i < kMaxScripts; ++i) {
         Script& script = scripts[i];
         if (!script.L || script.errored)
@@ -801,6 +828,7 @@ void dispatchEvent(const char* eventName, const EventArg* args, int argCount) no
             lua_pop(script.L, 2); // array + callbacks table
         }
     }
+    dispatchThreadKind.store(0, std::memory_order_relaxed);
 }
 
 void dispatchPaint(ImDrawList* drawList) noexcept
@@ -812,6 +840,7 @@ void dispatchPaint(ImDrawList* drawList) noexcept
     } mutexUnlock{mutex};
 
     paintDrawList = drawList;
+    dispatchThreadKind.store(2, std::memory_order_relaxed);
     for (int i = 0; i < kMaxScripts; ++i) {
         Script& script = scripts[i];
         if (!script.L || script.errored || !script.hasPaint)
@@ -822,6 +851,7 @@ void dispatchPaint(ImDrawList* drawList) noexcept
         }
     }
     paintDrawList = nullptr;
+    dispatchThreadKind.store(0, std::memory_order_relaxed);
     pollHttp();
 }
 
@@ -837,6 +867,7 @@ void dispatchTick() noexcept
         ~MutexUnlock() { pthread_mutex_unlock(&m); }
     } mutexUnlock{mutex};
 
+    dispatchThreadKind.store(1, std::memory_order_relaxed);
     for (int i = 0; i < kMaxScripts; ++i) {
         Script& script = scripts[i];
         if (!script.L || script.errored || !script.hasTick)
@@ -846,6 +877,7 @@ void dispatchTick() noexcept
             lua_pop(script.L, 2);
         }
     }
+    dispatchThreadKind.store(0, std::memory_order_relaxed);
 }
 
 } // namespace lua

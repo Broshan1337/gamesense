@@ -9,20 +9,26 @@
 #include <Features/Combat/Triggerbot/TriggerbotConfigVariables.h>
 #include <Features/Game/BlockbotConfigVariables.h>
 #include <Features/Game/BunnyhopConfigVariables.h>
+#include <Features/Game/ChatToolsConfigVariables.h>
 #include <Features/Game/CooldownRevealerConfigVariables.h>
 #include <Features/Game/FakeLevelConfigVariables.h>
 #include <Features/Game/MovementConfigVariables.h>
+#include <Features/Game/AutoPeekConfigVariables.h>
+#include <Features/Game/RevealRadarConfigVariables.h>
 #include <Features/Hud/SpectatorList/SpectatorListParams.h>
 #include <Features/Game/FakePrimeConfigVariables.h>
 #include <Features/Game/FvaConfigVariables.h>
 #include <Features/Game/MatchAutoAcceptConfigVariables.h>
 #include <Features/Game/HitLogConfigVariables.h>
 #include <Features/Game/KillsayConfigVariables.h>
+#include <Features/Game/NameAnimatorConfigVariables.h>
+#include <Features/Game/NetLagConfigVariables.h>
 #include <Features/Game/ValveDsSpoofConfigVariables.h>
 #include <Features/Game/PanicKeyConfigVariables.h>
 #include <Features/Game/TeamDamageConfigVariables.h>
 #include <Features/Hud/HudThemeColorConfigVariables.h>
 #include <Features/Misc/DiscordRpcConfigVariables.h>
+#include <Features/Game/AgentChangerConfigVariables.h>
 #include <Features/Game/VoteRevealerConfigVariables.h>
 #include <Features/Hud/BombPlantAlert/BombPlantAlertConfigVariables.h>
 #include <Features/Hud/BindsList/BindsListConfigVariables.h>
@@ -39,6 +45,7 @@
 #include <Features/Visuals/Hitmarker/HitmarkerConfigVariables.h>
 #include <Features/Visuals/ModelGlow/ModelGlowConfigVariables.h>
 #include <Features/Visuals/OutlineGlow/OutlineGlowConfigVariables.h>
+#include <Features/Visuals/Chams/ChamsConfigVariables.h>
 #include <Features/Visuals/PlayerInfoInWorld/PlayerInfoInWorldConfigVariables.h>
 #include <Features/Visuals/PlayerList/PlayerListConfigVariables.h>
 #include <Features/Visuals/Removals/RemovalsConfigVariables.h>
@@ -174,12 +181,19 @@ using ConfigVariableTypes = TypeList<
     aimbot_vars::Autowall,
     aimbot_vars::SpreadGate,
     aimbot_vars::SeedFallback,
+    aimbot_vars::ForceShotWait,
+    aimbot_vars::ForceShotWaitTicks,
     movement_vars::EdgeJump,
     movement_vars::EdgeStop,
     movement_vars::SlowWalk,
     movement_vars::SlowWalkSpeed,
     movement_vars::FastLadder,
     movement_vars::JumpBug,
+    movement_vars::Desubtick,
+    autopeek_vars::Enabled,
+    reveal_radar_vars::Enabled,
+    chams_vars::Enabled,
+    chams_vars::EnemyColor,
     spectator_list_params::SpectatorListEnabled,
     PlayerListOffsetX,
     PlayerListOffsetY,
@@ -202,40 +216,13 @@ using ConfigVariableTypes = TypeList<
     BombPlantAlertEnabled,
     skin_changer_vars::KnifeModel,
     skin_changer_vars::KnifeSkin,
-    skin_changer_vars::M4A4Skin,
-    skin_changer_vars::AK47Skin,
-    skin_changer_vars::AWPSkin,
-    skin_changer_vars::DesertEagleSkin,
-    skin_changer_vars::USPSSkin,
-    skin_changer_vars::Glock18Skin,
-    skin_changer_vars::M249Skin,
-    skin_changer_vars::XM1014Skin,
-    skin_changer_vars::MAG7Skin,
-    skin_changer_vars::NegevSkin,
-    skin_changer_vars::SawedOffSkin,
-    skin_changer_vars::NovaSkin,
-    skin_changer_vars::DualBerettasSkin,
-    skin_changer_vars::FiveSeveNSkin,
-    skin_changer_vars::Tec9Skin,
-    skin_changer_vars::P2000Skin,
-    skin_changer_vars::P250Skin,
-    skin_changer_vars::CZ75AutoSkin,
-    skin_changer_vars::R8RevolverSkin,
-    skin_changer_vars::AUGSkin,
-    skin_changer_vars::FamasSkin,
-    skin_changer_vars::GalilARSkin,
-    skin_changer_vars::SG553Skin,
-    skin_changer_vars::M4A1SSkin,
-    skin_changer_vars::MAC10Skin,
-    skin_changer_vars::P90Skin,
-    skin_changer_vars::MP5SDSkin,
-    skin_changer_vars::UMP45Skin,
-    skin_changer_vars::PPBizonSkin,
-    skin_changer_vars::MP7Skin,
-    skin_changer_vars::MP9Skin,
-    skin_changer_vars::G3SG1Skin,
-    skin_changer_vars::SCAR20Skin,
-    skin_changer_vars::SSG08Skin,
+    skin_changer_vars::KnifeSkinWear,
+    skin_changer_vars::KnifeSkinSeed,
+    skin_changer_vars::StatTrakEnabled,
+    skin_changer_vars::StatTrakValue,
+#define NS_SKIN_CHANGER_F(base) skin_changer_vars::base, skin_changer_vars::base##Wear, skin_changer_vars::base##Seed,
+    NS_SKIN_CHANGER_GUNS(NS_SKIN_CHANGER_F)
+#undef NS_SKIN_CHANGER_F
     FvaEnabled,
     FvaZeroOriginSpoof,
     fva_vars::Substeps,
@@ -294,5 +281,64 @@ using ConfigVariableTypes = TypeList<
     radio_vars::MicBroadcast,
     MenuStyleRainbow,
     discord_rpc_vars::Enabled,
-    hud_theme_vars::Enabled
+    hud_theme_vars::Enabled,
+    agent_changer_vars::AgentDef,
+#define NS_MODEL_GLOW_COLOR(F) F(Flashbang) F(HEGrenade) F(SmokeGrenade) F(Molotov) F(DroppedBomb) F(TickingBomb) F(DefuseKit)
+#define NS_OUTLINE_GLOW_COLOR(F) NS_MODEL_GLOW_COLOR(F) F(Hostage)
+#define NS_GLOW_COLOR_VARS(sys, M) M(sys, Flashbang) M(sys, HEGrenade) M(sys, SmokeGrenade) M(sys, Molotov) M(sys, DroppedBomb) M(sys, TickingBomb) M(sys, DefuseKit)
+    outline_glow_vars::FlashbangColor,
+    outline_glow_vars::HEGrenadeColor,
+    outline_glow_vars::SmokeGrenadeColor,
+    outline_glow_vars::MolotovColor,
+    outline_glow_vars::DroppedBombColor,
+    outline_glow_vars::TickingBombColor,
+    outline_glow_vars::DefuseKitColor,
+    outline_glow_vars::HostageColor,
+    model_glow_vars::FlashbangColor,
+    model_glow_vars::HEGrenadeColor,
+    model_glow_vars::SmokeGrenadeColor,
+    model_glow_vars::MolotovColor,
+    model_glow_vars::DroppedBombColor,
+    model_glow_vars::TickingBombColor,
+    model_glow_vars::DefuseKitColor,
+    MenuReduceMotion,
+    chat_vars::SpamEnabled,
+    chat_vars::SpamCount,
+    chat_vars::SpamInterval,
+    chat_vars::WheelEnabled,
+    chat_vars::RadioPhrase,
+    chat_vars::WheelInterval,
+    chat_vars::HudColorCycle,
+    chat_vars::HudColorCycleSpeed,
+    chat_vars::NameCycleEnabled,
+    chat_vars::NameCycleInterval,
+    chat_vars::TheaterDelay,
+    chat_vars::IntelEnabled,
+    chat_vars::IntelBind,
+    chat_vars::StreakRadioEnabled,
+    chat_vars::LiveBadgeEnabled,
+    chat_vars::KickReason,
+    chat_vars::KickKey,
+    net_lag_vars::Enabled,
+    net_lag_vars::FakelagAlways,
+    net_lag_vars::ChokeKeyBind,
+    net_lag_vars::ChokeTicks,
+    net_lag_vars::BlipCount,
+    net_lag_vars::DupCount,
+    net_lag_vars::DelayEnabled,
+    net_lag_vars::DelayMs,
+    net_lag_vars::StatsEnabled,
+    net_lag_vars::FloodBurstCount,
+    net_lag_vars::FloodKeyBind,
+    net_lag_vars::ConnlessFloodCount,
+    net_lag_vars::ConnlessKeyBind,
+    radio_vars::AirhornEnabled,
+    radio_vars::AirhornFirstBlood,
+    radio_vars::AirhornHeadshot,
+    radio_vars::AirhornRoundWin,
+    radio_vars::VoiceKeyBind,
+    chat_vars::NameForceReconnect,
+    name_animator_vars::Enabled,
+    name_animator_vars::Mode,
+    name_animator_vars::Speed
 >;

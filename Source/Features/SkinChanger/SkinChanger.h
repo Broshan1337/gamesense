@@ -128,11 +128,20 @@ private:
             return;
 
         const auto desiredDefIndex = static_cast<int>(*configuredKnife);
-        // nullopt here means "None" - a vanilla, unpainted knife. The model swap still applies;
-        // paint kit 0 is the schema's own "default"/no-finish kit, so writing it is correct
-        // rather than a sentinel.
-        const auto configuredFinish = SkinChangerData::configuredKnifePaintKit(hookContext);
-        const auto desiredPaintKit = configuredFinish.has_value() ? static_cast<int>(*configuredFinish) : 0;
+        // 0 means "None" - a vanilla, unpainted knife. The model swap still applies; paint kit 0
+        // is the schema's own "default"/no-finish kit, so writing it is correct rather than a
+        // sentinel.
+        const int configuredFinish = SkinChangerData::configuredKnifePaintKitId(hookContext);
+        const auto desiredPaintKit = configuredFinish;
+
+        // Validate the finish against the IMPERSONATED model's list (or the generic-knife set
+        // when no model is selected) - per-model finish kits must never reach the engine on the
+        // wrong knife type.
+        if (desiredPaintKit != 0 && !SkinChangerData::isKnifePaintKitValid(configuredKnife, desiredPaintKit))
+            return;
+
+        const auto [configuredWearPermille, configuredSeed] = SkinChangerData::configuredKnifeWearAndSeed(hookContext);
+        const int statTrak = GET_CONFIG_VAR(skin_changer_vars::StatTrakEnabled) ? GET_CONFIG_VAR(skin_changer_vars::StatTrakValue) : 0;
 
         const auto knife = weaponEntity.template as<BaseWeapon>();
         const auto handle = knife.baseEntity().handle();
@@ -178,7 +187,7 @@ private:
             knife.itemDefinitionIndex().valueOr(0) == desiredDefIndex
             && knife.subclassID().valueOr(0) == desiredSubclassToken
             && knife.paintKit().valueOr(-1) == desiredPaintKit
-            && knife.seed().valueOr(-1) == 0;
+            && knife.seed().valueOr(-1) == configuredSeed;
 
         // justEquipped still forces one pass, matching the reference's own forceUpdate argument -
         // a genuine deploy is exactly when re-applying is legitimate. Everything else falls
@@ -229,13 +238,15 @@ private:
         // resolved yet - see BaseWeapon::regenerateSkin()'s crash-fix comment for the full RE
         // trail. Don't latch the one-shot guard in that case, so this retries next frame instead
         // of silently failing forever.
-        if (!knife.applySkinAttributes(desiredPaintKit, 0, 0.01f))
+        if (!knife.applySkinAttributes(desiredPaintKit, configuredSeed, static_cast<float>(configuredWearPermille) / 1000.0f))
             return;
 
-        // applySkinAttributes() unconditionally writes m_iEntityQuality=0 (correct for guns);
-        // the reference wants 3 (QUALITY_UNUSUAL) for knives specifically, so this must come
-        // after it.
-        knife.setEntityQuality(3);
+        // applySkinAttributes() unconditionally writes m_iEntityQuality=0; the reference wants
+        // 3 (QUALITY_UNUSUAL) for knives specifically (StatTrak overrides with 9 = STRANGE), so
+        // this must come after it.
+        knife.setEntityQuality(statTrak ? 9 : 3);
+        if (statTrak)
+            knife.setStatTrak(statTrak);
         knife.updateWeaponData(1);
         knife.setSubclassID(desiredSubclassToken);
 
@@ -317,7 +328,7 @@ private:
 
         if (!knife.regenerateSkin())
             return;
-        hookContext.skinChangerState().markApplied(handle, static_cast<cs2::PaintKitIndex>(desiredPaintKit));
+        hookContext.skinChangerState().markApplied(handle, desiredPaintKit, configuredSeed, configuredWearPermille, statTrak);
 
         // NEW this round - the reference's exact final step after the composite-material
         // rebuild (UpdateCompositeMaterial/Set -> UpdateSkin(true) -> scene->PostDataUpdate()),
@@ -361,40 +372,60 @@ private:
         if (!defIndex.hasValue())
             return;
 
-        // configuredSelection(), not configuredPaintKit(): those collapse two different cases
-        // into one nullopt. nullopt here means "this weapon isn't curated at all" - leave it
-        // completely alone. A curated weapon set to "None" instead comes back as Some(None),
-        // which must REVERT rather than be ignored.
-        const auto selection = SkinChangerData::configuredSelection(hookContext, static_cast<cs2::ItemDefinitionIndex>(defIndex.value()));
-        if (!selection.has_value())
+        // configuredPaintKitId() keeps the two cases the old selection enum collapsed apart:
+        // nullopt means "this weapon has no config variable" - leave it completely alone.
+        // Some(0) means the user chose "None", which must REVERT rather than be ignored.
+        const auto configuredKit = SkinChangerData::configuredPaintKitId(hookContext, static_cast<cs2::ItemDefinitionIndex>(defIndex.value()));
+        if (!configuredKit.has_value())
+            return;
+
+        // Defense in depth: a config value that isn't in the weapon's PaintKitDatabase list
+        // (e.g. a stale value saved by an older build) must never reach the engine - an
+        // incompatible weapon+kit combination SIGFPEs the composite-material system.
+        if (*configuredKit != 0 && !SkinChangerData::isPaintKitValidFor(static_cast<cs2::ItemDefinitionIndex>(defIndex.value()), *configuredKit))
             return;
 
         const auto handle = weapon.baseEntity().handle();
 
-        // Capture what this weapon looked like before we ever touched it. No-op after the first
-        // call for a given entity, so our own writes can never become the "original".
-        hookContext.skinChangerState().rememberOriginalPaintKit(handle, static_cast<cs2::PaintKitIndex>(weapon.paintKit().valueOr(0)));
+        // Capture what this weapon looked like before we ever touched it (full kit/seed/wear
+        // triple). No-op after the first call for a given entity, so our own writes can never
+        // become the "original".
+        const auto originalSeed = weapon.seed().valueOr(0);
+        const auto originalWear = weapon.wear().valueOr(0.0f);
+        hookContext.skinChangerState().rememberOriginalPaintKit(handle,
+            static_cast<int>(weapon.paintKit().valueOr(0)),
+            originalSeed,
+            static_cast<int>(originalWear * 1000.0f + 0.5f));
 
         // Live updating falls straight out of this: the desired state is recomputed from config
-        // every pass, so changing the dropdown mid-game makes desired != applied on the very next
+        // every pass, so changing the selection mid-game makes desired != applied on the very next
         // frame and the weapon re-skins itself, with no equip/respawn needed. Choosing "None"
-        // makes the ORIGINAL paint kit the desired state, so it reverts by the same mechanism
-        // rather than being a special case.
-        const auto configuredPaintKit = SkinChangerData::resolvePaintKit(static_cast<cs2::ItemDefinitionIndex>(defIndex.value()), *selection);
-        const auto originalPaintKit = hookContext.skinChangerState().originalPaintKit(handle);
-        const auto desiredPaintKit = configuredPaintKit.value_or(originalPaintKit.value_or(static_cast<cs2::PaintKitIndex>(0)));
+        // makes the CAPTURED ORIGINAL state the desired state (the real seed/wear the weapon
+        // arrived with - not neutral values, which would corrupt real inventory skins), so it
+        // reverts by the same mechanism rather than being a special case.
+        const auto [configuredWearPermille, configuredSeed] = SkinChangerData::configuredWearAndSeed(hookContext, static_cast<cs2::ItemDefinitionIndex>(defIndex.value()));
+        const int statTrak = GET_CONFIG_VAR(skin_changer_vars::StatTrakEnabled) ? GET_CONFIG_VAR(skin_changer_vars::StatTrakValue) : 0;
 
-        if (hookContext.skinChangerState().alreadyApplied(handle, desiredPaintKit))
+        const auto original = hookContext.skinChangerState().originalState(handle).value_or(SkinChangerState::OriginalState{0, 0, 10});
+        const int desiredPaintKit = *configuredKit != 0 ? *configuredKit : original.paintKit;
+        const int desiredSeed = *configuredKit != 0 ? configuredSeed : original.seed;
+        const int desiredWearPermille = *configuredKit != 0 ? configuredWearPermille : original.wearPermille;
+
+        if (hookContext.skinChangerState().alreadyApplied(handle, desiredPaintKit, desiredSeed, desiredWearPermille, statTrak))
             return;
-
-        const auto paintKit = std::optional<cs2::PaintKitIndex>{desiredPaintKit};
 
         // applySkinAttributes() returns false (without crashing) when the weapon's VData isn't
         // resolved yet - a real race on freshly spawned weapons (e.g. die -> rebuy the same
         // weapon), see BaseWeapon::regenerateSkin()'s crash-fix comment for the full RE trail.
         // Don't mark this weapon "applied" in that case, so the next frame's pass retries it.
-        if (!weapon.applySkinAttributes(static_cast<int>(*paintKit), 0, 0.01f))
+        if (!weapon.applySkinAttributes(desiredPaintKit, desiredSeed, static_cast<float>(desiredWearPermille) / 1000.0f))
             return;
+
+        // StatTrak: m_iEntityQuality must be 9 (STRANGE) and the fallback counter set.
+        if (statTrak) {
+            weapon.setEntityQuality(9);
+            weapon.setStatTrak(statTrak);
+        }
 
         // The reference calls UpdateWeaponData()/UpdateVData() right after writing paint/wear/
         // seed, for every weapon (not just knives) - see UpdateWeaponData's declaration comment
@@ -426,7 +457,7 @@ private:
 
         if (!weapon.regenerateSkin())
             return;
-        hookContext.skinChangerState().markApplied(handle, *paintKit);
+        hookContext.skinChangerState().markApplied(handle, desiredPaintKit, desiredSeed, desiredWearPermille, statTrak);
 
         // NEW this round - see the matching call in applyKnifeIfConfigured() for the full
         // RE trail. The reference calls this after every weapon's skin apply, not just knives.

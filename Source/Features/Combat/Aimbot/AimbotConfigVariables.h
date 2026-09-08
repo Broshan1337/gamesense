@@ -120,6 +120,14 @@ CONFIG_VARIABLE(SpreadGate, bool, false);
 // nothing else. Off by default.
 CONFIG_VARIABLE(SeedFallback, bool, false);
 
+// skeet's wait-for-accuracy fire gate for force-shot: when the stance/min-damage arms pass but
+// the accuracy/hitchance arm does not, the auto-shot WAITS instead of giving up for the tick -
+// it keeps re-evaluating each tick and fires the moment the measured accuracy clears, giving up
+// only after ForceShotWaitTicks (skeet projects up to 34 ticks ahead; we wait on the real
+// weapon state instead of a simulated recovery curve). Off by default.
+CONFIG_VARIABLE(ForceShotWait, bool, false);
+CONFIG_VARIABLE_RANGE(ForceShotWaitTicks, aimbot_params::kForceShotWaitTicks);
+
 
 // NOTE: still to come - the Silent-vs-visible toggle. Its config var is added when built.
 

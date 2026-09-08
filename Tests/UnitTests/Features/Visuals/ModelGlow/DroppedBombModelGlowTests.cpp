@@ -51,7 +51,7 @@ class DroppedBombModelGlowHueTest
 
 TEST_P(DroppedBombModelGlowHueTest, CorrectHueIsReturned) {
     EXPECT_CALL(mockHookContext, config()).WillOnce(testing::ReturnRef(mockConfig));
-    mockConfig.expectGetVariable<model_glow_vars::DroppedBombHue>(model_glow_vars::DroppedBombHue::ValueType{GetParam()});
+    mockConfig.expectGetVariable<model_glow_vars::DroppedBombHue>(model_glow_vars::DroppedBombHue::ValueType{color::HueInteger{GetParam()}});
     EXPECT_EQ(droppedBombModelGlow.hue(), GetParam());
 }
 

@@ -37,8 +37,8 @@ fi
 if [ ! -f "$target_lib" ]; then
     echo "Error: Built library not found at '$target_lib'"
     echo "Build it first:"
-    echo "  cmake --build build --target Neversneeze      # release"
-    echo "  cmake --build build-dbg --target Neversneeze  # debug"
+    echo "  cmake --build build --target Neversnooze      # release"
+    echo "  cmake --build build-dbg --target Neversnooze  # debug"
     exit 1
 fi
 

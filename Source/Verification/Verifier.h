@@ -50,7 +50,7 @@ private:
 
     void showFailureMessageBox(const char* comparator) noexcept
     {
-        SimpleMessageBox{}.showError("Neversneeze verification failure", buildFailureMessage(comparator));
+        SimpleMessageBox{}.showError("Neversnooze verification failure", buildFailureMessage(comparator));
     }
 
     [[nodiscard]] const char* buildFailureMessage(const char* comparator) noexcept

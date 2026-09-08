@@ -33,4 +33,12 @@ CONFIG_VARIABLE_HUE(DefuseKitHue, outline_glow_params::kDefuseKitHue);
 
 CONFIG_VARIABLE_HUE(HostageHue, outline_glow_params::kHostageHue);
 
+CONFIG_VARIABLE(FlashbangColor, color::Rgba, (color::Rgba{64, 131, 255, outline_glow_params::kGlowAlpha}));
+CONFIG_VARIABLE(HEGrenadeColor, color::Rgba, (color::Rgba{255, 64, 64, outline_glow_params::kGlowAlpha}));
+CONFIG_VARIABLE(SmokeGrenadeColor, color::Rgba, (color::Rgba{64, 255, 64, outline_glow_params::kGlowAlpha}));
+CONFIG_VARIABLE(MolotovColor, color::Rgba, (color::Rgba{255, 128, 0, outline_glow_params::kGlowAlpha}));
+CONFIG_VARIABLE(DroppedBombColor, color::Rgba, (color::Rgba{255, 213, 77, outline_glow_params::kGlowAlpha}));
+CONFIG_VARIABLE(TickingBombColor, color::Rgba, (color::Rgba{255, 0, 0, outline_glow_params::kGlowAlpha}));
+CONFIG_VARIABLE(DefuseKitColor, color::Rgba, (color::Rgba{0, 213, 255, outline_glow_params::kGlowAlpha}));
+CONFIG_VARIABLE(HostageColor, color::Rgba, (color::Rgba{255, 200, 50, outline_glow_params::kGlowAlpha}));
 }

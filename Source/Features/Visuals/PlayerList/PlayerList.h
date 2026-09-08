@@ -39,6 +39,9 @@ public:
         const auto maxHealthOffset = hookContext.schemaSystem().getFieldOffset("C_BaseEntity", "m_iMaxHealth");
         const auto observerServicesOffset = hookContext.schemaSystem().getFieldOffset("C_BasePlayerPawn", "m_pObserverServices");
         const auto observerModeOffset = hookContext.schemaSystem().getFieldOffset("CPlayer_ObserverServices", "m_iObserverMode");
+        const auto actionTrackingOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayerController", "m_pActionTrackingServices");
+        const auto matchStatsOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayerController_ActionTrackingServices", "m_matchStats");
+        const auto killsOffset = hookContext.schemaSystem().getFieldOffset("CSPerRoundStats_t", "m_iKills");
         if (!nameOffset.has_value() || !maxHealthOffset.has_value())
             return;
 
@@ -77,6 +80,16 @@ public:
                     const void* moneyServices = readPointer(controllerBytes + *moneyServicesOffset);
                     if (moneyServices)
                         row.money = readInt(static_cast<const std::byte*>(moneyServices) + *accountOffset);
+                }
+
+                // Kills (the scoreboard's K column) come from the CONTROLLER's action-tracking
+                // services -> m_matchStats -> CSPerRoundStats_t::m_iKills (FrameworkCS2's
+                // KillsColumn reads the same chain). The PAWN-side
+                // CCSPlayer_ActionTrackingServices::m_iKills is NOT networked - it stays 0 on
+                // the client, verified in-game.
+                if (actionTrackingOffset.has_value() && matchStatsOffset.has_value() && killsOffset.has_value()) {
+                    if (const void* actionTracking = readPointer(controllerBytes + *actionTrackingOffset))
+                        row.kills = readInt(static_cast<const std::byte*>(actionTracking) + *matchStatsOffset + *killsOffset);
                 }
             }
 

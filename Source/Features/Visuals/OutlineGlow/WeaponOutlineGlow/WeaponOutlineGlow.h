@@ -1,5 +1,6 @@
 #pragma once
 
+#include <CS2/Classes/Color.h>
 #include <utility>
 
 #include <CS2/Classes/Entities/WeaponEntities.h>
@@ -41,6 +42,18 @@ public:
     [[nodiscard]] int getGlowRange() const noexcept
     {
         return outline_glow_params::kWeaponGlowRange;
+    }
+
+    [[nodiscard]] cs2::Color color(EntityTypeInfo entityTypeInfo, auto&& /* weapon */) const noexcept
+    {
+        switch (entityTypeInfo.typeIndex) {
+        case EntityTypeInfo::indexOf<cs2::C_MolotovGrenade>():
+        case EntityTypeInfo::indexOf<cs2::C_IncendiaryGrenade>(): { const auto c = GET_CONFIG_VAR(outline_glow_vars::MolotovColor); return cs2::Color{c.r(), c.g(), c.b(), c.a()}; }
+        case EntityTypeInfo::indexOf<cs2::C_Flashbang>(): { const auto c = GET_CONFIG_VAR(outline_glow_vars::FlashbangColor); return cs2::Color{c.r(), c.g(), c.b(), c.a()}; }
+        case EntityTypeInfo::indexOf<cs2::C_HEGrenade>(): { const auto c = GET_CONFIG_VAR(outline_glow_vars::HEGrenadeColor); return cs2::Color{c.r(), c.g(), c.b(), c.a()}; }
+        case EntityTypeInfo::indexOf<cs2::C_SmokeGrenade>(): { const auto c = GET_CONFIG_VAR(outline_glow_vars::SmokeGrenadeColor); return cs2::Color{c.r(), c.g(), c.b(), c.a()}; }
+        default: return outline_glow_params::kFallbackColor;
+        }
     }
 
 private:

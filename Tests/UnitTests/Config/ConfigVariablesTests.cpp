@@ -22,6 +22,8 @@ public:
             static_assert(color::Rgba{0x12u, 0x34u, 0x56u, 0xABu} != ConfigVariable::kDefaultValue,
                           "Rgba test value must differ from every Rgba config var's default");
             return color::Rgba{0x12u, 0x34u, 0x56u, 0xABu};
+        } else if constexpr (std::is_integral_v<typename ConfigVariable::ValueType>) {
+            return static_cast<typename ConfigVariable::ValueType>(ConfigVariable::kDefaultValue + 1);
         } else
             static_assert(!std::is_same_v<ConfigVariable, ConfigVariable>, "Unsupported type");
     }

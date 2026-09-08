@@ -1,6 +1,6 @@
 #pragma once
 
-// Neversneeze swirl cutout, 160px (display sizes are 26-52px; the asset was rebuilt with a
+// Neversnooze swirl cutout, 160px (display sizes are 26-52px; the asset was rebuilt with a
 
 // wide alpha ramp + edge defringe + alpha blur so the chip doesn't look jagged when downscaled).
 

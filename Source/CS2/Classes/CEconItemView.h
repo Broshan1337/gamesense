@@ -16,6 +16,8 @@ struct CEconItemView {
     using m_bDisallowSOC = bool;
     using m_bRestoreCustomMaterialAfterPrecache = bool;
     using m_iItemIDHigh = std::uint32_t;
+    using m_iItemIDLow = std::uint32_t;
+    using m_bInitialized = bool;
 
     // The real internal attribute-write path (found via string xref to "set item texture
     // wear"/"prefab"/"seed", the same names the Andromeda-CS2-Base reference uses). Unlike

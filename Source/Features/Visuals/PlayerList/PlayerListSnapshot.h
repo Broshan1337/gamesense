@@ -19,6 +19,7 @@ struct Row {
     int rank = 0;          // m_iCompetitiveRanking (raw; 11+rating = premier reading is rankType's job)
     int rankType = 0;      // m_iCompetitiveRankType (0xb = premier)
     int team = 0;          // 2 = T, 3 = CT
+    int kills = 0;         // CCSPlayer_ActionTrackingServices::m_iKills (scoreboard K column)
     int teamDamage = 0;    // from TeamDamageTracker's per-slot records
     int observerMode = -1; // CPlayer_ObserverServices::m_iObserverMode; -1 = none (alive)
     bool alive = false;

@@ -36,15 +36,24 @@
 #include <Features/Misc/DiscordRpc.h>
 #include <Features/Hud/HudThemeColor.h>
 #include <Features/SkinChanger/SkinChanger.h>
+#include <Features/Game/AgentChanger.h>
+#include <Features/Game/AutoPeek.h>
 #include <Features/Game/Blockbot.h>
 #include <Features/Game/Bunnyhop.h>
+#include <Features/Game/ChatTools.h>
 #include <Features/Game/Movement.h>
+#include <Features/Game/NameAnimator.h>
+#include <Features/Game/NetLag.h>
+#include <GameClient/ConVars/CvarSystem.h>
+#include <GameClient/EngineCommandExecutor.h>
+#include <GameClient/WorldToScreen/WorldToClipSpaceConverter.h>
 #include <Features/Game/TestStrafer.h>
 #include <Features/Game/CooldownRevealer.h>
 #include <Features/Game/FakeLevel.h>
 #include <Features/Game/FvaEmulator.h>
 #include <Features/Game/IsValveDsSpoof.h>
 #include <Features/Game/FakePrime.h>
+#include <Features/Game/RevealRadar.h>
 #include <Features/Game/MatchAutoAccept.h>
 #include <Features/Game/HitLog.h>
 #include <Features/Game/Killsay.h>
@@ -65,6 +74,8 @@
 #include <Features/Visuals/WorldColors/WorldColors.h>
 #include <Features/Lua/LuaManager.h>
 #include <Hooks/SceneRenderHooks.h>
+#include <Hooks/ChamsHook.h>
+#include <Features/Visuals/Chams/Chams.h>
 
 [[NOINLINE]] void finishInit(auto& hookContext)
 {
@@ -119,6 +130,63 @@
         });
         return count;
     };
+    // Console-command bridge for Lua client.exec - the same EngineCommandExecutor every feature
+    // uses (queued into the engine's command buffer, drained next frame; LOCAL client console).
+    lua::engineCommandQuery = [](const char* command) noexcept {
+        if (!command || !HookContext<GlobalContext>::isGlobalContextComplete() || HookQuiesce::isShuttingDown())
+            return;
+        HookContext<GlobalContext> context;
+        context.template make<EngineCommandExecutor>().execute(command);
+    };
+    // API v2 bridges: runtime convar reads/writes and the world-to-screen projection. Same
+    // guard pattern as above - null-safe "unavailable" results while the context is missing.
+    lua::cvarIntQuery = [](const char* name, int* out) noexcept -> bool {
+        if (!name || !out || !HookContext<GlobalContext>::isGlobalContextComplete() || HookQuiesce::isShuttingDown())
+            return false;
+        HookContext<GlobalContext> context;
+        const auto value = context.template make<CvarSystem>().readIntConVar(name);
+        if (!value.has_value())
+            return false;
+        *out = *value;
+        return true;
+    };
+    lua::cvarFloatQuery = [](const char* name, float* out) noexcept -> bool {
+        if (!name || !out || !HookContext<GlobalContext>::isGlobalContextComplete() || HookQuiesce::isShuttingDown())
+            return false;
+        HookContext<GlobalContext> context;
+        const auto value = context.template make<CvarSystem>().readFloatConVar(name);
+        if (!value.has_value())
+            return false;
+        *out = *value;
+        return true;
+    };
+    lua::cvarFloatSetQuery = [](const char* name, float value) noexcept -> bool {
+        if (!name || !HookContext<GlobalContext>::isGlobalContextComplete() || HookQuiesce::isShuttingDown())
+            return false;
+        HookContext<GlobalContext> context;
+        return context.template make<CvarSystem>().forceFloatConVar(name, value);
+    };
+    lua::cvarBoolSetQuery = [](const char* name, bool value) noexcept -> bool {
+        if (!name || !HookContext<GlobalContext>::isGlobalContextComplete() || HookQuiesce::isShuttingDown())
+            return false;
+        HookContext<GlobalContext> context;
+        return context.template make<CvarSystem>().forceBoolConVar(name, value);
+    };
+    // World -> normalized device coordinates through the frame's worldToProjection matrix
+    // (same WorldToClipSpaceConverter the in-world panel features draw with). The NDC -> pixel
+    // conversion happens in the binding, where the ImGui display size lives.
+    lua::worldToScreenQuery = [](float x, float y, float z, float* ndcX, float* ndcY) noexcept -> bool {
+        if (!ndcX || !ndcY || !HookContext<GlobalContext>::isGlobalContextComplete() || HookQuiesce::isShuttingDown())
+            return false;
+        HookContext<GlobalContext> context;
+        const auto clip = context.template make<WorldToClipSpaceConverter>().toClipSpace(cs2::Vector{x, y, z});
+        if (!clip.onScreen())
+            return false;
+        const float inverseW = 1.0f / clip.w;
+        *ndcX = clip.x * inverseW;
+        *ndcY = clip.y * inverseW;
+        return true;
+    };
 
     // ImGui menu: build the context (allocations bridged to CS2's IMemAlloc) and attempt the
     // Vulkan presentation hook. The hook legitimately fails while libvulkan is not mapped yet
@@ -138,6 +206,11 @@
     // Scene-render pass-through hooks (particle recolor, light recolor) + the patch anchors for
     // the Removals toggles. Fails closed per anchor with a StatusReport entry.
     (void)scene_render_hooks::install(); // per-anchor results already landed in StatusReport
+    // Enemy chams: GeneratePrimitives vtable patches (pass-through until chams_vars::Enabled).
+    (void)chams_hook::install();
+    // Datagram-level net-lag experiment (own servers only): GOT hook over the sendto/sendmsg
+    // imports of libsteamnetworkingsockets.so. Pass-through until net_lag_vars::Enabled.
+    static_cast<void>(netlag_hook::install());
 }
 
 int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType, unsigned maxType) noexcept
@@ -200,6 +273,8 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     // pass-through hooks must be restored while the context is still alive.
     hookContext.template make<Removals>().onUnload();
     scene_render_hooks::uninstall();
+    chams_hook::uninstall();
+    netlag_hook::unload();
     hookContext.hooks().viewRenderHook.uninstall();
     hookContext.hooks().source2ClientHook.uninstall();
     hookContext.hooks().gameEventManagerHook.uninstall();
@@ -268,6 +343,21 @@ void Source2ClientHook_onFrameStageNotify(cs2::CSource2Client* thisptr, int fram
     // CreateMove is the prime suspect of the 2026-08-23 23:56 SEGV.
     if (frameStage == 6 && (GET_CONFIG_VAR(aimbot_vars::Backtrack) || GET_CONFIG_VAR(aimbot_vars::Extrapolate)))
         hookContext.template make<Lagcomp>().run();
+
+    // Inventory changer (config-skin sync + pending adds): CREATEMOVE ONLY (session 8's rule).
+    // The FrameStageNotify menu tick was tried in session 11 and REVERTED 2026-09-06: injecting
+    // into the main menu crashed (libclient+0x1f941d7, [null+0x10], the session view-id walk)
+    // because our item/view mutation on the game thread still races the game's OWN view
+    // enumeration that runs on another thread while the menu is up. CreateMove only ticks
+    // in-game, which is where this feature matters anyway - do not re-add a menu tick without
+    // solving that enumeration race first.
+
+    // Chat tools also tick here so their cadences (HUD color cycle in the lobby) run in the
+    // main menu. Breadcrumb-proven clean during the 2026-09-06 inject crashes (0x310->0x311
+    // completed on every run); it touches no GC/session state. One caller of the shared parity
+    // gate drives the cadence per frame - see ChatTools.h.
+    if (frameStage == 6)
+        hookContext.template make<ChatTools>().run();
 }
 
 // Numeric event fields for the Lua callbacks' `event` table (see lua::dispatchEvent). Strings
@@ -361,6 +451,10 @@ bool GameEventManagerHook_onFireEventClientSide(cs2::IGameEventManager2* thisptr
     hookContext.template make<SpawnProtectionSound>().onFireEventClientSide(event);
     hookContext.template make<CombatStats>().onFireEventClientSide(event);
     hookContext.template make<Killsay>().onFireEventClientSide(event);
+    // Airhorn trigger decisions run on the game thread (event data), playback on the present
+    // thread (updateAirhorn) - the pending-trigger atomic bridges the two.
+    hookContext.template make<RadioManager>().onGameEvent(event);
+    hookContext.template make<ChatTools>().onFireEventClientSide(event);
     // Lua scripts: dispatch under the event's own name (player_hurt etc.), with the common
     // numeric fields passed along as the callbacks' `event` table. Everything is read through
     // the event vtable BEFORE the original can recycle the event object.
@@ -396,6 +490,11 @@ void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCm
     // never gets gated).
     auto&& panicKey = hookContext.template make<PanicKey>();
     panicKey.run();
+    // Net-lag poll runs BEFORE the panic gate so its hold-to-choke bind and config stay live
+    // even while combat features are panicked (it is a network feature, not a combat one).
+    hookContext.template make<NetLag>().run();
+    // Name animator: cosmetic live renames (setinfo path) - like visuals, it keeps running.
+    hookContext.template make<NameAnimator>().run();
     if (panicKey.isActive())
         return;
 
@@ -432,9 +531,29 @@ void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCm
     hookContext.template make<LegitAimbot>().onCreateMove(cmd);
     // Standalone recoil control: during a spray, pulls the real view against the recoil kick. See Rcs.h.
     hookContext.template make<Rcs>().onCreateMove(cmd);
+    // skeet's quick peek: anchors the standstill position and counter-drives the player back onto
+    // it (movement buttons + a subtick analog step) while they are peeked out. Runs after combat
+    // like the reference's pipeline. See AutoPeek.h.
+    hookContext.template make<AutoPeek>().onCreateMove(cmd);
     // FVA-style view-angle chains: runs LAST so the history entries interpolate towards the FINAL
     // angles every feature above settled on. See Features/Game/FvaEmulator.h.
     hookContext.template make<FvaEmulator>().onCreateMove(cmd);
+
+    // (The InventoryChanger was REMOVED 2026-09-06: its GC session-view mutation kept racing
+    // the game's own enumeration - menu + map-load crashes. The skin changer needs none of it;
+    // the agent model swap (AgentChanger, below) stays - it touches no GC state.)
+
+    // Local agent model changer - same thread rule (SetModel swaps the live pawn's model).
+    hookContext.template make<AgentChanger>().run();
+
+    // skeet's reveal radar: set the client-side spotted flag on every alive enemy pawn (game
+    // thread, same rule as the changer above). See RevealRadar.h.
+    hookContext.template make<RevealRadar>().run();
+
+    // Chat tools (fake name / chat spam / radio spam / HUD color cycle) - networked console
+    // commands, game thread. Also ticks from FrameStageNotify 6 so the cadences run in the
+    // main menu; the shared parity gate keeps the rate exact with both callers live.
+    hookContext.template make<ChatTools>().run();
 
     // Lua scripts: one "createmove" callback batch per input tick, after all native features.
     lua::dispatchTick();
@@ -507,6 +626,12 @@ std::uint64_t CSGOInputHook_onWriteMoveCrc(cs2::CCSGOInput* thisptr, cs2::CUserC
         // before it flipped that decision and changed shot behavior mid-spray). In the
         // FvaSilentShots experiment this call is a no-op and the early position above published.
         hookContext.template make<FvaEmulator>().onWriteMoveCrcLate(cmd);
+
+        // skeet's desubtick end-stage ("final subtick"): last writer position - strip the analog
+        // movement components from every subtick step so the SERVER receives no subtick movement.
+        // Button/angle steps (shots, jumps, strafer steering) survive. See SubtickMoves::stripAnalog.
+        if (GET_CONFIG_VAR(movement_vars::Desubtick))
+            SubtickMoves<HookContext<GlobalContext>>::stripAnalog(UserCmd{cmd}.baseMessage());
     }
     return hookContext.hooks().csgoInputHook.getOriginalWriteMoveCrc()(thisptr, cmd);
 }
@@ -521,6 +646,7 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     HookContext<GlobalContext> hookContext;
     hookContext.clearRenderHookState();
     hookContext.hooks().viewRenderHook.getOriginalOnRenderStart()(thisptr);
+
 
     // The presentation hook is installed lazily: libvulkan (and the renderer's pointer cache)
     // may not exist yet during early init, so every render start retries until it sticks. Once
@@ -805,3 +931,60 @@ void scene_render_hooks::onAggregateSceneObjectDrawArray(void* sceneObjectDesc, 
 {
     worldDrawArrayBody(hooks.aggregateSceneObjectDrawArray, sceneObjectDesc, renderContext, primitives, primitiveCount, sceneView, sceneLayer, perFrameStats);
 }
+
+// Live-pawn snapshot pacing for the chams hook body (see Chams.h).
+inline int chamsCallsUntilSnapshot{0};
+// Phase-3 material diagnostic counters (cumulative).
+
+// Hook on SceneObjectDesc::GeneratePrimitives (5 descriptor vtables, byte offset +0x20 - see
+// ChamsHook.h). Pass-through until chams_vars::Enabled; for enemy scene objects it re-runs the
+// original a second time (after clearing the object's generated-layers marker) and tints the
+// APPENDED primitive range - the duplicate pass draws the model again in the chams color.
+void chams_hook::onGeneratePrimitives(void* desc, void* sceneObject, void* sceneView, void* primitives) noexcept
+{
+    using GeneratePrimitivesFn = void (*)(void*, void*, void*, void*);
+    const auto original = reinterpret_cast<GeneratePrimitivesFn>(chams_hook::originalFor(desc));
+
+    const bool shuttingDown = HookQuiesce::isShuttingDown();
+    HookQuiesce::InFlight flight;
+    if (shuttingDown || !original) {
+        if (original)
+            RetAddrSpoofer::spoof(original)(desc, sceneObject, sceneView, primitives);
+        return;
+    }
+
+    HookContext<GlobalContext> hookContext;
+
+    // Fast pass-through: skip the rest of the machinery while the feature is disabled.
+    if (!GET_CONFIG_VAR(chams_vars::Enabled)) {
+        RetAddrSpoofer::spoof(original)(desc, sceneObject, sceneView, primitives);
+        return;
+    }
+
+    auto&& chams = hookContext.template make<Chams>();
+
+    // The live-pawn snapshot refreshes on a call counter (see Chams.h for the race-freedom note).
+    if (chamsCallsUntilSnapshot <= 0) {
+        chams.refreshLivePawnPointers();
+        chamsCallsUntilSnapshot = Chams<HookContext<GlobalContext>>::kSnapshotRefreshInterval;
+    }
+    --chamsCallsUntilSnapshot;
+
+    const auto colorPacked = Chams<HookContext<GlobalContext>>::primitiveColor(GET_CONFIG_VAR(chams_vars::EnemyColor));
+
+    RetAddrSpoofer::spoof(original)(desc, sceneObject, sceneView, primitives);
+
+    if (!chams.wantsOverlayPass(sceneObject))
+        return;
+
+    // Flat chams: tint the enemy's OWN primitives in place, at generation time. The primitive
+    // buffers are pooled and recycled across objects, so any generate->draw correlation by
+    // buffer address tints whatever object recycles the address (gloves/guns/random props) and
+    // races the pool (flicker). Generation-time is the only point where the buffer is
+    // guaranteed to belong to the classified object. Every regeneration passes through this
+    // hook, so the tint is refreshed automatically.
+    if (primitives)
+        Chams<HookContext<GlobalContext>>::applyOverlay(primitives, 0, colorPacked);
+}
+
+

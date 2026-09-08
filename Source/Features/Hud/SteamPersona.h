@@ -39,7 +39,7 @@ inline bool fetchStarted = false;
 inline char personaName[64] = {};
 inline float nextNameRead = 0.0f;
 
-inline constexpr const char* kScript = R"(#!/bin/sh
+inline constexpr char kScript[] = R"(#!/bin/sh
 V="$HOME/.local/share/Steam/config/loginusers.vdf"
 C="$HOME/.local/share/Steam/config/avatarcache"
 [ -f "$V" ] || exit 0

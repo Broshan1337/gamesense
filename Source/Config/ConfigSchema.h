@@ -24,6 +24,8 @@ public:
         gameObject(configConversion);
         menuObject(configConversion);
         discordRpcObject(configConversion);
+        inventoryChangerObject(configConversion);
+        chatToolsObject(configConversion);
         return configConversion.endRoot();
     }
 
@@ -33,6 +35,48 @@ private:
     {
         configConversion.beginObject(u8"DiscordRpc");
         configConversion.boolean(u8"Enabled", loadVariable<discord_rpc_vars::Enabled>(), saveVariable<discord_rpc_vars::Enabled>());
+        configConversion.endObject();
+    }
+
+    // Appended after DiscordRpc - same rule: new top-level objects go last.
+    void inventoryChangerObject(auto&& configConversion)
+    {
+        // InventoryChanger (local GC items: cases/keys/add/open) REMOVED 2026-09-06 - the
+        // session-view mutation kept racing the game's own enumeration (map-load crashes).
+        // Keys stay as parse-and-discard placeholders so existing config files keep loading.
+        configConversion.beginObject(u8"InventoryChanger");
+        configConversion.boolean(u8"Enabled", [](bool) {}, [] { return false; });
+        configConversion.uint(u8"CaseDefIndex", [](std::uint64_t) {}, [] { return 0; });
+        configConversion.uint(u8"KeyDefIndex", [](std::uint64_t) {}, [] { return 0; });
+        // Appended LAST (order-sensitive parser). The agent changer's selection is the only
+        // live key - the model-swap feature stays (it does no GC/session mutation).
+        configConversion.uint(u8"AgentDef", loadVariable<agent_changer_vars::AgentDef>(), saveVariable<agent_changer_vars::AgentDef>());
+        configConversion.endObject();
+    }
+
+    // Appended after InventoryChanger - same rule: new top-level objects go last.
+    void chatToolsObject(auto&& configConversion)
+    {
+        configConversion.beginObject(u8"ChatTools");
+        configConversion.boolean(u8"SpamEnabled", loadVariable<chat_vars::SpamEnabled>(), saveVariable<chat_vars::SpamEnabled>());
+        configConversion.uint(u8"SpamCount", loadVariable<chat_vars::SpamCount>(), saveVariable<chat_vars::SpamCount>());
+        configConversion.uint(u8"SpamInterval", loadVariable<chat_vars::SpamInterval>(), saveVariable<chat_vars::SpamInterval>());
+        configConversion.boolean(u8"WheelEnabled", loadVariable<chat_vars::WheelEnabled>(), saveVariable<chat_vars::WheelEnabled>());
+        configConversion.uint(u8"RadioPhrase", loadVariable<chat_vars::RadioPhrase>(), saveVariable<chat_vars::RadioPhrase>());
+        configConversion.uint(u8"WheelInterval", loadVariable<chat_vars::WheelInterval>(), saveVariable<chat_vars::WheelInterval>());
+        configConversion.boolean(u8"HudColorCycle", loadVariable<chat_vars::HudColorCycle>(), saveVariable<chat_vars::HudColorCycle>());
+        configConversion.uint(u8"HudColorCycleSpeed", loadVariable<chat_vars::HudColorCycleSpeed>(), saveVariable<chat_vars::HudColorCycleSpeed>());
+        configConversion.boolean(u8"NameCycleEnabled", loadVariable<chat_vars::NameCycleEnabled>(), saveVariable<chat_vars::NameCycleEnabled>());
+        configConversion.uint(u8"NameCycleInterval", loadVariable<chat_vars::NameCycleInterval>(), saveVariable<chat_vars::NameCycleInterval>());
+        configConversion.uint(u8"TheaterDelay", loadVariable<chat_vars::TheaterDelay>(), saveVariable<chat_vars::TheaterDelay>());
+        configConversion.boolean(u8"IntelEnabled", loadVariable<chat_vars::IntelEnabled>(), saveVariable<chat_vars::IntelEnabled>());
+        configConversion.uint(u8"IntelBind", loadVariable<chat_vars::IntelBind>(), saveVariable<chat_vars::IntelBind>());
+        configConversion.boolean(u8"StreakRadioEnabled", loadVariable<chat_vars::StreakRadioEnabled>(), saveVariable<chat_vars::StreakRadioEnabled>());
+        configConversion.boolean(u8"LiveBadgeEnabled", loadVariable<chat_vars::LiveBadgeEnabled>(), saveVariable<chat_vars::LiveBadgeEnabled>());
+        configConversion.uint(u8"KickReason", loadVariable<chat_vars::KickReason>(), saveVariable<chat_vars::KickReason>());
+        configConversion.uint(u8"KickKey", loadVariable<chat_vars::KickKey>(), saveVariable<chat_vars::KickKey>());
+        // Appended LAST (order-sensitive parser).
+        configConversion.boolean(u8"NameForceReconnect", loadVariable<chat_vars::NameForceReconnect>(), saveVariable<chat_vars::NameForceReconnect>());
         configConversion.endObject();
     }
     void combatObject(auto&& configConversion)
@@ -101,6 +145,8 @@ private:
         configConversion.boolean(u8"AutoStop", loadVariable<aimbot_vars::AutoStop>(), saveVariable<aimbot_vars::AutoStop>());
         configConversion.boolean(u8"SpreadGate", loadVariable<aimbot_vars::SpreadGate>(), saveVariable<aimbot_vars::SpreadGate>());
         configConversion.boolean(u8"SeedFallback", loadVariable<aimbot_vars::SeedFallback>(), saveVariable<aimbot_vars::SeedFallback>());
+        configConversion.boolean(u8"ForceShotWait", loadVariable<aimbot_vars::ForceShotWait>(), saveVariable<aimbot_vars::ForceShotWait>());
+        configConversion.uint(u8"ForceShotWaitTicks", loadVariable<aimbot_vars::ForceShotWaitTicks>(), saveVariable<aimbot_vars::ForceShotWaitTicks>());
         configConversion.endObject();
 
         configConversion.beginObject(u8"LegitAimbot");
@@ -146,40 +192,20 @@ private:
         configConversion.beginObject(u8"SkinChanger");
         configConversion.uint(u8"KnifeModel", loadVariable<skin_changer_vars::KnifeModel>(), saveVariable<skin_changer_vars::KnifeModel>());
         configConversion.uint(u8"KnifeSkin", loadVariable<skin_changer_vars::KnifeSkin>(), saveVariable<skin_changer_vars::KnifeSkin>());
-        configConversion.uint(u8"M4A4Skin", loadVariable<skin_changer_vars::M4A4Skin>(), saveVariable<skin_changer_vars::M4A4Skin>());
-        configConversion.uint(u8"AK47Skin", loadVariable<skin_changer_vars::AK47Skin>(), saveVariable<skin_changer_vars::AK47Skin>());
-        configConversion.uint(u8"AWPSkin", loadVariable<skin_changer_vars::AWPSkin>(), saveVariable<skin_changer_vars::AWPSkin>());
-        configConversion.uint(u8"DesertEagleSkin", loadVariable<skin_changer_vars::DesertEagleSkin>(), saveVariable<skin_changer_vars::DesertEagleSkin>());
-        configConversion.uint(u8"USPSSkin", loadVariable<skin_changer_vars::USPSSkin>(), saveVariable<skin_changer_vars::USPSSkin>());
-        configConversion.uint(u8"Glock18Skin", loadVariable<skin_changer_vars::Glock18Skin>(), saveVariable<skin_changer_vars::Glock18Skin>());
-        configConversion.uint(u8"M249Skin", loadVariable<skin_changer_vars::M249Skin>(), saveVariable<skin_changer_vars::M249Skin>());
-        configConversion.uint(u8"XM1014Skin", loadVariable<skin_changer_vars::XM1014Skin>(), saveVariable<skin_changer_vars::XM1014Skin>());
-        configConversion.uint(u8"MAG7Skin", loadVariable<skin_changer_vars::MAG7Skin>(), saveVariable<skin_changer_vars::MAG7Skin>());
-        configConversion.uint(u8"NegevSkin", loadVariable<skin_changer_vars::NegevSkin>(), saveVariable<skin_changer_vars::NegevSkin>());
-        configConversion.uint(u8"SawedOffSkin", loadVariable<skin_changer_vars::SawedOffSkin>(), saveVariable<skin_changer_vars::SawedOffSkin>());
-        configConversion.uint(u8"NovaSkin", loadVariable<skin_changer_vars::NovaSkin>(), saveVariable<skin_changer_vars::NovaSkin>());
-        configConversion.uint(u8"DualBerettasSkin", loadVariable<skin_changer_vars::DualBerettasSkin>(), saveVariable<skin_changer_vars::DualBerettasSkin>());
-        configConversion.uint(u8"FiveSeveNSkin", loadVariable<skin_changer_vars::FiveSeveNSkin>(), saveVariable<skin_changer_vars::FiveSeveNSkin>());
-        configConversion.uint(u8"Tec9Skin", loadVariable<skin_changer_vars::Tec9Skin>(), saveVariable<skin_changer_vars::Tec9Skin>());
-        configConversion.uint(u8"P2000Skin", loadVariable<skin_changer_vars::P2000Skin>(), saveVariable<skin_changer_vars::P2000Skin>());
-        configConversion.uint(u8"P250Skin", loadVariable<skin_changer_vars::P250Skin>(), saveVariable<skin_changer_vars::P250Skin>());
-        configConversion.uint(u8"CZ75AutoSkin", loadVariable<skin_changer_vars::CZ75AutoSkin>(), saveVariable<skin_changer_vars::CZ75AutoSkin>());
-        configConversion.uint(u8"R8RevolverSkin", loadVariable<skin_changer_vars::R8RevolverSkin>(), saveVariable<skin_changer_vars::R8RevolverSkin>());
-        configConversion.uint(u8"AUGSkin", loadVariable<skin_changer_vars::AUGSkin>(), saveVariable<skin_changer_vars::AUGSkin>());
-        configConversion.uint(u8"FamasSkin", loadVariable<skin_changer_vars::FamasSkin>(), saveVariable<skin_changer_vars::FamasSkin>());
-        configConversion.uint(u8"GalilARSkin", loadVariable<skin_changer_vars::GalilARSkin>(), saveVariable<skin_changer_vars::GalilARSkin>());
-        configConversion.uint(u8"SG553Skin", loadVariable<skin_changer_vars::SG553Skin>(), saveVariable<skin_changer_vars::SG553Skin>());
-        configConversion.uint(u8"M4A1SSkin", loadVariable<skin_changer_vars::M4A1SSkin>(), saveVariable<skin_changer_vars::M4A1SSkin>());
-        configConversion.uint(u8"MAC10Skin", loadVariable<skin_changer_vars::MAC10Skin>(), saveVariable<skin_changer_vars::MAC10Skin>());
-        configConversion.uint(u8"P90Skin", loadVariable<skin_changer_vars::P90Skin>(), saveVariable<skin_changer_vars::P90Skin>());
-        configConversion.uint(u8"MP5SDSkin", loadVariable<skin_changer_vars::MP5SDSkin>(), saveVariable<skin_changer_vars::MP5SDSkin>());
-        configConversion.uint(u8"UMP45Skin", loadVariable<skin_changer_vars::UMP45Skin>(), saveVariable<skin_changer_vars::UMP45Skin>());
-        configConversion.uint(u8"PPBizonSkin", loadVariable<skin_changer_vars::PPBizonSkin>(), saveVariable<skin_changer_vars::PPBizonSkin>());
-        configConversion.uint(u8"MP7Skin", loadVariable<skin_changer_vars::MP7Skin>(), saveVariable<skin_changer_vars::MP7Skin>());
-        configConversion.uint(u8"MP9Skin", loadVariable<skin_changer_vars::MP9Skin>(), saveVariable<skin_changer_vars::MP9Skin>());
-        configConversion.uint(u8"G3SG1Skin", loadVariable<skin_changer_vars::G3SG1Skin>(), saveVariable<skin_changer_vars::G3SG1Skin>());
-        configConversion.uint(u8"SCAR20Skin", loadVariable<skin_changer_vars::SCAR20Skin>(), saveVariable<skin_changer_vars::SCAR20Skin>());
-        configConversion.uint(u8"SSG08Skin", loadVariable<skin_changer_vars::SSG08Skin>(), saveVariable<skin_changer_vars::SSG08Skin>());
+#define NS_SKIN_CHANGER_F(base) configConversion.uint(u8"" #base, loadVariable<skin_changer_vars::base>(), saveVariable<skin_changer_vars::base>());
+        NS_SKIN_CHANGER_GUNS(NS_SKIN_CHANGER_F)
+#undef NS_SKIN_CHANGER_F
+        // NEW keys go LAST in an object (order-sensitive streaming parser): per-weapon wear
+        // (permille) and pattern seed, then the global StatTrak settings.
+        configConversion.uint(u8"KnifeSkinWear", loadVariable<skin_changer_vars::KnifeSkinWear>(), saveVariable<skin_changer_vars::KnifeSkinWear>());
+        configConversion.uint(u8"KnifeSkinSeed", loadVariable<skin_changer_vars::KnifeSkinSeed>(), saveVariable<skin_changer_vars::KnifeSkinSeed>());
+        configConversion.boolean(u8"StatTrakEnabled", loadVariable<skin_changer_vars::StatTrakEnabled>(), saveVariable<skin_changer_vars::StatTrakEnabled>());
+        configConversion.uint(u8"StatTrakValue", loadVariable<skin_changer_vars::StatTrakValue>(), saveVariable<skin_changer_vars::StatTrakValue>());
+#define NS_SKIN_CHANGER_F(base)                                                                     \
+        configConversion.uint(u8"" #base "Wear", loadVariable<skin_changer_vars::base##Wear>(), saveVariable<skin_changer_vars::base##Wear>()); \
+        configConversion.uint(u8"" #base "Seed", loadVariable<skin_changer_vars::base##Seed>(), saveVariable<skin_changer_vars::base##Seed>());
+        NS_SKIN_CHANGER_GUNS(NS_SKIN_CHANGER_F)
+#undef NS_SKIN_CHANGER_F
         configConversion.endObject();
     }
 
@@ -281,6 +307,15 @@ private:
         // NEW keys go LAST in an object - appending keeps old config files parsing.
         configConversion.uint(u8"EnemyColor", loadVariable<model_glow_vars::EnemyColor>(), saveVariable<model_glow_vars::EnemyColor>());
         configConversion.uint(u8"AllyColor", loadVariable<model_glow_vars::AllyColor>(), saveVariable<model_glow_vars::AllyColor>());
+        // Color-picker replacements for the legacy hue sliders (appended last).
+        configConversion.uint(u8"FlashbangColor", loadVariable<model_glow_vars::FlashbangColor>(), saveVariable<model_glow_vars::FlashbangColor>());
+        configConversion.uint(u8"HEGrenadeColor", loadVariable<model_glow_vars::HEGrenadeColor>(), saveVariable<model_glow_vars::HEGrenadeColor>());
+        configConversion.uint(u8"SmokeGrenadeColor", loadVariable<model_glow_vars::SmokeGrenadeColor>(), saveVariable<model_glow_vars::SmokeGrenadeColor>());
+        configConversion.uint(u8"MolotovColor", loadVariable<model_glow_vars::MolotovColor>(), saveVariable<model_glow_vars::MolotovColor>());
+        configConversion.uint(u8"DroppedBombColor", loadVariable<model_glow_vars::DroppedBombColor>(), saveVariable<model_glow_vars::DroppedBombColor>());
+        configConversion.uint(u8"TickingBombColor", loadVariable<model_glow_vars::TickingBombColor>(), saveVariable<model_glow_vars::TickingBombColor>());
+        configConversion.uint(u8"DefuseKitColor", loadVariable<model_glow_vars::DefuseKitColor>(), saveVariable<model_glow_vars::DefuseKitColor>());
+
         configConversion.endObject();
         configConversion.endObject();
 
@@ -327,6 +362,16 @@ private:
         // NEW keys go LAST in an object - appending keeps old config files parsing.
         configConversion.uint(u8"EnemyColor", loadVariable<outline_glow_vars::EnemyColor>(), saveVariable<outline_glow_vars::EnemyColor>());
         configConversion.uint(u8"AllyColor", loadVariable<outline_glow_vars::AllyColor>(), saveVariable<outline_glow_vars::AllyColor>());
+        // Color-picker replacements for the legacy hue sliders (appended last).
+        configConversion.uint(u8"FlashbangColor", loadVariable<outline_glow_vars::FlashbangColor>(), saveVariable<outline_glow_vars::FlashbangColor>());
+        configConversion.uint(u8"HEGrenadeColor", loadVariable<outline_glow_vars::HEGrenadeColor>(), saveVariable<outline_glow_vars::HEGrenadeColor>());
+        configConversion.uint(u8"SmokeGrenadeColor", loadVariable<outline_glow_vars::SmokeGrenadeColor>(), saveVariable<outline_glow_vars::SmokeGrenadeColor>());
+        configConversion.uint(u8"MolotovColor", loadVariable<outline_glow_vars::MolotovColor>(), saveVariable<outline_glow_vars::MolotovColor>());
+        configConversion.uint(u8"DroppedBombColor", loadVariable<outline_glow_vars::DroppedBombColor>(), saveVariable<outline_glow_vars::DroppedBombColor>());
+        configConversion.uint(u8"TickingBombColor", loadVariable<outline_glow_vars::TickingBombColor>(), saveVariable<outline_glow_vars::TickingBombColor>());
+        configConversion.uint(u8"DefuseKitColor", loadVariable<outline_glow_vars::DefuseKitColor>(), saveVariable<outline_glow_vars::DefuseKitColor>());
+        configConversion.uint(u8"HostageColor", loadVariable<outline_glow_vars::HostageColor>(), saveVariable<outline_glow_vars::HostageColor>());
+
         configConversion.endObject();
         configConversion.endObject();
 
@@ -442,6 +487,7 @@ private:
         configConversion.floating(u8"GlowSize", loadVariable<MenuGlowSize>(), saveVariable<MenuGlowSize>());
         configConversion.boolean(u8"GlowDebug", loadVariable<MenuGlowDebug>(), saveVariable<MenuGlowDebug>());
         configConversion.boolean(u8"StyleRainbow", loadVariable<MenuStyleRainbow>(), saveVariable<MenuStyleRainbow>());
+        configConversion.boolean(u8"ReduceMotion", loadVariable<MenuReduceMotion>(), saveVariable<MenuReduceMotion>());
         configConversion.endObject();
         configConversion.endObject();
     }
@@ -499,6 +545,15 @@ private:
         configConversion.uint(u8"SlowWalkSpeed", loadVariable<movement_vars::SlowWalkSpeed>(), saveVariable<movement_vars::SlowWalkSpeed>());
         configConversion.boolean(u8"FastLadder", loadVariable<movement_vars::FastLadder>(), saveVariable<movement_vars::FastLadder>());
         configConversion.boolean(u8"JumpBug", loadVariable<movement_vars::JumpBug>(), saveVariable<movement_vars::JumpBug>());
+        configConversion.boolean(u8"Desubtick", loadVariable<movement_vars::Desubtick>(), saveVariable<movement_vars::Desubtick>());
+        configConversion.endObject();
+
+        configConversion.beginObject(u8"AutoPeek");
+        configConversion.boolean(u8"Enabled", loadVariable<autopeek_vars::Enabled>(), saveVariable<autopeek_vars::Enabled>());
+        configConversion.endObject();
+
+        configConversion.beginObject(u8"RevealRadar");
+        configConversion.boolean(u8"Enabled", loadVariable<reveal_radar_vars::Enabled>(), saveVariable<reveal_radar_vars::Enabled>());
         configConversion.endObject();
 
         configConversion.beginObject(u8"PanicKey");
@@ -520,6 +575,30 @@ private:
 
         configConversion.boolean(u8"ValveDsSpoof", loadVariable<ValveDsSpoofEnabled>(), saveVariable<ValveDsSpoofEnabled>());
 
+        // NET LAG (own-server experiment; appended LAST per the ordering rule).
+        configConversion.beginObject(u8"NetLag");
+        configConversion.boolean(u8"Enabled", loadVariable<net_lag_vars::Enabled>(), saveVariable<net_lag_vars::Enabled>());
+        configConversion.boolean(u8"FakelagAlways", loadVariable<net_lag_vars::FakelagAlways>(), saveVariable<net_lag_vars::FakelagAlways>());
+        configConversion.uint(u8"ChokeKey", loadVariable<net_lag_vars::ChokeKeyBind>(), saveVariable<net_lag_vars::ChokeKeyBind>());
+        configConversion.uint(u8"ChokeTicks", loadVariable<net_lag_vars::ChokeTicks>(), saveVariable<net_lag_vars::ChokeTicks>());
+        configConversion.uint(u8"BlipCount", loadVariable<net_lag_vars::BlipCount>(), saveVariable<net_lag_vars::BlipCount>());
+        configConversion.uint(u8"DupCount", loadVariable<net_lag_vars::DupCount>(), saveVariable<net_lag_vars::DupCount>());
+        configConversion.boolean(u8"DelayEnabled", loadVariable<net_lag_vars::DelayEnabled>(), saveVariable<net_lag_vars::DelayEnabled>());
+        configConversion.uint(u8"DelayMs", loadVariable<net_lag_vars::DelayMs>(), saveVariable<net_lag_vars::DelayMs>());
+        configConversion.boolean(u8"StatsEnabled", loadVariable<net_lag_vars::StatsEnabled>(), saveVariable<net_lag_vars::StatsEnabled>());
+        configConversion.uint(u8"FloodBurst", loadVariable<net_lag_vars::FloodBurstCount>(), saveVariable<net_lag_vars::FloodBurstCount>());
+        configConversion.uint(u8"FloodKey", loadVariable<net_lag_vars::FloodKeyBind>(), saveVariable<net_lag_vars::FloodKeyBind>());
+        configConversion.uint(u8"ConnlessFlood", loadVariable<net_lag_vars::ConnlessFloodCount>(), saveVariable<net_lag_vars::ConnlessFloodCount>());
+        configConversion.uint(u8"ConnlessKey", loadVariable<net_lag_vars::ConnlessKeyBind>(), saveVariable<net_lag_vars::ConnlessKeyBind>());
+        configConversion.endObject();
+
+        // NAME ANIMATOR (live animated name; appended LAST per the ordering rule).
+        configConversion.beginObject(u8"NameAnimator");
+        configConversion.boolean(u8"Enabled", loadVariable<name_animator_vars::Enabled>(), saveVariable<name_animator_vars::Enabled>());
+        configConversion.uint(u8"Mode", loadVariable<name_animator_vars::Mode>(), saveVariable<name_animator_vars::Mode>());
+        configConversion.uint(u8"Speed", loadVariable<name_animator_vars::Speed>(), saveVariable<name_animator_vars::Speed>());
+        configConversion.endObject();
+
         configConversion.endObject();
     }
 
@@ -534,6 +613,20 @@ private:
         configConversion.beginObject(u8"Radio");
         configConversion.uint(u8"Volume", loadVariable<radio_vars::Volume>(), saveVariable<radio_vars::Volume>());
         configConversion.boolean(u8"MicBroadcast", loadVariable<radio_vars::MicBroadcast>(), saveVariable<radio_vars::MicBroadcast>());
+        // Appended LAST (order-sensitive parser): soundboard keys + routing toggle.
+        // Soundboard removed (replaced by the event-triggered airhorn) - keys stay as
+        // parse-and-discard placeholders because the config loader is an order-sensitive parser.
+        configConversion.boolean(u8"BoardEnabled", [](bool) {}, [] { return false; });
+        configConversion.uint(u8"BoardKey1", [](unsigned) {}, [] { return 0; });
+        configConversion.uint(u8"BoardKey2", [](unsigned) {}, [] { return 0; });
+        configConversion.uint(u8"BoardKey3", [](unsigned) {}, [] { return 0; });
+        configConversion.uint(u8"BoardKey4", [](unsigned) {}, [] { return 0; });
+        // Airhorn appended LAST (order-sensitive parser).
+        configConversion.boolean(u8"AirhornEnabled", loadVariable<radio_vars::AirhornEnabled>(), saveVariable<radio_vars::AirhornEnabled>());
+        configConversion.boolean(u8"AirhornFirstBlood", loadVariable<radio_vars::AirhornFirstBlood>(), saveVariable<radio_vars::AirhornFirstBlood>());
+        configConversion.boolean(u8"AirhornHeadshot", loadVariable<radio_vars::AirhornHeadshot>(), saveVariable<radio_vars::AirhornHeadshot>());
+        configConversion.boolean(u8"AirhornRoundWin", loadVariable<radio_vars::AirhornRoundWin>(), saveVariable<radio_vars::AirhornRoundWin>());
+        configConversion.uint(u8"VoiceKey", loadVariable<radio_vars::VoiceKeyBind>(), saveVariable<radio_vars::VoiceKeyBind>());
         configConversion.endObject();
 
         configConversion.beginObject(u8"SpawnProtection");
@@ -561,10 +654,12 @@ private:
         configConversion.boolean(u8"Enabled", [](bool) {}, [] { return false; });
         configConversion.endObject();
 
-        // Chams (velocity visual port) was removed; the object stays as a parse-and-discard
-        // placeholder because the config loader is an order-sensitive streaming parser.
+        // Chams revived for the skeet-parity enemy chams (the parse-and-discard placeholder kept
+        // the object's position while the feature was gone). EnemyColor appended LAST per the
+        // ordering rule.
         configConversion.beginObject(u8"Chams");
-        configConversion.boolean(u8"Enabled", [](bool) {}, [] { return false; });
+        configConversion.boolean(u8"Enabled", loadVariable<chams_vars::Enabled>(), saveVariable<chams_vars::Enabled>());
+        configConversion.uint(u8"EnemyColor", loadVariable<chams_vars::EnemyColor>(), saveVariable<chams_vars::EnemyColor>());
         configConversion.endObject();
 
         configConversion.beginObject(u8"Footsteps");
