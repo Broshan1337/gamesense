@@ -1,0 +1,595 @@
+#pragma once
+
+#include <algorithm>
+#include <cassert>
+#include <cstring>
+#include <BuildConfig.h>
+#include <MemoryAllocation/UniquePtr.h>
+#include <Platform/PlatformPath.h>
+
+#include "ConfigFileOperation.h"
+#include "ConfigFromString.h"
+#include "ConfigSchema.h"
+#include "ConfigState.h"
+#include "ConfigStringConversionState.h"
+#include "ConfigToString.h"
+#include "ConfigVariableChangeHandler.h"
+
+#if IS_WIN64()
+#include <Platform/Windows/FileSystem/WindowsFileSystem.h>
+#include <Platform/Macros/PlatformSpecific.h>
+#include <Utils/Wcslen.h>
+#elif IS_LINUX()
+#include <Platform/Linux/LinuxPlatformApi.h>
+#endif
+
+template <typename HookContext>
+class Config {
+public:
+    explicit Config(HookContext& hookContext) noexcept
+        : hookContext{hookContext}
+    {
+    }
+
+    void init() noexcept
+    {
+        buildConfigDirectoryPath();
+        buildConfigFilePath(WIN64_LINUX(L"default.cfg", "default.cfg"));
+        buildConfigTempFilePath();
+        static constinit char8_t fileOperationBuffer[build::kConfigFileBufferSize];
+        state().fileOperationBuffer = fileOperationBuffer;
+        setActiveConfigName(WIN64_LINUX(L"default.cfg", "default.cfg"));
+    }
+
+    template <typename ConfigVariable>
+    [[nodiscard]] auto getVariable() noexcept
+    {
+        return state().configVariables.template getVariableValue<ConfigVariable>();
+    }
+
+    template <typename ConfigVariable>
+    bool setVariable(ConfigVariable::ValueType newValue) noexcept
+    {
+        if (changeVariableValue<ConfigVariable>(newValue)) {
+            scheduleAutoSave();
+            return true;
+        }
+        return false;
+    }
+
+    template <typename ConfigVariable>
+    void setVariableWithoutAutoSave(ConfigVariable::ValueType newValue) noexcept
+    {
+        if constexpr (hasChangeHandler<ConfigVariable>()) {
+            if (getVariable<ConfigVariable>() != newValue)
+                invokeChangeHandler<ConfigVariable>(newValue);
+        }
+
+        state().configVariables.template storeVariableValue<ConfigVariable>(newValue);
+    }
+
+    void restoreDefaults() noexcept
+    {
+        ConfigVariableTypes::forEach([this] <typename ConfigVariable> (std::type_identity<ConfigVariable>) {
+            this->setVariableWithoutAutoSave<ConfigVariable>(ConfigVariable::kDefaultValue);
+        });
+        scheduleAutoSave();
+    }
+
+    void scheduleLoad() noexcept
+    {
+        state().loadScheduled = true;
+    }
+
+    // Explicit "write now" from the UI (the navbar SAVE button). Autosave covers every other
+    // change; this just forces the same pipeline.
+    void saveActive() noexcept
+    {
+        scheduleAutoSave();
+    }
+
+    // ---- Config file management (the navbar dropdown) -------------------------------------
+    //
+    // The ACTIVE config is what autosave writes and what the dropdown displays. Loading a config
+    // switches the active name + rebuilds paths, then runs the normal load pipeline; values stay
+    // in memory (and keep autosaving) under the new name from then on. "default.cfg" is only
+    // special in that it is the startup default.
+
+    static constexpr std::uint8_t kMaxListedConfigs = ConfigState::kMaxListedConfigs;
+
+    [[nodiscard]] std::uint8_t listedConfigCount() const noexcept
+    {
+        return state().listedConfigCount;
+    }
+
+    // UTF-8 view of a listed file name (Linux paths are char already; safe on this platform).
+    [[nodiscard]] const char* listedConfigName(std::uint8_t index) const noexcept
+    {
+        if (index < state().listedConfigCount)
+            return reinterpret_cast<const char*>(state().listedConfigs[index]);
+        return "";
+    }
+
+    [[nodiscard]] std::uint8_t activeConfigIndex() const noexcept
+    {
+        for (std::uint8_t i = 0; i < state().listedConfigCount; ++i) {
+            if (std::char_traits<char8_t>::compare(state().listedConfigs[i], state().activeConfigName, sizeof(state().activeConfigName)) == 0)
+                return i;
+        }
+        return 0;
+    }
+
+    [[nodiscard]] const char* activeConfigNameForDisplay() const noexcept
+    {
+        return reinterpret_cast<const char*>(state().activeConfigName);
+    }
+
+    [[nodiscard]] bool consumeConfigListDirty() noexcept
+    {
+        return std::exchange(state().configListDirty, false);
+    }
+
+    void markConfigListDirty() noexcept
+    {
+        state().configListDirty = true;
+    }
+
+    // Rescans <configDir>/*.cfg into the published list (sorted bytewise for a stable dropdown).
+    void refreshConfigList() noexcept
+    {
+        state().listedConfigCount = 0;
+        if (!state().pathToConfigDirectory)
+            return;
+
+        if (auto* const dir = LinuxPlatformApi::openDir(reinterpret_cast<const char*>(state().pathToConfigDirectory.get()))) {
+            while (const auto* entry = LinuxPlatformApi::readDir(dir)) {
+                const auto nameLength = std::strlen(entry);
+                if (nameLength <= 4 || nameLength > ConfigState::kMaxListedNameLength)
+                    continue;
+                if (std::memcmp(entry + nameLength - 4, ".cfg", 4) != 0)
+                    continue;
+                if (state().listedConfigCount >= ConfigState::kMaxListedConfigs)
+                    break;
+                auto* dest = state().listedConfigs[state().listedConfigCount];
+                std::memcpy(dest, entry, nameLength + 1);
+                ++state().listedConfigCount;
+            }
+            LinuxPlatformApi::closeDir(dir);
+        }
+
+        // Insertion sort bytewise - tiny N, keeps the dropdown order stable between scans.
+        for (std::uint8_t i = 1; i < state().listedConfigCount; ++i) {
+            char8_t buffer[ConfigState::kMaxListedNameLength + 1];
+            std::memcpy(buffer, state().listedConfigs[i], sizeof(buffer));
+            std::uint8_t j = i;
+            while (j > 0 && std::char_traits<char8_t>::compare(buffer, state().listedConfigs[j - 1], sizeof(buffer)) < 0) {
+                std::memcpy(state().listedConfigs[j], state().listedConfigs[j - 1], sizeof(buffer));
+                --j;
+            }
+            std::memcpy(state().listedConfigs[j], buffer, sizeof(buffer));
+        }
+
+        state().configListDirty = true;
+    }
+
+    // Loads the listed config `listedIndex`: makes it the active file and schedules the load.
+    // Selecting the already-active config is a no-op (this also breaks the
+    // programmatic-set-selection -> SelectionChanged handler loop).
+    void switchToConfig(std::uint8_t listedIndex) noexcept
+    {
+        if (listedIndex >= state().listedConfigCount)
+            return;
+        const auto* name = state().listedConfigs[listedIndex];
+        if (std::char_traits<char8_t>::compare(name, state().activeConfigName, sizeof(state().activeConfigName)) == 0)
+            return;
+        setActiveConfigName(reinterpret_cast<const platform::PathCharType*>(name));
+        rebuildActiveConfigPaths();
+        state().loadScheduled = true;
+        state().configListDirty = true;   // cfg_active attribute changed
+    }
+
+    // Deletes a listed config FILE from disk. The active config is protected - it is what
+    // autosave writes. Refreshes the published list on success.
+    bool deleteListedConfig(std::uint8_t listedIndex) noexcept
+    {
+        if (listedIndex >= state().listedConfigCount)
+            return false;
+        const auto* name = reinterpret_cast<const char*>(state().listedConfigs[listedIndex]);
+        if (std::char_traits<char>::compare(name, reinterpret_cast<const char*>(state().activeConfigName), sizeof(state().activeConfigName)) == 0)
+            return false;
+        const auto path = pathUnderConfigDir(reinterpret_cast<const platform::PathCharType*>(name));
+        if (!path)
+            return false;
+        if (LinuxPlatformApi::unlink(reinterpret_cast<const char*>(path.get())) != 0)
+            return false;
+        refreshConfigList();
+        return true;
+    }
+
+    // Renames the ACTIVE config file (sanitized like createAndSwitchToConfig). Fails for an
+    // unknown target name or when the target already exists.
+    bool renameActiveConfig(std::string_view requestedName) noexcept
+    {
+        char newNameWithExt[ConfigState::kMaxConfigNameLength + 5]{};
+        std::size_t length = 0;
+        for (const char c : requestedName) {
+            const bool allowed = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '-';
+            if (!allowed || length >= ConfigState::kMaxConfigNameLength)
+                return false;
+            newNameWithExt[length++] = c;
+        }
+        if (length == 0)
+            return false;
+        constexpr std::string_view kExt{".cfg"};
+        std::memcpy(newNameWithExt + length, kExt.data(), kExt.size());
+
+        // same name or target already listed -> no-op
+        if (std::strncmp(newNameWithExt, reinterpret_cast<const char*>(state().activeConfigName), sizeof(state().activeConfigName)) == 0)
+            return false;
+        for (std::uint8_t i = 0; i < state().listedConfigCount; ++i) {
+            if (std::strncmp(newNameWithExt, reinterpret_cast<const char*>(state().listedConfigs[i]), sizeof(state().listedConfigs[i])) == 0)
+                return false;
+        }
+
+        const auto oldPath = pathUnderConfigDir(reinterpret_cast<const platform::PathCharType*>(state().activeConfigName));
+        const auto newPath = pathUnderConfigDir(std::string_view{newNameWithExt, length + kExt.size()});
+        if (!oldPath || !newPath)
+            return false;
+        if (LinuxPlatformApi::rename(reinterpret_cast<const char*>(oldPath.get()), reinterpret_cast<const char*>(newPath.get())) != 0)
+            return false;
+
+        setActiveConfigName(reinterpret_cast<const platform::PathCharType*>(newNameWithExt));
+        rebuildActiveConfigPaths();
+        refreshConfigList();
+        return true;
+    }
+
+    // Creates a config from a user-typed name (sanitized), saves the CURRENT state into it and
+    // makes it active. Returns false (changing nothing) for anything outside [A-Za-z0-9_-],
+    // 1..40 chars - the name travels through the space-separated panorama command channel, so
+    // it must stay one token.
+    [[nodiscard]] bool createAndSwitchToConfig(std::string_view requestedName) noexcept
+    {
+        char8_t sanitized[ConfigState::kMaxConfigNameLength + 1];
+        std::size_t length = 0;
+        for (const char c : requestedName) {
+            const bool allowed = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '-';
+            if (!allowed)
+                return false;
+            if (length >= ConfigState::kMaxConfigNameLength)
+                return false;
+            sanitized[length++] = static_cast<char8_t>(c);
+        }
+        if (length == 0)
+            return false;
+
+        // "<name>.cfg"
+        char8_t fileName[ConfigState::kMaxConfigNameLength + 5];
+        std::memcpy(fileName, sanitized, length);
+        std::memcpy(fileName + length, WIN64_LINUX(L".cfg", ".cfg"), 5);
+
+        setActiveConfigName(reinterpret_cast<const platform::PathCharType*>(fileName));
+        rebuildActiveConfigPaths();
+        scheduleAutoSave();   // writes the current state under the new name
+        state().configListDirty = true;
+        return true;
+    }
+
+    // Copies the ACTIVE config file to "<name>_copy.cfg" and makes the copy active. Returns
+    // false (changing nothing) when no file operation is mid-flight, the copy name is already
+    // listed, or the file IO fails.
+    bool duplicateActiveConfig() noexcept
+    {
+        if (state().currentFileOperation != ConfigFileOperation::None)
+            return false; // the shared IO buffer would be in use
+
+        // "<name>.cfg" -> "<name>_copy.cfg" (name is sanitized ASCII by construction). The base
+        // must stay short enough for activeConfigName (kMaxConfigNameLength + ".cfg") to hold
+        // the suffixed name.
+        const auto* active = reinterpret_cast<const char*>(state().activeConfigName);
+        const auto baseLength = std::strlen(active);
+        if (baseLength < 4 || baseLength - 4 > ConfigState::kMaxConfigNameLength - 5)
+            return false;
+
+        char8_t copyName[ConfigState::kMaxListedNameLength + 8]{};
+        std::memcpy(copyName, state().activeConfigName, baseLength - 4); // without ".cfg"
+        {
+            const auto copyLength = baseLength - 4;
+            std::memcpy(copyName + copyLength, "_copy.cfg", 10);
+        }
+
+        for (std::uint8_t i = 0; i < state().listedConfigCount; ++i) {
+            if (std::char_traits<char8_t>::compare(copyName, state().listedConfigs[i], sizeof(copyName)) == 0)
+                return false; // copy already exists
+        }
+
+        const auto sourcePath = pathUnderConfigDir(reinterpret_cast<const platform::PathCharType*>(state().activeConfigName));
+        const auto copyPath = pathUnderConfigDir(std::basic_string_view<platform::PathCharType>{reinterpret_cast<const platform::PathCharType*>(copyName), std::strlen(reinterpret_cast<const char*>(copyName))});
+        if (!sourcePath || !copyPath)
+            return false;
+
+        // Copy the bytes through a scratch buffer (the file-operation buffer belongs to the
+        // deferred save/load pipeline, so this uses its own allocation).
+        const auto buffer = mem::makeUniqueForOverwrite<char[]>(build::kConfigFileBufferSize);
+        if (!buffer)
+            return false;
+        std::size_t bytes{0};
+        if (const auto fd = LinuxPlatformApi::open(reinterpret_cast<const char*>(sourcePath.get()), O_RDONLY); fd >= 0) {
+            if (const auto read_ = LinuxPlatformApi::pread(fd, buffer.get(), build::kConfigFileBufferSize, 0); read_ > 0)
+                bytes = static_cast<std::size_t>(read_);
+            LinuxPlatformApi::close(fd);
+        }
+        if (bytes == 0)
+            return false;
+
+        if (const auto fd = LinuxPlatformApi::open(reinterpret_cast<const char*>(copyPath.get()), O_CREAT | O_WRONLY | O_TRUNC, 0666); fd >= 0) {
+            std::size_t written{0};
+            while (written < bytes) {
+                const auto chunk = LinuxPlatformApi::write(fd, buffer.get() + written, bytes - written);
+                if (chunk <= 0)
+                    break;
+                written += static_cast<std::size_t>(chunk);
+            }
+            LinuxPlatformApi::close(fd);
+            if (written != bytes) {
+                LinuxPlatformApi::unlink(reinterpret_cast<const char*>(copyPath.get()));
+                return false;
+            }
+        } else {
+            return false;
+        }
+
+        setActiveConfigName(std::basic_string_view<platform::PathCharType>{reinterpret_cast<const platform::PathCharType*>(copyName), std::strlen(reinterpret_cast<const char*>(copyName))});
+        rebuildActiveConfigPaths();
+        refreshConfigList();
+        return true;
+    }
+
+    void update()
+    {
+        switch (state().currentFileOperation) {
+        case ConfigFileOperation::None:
+            if (state().autoSaveScheduled) {
+                state().currentFileOperation = ConfigFileOperation::Save;
+                prepareSaveToFile();
+                state().autoSaveScheduled = false;
+                break;
+            }
+            if (state().loadScheduled) {
+                state().currentFileOperation = ConfigFileOperation::Load;
+                state().bufferUsedBytes = 0;
+                state().loadScheduled = false;
+                break;
+            }
+            break;
+        case ConfigFileOperation::Load:
+            finishLoadFromFile();
+            break;
+        default:
+            break;
+        }
+    }
+
+    void performFileOperation() noexcept
+    {
+        switch (state().currentFileOperation) {
+        case ConfigFileOperation::Load:
+            loadFromFile();
+            break;
+        case ConfigFileOperation::Save:
+            saveToFile();
+            break;
+        default:
+            break;
+        }
+    }
+
+private:
+    template <typename ConfigVariable>
+    void invokeChangeHandler(ConfigVariable::ValueType newValue)
+    {
+        ConfigVariableChangeHandler{hookContext}.onConfigVariableValueChanged(newValue, std::type_identity<ConfigVariable>{});
+    }
+
+    template <typename ConfigVariable>
+    [[nodiscard]] static constexpr bool hasChangeHandler() noexcept
+    {
+        return requires {{ ConfigVariableChangeHandler{hookContext}.onConfigVariableValueChanged(ConfigVariable::kDefaultValue, std::type_identity<ConfigVariable>{}) }; };
+    }
+
+    template <typename ConfigVariable>
+    bool changeVariableValue(ConfigVariable::ValueType newValue) noexcept
+    {
+        if (getVariable<ConfigVariable>() == newValue)
+            return false;
+
+        if constexpr (hasChangeHandler<ConfigVariable>())
+            invokeChangeHandler<ConfigVariable>(newValue);
+
+        state().configVariables.template storeVariableValue<ConfigVariable>(newValue);
+        return true;
+    }
+
+    void scheduleAutoSave() noexcept
+    {
+        state().autoSaveScheduled = true;
+    }
+
+    [[nodiscard]] auto& state()
+    {
+        return hookContext.configState();
+    }
+
+    [[nodiscard]] const auto& state() const
+    {
+        return hookContext.configState();
+    }
+
+    void loadFromFile() noexcept
+    {
+        if (!state().pathToConfigFile)
+            return;
+
+#if IS_WIN64()
+        const std::basic_string_view path{state().pathToConfigFile.get(), utils::wcslen(state().pathToConfigFile.get())};
+        UNICODE_STRING pathStr{.Length = static_cast<USHORT>(path.length() * sizeof(wchar_t)), .MaximumLength = static_cast<USHORT>(path.length() * sizeof(wchar_t)), .Buffer = const_cast<wchar_t*>(path.data())};
+        if (const auto handle = WindowsFileSystem::openFileForReading(pathStr); handle != INVALID_HANDLE_VALUE) {
+            state().bufferUsedBytes = WindowsFileSystem::readFile(handle, 0, state().fileOperationBuffer, build::kConfigFileBufferSize);
+            WindowsSyscalls::NtClose(handle);
+        }
+#elif IS_LINUX()
+        if (const auto fd = LinuxPlatformApi::open(state().pathToConfigFile.get(), O_RDONLY); fd >= 0) {
+            if (const auto read = LinuxPlatformApi::pread(fd, state().fileOperationBuffer, build::kConfigFileBufferSize, 0); read > 0)
+                state().bufferUsedBytes = static_cast<std::size_t>(read);
+            LinuxPlatformApi::close(fd);
+        }
+#endif
+    }
+
+    void finishLoadFromFile()
+    {
+        assert(state().currentFileOperation == ConfigFileOperation::Load);
+        state().currentFileOperation = ConfigFileOperation::None;
+
+        const auto readBytes = state().bufferUsedBytes;
+        assert(readBytes < build::kConfigFileBufferSize && "Currently file must fit into a buffer");
+        ConfigStringConversionState conversionState;
+        std::size_t parsedBytes{0};
+        do {
+            assert(conversionState.offset <= readBytes);
+            ConfigFromString configFromString{std::span{state().fileOperationBuffer + conversionState.offset, readBytes - conversionState.offset}, conversionState};
+            parsedBytes = ConfigSchema{hookContext}.performConversion(configFromString);
+        } while (parsedBytes != 0 && (conversionState.nestingLevel != 0 || conversionState.indexInNestingLevel[0] != 1));
+        
+        assert(readBytes == 0 || (conversionState.nestingLevel == 0 && conversionState.indexInNestingLevel[0] == 1));
+    }
+
+    void prepareSaveToFile()
+    {
+        ConfigStringConversionState conversionState;
+        ConfigToString configToString{std::span{state().fileOperationBuffer, build::kConfigFileBufferSize}, conversionState};
+        state().bufferUsedBytes = ConfigSchema{hookContext}.performConversion(configToString);
+        assert(conversionState.nestingLevel == 0 && conversionState.indexInNestingLevel[0] == 1);
+    }
+
+    void saveToFile() noexcept
+    {
+        assert(state().currentFileOperation == ConfigFileOperation::Save);
+        state().currentFileOperation = ConfigFileOperation::None;
+
+        if (!hookContext.osirisDirectoryPath().get() || !state().pathToConfigDirectory || !state().pathToConfigFile || !state().pathToConfigTempFile)
+            return;
+
+        const auto numberOfBytesToWrite = state().bufferUsedBytes;
+#if IS_WIN64()
+        WindowsFileSystem::createDirectory(hookContext.osirisDirectoryPath().get());
+        WindowsFileSystem::createDirectory(state().pathToConfigDirectory.get());
+
+        if (const auto handle = WindowsFileSystem::createFileForOverwrite(state().pathToConfigTempFile.get()); handle != INVALID_HANDLE_VALUE) {
+            if (WindowsFileSystem::writeFile(handle, 0, state().fileOperationBuffer, numberOfBytesToWrite) == numberOfBytesToWrite)
+                WindowsFileSystem::renameFile(handle, state().pathToConfigFile.get());
+            WindowsSyscalls::NtClose(handle);
+        }
+#elif IS_LINUX()
+        mkdir(hookContext.osirisDirectoryPath().get(), 0777);
+        mkdir(state().pathToConfigDirectory.get(), 0777);
+
+        if (const auto fd = LinuxPlatformApi::open(state().pathToConfigTempFile.get(), O_CREAT | O_WRONLY, 0666); fd >= 0) {
+            if (std::cmp_equal(LinuxPlatformApi::write(fd, state().fileOperationBuffer, numberOfBytesToWrite), numberOfBytesToWrite))
+                rename(state().pathToConfigTempFile.get(), state().pathToConfigFile.get());
+            LinuxPlatformApi::close(fd);
+        }
+#endif
+        // The autosave can CREATE a config file (switching to a not-yet-existing name writes it
+        // on the first change) - the dropdown list has to pick it up.
+        state().configListDirty = true;
+    }
+
+    void buildConfigDirectoryPath() noexcept
+    {
+        if (!hookContext.osirisDirectoryPath().get())
+            return;
+
+        const std::basic_string_view osirisDirectoryPath{hookContext.osirisDirectoryPath().get(), WIN64_LINUX(utils::wcslen, std::strlen)(hookContext.osirisDirectoryPath().get())};
+        constexpr auto kPathSeparatorLength{1};
+        constexpr auto kNullTerminatorLength{1};
+        const auto length = osirisDirectoryPath.length() + kPathSeparatorLength + build::kConfigDirectoryName.length() + kNullTerminatorLength;
+        state().pathToConfigDirectory = mem::makeUniqueForOverwrite<platform::PathCharType[]>(length);
+        if (!state().pathToConfigDirectory)
+            return;
+        std::size_t writeIndex{0};
+        std::copy(osirisDirectoryPath.begin(), osirisDirectoryPath.end(), state().pathToConfigDirectory.get() + writeIndex);
+        writeIndex += osirisDirectoryPath.length();
+        state().pathToConfigDirectory.get()[writeIndex++] = platform::kPathSeparator;
+        std::copy(build::kConfigDirectoryName.begin(), build::kConfigDirectoryName.end(), state().pathToConfigDirectory.get() + writeIndex);
+        writeIndex += build::kConfigDirectoryName.length();
+        state().pathToConfigDirectory.get()[writeIndex++] = 0;
+    }
+
+    void buildConfigFilePath(std::basic_string_view<platform::PathCharType> configFileName) noexcept
+    {
+        state().pathToConfigFile = pathUnderConfigDir(configFileName);
+    }
+
+    void buildConfigTempFilePath() noexcept
+    {
+        if (!state().pathToConfigFile)
+            return;
+
+        const std::basic_string_view pathToConfigFile{state().pathToConfigFile.get(), WIN64_LINUX(utils::wcslen, std::strlen)(state().pathToConfigFile.get())};
+        const std::basic_string_view configTempFileSuffix{WIN64_LINUX(L".new", ".new")};
+        constexpr auto kNullTerminatorLength{1};
+        const auto length = pathToConfigFile.length() + configTempFileSuffix.length() + kNullTerminatorLength;
+        state().pathToConfigTempFile = mem::makeUniqueForOverwrite<platform::PathCharType[]>(length);
+        if (!state().pathToConfigTempFile)
+            return;
+        std::size_t writeIndex{0};
+        std::copy(pathToConfigFile.begin(), pathToConfigFile.end(), state().pathToConfigTempFile.get() + writeIndex);
+        writeIndex += pathToConfigFile.length();
+        std::copy(configTempFileSuffix.begin(), configTempFileSuffix.end(), state().pathToConfigTempFile.get() + writeIndex);
+        writeIndex += configTempFileSuffix.length();
+        state().pathToConfigTempFile.get()[writeIndex++] = 0;
+    }
+
+    // <osirisDir>/<configDir>/<fileName> - the one path-assembly the active config goes through.
+    [[nodiscard]] UniquePtr<platform::PathCharType[]> pathUnderConfigDir(std::basic_string_view<platform::PathCharType> fileName) noexcept
+    {
+        if (!state().pathToConfigDirectory)
+            return {};
+
+        const std::basic_string_view pathToConfigDirectory{state().pathToConfigDirectory.get(), WIN64_LINUX(utils::wcslen, std::strlen)(state().pathToConfigDirectory.get())};
+        constexpr auto kPathSeparatorLength{1};
+        constexpr auto kNullTerminatorLength{1};
+        const auto length = pathToConfigDirectory.length() + kPathSeparatorLength + fileName.length() + kNullTerminatorLength;
+        UniquePtr<platform::PathCharType[]> path{mem::makeUniqueForOverwrite<platform::PathCharType[]>(length)};
+        if (!path)
+            return {};
+        std::size_t writeIndex{0};
+        std::copy(pathToConfigDirectory.begin(), pathToConfigDirectory.end(), path.get() + writeIndex);
+        writeIndex += pathToConfigDirectory.length();
+        path.get()[writeIndex++] = platform::kPathSeparator;
+        std::copy(fileName.begin(), fileName.end(), path.get() + writeIndex);
+        writeIndex += fileName.length();
+        path.get()[writeIndex++] = 0;
+        return path;
+    }
+
+    void setActiveConfigName(std::basic_string_view<platform::PathCharType> fileName) noexcept
+    {
+        const auto length = std::min(fileName.length(), ConfigState::kMaxConfigNameLength + 4);
+        std::memcpy(state().activeConfigName, fileName.data(), length);
+        state().activeConfigName[length] = 0;
+    }
+
+    // Rebuilds pathToConfigFile(+temp) from the CURRENT activeConfigName. char8_t names are
+    // byte-compatible with char paths on this platform (Linux PathCharType = char).
+    void rebuildActiveConfigPaths() noexcept
+    {
+        const auto* name = reinterpret_cast<const char*>(state().activeConfigName);
+        const std::basic_string_view<platform::PathCharType> fileNameView{name, std::strlen(name)};
+        buildConfigFilePath(fileNameView);
+        buildConfigTempFilePath();
+    }
+
+    HookContext& hookContext;
+};

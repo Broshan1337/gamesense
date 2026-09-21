@@ -1,9 +1,20 @@
-# Build trees (regenerable; the inject tree is root build/)
-build/
-build-dbg/
-build-tests/
-build-steam/
-Source/build/
+# Build trees (regenerable; the CS2 inject tree is cs2/build/, TF2 is tf2/build/)
+cs2/build/
+cs2/build-dbg/
+cs2/build-tests/
+cs2/build-steam/
+cs2/build-obf-test/
+cs2/build-obf-nocse/
+cs2/build-obf-plain/
+cs2/Source/build/
+tf2/build/
+tf2/build-dbg/
+
+# Machine-local key material (masked session keys - regenerate from
+# ~/.config/neversnooze-keys/heartbeat.key; the cs2 and tf2 copies are IDENTICAL and
+# must be regenerated together - see memory/project_anti_reversing_hardening_20260921.md)
+cs2/Source/Utils/SessionBindKey.h
+tf2/Source/SessionBindKey.h
 
 # Compiled artifacts
 *.so
@@ -30,3 +41,6 @@ __pycache__/
 # Logs & temp
 *.log
 Loader/
+
+# Third-party reference trees (not our code)
+packinghelper/
