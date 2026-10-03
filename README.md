@@ -1,4 +1,5 @@
 # Neversnooze
+<img width="3440" height="1440" alt="image" src="https://github.com/user-attachments/assets/c64839e7-4ade-4028-98e5-50fb6b77af79" />
 
 A local trainer project for CS2 (and more recently TF2) on Linux. Started as a fork of
 [Osiris](https://github.com/danielkrupinski/Osiris) — most of that original code has since been
