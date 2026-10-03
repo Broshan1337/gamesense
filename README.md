@@ -1,8 +1,8 @@
 # Neversnooze
 
-Linux cheat for CS2, and more recently TF2. Started as a fork of
+A local trainer project for CS2 (and more recently TF2) on Linux. Started as a fork of
 [Osiris](https://github.com/danielkrupinski/Osiris) — most of that original code has since been
-torn out and replaced with my own work.
+torn out and replaced with my own work. Built for personal use and local testing.
 
 > Screenshots will be added later.
 
@@ -37,8 +37,8 @@ cmake -B cs2/build -S cs2
 cmake --build cs2/build --target Neversnooze
 ```
 
-Inject with `sudo cs2/inject.sh`. This is a personal project for people who know what they're
-doing — no installer, no support.
+Load it with `sudo cs2/inject.sh`. This is a hobby project — read the code before running
+anything, and don't expect hand-holding.
 
 ## Credits
 
