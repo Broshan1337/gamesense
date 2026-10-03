@@ -1,112 +1,92 @@
-# Neversnooze
+# cs2/ — the CS2 module
 
-[![Linux](https://github.com/danielkrupinski/Osiris/actions/workflows/linux.yml/badge.svg?branch=master&event=push)](https://github.com/danielkrupinski/Osiris/actions/workflows/linux.yml)
+The CS2 side of Neversnooze: a Dear ImGui overlay rendered through the game's own Vulkan
+(the old Panorama UI is gone), a Lua scripting API, and the usual feature set. **Linux
+only.** The built artifact is `libMangoHud.so` — the name is deliberate, it blends in with
+the actual MangoHud overlay people run anyway.
 
- Linux game hack for **Counter-Strike 2** with GUI and rendering based on game's Panorama UI. Compatible with the latest game update on Steam.
+## Building (stock toolchain)
 
+```sh
+cmake -B cs2/build-dbg -S cs2 -DCMAKE_BUILD_TYPE=Debug
+cmake --build cs2/build-dbg --target Neversnooze
+```
 
+Inject with `sudo cs2/inject.sh` (it prompts: release from `cs2/build/`, debug from
+`cs2/build-dbg/`; it refuses stale builds). Work in a debug build first — crashes give full
+logs there, and the in-game log lives at `/tmp/gamesense_gui.log` (anomaly-only: a healthy
+session prints nothing).
 
-## What's new
-* 18 August 2026
-    * Added skin and knife changer with it's own tab, every weapon currently only have 10 skins to choose from. - will be fixed later
-    <img width="2632" height="1041" alt="image" src="https://github.com/user-attachments/assets/d678fa7b-0a00-4ce2-be53-070ca904b816" />
-    <img width="1942" height="1028" alt="image" src="https://github.com/user-attachments/assets/feb8ce91-f3b4-4ff0-90f9-064a3d3574f1" />
-    <img width="1425" height="1076" alt="image" src="https://github.com/user-attachments/assets/3aa2b593-81e4-4ab8-a86e-02057159afc9" />
+Tests: `cmake -B cs2/build-tests -S cs2 -DENABLE_TESTS=unit` then
+`cmake --build cs2/build-tests && ctest --test-dir cs2/build-tests`.
 
-    * added team damage tracker
-    * added vote revealer
-    * added cooldown revealer
-    * added blockbot - hardcoded the keybind to E, change it to anything you want in code, might fix it later idk
-    * added bunnyhop
-    * added auto strafe
-    * added fake prime
-    * added fake level + level changer
-    * added match auto accept
-    <img width="1554" height="1270" alt="image" src="https://github.com/user-attachments/assets/f9dfb52e-2917-493e-a866-7595267b6a4c" />
+Settings are stored in `$HOME/OsirisCS2/configs`.
 
+## Building with OLLVM obfuscation (Arkari)
 
-    * added hit sound
-    * added spawn protection end sound
-    <img width="1308" height="319" alt="image" src="https://github.com/user-attachments/assets/29c3878f-40be-44f6-b0b2-f42d7e09fe13" />
+The tree supports per-function obfuscation through [Arkari](https://github.com/Arkari/obfuscator)
+(a goron-derived LLVM fork). Configure with its clang as the compiler:
 
+```sh
+cmake -B cs2/build-obf-test -S cs2 \
+  -DNEVERSNOOZE_OBFUSCATE=ON \
+  -DCMAKE_C_COMPILER=$HOME/obfuscator/Arkari/llvm/build/bin/clang \
+  -DCMAKE_CXX_COMPILER=$HOME/obfuscator/Arkari/llvm/build/bin/clang++
+```
 
-    * added a really annoying sound upon injection :)
-    * added a WIP triggerbot that needs to get fixed soon
-     <img width="1238" height="393" alt="image" src="https://github.com/user-attachments/assets/ad40b6d4-945a-403f-a067-dcd73433be5b" />
+- `NEVERSNOOZE_OBFUSCATE` is ON by default; with a stock compiler it compiles clean (the
+  annotations compile away), so the same tree builds with GCC or Arkari clang.
+- `-mllvm -arkari-cfg=<file>` carries the random seed (`NEVERSNOOZE_ARKARI_CFG` cache var).
+- Per-function policy lives in `cs2/Source/Utils/ObfAnnotations.h` — `NS_OBF_FLATTEN`
+  (`+fla`), `NS_OBF_ICALL` (`+icall`), `NS_OBF_INDGV` (`+indgv`), `NS_OBF_CIE` (`+cie`), etc.
+  Annotate **cold, secret-carrying code only — never hot paths** (flattening a per-frame
+  function is a straight FPS tax).
+- Obfuscated builds also lift clang's constexpr/template limits (`-fconstexpr-depth=4096`
+  etc.) because the pattern TypeLists instantiate ~460-argument fold expressions.
 
+## Ship hardening
 
+- `-DNEVERSNOOZE_SHIP:BOOL=ON` (default): the release link is fully stripped and the symbol
+  table is preserved only in a local `<build>/Source/ship-debug/<name>.debug` copy +
+  `.gnu_debuglink`, so you can still symbolize your own crashes.
+- `-DNEVERSNOOZE_BUILD_STEAM_MODULE32:BOOL=ON` builds the Steam-side module. Spell it
+  exactly — an untyped `-D` with a typo'd name silently leaves the target out of the build.
 
-* 04 November 2025
-    * Improved smoothness of "Player Info in World" on moving players
+## Session binding / heartbeats
 
-* 30 October 2025
-    * Added Bomb Plant Alert feature
-        * Green color means the bomb will be planted before the end of the round if uninterrupted
-        * Red color means the bomb can not be planted before the end of the round
+The loader stamps a 64-byte trailer after the ELF image inside the memfd it injects from
+(format in the [loader repo](https://github.com/Broshan1337/neversneeze-loader),
+`src/SessionTrailer.h`): magic `"NSHB02"`, the loader's pid + comm, and a proof
+(`comm XOR key`). Module side (`cs2/Source/Utils/SessionBind.h`):
 
-    <img width="201" height="146" alt="Bomb Plant Alert" src="https://github.com/user-attachments/assets/21c0f8fb-a20d-42df-9857-f578cfc9b9f9" />
+- `verifySession()` runs once, early on the first present thread: it finds its own memfd via
+  `/proc/self/fd`, reads the trailer, verifies magic + proof. **Fail-closed** — no trailer or
+  bad proof means the module wasn't injected by a loader holding the key (e.g. a dumped
+  module re-injected standalone) and the module releases itself.
+- `tickLoaderLiveness()` polls the stamped loader pid afterwards; if the loader died, the
+  module is an orphan and releases itself after a grace window. The check compares against
+  the comm the loader stamped at injection time, so the loader binary can be renamed freely.
+- The key itself lives in `cs2/Source/Utils/SessionBindKey.h` — **machine-local and
+  gitignored**, so the repo doesn't build as-is until you make one. Format: two 32-byte
+  arrays, `kKeyMasked` (key XOR mask) and `kKeyMask`; unmask transiently at verification
+  time. Generate your own pair, keep it in sync with the loader's `heartbeat.key`, and keep
+  the `cs2/` and `tf2/` copies byte-identical.
 
-* 23 October 2025
-    * Hostage Outline Glow hue is now customizable
+## VMProtect
 
-* 20 October 2025
-    * Added "No Scope Inaccuracy Visualization" feature
+VMP applies to the **loader** only (see the loader repo for that flow) — and only on stock
+codegen: VMP's parser cannot read Arkari-flattened code, so the two are never stacked in one
+binary. Module-side protection is Arkari annotations plus the layers below.
 
-    <img height="300" alt="no scope inaccuracy visualization" src="https://github.com/user-attachments/assets/860c944a-00b1-4b67-9d41-6f43e46f4252" />
+## Other hardening in the module
 
-* 09 October 2025
-    * Added viewmodel fov modification
-
-    ![Viewmodel fov modification](https://github.com/user-attachments/assets/3b9d6bde-a68c-4739-913c-d3b6caba4117)
-
-## Technical features
-
-* C++ runtime library (CRT) is not used in release builds
-* No heap memory allocations
-* No static imports in release build on Windows
-* No threads are created
-* Exceptions are not used
-* No external dependencies
-
-## Compiling
-
-### Prerequisites
-
-#### Linux
-
-* **CMake 3.24** or newer
-* **g++ 14 or newer** or **clang++ 18 or newer**
-
-### Compiling from source
-
-#### Linux
-
-Configure with CMake:
-
-    cmake -DCMAKE_BUILD_TYPE=Release -B build
-
-Build:
-
-    cmake --build build -j $(nproc --all)
-
-After following these steps you should receive **libOsiris.so** file in **build/Source/** directory.
-
-### Loading / Injecting into game process
-
-
-#### Linux
-
-You can simply run inject.sh
- with **sudo bash inject.sh**
-
-## FAQ
-
-### Where are the settings stored on disk?
-
-In a configuration file `default.cfg` inside `%appdata%\OsirisCS2\configs` directory on Windows and `$HOME/OsirisCS2/configs` on Linux.
-
-## License
-
-> Copyright (c) 2018-2025 Daniel Krupiński
-
-This project is licensed under the [MIT License](https://opensource.org/licenses/mit-license.php) - see the [LICENSE](https://github.com/danielkrupinski/Osiris/blob/master/LICENSE) file for details.
+- **String vault** (`Utils/NsStr.h`): identity strings are XOR-obfuscated constants, not
+  contiguous rodata literals (a plain string is one `movabs` immediate away from leaking).
+- **Pattern vault** (`MemorySearch/PatternVault.h`): byte patterns are encrypted at rest;
+  the pools unseal only after the session verify passes.
+- **Honeypots** (`Security/Honeypots.h`): decoy "license/key" strings that are deliberately
+  visible in `strings` output, plus heavily flattened dead-by-construction functions that
+  waste an analyst's time. Pure computation, never executed.
+- **Self-unload** (`Utils/LinuxSelfUnload.h`): the unmap worker needs
+  `[[clang::musttail]]` under clang (GCC uses `[[gnu::musttail]]`) — dropping it makes the
+  unload crash with a distinctive signature.
