@@ -1,7 +1,8 @@
+import os
 import re
 
 IG = '/tmp/opencode/items_game.txt'
-OUT = '/path/to/gamesense/Source/CS2/Econ/CaseLootDatabase.h'
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'cs2', 'Source', 'CS2', 'Econ', 'CaseLootDatabase.h')
 
 d = open(IG, encoding='utf-8', errors='replace').read()
 

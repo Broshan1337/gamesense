@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Hunt the Linux generate_primitives dispatcher in libscenesystem.so."""
+import os
 import sys
-sys.path.insert(0, '/path/to/gamesense/scratchpad')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import struct
 import capstone
 from elfmap import Elf

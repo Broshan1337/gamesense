@@ -2,9 +2,10 @@
 """Crash diagnosis for SIGSEGV in Aimbot::hitchanceFraction -> spreadFn call.
 Checks where the spread-related patterns match in the CURRENT libclient.so and
 disassembles the crash frame libclient+0x1af9b2d."""
+import os
 import re
 import sys
-sys.path.insert(0, '/path/to/gamesense/scratchpad')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from elfmap import Elf
 import capstone
 

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Scan steamservice.so for VAC build_diagnostic_response and memory copy functions."""
+import os
 import sys
-sys.path.insert(0, '/path/to/gamesense/scratchpad')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from elfmap import Elf
 import capstone
 
-STEAMSERVICE = '/home/user/.local/share/Steam/steamrt64/steamservice.so'
+STEAMSERVICE = os.path.expanduser('~/.local/share/Steam/steamrt64/steamservice.so')
 
 elf = Elf(STEAMSERVICE)
 md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)

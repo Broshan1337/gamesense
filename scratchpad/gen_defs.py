@@ -1,8 +1,9 @@
+import os
 import re
 
 IG = '/tmp/opencode/items_game.txt'
 EN = '/tmp/opencode/csgo_english.txt'
-OUT = '/path/to/gamesense/Source/CS2/Econ/ItemDefDatabase.h'
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'cs2', 'Source', 'CS2', 'Econ', 'ItemDefDatabase.h')
 
 d = open(IG, encoding='utf-8', errors='replace').read()
 t = open(EN, 'rb').read().decode('utf-8-sig', errors='replace')

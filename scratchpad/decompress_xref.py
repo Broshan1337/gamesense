@@ -7,10 +7,11 @@ Usage: python3 scratchpad/decompress_xref.py <module.so> <symbol> [<symbol> ...]
    and for PLT stubs `bnd jmp [rip+disp]` referencing it, then re-scans for `call <stub>`.
 3. Prints every reference site with the nearest preceding function prologue.
 """
+import os
 import struct
 import sys
 
-sys.path.insert(0, '/path/to/gamesense/scratchpad')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from elfmap import Elf  # noqa: E402
 
 
