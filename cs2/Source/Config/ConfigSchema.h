@@ -116,6 +116,11 @@ private:
         configConversion.uint(u8"KickKey", loadVariable<chat_vars::KickKey>(), saveVariable<chat_vars::KickKey>());
         // Appended LAST (order-sensitive parser).
         configConversion.boolean(u8"NameForceReconnect", loadVariable<chat_vars::NameForceReconnect>(), saveVariable<chat_vars::NameForceReconnect>());
+        configConversion.boolean(u8"ClanTagEnabled", loadVariable<chat_vars::ClanTagEnabled>(), saveVariable<chat_vars::ClanTagEnabled>());
+        // Clan tag animator (2026-10-03) - appended LAST (order-sensitive parser).
+        configConversion.boolean(u8"ClanTagAnimateEnabled", loadVariable<chat_vars::ClanTagAnimateEnabled>(), saveVariable<chat_vars::ClanTagAnimateEnabled>());
+        configConversion.uint(u8"ClanTagAnimateMode", loadVariable<chat_vars::ClanTagAnimateMode>(), saveVariable<chat_vars::ClanTagAnimateMode>());
+        configConversion.uint(u8"ClanTagAnimateSpeed", loadVariable<chat_vars::ClanTagAnimateSpeed>(), saveVariable<chat_vars::ClanTagAnimateSpeed>());
         configConversion.endObject();
     }
 

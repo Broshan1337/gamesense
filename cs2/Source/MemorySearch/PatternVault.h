@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <atomic>
 #include <cstddef>
 
 // Pattern vault: the module's signature byte arrays are its most valuable static secret -
@@ -30,3 +32,53 @@ template <std::size_t N>
         encrypted[i] = static_cast<char>(plaintext[i] ^ patternVaultKey(i));
     return encrypted;
 }
+
+// ---- RUNTIME SESSION LOCK (hardening 2026-09-24) -----------------------------------
+//
+// The consteval key above is static: it is recoverable from the module binary alone. The
+// idle state of a sealed pool therefore gets a SECOND XOR layer derived at RUNTIME from the
+// loader-stamped session trailer (see session_bind::verifySession -> armRuntimeLock). While
+// the vault is idle it is sealed under the session key; a scan window unseals it, and the
+// seal() wipe re-locks it afterwards (wipe-after-scan - the TOCTOU window is one scan pass
+// at init, not the whole session).
+//
+// Fail-closed: with NS_PATTERN_VAULT_REQUIRES_SESSION defined (the shipped module target),
+// an un-armed vault never unseals - the pattern bytes stay ciphertext and every scan finds
+// nothing (results zeroed, features degrade). A dumped-and-re-injected module without a
+// genuine loader-stamped trailer cannot decrypt its own patterns.
+//
+// Offline tools (scratchpad pattern_scan) and the unit tests build WITHOUT the define: the
+// runtime key stays all-zero, the extra XOR is a no-op, and the vault behaves exactly like
+// the pre-hardening version.
+namespace pattern_vault
+{
+
+#if defined(NS_PATTERN_VAULT_REQUIRES_SESSION)
+inline constexpr bool kVaultRequiresSessionLock = true;
+#else
+inline constexpr bool kVaultRequiresSessionLock = false;
+#endif
+
+inline std::array<unsigned char, 32> runtimeLockKey{};
+inline std::atomic<bool> runtimeLockArmed{false};
+
+// Called ONCE by session_bind::verifySession after the injection trailer verified. The key
+// is derived from trailer material at runtime - it exists nowhere in the module binary.
+inline void armRuntimeLock(const unsigned char key32[32]) noexcept
+{
+    for (std::size_t i = 0; i < runtimeLockKey.size(); ++i)
+        runtimeLockKey[i] = key32[i];
+    runtimeLockArmed.store(true, std::memory_order_release);
+}
+
+[[nodiscard]] inline bool vaultUnlockAllowed() noexcept
+{
+    return !kVaultRequiresSessionLock || runtimeLockArmed.load(std::memory_order_acquire);
+}
+
+[[nodiscard]] inline char runtimeLockByte(std::size_t index) noexcept
+{
+    return static_cast<char>(runtimeLockKey[index & (runtimeLockKey.size() - 1)]);
+}
+
+} // namespace pattern_vault

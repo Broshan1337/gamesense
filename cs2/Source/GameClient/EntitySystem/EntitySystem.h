@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstring>
 
 #include <CS2/Classes/Entities/CEntityInstance.h>
@@ -93,7 +94,12 @@ public:
         if (!entityClasses)
             return nullptr;
 
-        for (int i = 0; i < entityClasses->numElements; ++i) {
+        // BOUNDED SCAN (the 2026-10-03 lesson): a stale map layout walked garbage
+        // numElements entries (33M iterations of strcmp) - it stalled the render thread
+        // for minutes AND matched nothing, silently killing every classifier-gated
+        // feature. Cap the scan: the real map holds a few hundred classes.
+        const auto count = std::min<std::uint32_t>(entityClasses->numElements, kMaxEntityClassScan);
+        for (std::uint32_t i = 0; i < count; ++i) {
             if (std::strcmp(entityClasses->memory[i].key, className) == 0)
                 return entityClasses->memory[i].value;
         }
@@ -129,12 +135,17 @@ public:
         if (!entityClasses)
             return nullptr;
 
-        for (int i = 0; i < entityClasses->numElements; ++i) {
+        const auto count = std::min<std::uint32_t>(entityClasses->numElements, kMaxEntityClassScan);
+        for (std::uint32_t i = 0; i < count; ++i) {
             if (entityClasses->memory[i].value == entityIdentity.entityClass)
                 return entityClasses->memory[i].key;
         }
         return nullptr;
     }
+
+    // The real map holds a few hundred classes; anything above this = a stale layout
+    // resolving garbage (see the 2026-10-03 note at findEntityClass).
+    static constexpr std::uint32_t kMaxEntityClassScan = 4096;
 
 private:
     [[nodiscard]] cs2::CEntityIdentity* getRawEntityIdentityFromHandle(cs2::CEntityHandle handle) const noexcept
@@ -165,7 +176,18 @@ private:
 
     [[nodiscard]] auto getEntityList() const noexcept
     {
-        return hookContext.patternSearchResults().template get<EntityListOffset>().of(entitySystem()).get();
+        // The 5GB 2026-09-25 update INLINED the chunk-pointer array into CGameEntitySystem
+        // (live-verified on dce58989: chunks[k] sits at entitySystem+0x10+k*8; chunk 0 =
+        // the identity page for indices 0..511, chunk 1 = 512..1023, ...). EntityListOffset
+        // resolves the member's POSITION (16), so the list = entitySystem+offset directly.
+        // The old pointer-dereference read chunk 0's page pointer as the array base and
+        // every identity walk returned garbage - the silent death of the pawn lookups, the
+        // weapon loops, ESP and glow.
+        const auto offset = hookContext.patternSearchResults().template get<EntityListOffset>();
+        if (!offset || offset.rawOffset() <= 0 || !entitySystem())
+            return static_cast<cs2::CConcreteEntityList*>(nullptr);
+        return reinterpret_cast<cs2::CConcreteEntityList*>(
+            reinterpret_cast<std::uintptr_t>(entitySystem()) + offset.rawOffset());
     }
 
     [[nodiscard]] auto getEntityClasses() const noexcept

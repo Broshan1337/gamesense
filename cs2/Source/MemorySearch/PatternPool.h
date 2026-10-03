@@ -34,16 +34,48 @@ public:
 
     using PatternTypes = PatternTypesList;
 
-    // Decrypts the vaulted pattern bytes in place exactly once, then returns the view.
-    // Non-const on purpose: the runtime state of this object is "ciphertext until first scan".
+    // Idle states: the buffer sits XOR-sealed either under the static consteval key (as
+    // emitted at rest) or - once a scan window has run under the shipped module - under the
+    // RUNTIME session key (wipe-after-scan: the plaintext exists in memory only during a
+    // scan). getView unseals on demand; seal() re-locks.
+    enum class SealState : unsigned char { kStaticSealed, kOpen, kRuntimeSealed };
+
+    // Decrypts the vaulted pattern bytes on demand and returns the plaintext view.
+    // Non-const on purpose: the runtime state of this object mutates between seal states.
+    // FAIL-CLOSED: under the shipped module build an un-armed vault (no verified session
+    // trailer) never unseals - the view then points at ciphertext and every scan finds
+    // nothing. Offline builds (no NS_PATTERN_VAULT_REQUIRES_SESSION) always unseal.
     [[nodiscard]] __attribute__((annotate("+fla"))) PatternPoolView getView() noexcept
     {
-        if (!decrypted) {
+        // CRITICAL (fixed same session, caught live in-game): the runtime session key lives
+        // ONLY in the idle re-seal (kOpen -> kRuntimeSealed via seal()). Unsealing must strip
+        // EXACTLY the key the current seal state carries - unsealing kStaticSealed with
+        // K_static THEN K_runtime left the buffer double-XORed (= plaintext ^ K_runtime) and
+        // every scan ran on garbage ("Failed to find pattern" dialogs with random bytes).
+        if (sealState == SealState::kStaticSealed) {
+            if (!pattern_vault::vaultUnlockAllowed())
+                return {NumberOfPatterns, buffer.data(), patternLengths.data(), patternOffsets.data(), operations.data()};
             for (std::size_t i = 0; i < BufferSize; ++i)
                 buffer[i] = static_cast<char>(buffer[i] ^ patternVaultKey(i));
-            decrypted = true;
+            sealState = SealState::kOpen;
+        } else if (sealState == SealState::kRuntimeSealed) {
+            for (std::size_t i = 0; i < BufferSize; ++i)
+                buffer[i] = static_cast<char>(buffer[i] ^ pattern_vault::runtimeLockByte(i));
+            sealState = SealState::kOpen;
         }
         return {NumberOfPatterns, buffer.data(), patternLengths.data(), patternOffsets.data(), operations.data()};
+    }
+
+    // Wipe-after-scan: re-seal an open pool under the runtime session key. No-op on offline
+    // builds (the runtime key is zero there - the pool simply stays open, like pre-hardening).
+    void seal() noexcept
+    {
+        if (sealState != SealState::kOpen || !pattern_vault::kVaultRequiresSessionLock
+            || !pattern_vault::vaultUnlockAllowed())
+            return;
+        for (std::size_t i = 0; i < BufferSize; ++i)
+            buffer[i] = static_cast<char>(buffer[i] ^ pattern_vault::runtimeLockByte(i));
+        sealState = SealState::kRuntimeSealed;
     }
 
 private:
@@ -78,5 +110,5 @@ private:
     std::array<std::uint8_t, NumberOfPatterns> patternLengths{};
     std::array<std::uint8_t, NumberOfPatterns> patternOffsets{};
     std::array<CodePatternOperation, NumberOfPatterns> operations{};
-    bool decrypted{false};
+    SealState sealState{SealState::kStaticSealed};
 };

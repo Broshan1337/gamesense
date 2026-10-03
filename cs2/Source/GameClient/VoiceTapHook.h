@@ -88,9 +88,16 @@ inline bool hookedReadFromBuffer(void* manager, net_messages::BitRead* reader, v
     // Wire snapshot BEFORE the original consumes the reader: the entry position is the start of
     // this message (varint payload length + protobuf body) - parseable without any parsed-object
     // offsets, using the CMsgVoiceAudio wire schema the soundboard already builds.
+    //
+    // GATED on the enable mirror (hardening 2026-09-24): the game update reshuffled this
+    // manager's vtable (slot 1 is no longer the old binding getter - RegisterFieldChange-
+    // CallbackPriority lives there now), so slot 4's argument semantics MUST NOT be trusted
+    // blindly. When the probe is off the hook must be a pure, touch-nothing pass-through:
+    // dereferencing reader->data on a reshuffled slot's args would be a wild read.
     const std::uint8_t* wireStart = nullptr;
     std::uint32_t wireLen = 0;
-    if (reader && reader->data && reader->currentBit >= 0) {
+    const bool probeActive = enabledMirror.load(std::memory_order_acquire);
+    if (probeActive && reader && reader->data && reader->currentBit >= 0) {
         const int bytePos = reader->currentBit >> 3;
         const int remaining = reader->dataBytes - bytePos;
         if (remaining > 0) {
@@ -100,7 +107,7 @@ inline bool hookedReadFromBuffer(void* manager, net_messages::BitRead* reader, v
     }
 
     const bool ok = originalReadFromBuffer(manager, reader, message);
-    if (ok && message && enabledMirror.load(std::memory_order_acquire)) {
+    if (ok && message && probeActive) {
         const auto vtable = *reinterpret_cast<std::uintptr_t*>(message);
         if (vtable == voiceVtablePrimary || vtable == voiceVtableProto) {
             StagedPacket staged;
@@ -123,6 +130,35 @@ inline bool hookedReadFromBuffer(void* manager, net_messages::BitRead* reader, v
 
 [[nodiscard]] inline bool install() noexcept
 {
+    // FAIL-CLOSED (2026-09-25 game update): the manager (INetworkMessageInternal) vtable
+    // reshuffled for the THIRD time in a row (09-23, 09-24, 09-25) and slot 4 is no longer
+    // the parse. Live evidence (18:44 loader-session crash): hooking the new slot 4 and
+    // truncating its return to bool wild-called the game into
+    // libnetworksystem RegisterFieldChangeCallbackPriority (its assert fires -> dialog +
+    // null-write + ud2 abort), because the new slot 4 is an unrelated method whose return
+    // is not a bool. A hook on an unverified slot is a loaded gun: fail closed until the
+    // parse slot is re-derived AND verified (the lagger's crafted-parse flow, once its own
+    // stale manager slots are re-derived, is the natural live verifier - it calls the same
+    // slot with a crafted bit reader + message).
+    //
+    // 09-25 static layout (libnetworksystem manager vtable @0x48b080, 40 primary slots +
+    // secondary-base composite to ~slot 54):
+    //   slot 1 = RegisterFieldChangeCallbackPriority (0x2b22c0 - the assert fn)
+    //   slot 7 = PARSE entry (0x2b4bc0: varint msg-id read + dword-pair decode off the bit
+    //            reader, tail-calls slot 5) - 4th arg in rcx is forwarded, a 3-arg hook
+    //            would clobber it
+    //   slot 8 = clone-message forwarder (tail-jumps msg->vtable[5] = the 0x70-alloc copy
+    //            ctor; slot 5 is NOT the parse)
+    //   slot 9 = destroy-message forwarder (msg->vtable[1] = Itanium D0)
+    //   message-class layout UNCHANGED vs 09-12: 0=D1, 1=D0(delete), 2/3=GetProto(lea
+    //   [rdi+0x30]), 4=getter, 5=clone(0x70 alloc+copy), 6=returns the netmsg id (0x2f
+    //   for voice)
+    //   voice wrapper vtables moved: libclient .data.rel.ro primary 0x44e6ed0 (off_to_top
+    //   0), embedded proto sub-object 0x44e6f20 (off_to_top -0x30 = msg+0x30) - replaces
+    //   the stale build-14181 RVAs 0x43E9108/0x43E9148 + sh_addr 0x42D5920 below
+    StatusReport::record("VoiceTap: manager vtable reshuffled (09-25), parse slot unverified - tap disabled", false);
+    return false;
+
     NetworkMessagesPointer managerPointer;
     if (!managerPointer) {
         StatusReport::record("VoiceTap: CNetworkMessages not resolved", false);
@@ -164,7 +200,14 @@ inline bool hookedReadFromBuffer(void* manager, net_messages::BitRead* reader, v
         new (swapperStorage) VmtSwapper{};
         swapperConstructed.store(true, std::memory_order_release);
     }
-    if (!swapper().install(calculator, *objectVmtSlot, 5)) {
+    // minSlots 128 (hardening 2026-09-24 crash fix): the manager is INetworkMessageInternal
+    // and the game dispatches it POSITIONALLY well beyond the hooked slot - a live crash showed
+    // [vptr+0x2B0] (slot 86). The 2026-09-23 game build additionally put a NULL at slot 0 of
+    // this vtable, which made the old stop-at-first-null scan compute length 0 (floored to 5)
+    // -> every dispatch beyond slot 4 read out of bounds of the pool allocation. The fixed
+    // null-tolerant scan yields 102; 128 is the floor so a future reshuffle cannot truncate
+    // below the observed dispatch range again.
+    if (!swapper().install(calculator, *objectVmtSlot, 128)) {
         StatusReport::record("VoiceTap: VMT install failed", false);
         return false;
     }

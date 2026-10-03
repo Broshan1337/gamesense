@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cmath>
+#include <cstring>
 #include <mutex>
 
 #include <SDL3/SDL_events.h>
@@ -191,6 +192,55 @@ constexpr float expDecay(float current, float target, float decay, float dt) noe
     return event.key.key == SDLK_INSERT || (event.key.mod == SDL_KMOD_LALT && event.key.key == SDLK_I);
 }
 
+// --- game-side input desync (menu-open swallow) ---------------------------------------
+//
+// While the menu is open, SDLHook_PeepEvents swallows every fetched batch, so key-ups and
+// mouse-ups the game misses leave the game's internal input state stuck "down": space held
+// at menu-open, released behind the menu, still reads as held afterwards - the game then
+// auto-jumps on every landing with OUR bhop disabled (reported as "bhop stays on after
+// disabling it"), and stale mouse buttons cause the same class of ghosts.
+//
+// gameKeyDown/gameMouseDown mirror what the GAME received: updated only from batches that
+// are delivered to it (menu closed), untouched while the menu swallows everything. On the
+// close edge, one synthetic key-up / mouse-button-up per key the game still thinks is held
+// is pushed into SDL's queue through the REAL SDL_PeepEvents (dlsym'd entry point - the
+// game's poll path goes through our hook, SDL_ADDEVENT through the real function bypasses
+// it and lands in the same queue the game polls next). A synthetic up for a key SDL already
+// considers up is a no-op, so this is idempotent and safe to fire on every close.
+inline bool gameKeyDown[256] = {};
+inline bool gameMouseDown[6] = {};
+
+void synthesizeMenuCloseInput() noexcept
+{
+    if (!gui_sdl::functions.peepEvents)
+        return;
+
+    SDL_Event up;
+    for (int scancode = 0; scancode < 256; ++scancode) {
+        if (!gameKeyDown[scancode])
+            continue;
+        gameKeyDown[scancode] = false;
+        std::memset(&up, 0, sizeof(up));
+        up.type = SDL_EVENT_KEY_UP;
+        up.key.windowID = gui_sdl::windowId;
+        up.key.scancode = static_cast<SDL_Scancode>(scancode);
+        up.key.down = false;
+        gui_sdl::functions.peepEvents(&up, 1, SDL_ADDEVENT, 0, 0);
+    }
+    for (int button = 1; button <= 5; ++button) {
+        if (!gameMouseDown[button])
+            continue;
+        gameMouseDown[button] = false;
+        std::memset(&up, 0, sizeof(up));
+        up.type = SDL_EVENT_MOUSE_BUTTON_UP;
+        up.button.windowID = gui_sdl::windowId;
+        up.button.button = static_cast<std::uint8_t>(button);
+        up.button.down = false;
+        up.button.clicks = 1;
+        gui_sdl::functions.peepEvents(&up, 1, SDL_ADDEVENT, 0, 0);
+    }
+}
+
 // Font setup: the Neverlose design ships its own fonts (Inter + FontAwesome), embedded into
 // the binary and loaded by the menu layer. No Noto fallback chain needed anymore.
 [[NOINLINE]] void createFont() noexcept
@@ -290,8 +340,39 @@ bool GUI::polledEvents(const SDL_Event* events, int count) noexcept
         queueEvent(event);
     }
 
-    if (sawToggleKey)
-        menuOpen.store(!menuOpen.load(std::memory_order_acquire), std::memory_order_release);
+    bool menuWasOpen = false;
+    if (sawToggleKey) {
+        menuWasOpen = menuOpen.load(std::memory_order_acquire);
+        menuOpen.store(!menuWasOpen, std::memory_order_release);
+        if (menuWasOpen)
+            synthesizeMenuCloseInput(); // game-side keys stuck down behind the swallow
+    }
+
+    // Mirror what the GAME receives into gameKeyDown/gameMouseDown: the swallow decision in
+    // SDLHook_PeepEvents uses the menuOpen state AFTER this flip, so this batch is delivered
+    // to the game exactly when the menu is (now) closed - which includes the closing toggle
+    // batch itself. While the menu is open the batch is swallowed: do not update the mirror.
+    if (!menuOpen.load(std::memory_order_acquire)) {
+        for (int i = 0; i < count; ++i) {
+            const SDL_Event& event = events[i];
+            switch (event.type) {
+            case SDL_EVENT_KEY_DOWN:
+            case SDL_EVENT_KEY_UP: {
+                const auto scancode = static_cast<int>(event.key.scancode);
+                if (scancode >= 0 && scancode < 256)
+                    gameKeyDown[scancode] = event.type == SDL_EVENT_KEY_DOWN;
+                break;
+            }
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+                if (event.button.button >= 1 && event.button.button <= 5)
+                    gameMouseDown[event.button.button] = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
+                break;
+            default:
+                break;
+            }
+        }
+    }
 
     if (!backendReady.load(std::memory_order_acquire)) {
         // Capture the game's main window. Primary path: a window event in this batch (the game

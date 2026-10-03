@@ -3945,6 +3945,8 @@ void chatActionRow(const char* label, const char* buttonText, int id, int action
 
 // Name animator modes (order = name_animator_vars::Mode values).
 constexpr const char* const kAnimatorModeNames[] = {"Typewriter", "Glitch", "Marquee", "Scramble", "Binary", "Flicker", "Backwards", "Mocking", "Pulse", "Strobe", "Wave", "Crawler", "Storm", "Nystagmus", "Emoji Strobe", "Flashbang", "Twitch", "Face Storm", "Super Wave", "RLO Flip", "Vaporwave", "Invisible Chaos", "Zalgo"};
+// Clan tag animator modes (order = chat_vars::ClanTagAnimateMode values; tuned for short tags).
+constexpr const char* const kClanTagModeNames[] = {"Typewriter", "Glitch", "Marquee", "Wave", "Strobe", "Pulse"};
 
 
 // Persona preset dropdown: commits the chosen recipe into the name buffer, stages it for the
@@ -4217,7 +4219,7 @@ void pageMiscChat() noexcept
     // userinfo convar) - the server relays it to every player. Text lives in sidecar files
     // (chat_name.txt / chat_spam.txt / chatwheel.txt / chat_names.txt next to the configs),
     // edited in-place. {nl} in any text becomes a real line break in chat (U+2028).
-    addCard("CHAT", 13, [] {
+    addCard("CHAT", 18, [] {
         chatTemplateRow("Fake Name", chat_tools::kNameBuffer, ++controlId);
         chatActionRow("Apply Name", "APPLY NAME", ++controlId, 0);
         selectList("Persona Preset", &chatPresetIndex, kPersonaPresetNames, static_cast<int>(sizeof(kPersonaPresetNames) / sizeof(kPersonaPresetNames[0])), ++controlId, &chatPresetApply);
@@ -4237,6 +4239,17 @@ void pageMiscChat() noexcept
                                             static_cast<int>(sizeof(kAnimatorModeNames) / sizeof(kAnimatorModeNames[0])), ++controlId);
         sliderVar<name_animator_vars::Speed>("Animate Speed", ++controlId);
         toggleVar<name_animator_vars::DirectSend>("Direct Rename", ++controlId);
+        // Clan tag spoof (2026-09-23 update): local display rewrite of the controller's
+        // sanitized clan tag. The networked tag is Steam-clan/GC authoritative - this shows
+        // only on OUR screen (scoreboard, chat decoration, death notices). The animator
+        // drives the SAME rewrite frame by frame (no clan userinfo cvar exists in CS2, so
+        // there is no server-visible setinfo route).
+        toggleVar<chat_vars::ClanTagEnabled>("Clan Tag", ++controlId);
+        chatTemplateRow("Clan Tag Text", chat_tools::kClanTagBuffer, ++controlId);
+        toggleVar<chat_vars::ClanTagAnimateEnabled>("Animate Clan Tag", ++controlId);
+        selectVar<chat_vars::ClanTagAnimateMode>("Tag Mode", kClanTagModeNames,
+                                                 static_cast<int>(sizeof(kClanTagModeNames) / sizeof(kClanTagModeNames[0])), ++controlId);
+        sliderVar<chat_vars::ClanTagAnimateSpeed>("Tag Speed", ++controlId);
     });
 
     addCard("GLITCH TEXT", 7, [] {
@@ -5793,8 +5806,9 @@ void searchOverlay(ImDrawList* d, ImVec2 b) noexcept
     ImGui::PopItemWidth();
 
     // Input diagnostics: the field once filled with '?' - log the raw UTF-8 bytes we receive
-    // (on change only) plus whether SDL text input is actually active, so a layout/encoding
-    // problem is visible in the log instead of guessable only from rendered glyphs.
+    // on change, so a layout/encoding problem is visible in the log instead of guessable only
+    // from rendered glyphs. (SDL text input is deliberately NOT used by this backend - text
+    // comes from scancode synthesis, see SdlImGuiBackend.h - so there is no SDL state to probe.)
     static char lastLoggedQuery[sizeof(searchQuery)] = "";
     if (std::strcmp(searchQuery, lastLoggedQuery) != 0) {
         std::memcpy(lastLoggedQuery, searchQuery, sizeof(lastLoggedQuery));
@@ -5802,8 +5816,7 @@ void searchOverlay(ImDrawList* d, ImVec2 b) noexcept
         std::size_t hexIndex = 0;
         for (std::size_t i = 0; i < sizeof(searchQuery) && searchQuery[i]; ++i)
             hexIndex += static_cast<std::size_t>(std::snprintf(hex + hexIndex, sizeof(hex) - hexIndex, "%02X ", static_cast<unsigned char>(searchQuery[i])));
-        const bool textInputActive = gui_sdl::functions.textInputActive && gui_sdl::functions.textInputActive(gui_sdl::window);
-        gui_log::write("search query: [%s] bytes: %s(text input %s)", searchQuery, hex, textInputActive ? "active" : "INACTIVE");
+        gui_log::write("search query: [%s] bytes: %s", searchQuery, hex);
     }
 
     if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) || (ImGui::IsMouseClicked(0) && ImGui::IsMouseHoveringRect(b, b + ImVec2(kSidebarWidth, kShellHeight)) && ImGui::GetFrameCount() > searchOpenedFrame))

@@ -72,6 +72,26 @@ public:
         return value;
     }
 
+    // The pointer inside the controller's m_sSanitizedClanTag (CUtlString) - the string the
+    // game renders as our clan tag everywhere (scoreboard, #DecoratedPlayerName chat/death
+    // notices). Resolved by field name through the schema, like m_iPing above. The 2026-09-23
+    // update made client-visible clan tags real (GC SetMyClanId32BitEquipped / CSOPersonaDataPublic.
+    // clan_tag on the server side); the field itself is display-local data, so spoofing it
+    // (in-place rewrite - see ChatTools) changes what WE see. {} when unavailable.
+    [[nodiscard]] Optional<char*> clanTagStringPointer() const noexcept
+    {
+        if (!playerControllerPointer)
+            return {};
+        const auto offset = hookContext.schemaSystem().getFieldOffset("CCSPlayerController", "m_sSanitizedClanTag");
+        if (!offset.has_value() || *offset <= 0)
+            return {};
+        char* value{};
+        std::memcpy(&value, reinterpret_cast<const std::byte*>(playerControllerPointer) + *offset, sizeof(value));
+        if (!value)
+            return {};
+        return value;
+    }
+
     // m_iPing - this controller's round-trip latency in milliseconds, as displayed on the scoreboard.
     // Used by the lag-comp record validity as velocity-cs2's one-way latency source (they read
     // INetChannel::GetLatency(FLOW_OUTGOING); halving the RTT gives the same quantity without needing

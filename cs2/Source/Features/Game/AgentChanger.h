@@ -6,6 +6,7 @@
 #include <CS2/Classes/Entities/C_BaseEntity.h>
 #include <CS2/Econ/ItemDefDatabase.h>
 #include <GameClient/SchemaSystem/SchemaReadiness.h>
+#include <GameClient/PawnSettle.h>
 #include <Utils/CrashLogger.h>
 #include <Features/Game/AgentChangerConfigVariables.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
@@ -109,6 +110,16 @@ public:
 
         if (auto&& localPawn = hookContext.activeLocalPlayerPawn()) {
             if (!localPawn.isAlive().value_or(false))
+                return;
+            // PAWN-SETTLE GATE (2026-09-27, crashes 02:14/10:12 - both map-load, both right
+            // after the fresh pawn spawned): the curtime gate above is BLIND during the join
+            // window (old map's large curtime until the GlobalVars swap - the 09-12 lesson),
+            // so SetModel still fired on a pawn whose model/animgraph state was mid-build
+            // (the same race as the documented 09-19 23:28 crash). CLOCK_MONOTONIC identity
+            // settle: the fresh pawn must be the local pawn for pawn_settle::kSettleNs
+            // before any model swap. Mid-round respawns re-arm the window too (rule 0:
+            // don't re-fire on a pawn identity change until the session gate passes).
+            if (!pawn_settle::ready(localPawn.rawPawn()))
                 return;
             applyToPawn(static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity()));
         }

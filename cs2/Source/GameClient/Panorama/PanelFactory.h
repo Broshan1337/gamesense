@@ -9,6 +9,7 @@
 #include <MemoryPatterns/PatternTypes/PanoramaLabelPatternTypes.h>
 #include <GameClient/Panorama/ClientPanel.h>
 #include <GameClient/Panorama/ImagePanel.h>
+#include <Utils/CrashLogger.h>
 
 template <typename HookContext>
 struct PanelFactory {
@@ -19,9 +20,26 @@ struct PanelFactory {
 
     [[nodiscard]] decltype(auto) createPanel(cs2::CUIPanel* parentPanel, const char* id = "") noexcept
     {
-        if (parentPanel && panelConstructor())
-            return hookContext.template make<ClientPanel>(panelConstructor()(id, parentPanel->clientPanel));
-        return hookContext.template make<ClientPanel>(nullptr);
+        // 0x378 entry / 0x379 created (2026-09-26 input-object destruction crash triage).
+        // 0x37D = parent null / 0x37E = constructor unresolved (the 2026-10-03 in-game
+        // session: 0x378 fires repeatedly with no 0x379 and no crash - name the failing leg).
+        CrashLogger::trace(0x378);
+        if (!parentPanel) {
+            // Debug instrumentation: trace the CALLER's return address as the code - a
+            // module VA (0x4xxxx range), unambiguous against the small game-path codes, so
+            // the live ring names exactly which caller passed the null parent. Remove once
+            // the panel-creation flow is verified.
+            CrashLogger::trace(reinterpret_cast<std::uintptr_t>(__builtin_return_address(0)));
+            CrashLogger::trace(0x37D);
+            return hookContext.template make<ClientPanel>(nullptr);
+        }
+        if (!panelConstructor()) {
+            CrashLogger::trace(0x37E);
+            return hookContext.template make<ClientPanel>(nullptr);
+        }
+        auto created = hookContext.template make<ClientPanel>(panelConstructor()(id, parentPanel->clientPanel));
+        CrashLogger::trace(0x379);
+        return created;
     }
 
     [[nodiscard]] decltype(auto) createLabelPanel(cs2::CUIPanel* parentPanel, const char* id = "") const noexcept

@@ -95,8 +95,22 @@ struct AimPunchAngles {
 // CURRENT tick and returns their sum - the live aim punch the game adds to the shoot angle (confirmed:
 // a caller `addps`es this straight into the view angle before firing). The aimbot subtracts it so a
 // spray stays on target as recoil kicks the view. Reads only - safe from the input hook. Only pitch/
-// yaw are used (roll is ~0 for aim punch). The trailing args are a reserved xmm slot and a roll input;
-// pass 0 to both (this zeroes xmm0/xmm1 regardless of which the roll input really occupies, and
-// neither affects pitch/yaw). Verified exactly one match across libclient.so.
-using GetAimPunchFn = AimPunchAngles(void* aimPunchServices, double reserved, float rollInput);
+// yaw are used (roll is ~0 for aim punch).
+//
+// 2026-09-27 SIGNATURE CORRECTION (the mid-match SEGV class, RE'd from build 68f386a6): the
+// 5GB update changed the signature. The current function takes (this, PunchAccumulator* in
+// RSI, float in XMM0): it builds a local {int tick, float angle} pair and ADDS it into the
+// CALLER-SUPPLIED accumulator via 0x2F072D0 - which reads [rsi]/[rsi+4] UNCONDITIONALLY (no
+// null guard) - before interpolating the history (0x15173A0). The old "(double reserved,
+// float rollInput)" contract belonged to the pre-update function; calling the new one with
+// garbage in rsi fed an unmapped/garbage pair into the accumulator, the interpolation index
+// collapsed to cvttss2si's indefinite value (0x80000000 = INT_MIN - what cvttss2si returns
+// for NaN/overflow) and the history walk faulted at [history + INT_MIN*12] - both mid-match
+// crashes faulted at exactly array - 0x600000000, the INT_MIN*12 offset, verified to the byte.
+// A standalone read passes a ZEROED accumulator = zero extra accumulation = the base punch.
+struct PunchAccumulator {
+    std::int32_t tick;
+    float angle;
+};
+using GetAimPunchFn = AimPunchAngles(void* aimPunchServices, PunchAccumulator* accumulator, float interpInput);
 STRONG_TYPE_ALIAS(PointerToGetAimPunchFunction, GetAimPunchFn*);

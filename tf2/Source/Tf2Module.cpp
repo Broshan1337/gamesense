@@ -16,7 +16,7 @@ namespace ns_tf2 {
 // ---- session binding (see cs2/Source/Utils/SessionBind.h for the full rationale) ----
 //
 // The loader stamps every module it injects with a 64-byte trailer after the ELF image:
-// "NSHB01" | pad[2] | u64 loaderPid | session[16] | proof[32] = session XOR key.
+// "NSHB02" | pad[2] | u64 loaderPid | loaderComm[16] | proof[32] = loaderComm XOR key.
 // A module re-injected standalone from a dump has no trailer -> fails closed (inert).
 // TF2 keeps the module mapped but installs NO hooks (no self-unload machinery here; the
 // loader can still dlclose it normally).
@@ -68,8 +68,8 @@ bool verifyInjectionTrailer(long long* loaderPidOut)
     }
     close(fd);
 
-    // "NSHB01" XOR-obfuscated (see cs2/Source/Utils/SessionBind.h)
-    static const unsigned char kMagicObf[6] = {0x14, 0x09, 0x12, 0x18, 0x6A, 0x6B};
+    // "NSHB02" XOR-obfuscated (see cs2/Source/Utils/SessionBind.h)
+    static const unsigned char kMagicObf[6] = {0x14, 0x09, 0x12, 0x18, 0x6A, 0x68};
     unsigned char magic[6];
     for (int i = 0; i < 6; ++i)
         magic[i] = static_cast<unsigned char>(kMagicObf[i] ^ 0x5A);
@@ -78,8 +78,13 @@ bool verifyInjectionTrailer(long long* loaderPidOut)
     long long pid = 0;
     for (int i = 7; i >= 0; --i)
         pid = (pid << 8) | trailer[8 + i];
+    // The proof mixes the TARGET pid the loader stamped (2026-09-24): a copied memfd file
+    // re-injected elsewhere carries the old pid - proof mismatch -> bricked. The loader
+    // stamps proof = comm ^ key ^ targetPid; recompute with our own getpid().
+    const auto ownPid = static_cast<unsigned long long>(getpid());
     for (int i = 0; i < 32; ++i) {
-        if (trailer[32 + i] != static_cast<unsigned char>(trailer[16 + (i % 16)] ^ key[i]))
+        const auto targetByte = static_cast<unsigned char>((ownPid >> ((i % 8) * 8)) & 0xff);
+        if (trailer[32 + i] != static_cast<unsigned char>(trailer[16 + (i % 16)] ^ key[i] ^ targetByte))
             return false;
     }
     if (loaderPidOut)

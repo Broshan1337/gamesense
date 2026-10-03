@@ -36,7 +36,14 @@ struct SchemaSystemPatterns {
             // The two `je` displacements stay wildcarded - they are position-dependent. If a future
             // update moves the shared helper by >= 0x100 the DC anchor shifts and this pattern
             // degrades to not-found (logged), never to a wrong-function match.
-            .template addPattern<PointerToSchemaFindDeclaredClassOrEnum, CodePattern{"55 48 89 E5 41 57 41 56 41 55 49 89 FD 41 54 53 48 83 EC 08 48 85 F6 0F 84 ? ? ? ? 45 31 E4 80 3E 00 48 89 F3 0F 84 ? ? ? ? 48 89 F7 E8 3C DC"}>()
+            // 2026-09-23 update (1.41.8.2): exactly the case the note above predicted - the
+            // shared strlen helper moved again, so the E8-disp anchor bytes rotated
+            // (DC -> D9 low byte at twin +0x30..0x31; enum twin now D6). Same fix shape:
+            // extended exact bytes through the first divergence between the recompiled
+            // twins (verified 0x31 identical bytes, class twin calls 0x39180 = strlen
+            // helper, enum twin disp low byte D6). The two `je` displacements stay
+            // wildcarded - position-dependent.
+            .template addPattern<PointerToSchemaFindDeclaredClassOrEnum, CodePattern{"55 48 89 E5 41 57 41 56 41 55 49 89 FD 41 54 53 48 83 EC 08 48 85 F6 0F 84 ? ? ? ? 45 31 E4 80 3E 00 48 89 F3 0F 84 ? ? ? ? 48 89 F7 E8 CC D9"}>()
             // void BeginFieldIterator(FieldIterator* outIter, CSchemaClassBinding* classBinding, int32_t kind)
             //
             // The original 31-byte version of this pattern (just the shared "movabs rax,0x80...08;

@@ -72,6 +72,19 @@ public:
         return result;
     }
 
+    // Reads the single byte at the offset, sign-extended to 32 bits (see Read8 in
+    // CodePatternOperation.h for why this exists).
+    [[nodiscard]] std::array<std::byte, 8> read8() const noexcept
+    {
+        std::array<std::byte, 8> result{};
+        if (base && foundPatternBytes.size() > extraOffset) {
+            const auto value = static_cast<std::int8_t>(foundPatternBytes[extraOffset]);
+            const auto extended = static_cast<std::int32_t>(value);
+            std::memcpy(result.data(), &extended, sizeof(extended));
+        }
+        return result;
+    }
+
     [[nodiscard]] std::array<std::byte, 8> get() const noexcept
     {
         std::array<std::byte, 8> result{};

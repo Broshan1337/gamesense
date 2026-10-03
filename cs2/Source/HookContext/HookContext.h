@@ -1,10 +1,12 @@
 #pragma once
 
 #include <optional>
+#include <ctime>
 
 #include <CS2/Classes/CCvar.h>
 #include <Config/Config.h>
 #include <GameClient/SchemaSystem/SchemaReadiness.h>
+#include <GameClient/PawnSettle.h>
 #include <GameClient/Entities/GameRules.h>
 #include <GameClient/Entities/PlantedC4.h>
 #include <GameClient/Entities/PlayerController.h>
@@ -298,7 +300,17 @@ struct HookContext {
 
     [[nodiscard]] decltype(auto) localPlayerBulletInaccuracy() noexcept
     {
-        return activeLocalPlayerPawn().getActiveWeapon().bulletInaccuracy();
+        // MAP-TRANSITION SESSION GATE (AGENTS.md rule 0; the 2026-09-27 map-load crash class):
+        // GetInaccuracy/GetSpread/UpdateAccuracyPenalty are direct game-function calls on the
+        // local pawn's ACTIVE WEAPON - on a freshly-spawned pawn (map join) the weapon entities
+        // are mid-build and the calls walk unconstructed state, the same class as the GetAimPunch
+        // crash. Same CLOCK_MONOTONIC pawn-settle gate as aimPunchAngle (curtime is blind during
+        // the join window). {} until the pawn has been stable for the settle window - callers
+        // (Triggerbot, Aimbot, SpreadCircleVis, NoScopeInaccuracyVis) all treat {} as "unknown".
+        auto&& pawn = activeLocalPlayerPawn();
+        if (!pawn || !pawn_settle::ready(pawn.rawPawn()))
+            return Optional<float>{};
+        return pawn.getActiveWeapon().bulletInaccuracy();
     }
 
     [[nodiscard]] decltype(auto) playerResource()
@@ -334,9 +346,27 @@ private:
 
     [[nodiscard]] bool pastOffsetResolveDeadline() noexcept
     {
-        const auto mapTime = globalVars().curtime();
-        return mapTime.hasValue() && mapTime.value() >= schema_readiness::kGiveUpMapTime;
+        // THE 2026-10-03 LESSON: this used to be curtime-based (30s of map time). Injecting
+        // into an ALREADY-RUNNING match means curtime is past 30 on the very first touch,
+        // so a single failed schema resolve was cached as zeros for the whole session and
+        // the schema-fed features (accuracy, mesh-group chain) silently died. The give-up
+        // is now a WALL-CLOCK window from module load (CLOCK_MONOTONIC): a mid-match inject
+        // still gets its full retry window, and a field genuinely removed by a game update
+        // still stops the per-frame walk. Function-local statics are off the table (the
+        // test harness links without __cxa_guard; the codebase idiom = inline statics).
+        return nowMs() - resolveWindowStartMs > 60000;
     }
+
+    [[nodiscard]] static std::uint64_t nowMs() noexcept
+    {
+        timespec ts{};
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return static_cast<std::uint64_t>(ts.tv_sec) * 1000 + ts.tv_nsec / 1000000;
+    }
+
+    // The retry window anchor (module load). Immaterial when exactly it starts - what
+    // matters is that the window does NOT depend on curtime.
+    inline static std::uint64_t resolveWindowStartMs{nowMs()};
 
     [[nodiscard]] cs2::CPlantedC4* getPlantedC4() const noexcept
     {

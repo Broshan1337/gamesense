@@ -7,9 +7,12 @@
 #include "hooks/vac_hook.h"
 #include "Platform/SelfUnload.h"
 #include "Utils/ReturnAddress.h"
+#include <Utils/CrashLogger.h>
 #include <Utils/RetAddrSpoofer.h>
 #include <Utils/SessionBind.h>
+#include <Security/Honeypots.h>
 #include "Utils/StatusReport.h"
+#include <cstdlib>
 #include "Utils/VerifyConsole.h"
 
 #include <SDL3/SDL_events.h>
@@ -337,13 +340,34 @@
     // (early startup) - ViewRenderHook_onRenderStart retries it every frame until it sticks.
     // NOTE: the PeepEvents hook deliberately STAYS enabled from here on (it used to disable
     // itself after serving as the init trigger) - it is the menu's input feed now.
+    honey::keepAlive(); // honey decodes: keeps the decoy bodies/strings in the binary (returns immediately)
     if (GUI::init())
         (void)VulkanHook::tryInstall(); // false = libvulkan not mapped yet; retried per frame below
 
+    // 2026-09-26 crash isolation: per-hook env switches (Steam launch options, e.g.
+    // "NS_DISABLE_GEM_HOOK=1 %command%"). NS_DISABLE_VTABLE_HOOKS=1 = all three at once.
+    // ViewRender stays (it carries the config pipeline + the ESP panel path). The
+    // 09-26/27 crash families: (a) the original tier0-free signature - returned when the
+    // CSGOInput hook came back on, (b) the engine2 #GP on the NaN-poisoned global - fixed
+    // with the offset-pattern audit. The GEM hook is the prime remaining suspect: its
+    // hooked object's identity and the clone-length math are unverified on this build.
+    const bool vtableHooksDisabled = std::getenv("NS_DISABLE_VTABLE_HOOKS") != nullptr;
+    const bool gemDisabled = vtableHooksDisabled || std::getenv("NS_DISABLE_GEM_HOOK") != nullptr;
+    const bool fsnDisabled = vtableHooksDisabled || std::getenv("NS_DISABLE_FSN_HOOK") != nullptr;
+    const bool inputDisabled = vtableHooksDisabled || std::getenv("NS_DISABLE_INPUT_HOOK") != nullptr;
+    if (gemDisabled)
+        StatusReport::record("GEM hook fail-closed (bisect switch)", true);
+    if (fsnDisabled)
+        StatusReport::record("FSN hook fail-closed (bisect switch)", true);
+    if (inputDisabled)
+        StatusReport::record("CSGOInput hook fail-closed (bisect switch)", true);
+    if (!fsnDisabled)
+        hookContext.hooks().source2ClientHook.install();
+    if (!gemDisabled)
+        hookContext.hooks().gameEventManagerHook.install();
+    if (!inputDisabled)
+        hookContext.hooks().csgoInputHook.install();
     hookContext.hooks().viewRenderHook.install();
-    hookContext.hooks().source2ClientHook.install();
-    hookContext.hooks().gameEventManagerHook.install();
-    hookContext.hooks().csgoInputHook.install();
     // CHEAT O METER voice receive tap: VMT hook on the CNetworkMessages ReadFromBuffer slot -
     // pass-through unless the analyzer's VoiceProbe toggle stages packets for the [vtap] probe.
     (void)voice_tap::install();
@@ -370,8 +394,13 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
 
     HookQuiesce::InFlight flight;
     const auto initInProgress = !HookContext<GlobalContext>::isGlobalContextComplete();
-    if (initInProgress)
+    if (initInProgress) {
+        // SESSION BIND FIRST (hardening 2026-09-24): the pattern vault's runtime lock must be
+        // armed from the injection trailer BEFORE the pools unseal for their one and only
+        // scan. Fail-closed: an unverified module releases itself and the pools never decrypt.
+        session_bind::verifyOnce([] { GUI::requestUnload(); });
         HookContext<GlobalContext>::initCompleteGlobalContextFromGameThread();
+    }
 
     HookContext<GlobalContext> hookContext;
 
@@ -419,6 +448,14 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     hookContext.template make<FakeCommends>().onUnload();
     hookContext.template make<MatchAutoAccept>().onUnload();
     hookContext.template make<CooldownRevealer>().onUnload();
+    hookContext.template make<ChatTools>().restoreClanTag();
+    // Remove this session's integrity-baseline report (loader watchdog liveness signal).
+    {
+        char path[64];
+        if (const int written = std::snprintf(path, sizeof(path), "/tmp/ns_module_integrity_%d",
+                LinuxPlatformApi::processId()); written > 0 && written < static_cast<int>(sizeof(path)))
+            ::unlink(path);
+    }
     hookContext.template make<userinfo_flood::UserInfoFlood>().onUnload();
     hookContext.template make<server_lagger::ServerLagger>().onUnload();
     // Feature-owned code patches (legs render skip, post-hud layer skip) and the scene-render
@@ -668,6 +705,11 @@ bool GameEventManagerHook_onFireEventClientSide(cs2::IGameEventManager2* thisptr
 // AFTER it and edit the finished command. Running first would just have the original overwrite it.
 void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCmd* cmd) noexcept
 {
+    // 0x370 entry / 0x371 normal tail (2026-09-26 22:15 crash: the game destroyed an
+    // input-system object whose per-slot command ring held a dead-stack pointer; these
+    // breadcrumbs prove which input path ran last, see hud_root_walk 0x376/0x377 for the
+    // ESP panel path)
+    CrashLogger::trace(0x370);
     const bool shuttingDown = HookQuiesce::isShuttingDown();
     if (shuttingDown && !HookContext<GlobalContext>::isGlobalContextComplete())
         return;
@@ -781,6 +823,7 @@ void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCm
     // Lua scripts: one "createmove" callback batch per input tick, after all native features.
     // The tick's own command goes along so the cmd.* bindings can read/steer it (game-thread
     // lifetime only - the pointer is dead the moment this returns).
+    CrashLogger::trace(0x371);
     lua::dispatchTick(cmd);
 }
 
@@ -792,6 +835,7 @@ void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCm
 // protobuf fields, the per-subtick analog deltas - is then produced by the game itself.
 std::uint64_t CSGOInputHook_onBuildUserCmd(cs2::CCSGOInput* thisptr, int slot, int frameNumber) noexcept
 {
+    CrashLogger::trace(0x372);
     const bool shuttingDown = HookQuiesce::isShuttingDown();
     if (shuttingDown && !HookContext<GlobalContext>::isGlobalContextComplete())
         return 0;
@@ -803,6 +847,7 @@ std::uint64_t CSGOInputHook_onBuildUserCmd(cs2::CCSGOInput* thisptr, int slot, i
         hookContext.template make<Bunnyhop>().onBuildUserCmd(thisptr, slot);
         hookContext.template make<Movement>().onBuildUserCmd(thisptr, slot);
     }
+    CrashLogger::trace(0x373);
     return hookContext.hooks().csgoInputHook.getOriginalBuildUserCmd()(thisptr, slot, frameNumber);
 }
 
@@ -814,6 +859,7 @@ std::uint64_t CSGOInputHook_onBuildUserCmd(cs2::CCSGOInput* thisptr, int slot, i
 // one - slot 6 obtains its command by calling sub_15DAC30 rather than from any global.
 std::uint64_t CSGOInputHook_onWriteMoveCrc(cs2::CCSGOInput* thisptr, cs2::CUserCmd* cmd) noexcept
 {
+    CrashLogger::trace(0x374);
     const bool shuttingDown = HookQuiesce::isShuttingDown();
     if (shuttingDown && !HookContext<GlobalContext>::isGlobalContextComplete())
         return 0;
@@ -861,6 +907,7 @@ std::uint64_t CSGOInputHook_onWriteMoveCrc(cs2::CCSGOInput* thisptr, cs2::CUserC
         if (GET_CONFIG_VAR(movement_vars::Desubtick))
             SubtickMoves<HookContext<GlobalContext>>::stripAnalog(UserCmd{cmd}.baseMessage());
     }
+    CrashLogger::trace(0x375);
     return hookContext.hooks().csgoInputHook.getOriginalWriteMoveCrc()(thisptr, cmd);
 }
 
@@ -904,6 +951,14 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     // real reason for the wait: touching the offsets too early cached them all as 0 for the whole
     // session, so the gate had to guarantee the first touch was late enough to be correct. With
     // that fixed the gate only has to mean "the client is actually running".
+    // CLASSIFIER RETRY (the 2026-10-03 silent-death fix): EntityClassifier::init runs once
+    // at module init - in the MAIN MENU, where the entity-system global is still null - so
+    // every class lookup failed and ESP/glow/knife-skins stayed dead even after joining a
+    // map. Retry at the top of the feature layer until it fills (the check = one array
+    // read; the re-init = a full idempotent rebuild).
+    if (!hookContext.entityClassifier().initialized())
+        hookContext.entityClassifier().init(hookContext);
+
     if (const auto mapTime = hookContext.globalVars().curtime(); mapTime.hasValue() && mapTime.value() >= schema_readiness::kMinMapTime)
         hookContext.template make<SkinChanger>().run();
 
@@ -966,10 +1021,9 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     // orphaned module (loader died) releases after the ~5 min grace. Same teardown path as
     // the unload request below - proven graceful.
     {
-        static bool sbVerified = false;
-        static std::int64_t sbLoaderPid = 0;
-        static int sbMisses = 0;
-        session_bind::presentTick(sbVerified, sbLoaderPid, sbMisses, [] { GUI::requestUnload(); });
+        // The one-time verify may already have run on the SDL init thread (it must precede
+        // the pattern scan); the tick then only drives the loader liveness poll.
+        session_bind::presentTick([] { GUI::requestUnload(); });
     }
     if (GUI::consumeUnloadRequest())
         unloadFlag.set();

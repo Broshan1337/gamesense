@@ -133,7 +133,18 @@ public:
 
     [[nodiscard]] decltype(auto) children() const noexcept
     {
-        return PanoramaUiPanelChildPanels{hookContext, hookContext.patternSearchResults().template get<ChildPanelsVectorOffset>().of(panel).get()};
+        // 2026-09-26 5GB update: the children = two separate fields - the count at
+        // ChildPanelsCountOffset and the array at ChildPanelsArrayOffset = countOffset + 8.
+        // 2026-09-27: !panel guard - the HUD-root walk (and findChildInLayoutFile recursion
+        // during map teardown) legitimately produce a null panel; the 02:06 crash was this
+        // deref at [nullptr + countOffset] via Hud::getHudReticle -> findChildInLayoutFile.
+        const auto countOffset = hookContext.patternSearchResults().template get<ChildPanelsCountOffset>();
+        const auto arrayOffset = hookContext.patternSearchResults().template get<ChildPanelsArrayOffset>();
+        if (!panel || !countOffset || !arrayOffset)
+            return PanoramaUiPanelChildPanels{hookContext, nullptr, 0};
+        const auto childCount = *reinterpret_cast<const std::uint32_t*>(reinterpret_cast<std::uintptr_t>(panel) + countOffset.rawOffset());
+        const auto childArray = *reinterpret_cast<cs2::CUIPanel***>(reinterpret_cast<std::uintptr_t>(panel) + arrayOffset.rawOffset());
+        return PanoramaUiPanelChildPanels{hookContext, childArray, childCount};
     }
 
     explicit(false) operator cs2::CUIPanel*() const noexcept

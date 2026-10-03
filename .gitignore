@@ -44,3 +44,11 @@ Loader/
 
 # Third-party reference trees (not our code)
 packinghelper/
+
+# Local-only agent/AI docs and machine-specific config (never push)
+AGENTS.md
+NEXT_SESSION_PROMPT.md
+.mcp.json
+.qtcreator/
+.cache/
+*.tmp

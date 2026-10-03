@@ -89,4 +89,21 @@ CONFIG_VARIABLE_RANGE(KickKey, chat_params::kIntelBindParams);
 // mid-match `name` convar changes. Off = the name applies on your next natural reconnect.
 CONFIG_VARIABLE(NameForceReconnect, bool, false);
 
+// Clan tag spoof (2026-09-23 update added client-visible clan tags): in-place rewrite of the
+// local controller's m_sSanitizedClanTag string (schema-resolved). Local display only - the
+// NETWORKED tag is GC/Steam-clan authoritative (SetMyClanId32BitEquipped msg 0x240D) and
+// cannot be changed with arbitrary text from the client.
+CONFIG_VARIABLE(ClanTagEnabled, bool, false);
+
+// Clan tag ANIMATOR (2026-10-03): drives the SAME in-place m_sSanitizedClanTag rewrite frame
+// by frame from the /chat_clantag.txt source (local display only - no clan userinfo cvar
+// exists, the networked tag is GC-authoritative, so "setinfo clan" churn is impossible).
+// Appended LAST (order-sensitive parser). Speed semantics = the name animator's inverted
+// slider (high = fast; ticksPerFrame = 64 - Speed + 1).
+CONFIG_VARIABLE(ClanTagAnimateEnabled, bool, false);
+inline constexpr auto kClanTagAnimateModeParams = RangeConstrainedVariableParams<std::uint8_t>{.min = 1, .max = 6, .def = 1};
+CONFIG_VARIABLE_RANGE(ClanTagAnimateMode, kClanTagAnimateModeParams);
+inline constexpr auto kClanTagAnimateSpeedParams = RangeConstrainedVariableParams<std::uint8_t>{.min = 1, .max = 64, .def = 32};
+CONFIG_VARIABLE_RANGE(ClanTagAnimateSpeed, kClanTagAnimateSpeedParams);
+
 }

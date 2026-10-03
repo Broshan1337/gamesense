@@ -35,6 +35,12 @@ struct CodePattern {
         return *this;
     }
 
+    [[nodiscard]] consteval auto read8() noexcept
+    {
+        operation = CodePatternOperation::Read8;
+        return *this;
+    }
+
     BytePatternStorage<N> storage;
     std::uint8_t offset{};
     CodePatternOperation operation{CodePatternOperation::None};

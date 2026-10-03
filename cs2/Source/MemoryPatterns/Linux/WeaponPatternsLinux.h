@@ -9,8 +9,15 @@ struct WeaponPatterns {
         return clientPatterns
             .template addPattern<OffsetToClipAmmo, CodePattern{"74 ? 8B 87 ? ? ? ? C3"}.add(4).read()>()
             .template addPattern<OffsetToWeaponSceneObjectUpdaterHandle, CodePattern{"48 89 83 ? ? ? ? BE ? ? ? ? 48 89 DF"}.add(3).read()>()
-            .template addPattern<PointerToGetInaccuracyFunction, CodePattern{"55 48 89 E5 41 57 41 56 49 89 ? 41 55 49 89 ? 41 54 53 48 89 FB 48 83 EC ? E8"}>()
-            .template addPattern<PointerToGetSpreadFunction, CodePattern{"55 48 89 E5 48 83 EC ? 48 63"}>()
+            // 2026-09-23 1.41.8.2: GetInaccuracy moved to 0x148EF40 (vtable slot 0x5C8) and
+            // recompiled (r13=rdx, r12=rsi explicitly, stack 0x48); the leading E8 is the
+            // interval-per-tick getter as before. Verified exactly-once.
+            .template addPattern<PointerToGetInaccuracyFunction, CodePattern{"55 48 89 E5 41 57 41 56 41 55 49 89 D5 41 54 49 89 F4 53 48 89 FB 48 83 EC 48 E8"}>()
+            // 2026-09-23 1.41.8.2: GetSpread moved to 0x1490590 (vtable slot 0x5E8) and
+            // recompiled from the prologue+movsxd shape into a weapon-id dispatch
+            // (movzx eax,[rdi+0x2838]; cmp 0x321 first). A byte-identical twin exists in the
+            // same dispatch family, so the first cmp is load-bearing. Verified exactly-once.
+            .template addPattern<PointerToGetSpreadFunction, CodePattern{"55 48 89 E5 53 48 89 FB 48 83 EC 08 0F B7 87 38 28 00 00 66 3D 21 03"}>()
             // sub_1ADCAA0 - the per-shot spread SEED generator (see WeaponPatternTypes.h for the C
             // signature and RE trail). Anchors on the distinctive prologue
             // (push rbp / mov eax,edx / mov rbp,rsp / push rbx / sub rsp,0xD8) followed by
@@ -25,26 +32,51 @@ struct WeaponPatterns {
             // mov esi,-1 / mov [rbp],di (the int16 itemDef store), ending at the `lea rdi,[rip+...]`
             // whose displacement is wildcarded. Verified exactly 1 match in the current libclient.so
             // via the IDA find_bytes tool.
-            .template addPattern<PointerToCalculateSpreadFunction, CodePattern{"55 48 89 E5 41 57 41 56 41 89 CE 41 55 41 54 41 89 FC 53 4C 89 C3 48 83 EC 58 89 75 A8 BE FF FF FF FF 66 89 7D A0 48 8D 3D ? ? ? ?"}>()
+            // 2026-09-23 1.41.8.2: CalculateSpread moved to 0x1B49880 (found as the call that
+            // follows the spread-seed fn at the fire path, 0x14A21AF seed -> 0x14A2254 cone)
+            // and recompiled (r15=rdx, r13=r8, r12=rcx, ebx=edi, stack 0x458, args spilled to
+            // rbp immediately). Verified exactly-once.
+            .template addPattern<PointerToCalculateSpreadFunction, CodePattern{"55 48 89 E5 41 57 49 89 D7 41 56 41 55 4D 89 C5 41 54 49 89 CC 53 89 FB 48 81 EC 58 04 00 00 8B 45 40"}>()
             // sub_14537D0 - UpdateAccuracyPenalty (see WeaponPatternTypes.h). Anchors on the prologue
             // (push rbp / mov rbp,rsp / push r13 / push r12 / push rbx / mov rbx,rdi / sub rsp,0x18)
             // through `call <owner-getter> / test rax,rax / jz / mov rdi,rax / mov r12,rax / call`,
             // with the three relative call/jump displacements wildcarded. Verified exactly 1 match in
             // the current libclient.so via the IDA find_bytes tool.
-            .template addPattern<PointerToUpdateAccuracyPenaltyFunction, CodePattern{"55 48 89 E5 41 55 41 54 53 48 89 FB 48 83 EC 18 E8 ? ? ? ? 48 85 C0 0F 84 ? ? ? ? 48 89 C7 49 89 C4 E8"}>()
+            // 2026-09-23 1.41.8.2: UpdateAccuracyPenalty recompiled - r13 push dropped, the
+            // stack frame shrank to 0x10 and the field offsets moved (m_fAccuracyPenalty
+            // 0x2680 -> 0x28A8, m_flRecoilIndex 0x2690 -> 0x28B8, last-update 0x28AC - all
+            // schema-confirmed, verified in the decay math at 0x14947C0..0x1494814). The
+            // prologue + globals-call + test/je chain stays the anchor; verified exactly-once.
+            .template addPattern<PointerToUpdateAccuracyPenaltyFunction, CodePattern{"55 48 89 E5 41 54 53 48 89 FB 48 83 EC 10 E8 ? ? ? ? 48 85 C0 0F 84"}>()
             // sub_14D31A0 - the aim-punch getter (see WeaponPatternTypes.h). Anchors on the prologue
             // (push rbp / mov rbp,rsp / push r14 / push r13 / push r12 / push rbx / mov rbx,rdi /
             // add rsp,-0x80) through the `cmp dword[rip+disp], -1` init-flag check, its jz, a call, and
             // `mov esi,[rbx+0x48]` (the read of m_predictableBaseTick that fingerprints this as the
             // aim-punch getter). RIP displacement, jz and call targets wildcarded. Verified exactly 1
             // match in the current libclient.so via the IDA find_bytes tool.
-            .template addPattern<PointerToGetAimPunchFunction, CodePattern{"55 48 89 E5 41 56 41 55 41 54 53 48 89 FB 48 83 C4 80 83 3D ? ? ? ? FF 0F 84 ? ? ? ? E8 ? ? ? ? 8B 73 48"}>()
-            // Prologue of the function bound to the "regenerate_weapon_skins" ConCommand
-            // (confirmed via xref from the string + IDA decompilation, not signature-guessed).
-            // Uniqueness across the whole client.so has not been exhaustively confirmed yet -
-            // r2's /x search is too slow over this binary in this environment to finish a full
-            // scan (same known limitation as two of the schema-system patterns).
-            .template addPattern<PointerToRegenerateWeaponSkin, CodePattern{"55 48 89 E5 41 57 41 56 41 55 41 54 41 89 F4 BE FF FF FF FF 53 48 89 FB 48 8D 3D ? ? ? ? 48 81 EC 28 03 00 00 E8 ? ? ? ? 48 85 C0 0F 84"}>()
+            // 2026-09-23 1.41.8.2: GetAimPunch moved to 0x1516720 and recompiled (a movsldup
+            // head, r15 carries the roll input, r13/r12 reshuffled; predictable/unpredictable
+            // punch offsets unchanged per schema: 0x48/0x4C/0x50/0x5C + 0xA0/0xA4). The
+            // leading movsldup keeps it unique; verified exactly-once.
+            .template addPattern<PointerToGetAimPunchFunction, CodePattern{"F3 0F 12 F1 55 48 89 E5 41 57 66 41 0F 7E CF 41 56 41 55 49 89 F5 BE 01 00 00 00 41 54 4C 8D 65 C4 53 48 89 FB 4C 89 E7 4C 8D 73 5C"}>()
+            // C_CSWeaponBase::RegenerateSkin(this /*rdi*/, bool forceHighRes /*sil*/) - the
+            // PER-WEAPON fn. 2026-09-27 (build dce58989) CORRECTION of a latent 09-23
+            // re-anchor bug (THE "skins broken" root): the 09-23 anchor followed the
+            // regenerate_weapon_skins ConCommand thunk into the ConCommand HANDLER BODY - an
+            // iterator taking only a bool in dil which regenerates EVERY weapon in the list
+            // (it calls the per-weapon fn itself per element). Our regenerate(baseWeapon,
+            // false) therefore ran that iterator since 09-23: the weapon pointer's LOW BYTE
+            // was read as forceHighRes (heap addresses = almost always nonzero = the
+            // "forceHighRes=true" death-SEGV class documented in BaseWeapon.h) and every skin
+            // apply regenerated the whole weapon list. The per-weapon fn on dce58989 =
+            // 0x1491950, verified by its own semantic chain (vdata getter 0xd8c540 ->
+            // readiness virtuals [+0x4e8]/[+0xaf0] -> devirt check vtable+0xC50 ->
+            // m_pSubclassVData [this+0x4f8] -> [+0x520] compare = the exact documented +1312
+            // field) and by the game's own skin-update call sites (0x15d32b7/0x15d33e6).
+            // Forged with pattern_forge.py forge --direct (literal prologue, exactly-once,
+            // match == target; the fn is referenced only by call rel32, which the default
+            // rip-ref forge does not see).
+            .template addPattern<PointerToRegenerateWeaponSkin, CodePattern{"55 48 89 E5 41 57 41 56 49 89 FE 41 55 41 54 49 89 F4 53 48 81 EC 88 02 00 00"}>()
             // C_EconItemView::SetAttributeValueByName(this, const char* attributeName, float
             // value) - the real internal attribute-write path. Found via string xref to
             // "set item texture wear"/"prefab"/"seed" (the same attribute names the
@@ -66,7 +98,10 @@ struct WeaponPatterns {
             // that independently schema-resolves to m_nSubclassID (see EntitySubclassOffsets.h)
             // - strong independent confirmation this is the right function on the right object.
             // Verified unique across the whole binary via an independent Python byte scan.
-            .template addPattern<PointerToResolveSubclassData, CodePattern{"55 48 89 E5 41 57 49 89 FF 41 56 41 55 41 54 53 48 81 EC 48 01 00 00 48 8B 07 FF 90 18 06 00 00 89 C3 41 8B"}>()
+            // 2026-09-23 1.41.8.2: ResolveSubclassData moved to 0x1C660A0 (recompiled - r6d
+            // args, stack 0x68, the vtable+0x618 GetSubclassID call at 0x1C6616B survives
+            // inside). Verified exactly-once.
+            .template addPattern<PointerToResolveSubclassData, CodePattern{"55 48 89 E5 41 57 41 56 41 89 D6 41 55 41 54 41 89 F4 53 48 89 FB 48 83 EC 68 E8"}>()
             // The real UpdateWeaponData(). Found via string xref to "Re-creating weapon hudmodel
             // due to vdata subclass model change." - see the type alias comment (C_CSWeaponBase.h)
             // for the full RE trail, including the later discovery (via a full decompile of the
@@ -78,6 +113,8 @@ struct WeaponPatterns {
             // shorter 16-byte prefix was NOT unique - 5 matches - had to extend to 24 bytes, a
             // clean instruction boundary right after the `cmp esi, 1 / je` that gates the
             // changeType==1-specific behavior).
+            // 2026-09-23 1.41.8.2: UpdateWeaponData moved to 0x14D78D0 - same prologue+tail
+            // (cmp esi,1; je +0x18) as before; verified exactly-once.
             .template addPattern<PointerToUpdateWeaponData, CodePattern{"55 48 89 E5 41 55 41 54 41 89 F4 53 48 89 FB 48 83 EC 08 83 FE 01 74 18"}>()
             // The real UpdateSubclass() (sub_DDE400), confirmed via the user's own IDA
             // analysis. See the type alias comment (C_CSWeaponBase.h) for the full trail.

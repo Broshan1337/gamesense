@@ -217,10 +217,14 @@ private:
 
     static inline std::atomic<int> validationState{kValidationUnknown};
 
-    // Sanity: TraceShape must start with its recorded prologue (the signature contains the same
-    // bytes; this re-check catches a resolve that landed on a coincidental sibling).
-    static constexpr std::array<std::uint8_t, 16> kTraceShapeSignature{
-        0x55, 0x48, 0x89, 0xE5, 0x41, 0x57, 0x49, 0x89, 0xCF, 0x41, 0x56, 0x49, 0x89, 0xF6, 0x41, 0x55};
+    // Sanity: TraceShape must start with its recorded prologue (this re-check catches a resolve
+    // that landed on a coincidental sibling). 2026-09-27: the real TraceShape (0x16F69C0 on
+    // build 68f386a6) opens with `55 48 8D 05 <disp32> 48 89 E5 41 57 49 89 F7` - the OLD
+    // contiguous prologue matched a DIFFERENT wrapper fn after the 5GB update and traces called
+    // it with Vector args it walked as objects (mid-match SIGSEGV). Check the two fixed
+    // segments around the rip-disp32 hole.
+    static constexpr std::array<std::uint8_t, 4> kTraceShapePrefix{0x55, 0x48, 0x8D, 0x05};
+    static constexpr std::array<std::uint8_t, 8> kTraceShapeAfterDisp{0x48, 0x89, 0xE5, 0x41, 0x57, 0x49, 0x89, 0xF7};
     static constexpr std::array<std::uint8_t, 16> kEntityToHandleSignature{
         0x48, 0x85, 0xFF, 0x74, 0x3B, 0x48, 0x8B, 0x57, 0x10, 0xB8, 0xFF, 0xFF, 0xFF, 0xFF, 0x48, 0x85};
 
@@ -231,8 +235,8 @@ private:
 
     [[nodiscard]] static bool runValidation(const tracing_sigs::Anchors& anchors) noexcept
     {
-        static constexpr std::array<std::uint8_t, 4> kPrologue{0x55, 0x48, 0x89, 0xE5};
-        const bool intact = std::memcmp(reinterpret_cast<const void*>(anchors.traceShape), kTraceShapeSignature.data(), kTraceShapeSignature.size()) == 0
+        const bool intact = bytesMatch(anchors.traceShape, kTraceShapePrefix.data(), kTraceShapePrefix.size())
+            && bytesMatch(anchors.traceShape + 8, kTraceShapeAfterDisp.data(), kTraceShapeAfterDisp.size())
             && std::memcmp(reinterpret_cast<const void*>(anchors.entityToHandle), kEntityToHandleSignature.data(), kEntityToHandleSignature.size()) == 0;
         if (!intact) {
             StatusReport::record("Tracing: signatures drifted - traces fail closed", false);

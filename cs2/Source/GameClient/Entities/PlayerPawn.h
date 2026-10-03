@@ -11,6 +11,7 @@
 #include <CS2/Classes/Entities/CCSPlayerController.h>
 #include <CS2/Classes/ConVarTypes.h>
 #include <CS2/Classes/Vector.h>
+#include <GameClient/PawnSettle.h>
 #include <Utils/Optional.h>
 #include <Utils/Trig.h>
 #include <GameClient/Entities/TeamNumber.h>
@@ -50,6 +51,12 @@ public:
         return playerPawn != nullptr;
     }
 
+    // Raw pawn identity for the pawn-settle session gate (CLOCK_MONOTONIC identity tracking).
+    [[nodiscard]] cs2::C_CSPlayerPawn* rawPawn() const noexcept
+    {
+        return playerPawn;
+    }
+
     template <template <typename...> typename EntityType>
     [[nodiscard]] decltype(auto) cast() const noexcept
     {
@@ -77,6 +84,15 @@ public:
         if (!playerPawn)
             return {};
 
+        // MAP-TRANSITION SESSION GATE (AGENTS.md rule 0; the 2026-09-27 map-load crash):
+        // GetAimPunch walks the pawn's aim-punch history at [services+0x28], which is not
+        // built yet on a freshly-spawned pawn - the game itself only calls it after the
+        // entity is fully constructed. Covers every reader (Removals view-punch, Rcs,
+        // Aimbot, Triggerbot x2) in one place. CLOCK_MONOTONIC pawn-settle, NOT curtime -
+        // curtime is blind during the join window (old map's value until the GlobalVars swap).
+        if (!pawn_settle::ready(playerPawn))
+            return {};
+
         const auto servicesOffset = hookContext.schemaSystem().getFieldOffset("C_CSPlayerPawn", "m_pAimPunchServices");
         if (!servicesOffset.has_value() || *servicesOffset <= 0)
             return {};
@@ -90,9 +106,12 @@ public:
         if (!getAimPunch)
             return {};
 
-        // Reserved xmm slot and roll input both 0 (see PointerToGetAimPunchFunction) - neither affects
-        // the pitch/yaw the aimbot uses.
-        const auto punch = getAimPunch(services, 0.0, 0.0f);
+        // 2026-09-27 signature correction: the update added a caller-supplied accumulator
+        // pair in rsi (read unconditionally, no null guard). A zeroed pair = zero extra
+        // accumulation = the base predictable punch, which is what a standalone read wants.
+        // The old call left rsi = an uncontrolled register - the mid-match SEGV class.
+        PunchAccumulator zeroAccumulator{0, 0.0f};
+        const auto punch = getAimPunch(services, &zeroAccumulator, 0.0f);
         return cs2::Vector{punch.pitch, punch.yaw, punch.roll};
     }
 

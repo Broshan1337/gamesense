@@ -17,7 +17,10 @@ STRONG_TYPE_ALIAS(SetVisibleFunctionOffset, FieldOffset<const void, cs2::CUIPane
 STRONG_TYPE_ALIAS(GetAttributeStringFunctionOffset, FieldOffset<const void, cs2::CUIPanel::getAttributeString, std::int32_t>);
 STRONG_TYPE_ALIAS(SetAttributeStringFunctionOffset, FieldOffset<const void, cs2::CUIPanel::setAttributeString, std::int32_t>);
 
-STRONG_TYPE_ALIAS(ChildPanelsVectorOffset, PanoramaUiPanelOffset<cs2::CUIPanel::childrenVector, std::int8_t>);
+// 2026-09-26 5GB update: the children storage split - the count (uint32) at +0x2C8 and
+// the array (CUIPanel**) at +0x2D0, both int32-offsets (0x2C8/0x2D0 overflow int8_t).
+STRONG_TYPE_ALIAS(ChildPanelsCountOffset, PanoramaUiPanelOffset<std::uint32_t, std::int32_t>);
+STRONG_TYPE_ALIAS(ChildPanelsArrayOffset, PanoramaUiPanelOffset<cs2::CUIPanel*, std::int32_t>);
 STRONG_TYPE_ALIAS(PanelClassesVectorOffset, PanoramaUiPanelOffset<cs2::CUIPanel::classesVector, std::int32_t>);
 STRONG_TYPE_ALIAS(PanelStyleOffset, PanoramaUiPanelOffset<cs2::CPanelStyle, std::int8_t>);
 STRONG_TYPE_ALIAS(ParentWindowOffset, PanoramaUiPanelOffset<cs2::CTopLevelWindow*, std::int8_t>);

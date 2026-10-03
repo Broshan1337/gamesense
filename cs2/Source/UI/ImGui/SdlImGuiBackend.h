@@ -185,9 +185,6 @@ struct Functions {
     bool (*getWindowSize)(SDL_Window*, int*, int*) = nullptr;
     bool (*getWindowSizeInPixels)(SDL_Window*, int*, int*) = nullptr;
     SDL_WindowFlags (*getWindowFlags)(SDL_Window*) = nullptr;
-    bool (*textInputActive)(SDL_Window*) = nullptr;
-    bool (*startTextInput)(SDL_Window*) = nullptr;
-    bool (*stopTextInput)(SDL_Window*) = nullptr;
     char* (*getClipboardText)() = nullptr;
     bool (*setClipboardText)(const char*) = nullptr;
     void (*free)(void*) = nullptr;
@@ -231,9 +228,6 @@ inline bool videoDriverResolved = false;
     functions.getWindowSize = sdl.getFunctionAddress("SDL_GetWindowSize").as<decltype(functions.getWindowSize)>();
     functions.getWindowSizeInPixels = sdl.getFunctionAddress("SDL_GetWindowSizeInPixels").as<decltype(functions.getWindowSizeInPixels)>();
     functions.getWindowFlags = sdl.getFunctionAddress("SDL_GetWindowFlags").as<decltype(functions.getWindowFlags)>();
-    functions.textInputActive = sdl.getFunctionAddress("SDL_TextInputActive").as<decltype(functions.textInputActive)>();
-    functions.startTextInput = sdl.getFunctionAddress("SDL_StartTextInput").as<decltype(functions.startTextInput)>();
-    functions.stopTextInput = sdl.getFunctionAddress("SDL_StopTextInput").as<decltype(functions.stopTextInput)>();
     functions.getClipboardText = sdl.getFunctionAddress("SDL_GetClipboardText").as<decltype(functions.getClipboardText)>();
     functions.setClipboardText = sdl.getFunctionAddress("SDL_SetClipboardText").as<decltype(functions.setClipboardText)>();
     functions.free = sdl.getFunctionAddress("SDL_free").as<decltype(functions.free)>();
@@ -262,7 +256,6 @@ inline SDL_WindowID windowId = 0;
 inline std::uint64_t time = 0;
 inline std::uint32_t mousePendingLeaveFrame = 0;
 inline std::uint32_t mouseButtonsDown = 0;
-inline bool textInputWasWanted = false;
 
 // Raw scancode/button state for the keybind-capture widget (the config binds store SDL
 // scancodes, not layout keycodes, so ImGui's key state alone is not enough). Index ranges:
@@ -543,12 +536,13 @@ inline void newFrame(bool menuOpen) noexcept
         io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
     }
 
-    // Text input lifecycle: SDL only produces SDL_EVENT_TEXT_INPUT while text input is active.
-    if (io.WantTextInput && !textInputWasWanted && functions.startTextInput)
-        functions.startTextInput(window);
-    else if (!io.WantTextInput && textInputWasWanted && functions.stopTextInput)
-        functions.stopTextInput(window);
-    textInputWasWanted = io.WantTextInput;
+    // DELIBERATELY no SDL_StartTextInput/SDL_StopTextInput lifecycle here (imgui_impl_sdl3
+    // does it, we must not): our text comes from scancode synthesis (see scancodeToChar) and
+    // SDL_EVENT_TEXT_INPUT is never consumed, so toggling the window's text-input state only
+    // reaches one shared victim - the GAME's own text input. A menu text field focused over
+    // the CS2 console/party chat, then a menu close, SDL_StopTextInput'd the game's active
+    // session and Panorama never restarted it: no typing in console/chat until uninject.
+    // The game owns the text-input state on its own window; we stay out of it entirely.
 }
 
 }

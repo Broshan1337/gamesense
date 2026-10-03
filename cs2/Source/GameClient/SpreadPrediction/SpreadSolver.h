@@ -135,28 +135,22 @@ public:
     // the full buffer it demands and read index 0.
     [[nodiscard]] cs2::Vector spreadOffset(std::uint32_t seed, const WeaponSpreadParams& params) const noexcept
     {
-        cs2::Vector out{};
-        const auto spreadFn = hookContext.patternSearchResults().template get<PointerToCalculateSpreadFunction>();
-        if (!spreadFn)
-            return out;
-
-        // Sanity-gate the values that size the output buffer (and would multiply into the game's
-        // write loop). recoilIndex is a float read off the weapon entity; NaN fails both range
-        // comparisons and is rejected. Fail CLOSED: nonsense state = "no predicted deflection".
-        const int recoilSteps = static_cast<int>(params.recoilIndex);
-        if (params.numBullets <= 0 || params.numBullets > kMaxNumBullets
-            || !(params.recoilIndex >= 0.0f && params.recoilIndex <= kMaxRecoilIndex))
-            return out;
-        const int steps = params.numBullets * (recoilSteps + 1);
-        if (steps > kMaxSpreadSteps)
-            return out;
-
-        float outX[kMaxSpreadSteps];
-        float outY[kMaxSpreadSteps];
-        spreadFn(params.itemDefinitionIndex, params.numBullets, 0, seed + 1u, params.inaccuracy, params.spread, params.recoilIndex, outX, outY);
-        out.x = outX[0];
-        out.y = outY[0];
-        return out;
+        // FAIL-CLOSED (2026-09-27, the 5GB update): CalculateSpread's ABI changed from the
+        // 9-argument cone generator to a ~16-argument shot-simulation context API - RE'd from
+        // the game's own spread pipeline caller (0x14A348C on build 68f386a6):
+        //   rdi = item def index (via 0x2ED8090(activeWeapon-owner)), rsi = the WEAPON entity
+        //   (null-checked pointer where our old ABI passed numBullets!), rdx = a null-checked
+        //   pointer from 0x1FBBDB0(weapon), rcx = a caller-built local struct, r8 = the angles
+        //   buffer, r9d = ?, xmm0/1/2 = inaccuracy + two more floats, then 11 stack args
+        //   (seed first, then more ints/pointers/struct addrs). Our old 9-arg call left
+        //   numBullets in the weapon-pointer slot -> the fn's own 0x1FBBDB0 call dereferenced
+        //   it as a pointer (crash-in-waiting), and mode=0 hit the null-checked pointer slot.
+        // Every old assumption about the out-array contract is void until this is re-derived
+        // properly (the args' semantics + the local struct layouts + the 0x1FBBDB0 resolver).
+        // "No predicted deflection" is the honest interim state - the feature degrades, the
+        // game is never fed garbage. GetInaccuracy/GetSpread/UpdateAccuracyPenalty/SpreadSeed
+        // were all verified UNCHANGED this session (from the game's own dispatch sites).
+        return cs2::Vector{};
     }
 
     // MOVING-TARGET SPREAD CANCELLATION (deviation from velocity-cs2, documented):

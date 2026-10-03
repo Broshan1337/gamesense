@@ -29,7 +29,7 @@ set(ENABLE_TESTS CACHE STRING "List of test types to enable e.g. \"unit;function
 # stripped (.symtab removed) and the symbol table is preserved only in a local
 # <build>/Source/ship-debug/<name>.debug copy + gnu-debuglink. Set at configure time:
 #   cmake -B build -DNEVERSNOOZE_SHIP:BOOL=ON ...
-option(NEVERSNOOZE_SHIP "Ship hardening: fully strip module, keep local .debug copy" OFF)
+option(NEVERSNOOZE_SHIP "Ship hardening: fully strip module, keep local .debug copy" ON)
 
 # OLLVM obfuscation (Arkari/goron-derived clang): configure the tree with
 #   cmake -B build -DNEVERSNOOZE_OBFUSCATE=ON -DCMAKE_C_COMPILER=<arkari-clang> -DCMAKE_CXX_COMPILER=<arkari-clang++> ...
@@ -37,7 +37,7 @@ option(NEVERSNOOZE_SHIP "Ship hardening: fully strip module, keep local .debug c
 # (+irobf-cff / +irobf-cse / ... on cold, secret-carrying code only - NEVER hot paths).
 # The -arkari-cfg file carries the random seed; global obfuscation flags stay OFF so
 # unannotated functions are compiled clean.
-option(NEVERSNOOZE_OBFUSCATE "Arkari OLLVM: enable per-function obfuscation annotations" OFF)
+option(NEVERSNOOZE_OBFUSCATE "Arkari OLLVM: enable per-function obfuscation annotations" ON)
 set(NEVERSNOOZE_ARKARI_CFG "$ENV{HOME}/obfuscator/arkari-cfg/cs2.cfg" CACHE FILEPATH "Arkari config (random seed)")
 if(NEVERSNOOZE_OBFUSCATE)
   add_compile_definitions(NEVERSNOOZE_OBFUSCATE)

@@ -128,6 +128,30 @@ inline NS_OBF_FLATTEN void tick() noexcept
 
     if (baselineHash == 0) {
         baselineHash = hash;
+        // Publish a liveness/range report for the LOADER's external watchdog (hardening
+        // 2026-09-24): the loader derives the authoritative exec range itself from the
+        // target's maps and keeps ITS OWN baseline hash (VMP'd loader memory) - an in-process
+        // attacker cannot rewrite either. This file is the module's "integrity tick is alive"
+        // signal (its presence is required by the watchdog) and a range cross-check: a range
+        // disagreement between here and maps = someone tampered with the file -> logged by
+        // the loader, never fatal.
+        {
+            char path[64];
+            if (const int written = std::snprintf(path, sizeof(path), "/tmp/ns_module_integrity_%d",
+                    LinuxPlatformApi::processId());
+                written > 0 && written < static_cast<int>(sizeof(path))) {
+                if (const int fd = LinuxPlatformApi::open(path, 0x41 /* O_WRONLY|O_CREAT */, 0600); fd >= 0) {
+                    char line[160];
+                    const int len = std::snprintf(line, sizeof(line),
+                        "NSINT01 %d %lx %zx %llx\n", LinuxPlatformApi::processId(),
+                        static_cast<unsigned long>(range.start), range.size,
+                        static_cast<unsigned long long>(hash));
+                    if (len > 0)
+                        LinuxPlatformApi::write(fd, line, static_cast<std::size_t>(len));
+                    LinuxPlatformApi::close(fd);
+                }
+            }
+        }
     } else if (hash != baselineHash && !textAnomalyLogged) {
         textAnomalyLogged = true;
         gui_log::write("[tamper] own .text checksum drift (baseline %llx, now %llx, range %lx+%zx)",

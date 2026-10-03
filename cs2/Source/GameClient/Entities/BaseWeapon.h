@@ -215,10 +215,15 @@ public:
     }
 
     // Writes CModelState::m_MeshGroupMask (1 = default, 2 = legacy paint kit - matches the
-    // reference's IsLegacyPaintKit() check, see SkinChangerData::isLegacyPaintKit()) via
-    // C_BaseEntity::m_CBodyComponent's own vtable+112 (identified empirically as functionally
-    // GetSkeletonInstance() - see ModelStateOffsets.h for the full RE trail). All schema-based
-    // plus one virtual call - no byte pattern involved.
+    // reference's IsLegacyPaintKit() check, see SkinChangerData::isLegacyPaintKit()) through
+    // the fully schema-resolved chain: weapon -> m_CBodyComponent -> m_skeletonInstance ->
+    // m_modelState -> m_MeshGroupMask. 2026-09-27: this replaces the pre-update vtable+112
+    // virtual call ("slot 14, identified empirically") - the 5GB update reshuffled that
+    // vtable, slot 14 became a STATIC-POINTER getter (returns 0x46798A0 on build 68f386a6),
+    // and the mask write through it (+0x248) clobbered the CBaseAnimGraph_API registry at
+    // 0x4679AE8 with the value 2 -> the game's map-load animgraph walk called the poisoned
+    // entry -> the rip=2 crashes (caught with a gdb hardware watchpoint on the slot). All
+    // schema offsets = update-proof; no virtual call, no empirical vtable slots.
     void setMeshGroupMask(std::uint64_t mask) const noexcept
     {
         const auto& offsets = hookContext.modelStateOffsets();
@@ -226,20 +231,15 @@ public:
         if (!bodyComponent)
             return;
 
-        const auto vtable = *reinterpret_cast<void* const*>(bodyComponent);
-        if (!vtable)
+        // A weapon's body component is a CBodyComponentSkeletonInstance (the schema class
+        // whose m_skeletonInstance the next step reads).
+        const auto skeletonInstance = offsets.skeletonInstance.of(reinterpret_cast<cs2::CBodyComponentSkeletonInstance*>(bodyComponent)).get();
+        if (!skeletonInstance)
             return;
-
-        const auto getModelStateFn = *reinterpret_cast<void* const*>(reinterpret_cast<const unsigned char*>(vtable) + 112);
-        if (!getModelStateFn)
-            return;
-
-        using GetModelStateFn = void*(*)(cs2::CBodyComponent*);
-        const auto modelState = RetAddrSpoofer::spoof(reinterpret_cast<GetModelStateFn>(getModelStateFn))(bodyComponent);
+        const auto modelState = offsets.modelState.of(skeletonInstance).get();
         if (!modelState)
             return;
-
-        offsets.meshGroupMask.of(static_cast<cs2::CModelState*>(modelState)) = mask;
+        offsets.meshGroupMask.of(modelState) = mask;
     }
 
     // Reads back CModelState::m_hModel (the u64 resource handle at +0xA0 - the same field
@@ -254,22 +254,17 @@ public:
         if (!bodyComponent)
             return 0;
 
-        const auto vtable = *reinterpret_cast<void* const*>(bodyComponent);
-        if (!vtable)
+        // 2026-09-27: same schema-chain replacement as setMeshGroupMask (the old vtable+112
+        // slot reshuffled in the 5GB update - see that comment for the crash trail).
+        const auto skeletonInstance = offsets.skeletonInstance.of(reinterpret_cast<cs2::CBodyComponentSkeletonInstance*>(bodyComponent)).get();
+        if (!skeletonInstance)
             return 0;
-
-        const auto getModelStateFn = *reinterpret_cast<void* const*>(reinterpret_cast<const unsigned char*>(vtable) + 112);
-        if (!getModelStateFn)
-            return 0;
-
-        using GetModelStateFn = void*(*)(cs2::CBodyComponent*);
-        const auto modelState = RetAddrSpoofer::spoof(reinterpret_cast<GetModelStateFn>(getModelStateFn))(bodyComponent);
+        const auto modelState = offsets.modelState.of(skeletonInstance).get();
         if (!modelState)
             return 0;
 
         std::uint64_t handle = 0;
-        std::memcpy(&handle, reinterpret_cast<const unsigned char*>(modelState) + 0xA0, sizeof(handle));
-        return handle;
+        return offsets.modelHandle.of(modelState).valueOr(handle);
     }
 
     // The real, schema+RE-confirmed replacement for SkinChangerData::isLegacyPaintKit()'s
@@ -399,6 +394,14 @@ public:
     // Triggers the actual composite material rebuild (RegenerateWeaponSkin). Call this AFTER
     // applySkinAttributes(), setMeshGroupMask() and updateCompositeMaterial() - see
     // applySkinAttributes()'s comment for why the order matters.
+    //
+    // NOTE for symptom archaeology: between the 2026-09-23 re-anchor and the 2026-09-27 fix,
+    // PointerToRegenerateWeaponSkin resolved to the regenerate_weapon_skins ConCommand
+    // HANDLER (an all-weapons iterator taking only a bool in dil) instead of this per-weapon
+    // fn - so calls in that window ran the iterator with the weapon pointer's low byte as
+    // forceHighRes (usually nonzero = the high-res/async-heavy path). Any "skins flaky /
+    // weird perf on apply / teardown-adjacent SEGVs" report from that window maps here.
+    // Pattern re-anchored on the true per-weapon fn 2026-09-27 (see WeaponPatternsLinux.h).
     //
     // Returns false if the regenerate call had to be skipped - a real crash fix, confirmed via
     // a coredump: RegenerateWeaponSkin (sub_1466900) unconditionally reads

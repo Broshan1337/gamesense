@@ -12,6 +12,11 @@ set_target_properties(Neversnooze PROPERTIES
 
 target_include_directories(Neversnooze PRIVATE "${CMAKE_SOURCE_DIR}/Source" "${CMAKE_SOURCE_DIR}/Source/hooks")
 target_link_libraries(Neversnooze PRIVATE ${CMAKE_DL_LIBS})
+# Pattern vault runtime session lock (hardening 2026-09-24): the shipped module refuses to
+# unseal its pattern pools until the loader-stamped session trailer verified. Offline tools
+# (scratchpad pattern_scan) and the unit tests build WITHOUT this - the vault behaves exactly
+# like pre-hardening there.
+target_compile_definitions(Neversnooze PRIVATE NS_PATTERN_VAULT_REQUIRES_SESSION)
 
 # ---- Steam Module (separate target for Steam process injection) --------------------
 add_library(SteamModule SHARED SteamModule/steam_module.cpp)

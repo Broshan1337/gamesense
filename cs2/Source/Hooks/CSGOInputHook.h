@@ -3,8 +3,10 @@
 #include <cstdint>
 
 #include <CS2/Classes/CCSGOInput.h>
+#include <UI/ImGui/GuiLog.h>
 #include <Vmt/VmtLengthCalculator.h>
 #include <Vmt/VmtSwapper.h>
+#include <Utils/StatusReport.h>
 
 void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCmd* cmd) noexcept;
 std::uint64_t CSGOInputHook_onBuildUserCmd(cs2::CCSGOInput* thisptr, int slot, int frameNumber) noexcept;
@@ -53,10 +55,20 @@ public:
 
     void install() noexcept
     {
-        // Highest hooked slot = CreateMove at 26 -> the copy must span 27 entries. The plain
-        // length scan truncates on this composite vtable (see vmtCopyLength) - slot 26 once
-        // lived entirely in out-of-bounds pool memory.
-        if (input && hook.install(vmtLengthCalculator, *reinterpret_cast<std::uintptr_t**>(input), cs2::CCSGOInput::kCreateMoveVtableSlot + 1)) {
+        // 09-26 RE-ENABLED (post root-cause): the input hook was exonerated twice - the
+        // 23:46 crash fired with this hook OFF (that one = the SILENT OFFSET-PATTERN
+        // BREAKAGE class, PanelStyleOffset et al. resolving garbage displacements; fixed
+        // by the 2026-09-26 full value audit), and the 5x tier0-free "wild D2" crashes
+        // (22:15/22:54/23:19/01:00/01:12) were the GEM HOOK CLONE OVERRUN, not this hook:
+        // engine2's slot-173 dispatch on the event manager read past the GEM clone's
+        // 170-slot floor into THIS hook's pool-adjacent clone and executed its slot-1 copy
+        // (0x1AD3780 = the deleting destructor) with a stack `this`. This hook's surface
+        // verified independently on this build: the anchor global holds the in-place
+        // object sane (vptr = 0x4518480, ctor caller 0x1B0BBD0), slots 26/6/7 still at
+        // their vtable positions, the CUserCmd write anchors byte-identical to the game's
+        // own slot-6 code, composite = 42 slots << the 128 clone floor.
+        // VoiceTap stays disabled per the standing rule.
+        if (input && hook.install(vmtLengthCalculator, *reinterpret_cast<std::uintptr_t**>(input), 128)) {
             originalCreateMove = hook.hook(cs2::CCSGOInput::kCreateMoveVtableSlot, &CSGOInputHook_onCreateMove);
             // Both slots go through the same VmtSwapper - one replacement vtable, two entries
             // swapped in it - so uninstall() still restores everything in one step.

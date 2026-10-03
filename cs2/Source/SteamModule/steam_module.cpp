@@ -482,7 +482,7 @@ static void init_hooks(void)
 // ---- session binding ------------------------------------------------------------
 //
 // The loader stamps every module it injects with a 64-byte trailer after the ELF image
-// ("NSHB01" | pad[2] | u64 loaderPid | session[16] | proof[32] = session XOR key - see
+// ("NSHB02" | pad[2] | u64 loaderPid | loaderComm[16] | proof[32] = loaderComm XOR key - see
 // Loader/src/SessionTrailer.h). A steam module re-injected standalone from a dump has no
 // trailer -> fails closed (inert). The key is the same material the Loader embeds
 // (heartbeat.key in its key dir); stored here XOR-masked (Utils/SessionBindKey.h) so the
@@ -533,15 +533,19 @@ static int verify_session_trailer(void)
         return 0;
     }
     close(fd);
-    /* "NSHB01" XOR-obfuscated (see cs2/Source/Utils/SessionBind.h) */
-    static const unsigned char kMagicObf[6] = {0x14, 0x09, 0x12, 0x18, 0x6A, 0x6B};
+    /* "NSHB02" XOR-obfuscated (see cs2/Source/Utils/SessionBind.h) */
+    static const unsigned char kMagicObf[6] = {0x14, 0x09, 0x12, 0x18, 0x6A, 0x68};
     unsigned char magic[6];
     for (int i = 0; i < 6; ++i)
         magic[i] = (unsigned char)(kMagicObf[i] ^ 0x5A);
     if (memcmp(trailer, magic, 6) != 0)
         return 0;
+    /* The proof mixes the TARGET pid the loader stamped (2026-09-24): a copied memfd file
+     * re-injected elsewhere carries the old pid - proof mismatch -> bricked. */
+    const unsigned long long ownPid = (unsigned long long)getpid();
     for (int i = 0; i < 32; ++i) {
-        if (trailer[32 + i] != (unsigned char)(trailer[16 + (i % 16)] ^ key[i]))
+        const unsigned char targetByte = (unsigned char)((ownPid >> ((i % 8) * 8)) & 0xff);
+        if (trailer[32 + i] != (unsigned char)(trailer[16 + (i % 16)] ^ key[i] ^ targetByte))
             return 0;
     }
     return 1;

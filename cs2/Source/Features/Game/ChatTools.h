@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cctype>
 #include <optional>
 #include <cstddef>
 #include <cstdio>
@@ -15,6 +16,7 @@
 #include <GameClient/EntitySystem/EntitySystem.h>
 #include <CS2/Constants/DllNames.h>
 #include <Features/Game/ChatToolsConfigVariables.h>
+#include <GameClient/SchemaSystem/SchemaReadiness.h>
 #include <Features/Hud/SpectatorList/SpectatorSnapshot.h>
 #include <Features/Visuals/PlayerList/PlayerListSnapshot.h>
 #include <GameClient/Bind.h>
@@ -25,6 +27,7 @@
 #include <HookContext/HookContextMacros.h>
 #include <Platform/Linux/LinuxPlatformApi.h>
 #include <Utils/CrashLogger.h>
+#include <Utils/Random.h>
 #include <Utils/VerifyConsole.h>
 
 // Chat tools - every piece of this is genuinely networked, exactly like Killsay:
@@ -518,7 +521,8 @@ inline constexpr cs2::ItemDefEntry kKickReasonEntries[] = {
 inline constexpr int kKickReasonCount = static_cast<int>(sizeof(kKickReasonEntries) / sizeof(kKickReasonEntries[0]));
 
 // which buffer chatTemplateRow is editing
-enum BufferKind { kNameBuffer = 0, kSpamBuffer = 1, kWheelBuffer = 2, kIntelBuffer = 3, kAnimatorBuffer = 4, kBufferKindCount };
+// Appended LAST (kClanTagBuffer): appending never shifts older indices - old sidecar paths stay valid.
+enum BufferKind { kNameBuffer = 0, kSpamBuffer = 1, kWheelBuffer = 2, kIntelBuffer = 3, kAnimatorBuffer = 4, kClanTagBuffer, kBufferKindCount };
 
 // buffers: the menu edits these; contents mirror the sidecar files
 constexpr std::size_t kBufferTextSize = 160; // multi-line persona names are long
@@ -535,6 +539,7 @@ inline constexpr const char* kFileNames[kBufferKindCount] = {
     "/chatwheel.txt",
     "/chat_intel.txt",
     "/name_animator.txt",
+    "/chat_clantag.txt",
 };
 
 
@@ -864,6 +869,8 @@ public:
         runPingSpam();
         runLiveBadge();
         runFakeKick();
+        runClanTag();
+        runClanTagAnimation();
         CrashLogger::trace(0x311);
     }
 
@@ -917,6 +924,7 @@ private:
         chat_tools::seedSidecarIfMissing(hookContext, "/chat_intel.txt",
             "Last enemy: B tunnels, low HP{nl}[Server] Intel packet delivered\n");
         chat_tools::seedSidecarIfMissing(hookContext, "/name_animator.txt", "name animator");
+        chat_tools::seedSidecarIfMissing(hookContext, "/chat_clantag.txt", "CAT");
     }
 
     // #4 doppelganger: mirror the current top-fragger's name plus an invisible suffix - two
@@ -1165,6 +1173,416 @@ private:
         chat_tools::sendInvalidSteamLogon(GET_CONFIG_VAR(chat_vars::KickReason));
     }
 
+public:
+    // --- CLAN TAG SPOOF (2026-09-23 update: client-visible clan tags) -------------------
+    // The displayed tag = the local controller's m_sSanitizedClanTag (CUtlString) - a plain
+    // char* the game derefs on every scoreboard/chat/death-notice render (verified in the
+    // reader at 0x1530BDC: `mov rax,[rbx+0xA00]; test rax,rax`). The NETWORKED tag is
+    // GC-authoritative (SetMyClanId32BitEquipped, msg 0x240D - only real Steam-clan IDs work),
+    // so arbitrary text is a LOCAL DISPLAY spoof.
+    //
+    // Safety contract (the map-transition rules): NOTHING is allocated, freed or re-pointed.
+    // The spoof rewrites the EXISTING game-owned string in place, bounded by its current
+    // length, so it can never overflow the allocation. The original content is saved once per
+    // controller pointer and restored on toggle-off/unload. A server-side tag update just
+    // replaces the buffer wholesale - our next tick re-saves + rewrites (worst case one frame
+    // shows the legit tag). Empty originals (shared static "") are refused - never write into
+    // unknown storage.
+    inline static char clanTagOriginal[chat_tools::kBufferTextSize]{};
+    inline static std::size_t clanTagOriginalLength{0};
+    inline static const void* clanTagOriginalController{nullptr};
+    inline static bool clanTagApplied{false};
+    inline static bool clanTagLoggedEmpty{false};
+
+    void resetClanTagState() noexcept
+    {
+        clanTagOriginalController = nullptr;
+        clanTagOriginalLength = 0;
+        clanTagOriginal[0] = '\0';
+        clanTagApplied = false;
+    }
+
+    void restoreClanTag() noexcept
+    {
+        if (!clanTagApplied)
+            return;
+        if (const auto stringPtr = hookContext.localPlayerController().clanTagStringPointer();
+            stringPtr.hasValue() && clanTagOriginalController == stringPtr.value()) {
+            // same buffer still installed - put the original content back
+            auto* const target = stringPtr.value();
+            std::memcpy(target, clanTagOriginal, clanTagOriginalLength);
+            target[clanTagOriginalLength] = '\0';
+        }
+        resetClanTagState();
+    }
+
+    void runClanTag() noexcept
+    {
+        const auto enabled = GET_CONFIG_VAR(chat_vars::ClanTagEnabled);
+        // THE ANIMATOR OWNS THE TAG when enabled (both toggles on = the animator wins; the
+        // static spoof would rewrite the same buffer every tick and fight the animation).
+        const auto animate = GET_CONFIG_VAR(chat_vars::ClanTagAnimateEnabled);
+        if (!enabled || animate) {
+            if (!animate) // the animator owns the tag while enabled - never restore under it
+                restoreClanTag();
+            return;
+        }
+
+        // SESSION GATE (the map-transition rule): no live session -> stand down. The
+        // controller we would otherwise touch is mid-teardown exactly when the pawn is gone.
+        if (!hookContext.localPlayerController().pawn())
+            return;
+
+        // MAP-CHANGE GUARD: schema readiness idiom (same as NameAnimator).
+        if (const auto mapTime = hookContext.globalVars().curtime();
+            !mapTime.hasValue() || mapTime.value() < schema_readiness::kMinMapTime)
+            return;
+
+        const auto& bufferState = chat_tools::buffers[chat_tools::kClanTagBuffer];
+        if (bufferState.text[0] == '\0') {
+            restoreClanTag();
+            return;
+        }
+
+        if (!ensureClanTagTarget())
+            return;
+        applyClanTagText(bufferState.text);
+    }
+
+    // --- CLAN TAG ANIMATOR (2026-10-03): the client-display spoof, animated ----------------
+    // CS2 has NO clan userinfo cvar (the userinfo surface = name + the clutch/color/crosshair/
+    // loadout set, UserInfoFlood.h kFields; the "clan"/"clantag" strings in libclient are
+    // schema field names and UI keys, not cvar registrations) and the NETWORKED tag is
+    // GC-authoritative (SetMyClanId32BitEquipped, msg 0x240D) - so the setinfo-churn route the
+    // CS:GO clantag changers used does not exist here. The animator therefore drives the SAME
+    // in-place m_sSanitizedClanTag rewrite the static spoof uses (what WE see on the
+    // scoreboard/chat decoration), frame by frame, from the same /chat_clantag.txt source.
+    // Every frame obeys the static spoof's safety contract: in-place, bounded by the saved
+    // original length (never past the game's allocation), save/restore on disable/unload,
+    // same session + map-change gates (the 09-12 crash class).
+    void runClanTagAnimation() noexcept
+    {
+        if (!GET_CONFIG_VAR(chat_vars::ClanTagAnimateEnabled))
+            return restoreClanTag();
+
+        // Stand-down gates: during map transitions (pawn gone / curtime blind) the tag is
+        // left EXACTLY as the last frame left it - the static spoof's rule (never write the
+        // controller's string mid-teardown; restore happens on the explicit disable path).
+        if (!hookContext.localPlayerController().pawn())
+            return;
+
+        if (const auto mapTime = hookContext.globalVars().curtime();
+            !mapTime.hasValue() || mapTime.value() < schema_readiness::kMinMapTime)
+            return;
+
+        const auto& bufferState = chat_tools::buffers[chat_tools::kClanTagBuffer];
+        if (bufferState.text[0] == '\0')
+            return restoreClanTag();
+
+        // Reload the source once per animation loop so sidecar edits are picked up live
+        // (the NameAnimator hasText lesson: without this gate every frame re-splits and
+        // resets the animation state - the modes read as frozen). The text is SNAPSHOTTED
+        // here - the modes read the snapshot, never the live buffer, so a mid-loop sidecar
+        // edit cannot render stale-buffer garbage through old sequence offsets.
+        if (!clanTagSeqCount && !buildClanTagSequences(bufferState.text))
+            return restoreClanTag();
+
+        // Speed = ticks per frame inverted (high slider = fast), the NameAnimator rule with
+        // its scale lesson: (kSpeedMax - Speed), never anything with a +kSpeedMin offset.
+        const int ticksPerFrame = kClanTagSpeedMax - GET_CONFIG_VAR(chat_vars::ClanTagAnimateSpeed) + 1;
+        if (clanTagTickCounter < ticksPerFrame) {
+            ++clanTagTickCounter;
+            return;
+        }
+        clanTagTickCounter = 0;
+
+        if (!ensureClanTagTarget())
+            return;
+
+        char frame[chat_tools::kBufferTextSize]{};
+        switch (GET_CONFIG_VAR(chat_vars::ClanTagAnimateMode)) {
+        case 2:
+            clanTagGlitchFrame(frame);
+            break;
+        case 3:
+            clanTagMarqueeFrame(frame);
+            break;
+        case 4:
+            clanTagWaveFrame(frame);
+            break;
+        case 5:
+            clanTagStrobeFrame(frame);
+            break;
+        case 6:
+            clanTagPulseFrame(frame);
+            break;
+        default:
+            if (clanTagTypewriterFrame(frame))
+                clanTagResetText(); // the hold finished - reload + restart on the next tick
+            break;
+        }
+        applyClanTagText(frame);
+    }
+
+    void clanTagResetText() noexcept
+    {
+        clanTagSeqCount = 0; // forces the reload + restart
+        clanTagPosition = 0;
+        clanTagHoldLeft = 0;
+        clanTagShrinking = false;
+    }
+
+    // Splits the source into UTF-8 sequences (a sequence = a non-continuation byte plus its
+    // continuations), so modes never split a multi-byte glyph. The source is snapshotted into
+    // clanTagText at the same time - the modes read the snapshot, never the live buffer.
+    // Returns false on an empty text.
+    bool buildClanTagSequences(const char* text) noexcept
+    {
+        clanTagSeqCount = 0;
+        clanTagPosition = 0;
+        clanTagHoldLeft = 0;
+        clanTagShrinking = false;
+        std::size_t length = std::strlen(text);
+        if (length >= sizeof(clanTagText))
+            length = sizeof(clanTagText) - 1;
+        std::memcpy(clanTagText, text, length);
+        clanTagText[length] = '\0';
+        for (std::size_t i = 0; i < length && clanTagSeqCount < kClanTagMaxSequences;) {
+            std::size_t span = 1;
+            while (i + span < length && (static_cast<unsigned char>(clanTagText[i + span]) & 0xC0) == 0x80)
+                ++span;
+            clanTagSeqOffset[clanTagSeqCount] = i;
+            clanTagSeqLength[clanTagSeqCount] = span;
+            ++clanTagSeqCount;
+            i += span;
+        }
+        return clanTagSeqCount > 0;
+    }
+
+    [[nodiscard]] int clanTagChunk() const noexcept
+    {
+        // A quarter of the tag per frame (the NameAnimator cadence lesson: small steps are
+        // invisible at the visible rename rate; the floor keeps 1-3 glyph tags alive).
+        const auto step = clanTagSeqCount / 4;
+        return step > 0 ? step : 1;
+    }
+
+    void clanTagCopyVisible(char (&frame)[chat_tools::kBufferTextSize], int visible) const noexcept
+    {
+        std::size_t write = 0;
+        for (int i = 0; i < visible && i < clanTagSeqCount; ++i) {
+            if (write + clanTagSeqLength[i] >= sizeof(frame))
+                break;
+            std::memcpy(frame + write, clanTagText + clanTagSeqOffset[i], clanTagSeqLength[i]);
+            write += clanTagSeqLength[i];
+        }
+        frame[write] = '\0';
+    }
+
+    // Typewriter: grows in quarter-tag steps, holds the full tag, erases, restarts.
+    [[nodiscard]] bool clanTagTypewriterFrame(char (&frame)[chat_tools::kBufferTextSize]) noexcept
+    {
+        if (clanTagShrinking) {
+            clanTagPosition -= clanTagChunk();
+            if (clanTagPosition <= 0)
+                return true; // fully collapsed - restart
+            clanTagCopyVisible(frame, clanTagPosition);
+            return false;
+        }
+        if (clanTagHoldLeft > 0) {
+            if (--clanTagHoldLeft == 0)
+                clanTagShrinking = true;
+            clanTagCopyVisible(frame, clanTagSeqCount);
+            return false;
+        }
+        if (clanTagPosition >= clanTagSeqCount) {
+            clanTagPosition = clanTagSeqCount;
+            clanTagHoldLeft = kClanTagHoldUpdates;
+            clanTagCopyVisible(frame, clanTagSeqCount);
+            return false;
+        }
+        clanTagPosition += clanTagChunk();
+        clanTagCopyVisible(frame, clanTagPosition);
+        return false;
+    }
+
+    // Glitch: the WHOLE tag glitches simultaneously - each glyph flips between the real
+    // character and a glitch symbol every frame, never stable (the mode the user preferred
+    // for the name after the 09-19 crawl verdict).
+    void clanTagGlitchFrame(char (&frame)[chat_tools::kBufferTextSize]) noexcept
+    {
+        const char* const text = clanTagText;
+        frame[0] = '\0';
+        constexpr float kGlitchChance = 0.5f;
+        std::size_t write = 0;
+        for (int i = 0; i < clanTagSeqCount && write + 8 < sizeof(frame); ++i) {
+            if (Random::floating(0.0f, 1.0f) >= kGlitchChance) {
+                std::memcpy(frame + write, text + clanTagSeqOffset[i], clanTagSeqLength[i]);
+                write += clanTagSeqLength[i];
+            } else {
+                const auto pick = static_cast<int>(Random::floating(0.0f, static_cast<float>(kClanTagGlitchSize)));
+                frame[write++] = kClanTagGlitchCharset[pick];
+            }
+        }
+        frame[write] = '\0';
+    }
+
+    // Marquee: the tag rotates through itself with a " |" wrap seam (visible even when the
+    // source is repetitive).
+    void clanTagMarqueeFrame(char (&frame)[chat_tools::kBufferTextSize]) noexcept
+    {
+        const char* const text = clanTagText;
+        frame[0] = '\0';
+        std::size_t write = 0;
+        for (int k = 0; k < clanTagSeqCount && write + 8 < sizeof(frame); ++k) {
+            const int index = (clanTagPosition + k) % clanTagSeqCount;
+            std::memcpy(frame + write, text + clanTagSeqOffset[index], clanTagSeqLength[index]);
+            write += clanTagSeqLength[index];
+        }
+        constexpr const char seam[]{" |"};
+        constexpr std::size_t seamLen = sizeof(seam) - 1;
+        if (write + seamLen < sizeof(frame)) {
+            std::memcpy(frame + write, seam, seamLen);
+            write += seamLen;
+        }
+        frame[write] = '\0';
+        clanTagPosition = (clanTagPosition + clanTagChunk()) % clanTagSeqCount;
+    }
+
+    // Wave: a case-height sine rolls through the tag forever.
+    void clanTagWaveFrame(char (&frame)[chat_tools::kBufferTextSize]) noexcept
+    {
+        constexpr int kWavelength = 4;
+        const int tick = ++clanTagFrameClock;
+        const char* const text = clanTagText;
+        std::size_t write = 0;
+        for (int i = 0; i < clanTagSeqCount && write + 8 < sizeof(frame); ++i) {
+            char c = text[clanTagSeqOffset[i]];
+            if ((c & 0x80) == 0 && std::isalpha(static_cast<unsigned char>(c))) {
+                const int height = ((i - tick) % kWavelength + kWavelength) % kWavelength;
+                c = height < kWavelength / 2 ? static_cast<char>(std::toupper(static_cast<unsigned char>(c)))
+                                             : static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            }
+            frame[write++] = c;
+        }
+        frame[write] = '\0';
+    }
+
+    // Strobe: hard cuts between SHOUTING / whisper / spaced-out renderings of the tag.
+    void clanTagStrobeFrame(char (&frame)[chat_tools::kBufferTextSize]) noexcept
+    {
+        const int step = (++clanTagFrameClock) % 3;
+        const char* const text = clanTagText;
+        std::size_t write = 0;
+        for (int i = 0; i < clanTagSeqCount && write + 4 < sizeof(frame); ++i) {
+            const char c = text[clanTagSeqOffset[i]];
+            if (step == 0)
+                frame[write++] = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            else if (step == 1)
+                frame[write++] = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            else {
+                frame[write++] = c;
+                if (i + 1 < clanTagSeqCount && write + 4 < sizeof(frame))
+                    frame[write++] = ' ';
+            }
+        }
+        frame[write] = '\0';
+    }
+
+    // Pulse: a bright caps segment JUMPS around the tag (quarter-tag steps per frame so the
+    // highlight visibly teleports at the server's coalesced rename rate).
+    void clanTagPulseFrame(char (&frame)[chat_tools::kBufferTextSize]) noexcept
+    {
+        constexpr int kSegLen = 2; // glyphs lit at once (the tag is short)
+        const int cycle = clanTagSeqCount + kSegLen;
+        const int head = clanTagPosition % cycle;
+        const char* const text = clanTagText;
+        std::size_t write = 0;
+        for (int i = 0; i < clanTagSeqCount && write + 8 < sizeof(frame); ++i) {
+            char c = text[clanTagSeqOffset[i]];
+            if ((c & 0x80) == 0 && std::isalpha(static_cast<unsigned char>(c))) {
+                const int distance = (i - head + cycle) % cycle;
+                c = distance < kSegLen ? static_cast<char>(std::toupper(static_cast<unsigned char>(c)))
+                                       : static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            }
+            frame[write++] = c;
+        }
+        frame[write] = '\0';
+        const auto step = clanTagChunk() > 1 ? clanTagChunk() : 2; // the segment jumps >= 2
+        clanTagPosition += step;
+    }
+
+    // Shared per-frame delivery: the bounded in-place rewrite (same contract as the static
+    // spoof - never past the saved original length, NUL-terminated in place).
+    void applyClanTagText(const char* frame) noexcept
+    {
+        if (!clanTagApplied)
+            return;
+        const auto stringPtr = hookContext.localPlayerController().clanTagStringPointer();
+        if (!stringPtr.hasValue() || clanTagOriginalController != stringPtr.value())
+            return; // the controller was replaced mid-animation - the next ensure re-saves
+        auto* const target = stringPtr.value();
+        char sanitized[chat_tools::kBufferTextSize];
+        const auto wanted = chat_tools::sanitizeInto(frame, sanitized, sizeof(sanitized));
+        const std::size_t length = wanted > clanTagOriginalLength ? clanTagOriginalLength : wanted;
+        std::memcpy(target, sanitized, length);
+        target[length] = '\0';
+    }
+
+    // Saves the current tag content as the restore source (once per controller pointer) and
+    // marks the spoof applied. Returns false when there is nothing to overwrite (no live
+    // string pointer / empty original - the game refuses to hand us unknown storage).
+    [[nodiscard]] bool ensureClanTagTarget() noexcept
+    {
+        const auto controller = hookContext.localPlayerController();
+        const auto stringPtr = controller.clanTagStringPointer();
+        if (!stringPtr.hasValue()) {
+            restoreClanTag();
+            return false;
+        }
+
+        auto* const target = stringPtr.value();
+        if (clanTagApplied && clanTagOriginalController == target)
+            return true; // already spoofed on this controller
+
+        if (clanTagOriginalController != target) {
+            const std::size_t currentLength = std::strlen(target);
+            if (currentLength == 0) {
+                if (!clanTagLoggedEmpty) {
+                    clanTagLoggedEmpty = true;
+                    VerifyConsole::write(0.0f, "clantag", "no existing clan tag to overwrite (equip a Steam clan first)");
+                }
+                restoreClanTag();
+                return false;
+            }
+            clanTagOriginalLength = currentLength < chat_tools::kBufferTextSize - 1 ? currentLength : chat_tools::kBufferTextSize - 1;
+            std::memcpy(clanTagOriginal, target, clanTagOriginalLength);
+            clanTagOriginal[clanTagOriginalLength] = '\0';
+            clanTagOriginalController = target;
+        }
+        clanTagApplied = true;
+        return true;
+    }
+
+    // Animator state + constants - inline statics, NOT members: hookContext.make<ChatTools>()
+    // constructs a temporary per call, so member state would reset every tick (the header
+    // comment at the top of the file).
+    static constexpr int kClanTagMaxSequences = 96;
+    static constexpr int kClanTagHoldUpdates = 8; // full-tag frames before the loop restarts
+    static constexpr int kClanTagSpeedMax = 64;   // Speed -> ticksPerFrame = kClanTagSpeedMax - Speed + 1
+    static constexpr char kClanTagGlitchCharset[] = "!<>-_\\/[]{}=+*^?#____";
+    static constexpr int kClanTagGlitchSize = static_cast<int>(sizeof(kClanTagGlitchCharset)) - 1;
+    inline static int clanTagTickCounter{0};
+    inline static int clanTagPosition{0};
+    inline static int clanTagHoldLeft{0};
+    inline static bool clanTagShrinking{false};
+    inline static int clanTagFrameClock{0};
+    inline static int clanTagSeqCount{0};
+    inline static char clanTagText[chat_tools::kBufferTextSize]{}; // the snapshotted source
+    inline static std::size_t clanTagSeqOffset[kClanTagMaxSequences]{};
+    inline static std::size_t clanTagSeqLength[kClanTagMaxSequences]{};
+
+private:
     // the `name` cvar flags patch happens once per session (see applyFakeName)
     inline static bool nameCvarFlagsPatched{false};
     // last name actually pushed to the convar - the cycler and the re-assert use it to skip

@@ -31,10 +31,15 @@ inline constexpr std::uint64_t kMaxModuleExtent = 0x4C00000;
 
 // --- signatures (offsets are byte offsets from the match start) ------------------------------
 
-// CGameTraceManager::TraceShape: prologue + register shuffle (unique across .text)
-inline constexpr const char* kTraceShapeSig =
-    "55 48 89 E5 41 57 49 89 CF 41 56 49 89 F6 41 55 4D 89 C5";
-// C_BaseEntity* -> packed entity handle converter: prologue (unique)
+// CGameTraceManager::TraceShape: RESOLVED VIA THE CALLER BLOCK'S OWN CALL (see
+// kCallerTraceCallOffset) - there is NO standalone prologue signature for it anymore.
+// 2026-09-27 lesson: the old standalone prologue sig ("55 48 89 E5 41 57 49 89 CF...") went
+// POISON after the 5GB update - the real TraceShape recompiled to a different prologue
+// (55 48 8D 05 <disp32> 48 89 E5 41 57 49 89 F7...) and the old shape then matched a
+// DIFFERENT function (an argument-reordering wrapper at 0x11347F0 that fed our Vector* args
+// to an inner walker as objects -> mid-match SIGSEGV). The caller-block capture is unique by
+// construction (the block is fingerprinted) and self-consistent: the same match yields the
+// filter vtable, the manager global, and the trace function the game itself calls with them.
 inline constexpr const char* kEntityToHandleSig =
     "48 85 FF 74 3B 48 8B 57 10 B8 FF FF FF FF 48 85";
 // The fingerprinted trace-caller block. Captures (byte offsets from match start):
@@ -50,6 +55,9 @@ inline constexpr const char* kCallerSig =
 inline constexpr std::size_t kCallerVtableDispOffset = 62;
 inline constexpr std::size_t kCallerManagerDispOffset = 154;
 inline constexpr std::size_t kCallerEntityToHandleCallOffset = 74;
+// The block's own `call rel32` to CGameTraceManager::TraceShape (0xF3 on build 68f386a6;
+// the target cross-checks against the filter/manager captured from the same block).
+inline constexpr std::size_t kCallerTraceCallOffset = 0xF3;
 // ff_damage_bullet_penetration READER: lea rbx,[obj] / mov esi,-1 / mov [rbp-1B8h],r9 / mov rdi,rbx / call
 inline constexpr const char* kFfReaderSig =
     "48 8D 1D ? ? ? ? BE FF FF FF FF 4C 89 8D 48 FE FF FF 48 89 DF E8 ? ? ? ?";
@@ -59,8 +67,8 @@ inline constexpr std::size_t kFfReaderGetterCallOffset = 22;
 inline constexpr const char* kFfGetterSig =
     "55 48 89 E5 53 48 89 FB 48 83 EC 08 E8 5F 61 BE 00 48 85 C0";
 
-// Legacy RVAs (2026-09-10 build) - per-anchor fallback when a signature drifts.
-inline constexpr std::uint64_t kRvaTraceShape = 0x16C32C0;
+// Legacy RVAs (2026-09-26 build 68f386a6) - per-anchor fallback when a signature drifts.
+inline constexpr std::uint64_t kRvaTraceShape = 0x16F69C0;
 inline constexpr std::uint64_t kRvaEntityToHandle = 0x16C1AE0;
 inline constexpr std::uint64_t kRvaManagerQword = 0x458BB70;
 inline constexpr std::uint64_t kRvaFilterVtable = 0x42EAF38;
@@ -197,13 +205,14 @@ inline const Anchors& resolved() noexcept
         return address >= base && address < base + kMaxModuleExtent;
     };
 
-    // 1. Functions by their own prologue patterns.
-    if (const auto* match = detail::scan(haystack, detail::parse(kTraceShapeSig)))
-        anchors.traceShape = reinterpret_cast<std::uint64_t>(match);
+    // 1. Functions by their own prologue patterns. TraceShape is deliberately NOT scanned
+    // this way anymore - see the kTraceShapeSig removal note above; it is captured from the
+    // caller block's own call below (unique + self-consistent with the filter/manager).
     if (const auto* match = detail::scan(haystack, detail::parse(kEntityToHandleSig)))
         anchors.entityToHandle = reinterpret_cast<std::uint64_t>(match);
 
-    // 2. The fingerprinted trace-caller block: filter vtable + manager qword disp32 captures.
+    // 2. The fingerprinted trace-caller block: filter vtable + manager qword disp32 captures
+    //    AND the block's own call target = CGameTraceManager::TraceShape.
     if (const auto* callerMatch = detail::scan(haystack, detail::parse(kCallerSig))) {
         const auto matchAddress = reinterpret_cast<std::uint64_t>(callerMatch);
         const auto readDisp = [callerMatch](std::size_t offset) {
@@ -213,6 +222,7 @@ inline const Anchors& resolved() noexcept
         };
         anchors.filterVtable = matchAddress + kCallerVtableDispOffset + 4 + readDisp(kCallerVtableDispOffset);
         anchors.managerQword = matchAddress + kCallerManagerDispOffset + 4 + readDisp(kCallerManagerDispOffset);
+        anchors.traceShape = matchAddress + kCallerTraceCallOffset + 5 + readDisp(kCallerTraceCallOffset + 1);
     }
 
     // 3. ff_damage_bullet_penetration: getter by its own sig, cvar object from the reader's lea
@@ -247,13 +257,21 @@ inline const Anchors& resolved() noexcept
     // with test rdi,rdi / je) - a generic 55-48-89-E5 check on it fails forever and latched the
     // whole trace primitive fail-closed (the 2026-09-13 "confirms trace misses everything" root
     // cause, found via the [tba] ok=0 step=4 probe).
-    static constexpr std::array<unsigned char, 4> kRbpPrologue{0x55, 0x48, 0x89, 0xE5};
+    // The 68f386a6+ TraceShape opens with `push rbp; lea rax, [rip+disp32]` (a telemetry
+    // anchor) - validate the lea PREFIX, then `mov rbp, rsp` right after the disp32 hole.
+    static constexpr std::array<unsigned char, 4> kTraceShapeLeaPrefix{0x55, 0x48, 0x8D, 0x05};
+    static constexpr std::array<unsigned char, 3> kTraceShapeAfterDisp{0x48, 0x89, 0xE5};
     static constexpr std::array<unsigned char, 4> kTestRdiPrologue{0x48, 0x85, 0xFF, 0x74};
     const auto prologueOk = [&](std::uint64_t address, const std::array<unsigned char, 4>& expected) {
         return inModule(address)
             && std::memcmp(reinterpret_cast<const void*>(address), expected.data(), 4) == 0;
     };
-    const bool functionsOk = prologueOk(anchors.traceShape, kRbpPrologue)
+    const auto traceShapeOk = [&](std::uint64_t address) {
+        return inModule(address)
+            && std::memcmp(reinterpret_cast<const void*>(address), kTraceShapeLeaPrefix.data(), 4) == 0
+            && std::memcmp(reinterpret_cast<const void*>(address + 8), kTraceShapeAfterDisp.data(), 3) == 0;
+    };
+    const bool functionsOk = traceShapeOk(anchors.traceShape)
         && prologueOk(anchors.entityToHandle, kTestRdiPrologue);
     const bool dataOk = inModule(anchors.filterVtable) && inModule(anchors.managerQword);
     anchors.ok = functionsOk && dataOk;

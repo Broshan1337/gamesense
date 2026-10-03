@@ -15,6 +15,21 @@ public:
     {
     }
 
+    // 2026-09-26 5GB update: OffsetToConVarValueType's pattern is GONE (its site drifted into
+    // mid-instruction garbage; this build has no [conVar+0x28] anchor in tier0 - the type
+    // dispatch is virtual). The type check uses the friend-verified CConVar layout constant
+    // instead - the SAME contract patchUserInfoFlagAny below already trusts (type u32 @0x28,
+    // flags u32 @0x30, value union @0x58 - the value offset stays pattern-anchored). The
+    // enum-range gate fails closed on a shifted layout.
+    [[nodiscard]] bool conVarTypeIs(cs2::ConVar* conVar, cs2::ConVarValueType type) const noexcept
+    {
+        constexpr std::uintptr_t kTypeOffset = 0x28;
+        const auto value = *reinterpret_cast<const std::uint32_t*>(reinterpret_cast<std::uintptr_t>(conVar) + kTypeOffset);
+        if (value > static_cast<std::uint32_t>(cs2::ConVarValueType::string))
+            return false; // not a valid type slot - layout shifted, fail closed
+        return value == static_cast<std::uint32_t>(type);
+    }
+
     [[nodiscard]] cs2::ConVar* findConVar(const char* name) const noexcept
     {
         const auto conVarList = getConVarList();
@@ -39,7 +54,7 @@ public:
         const auto conVar = findConVar(name);
         if (!conVar)
             return {};
-        if (!hookContext.patternSearchResults().template get<OffsetToConVarValueType>().of(conVar).toOptional().equal(cs2::ConVarValueType::float32).valueOr(false))
+        if (!conVarTypeIs(conVar, cs2::ConVarValueType::float32))
             return {};
         return readValueAs<float>(conVar);
     }
@@ -51,7 +66,7 @@ public:
         const auto conVar = findConVar(name);
         if (!conVar)
             return {};
-        if (!hookContext.patternSearchResults().template get<OffsetToConVarValueType>().of(conVar).toOptional().equal(cs2::ConVarValueType::boolean).valueOr(false))
+        if (!conVarTypeIs(conVar, cs2::ConVarValueType::boolean))
             return {};
         return readValueAs<bool>(conVar);
     }
@@ -63,7 +78,7 @@ public:
         const auto conVar = findConVar(name);
         if (!conVar)
             return {};
-        if (!hookContext.patternSearchResults().template get<OffsetToConVarValueType>().of(conVar).toOptional().equal(cs2::ConVarValueType::int32).valueOr(false))
+        if (!conVarTypeIs(conVar, cs2::ConVarValueType::int32))
             return {};
         return readValueAs<int>(conVar);
     }
@@ -79,7 +94,7 @@ public:
         const auto conVar = findConVar(name);
         if (!conVar)
             return false;
-        if (!hookContext.patternSearchResults().template get<OffsetToConVarValueType>().of(conVar).toOptional().equal(cs2::ConVarValueType::boolean).valueOr(false))
+        if (!conVarTypeIs(conVar, cs2::ConVarValueType::boolean))
             return false;
 
         const auto pointerToValue = hookContext.patternSearchResults().template get<OffsetToConVarValue>().of(conVar).get();
@@ -100,7 +115,7 @@ public:
         const auto conVar = findConVar(name);
         if (!conVar)
             return false;
-        if (!hookContext.patternSearchResults().template get<OffsetToConVarValueType>().of(conVar).toOptional().equal(cs2::ConVarValueType::float32).valueOr(false))
+        if (!conVarTypeIs(conVar, cs2::ConVarValueType::float32))
             return false;
 
         const auto pointerToValue = hookContext.patternSearchResults().template get<OffsetToConVarValue>().of(conVar).get();
@@ -198,7 +213,7 @@ private:
     template <typename ConVarType>
     [[nodiscard]] std::optional<typename ConVarType::ValueType> getValue(cs2::ConVar* conVar) const
     {
-        if (hookContext.patternSearchResults().template get<OffsetToConVarValueType>().of(conVar).toOptional().equal(conVarValueTypeForType<typename ConVarType::ValueType>()).valueOr(false))
+        if (conVarTypeIs(conVar, conVarValueTypeForType<typename ConVarType::ValueType>()))
             return readValueAs<typename ConVarType::ValueType>(conVar);
         return {};
     }
