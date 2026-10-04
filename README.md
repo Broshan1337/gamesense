@@ -16,6 +16,10 @@ project is under active fixing, expect breakage after game updates.
 
 TF2 support is new and rough around the edges.
 
+**I don't have as much time for this anymore.** If a game update lands before I get to it,
+pull requests fixing the broken patterns/offsets are very welcome — see the
+[update workflow](#helping-update-it-after-a-game-update) below for how.
+
 ## What this is
 
 - Dear ImGui overlay rendered through the game's own Vulkan — the old Panorama UI is gone
