@@ -23,6 +23,7 @@
 #include <GameClient/GameEvents/GameEventFields.h>
 #include <HookContext/HookContextMacros.h>
 #include <Platform/Linux/LinuxDynamicLibrary.h>
+#include <Utils/NsPaths.h>
 #include <Utils/NsStr.h>
 #include <UI/ImGui/GuiLog.h>
 #include <Utils/CrashLogger.h>
@@ -36,8 +37,10 @@
 // because CS2 runs inside the Steam Linux Runtime container (pressure-vessel) where ffplay does not exist
 // and only /usr/bin:/bin are on PATH. Everything therefore runs through `steam-runtime-launch-client
 // --host`, which executes on the host (host PATH, host libraries, host network, host audio proxied back
-// in via PULSE_SERVER). curl also runs host-side. /tmp is shared between the container and the host, so
-// the container-side game reads the JSON that host-side curl writes there.
+// in via PULSE_SERVER). curl also runs host-side. The results JSON lives in the writable
+// exchange root (Utils/NsPaths.h - $HOME/OsirisCS2): since the 2026-10-04 Steam client update
+// /tmp is no longer shared between the container and the host, so that is where host-side
+// curl writes and the container-side game reads.
 //
 // Fetches are asynchronous and non-blocking: startBrowseLocal()/startSearch() fire a detached host
 // `curl ... -o file.part && mv file.part file` (the rename makes the finished file appear atomically),
@@ -93,8 +96,8 @@ public:
         if (!fetchPending)
             return;
 
-        NS_DEC(kResultsPath, kResultsPathEnc);
-        const int fd = ::open(kResultsPath, O_RDONLY);
+        resolveRadioPaths();
+        const int fd = ::open(resultsPath, O_RDONLY);
         if (fd < 0) {
             // Process exited and no result file landed: the fetch failed (offline, timeout) -
             // clear the pending flag so the UI's loading indicator does not stick forever.
@@ -113,8 +116,7 @@ public:
                 break;
         }
         ::close(fd);
-        NS_DEC(kResultsPath2, kResultsPathEnc);
-        ::unlink(kResultsPath2);
+        ::unlink(resultsPath);
         fetchBuffer[total] = '\0';
         fetchPending = false;
 
@@ -265,7 +267,8 @@ public:
     // --- mic broadcast (radio -> voice chat) ---
     //
     // While the menu toggle is on AND a station is playing, the game's microphone capture is
-    // routed to a virtual source: the switch script (written once to /tmp/ns_mic_radio.sh,
+    // routed to a virtual source: the switch script (written once to ns_mic_radio.sh in the
+    // exchange root,
     // executed ON THE HOST via spawnHostShell) creates a module-pipe-source, feeds it with a
     // second ffmpeg streaming the same station at s16le/48k mono, and `pactl
     // move-source-output`s the cs2 capture stream (matched by application.name = "cs2") to it.
@@ -311,7 +314,10 @@ public:
             if (micBroadcastActive && ++voiceKeyReassertCounter >= 128) {
                 voiceKeyReassertCounter = 0;
                 synthVoiceKey(true, true);
-                static_cast<void>(spawnHostShell("exec sh /tmp/ns_mic_radio.sh keepalive"));
+                resolveRadioPaths();
+                char keepaliveCommand[288];
+                if (std::snprintf(keepaliveCommand, sizeof(keepaliveCommand), "exec sh %s keepalive", micScriptPath) > 0)
+                    static_cast<void>(spawnHostShell(keepaliveCommand));
                 // Anomaly-only probe (gui log contract: silence = healthy): if the game's voice
                 // capture reports no signal level for ~6s straight while the FIFO is being fed,
                 // the routing failed - say so once instead of failing silently.
@@ -327,15 +333,16 @@ public:
             }
             return;
         }
-        StringBuilderStorage<96> storage;
+        resolveRadioPaths();
+        StringBuilderStorage<384> storage;
         auto builder = storage.builder();
         if (want) {
-            builder.put("exec sh /tmp/ns_mic_radio.sh on ", lastPlayedId);
+            builder.put("exec sh ", micScriptPath, " on ", lastPlayedId);
             copyId(micBroadcastStation, lastPlayedId);
             micBroadcastActive = true;
             armTransmission();
         } else {
-            builder.put("exec sh /tmp/ns_mic_radio.sh off");
+            builder.put("exec sh ", micScriptPath, " off");
             micBroadcastStation[0] = '\0';
             micBroadcastActive = false;
             disarmTransmission();
@@ -504,13 +511,16 @@ private:
 
 
     // The switch script must live on disk (too long for the spawnHostShell command buffer and
-    // easier to keep idempotent as a standalone file). Written once per process; /tmp is shared
-    // with the host the same way the radio results file is.
+    // easier to keep idempotent as a standalone file). Written once per process into the
+    // exchange root - the module writes it inside the container, the host-side sh executes it.
+    // The script's own scratch files (FF/PIDF/ORIG) stay in /tmp: they are only touched
+    // host-side, so they never cross the container boundary.
     static void writeBroadcastScriptOnce() noexcept
     {
         if (broadcastScriptWritten)
             return;
         broadcastScriptWritten = true;
+        resolveRadioPaths();
 
         // $1 = on|off|hardoff, $2 = station id (on only). Ids are alphanumeric (TuneIn), so the
         // interpolation into the curl URL is safe.
@@ -582,7 +592,7 @@ private:
             "\t;;\n"
             "esac\n";
 
-        const int fd = ::open("/tmp/ns_mic_radio.sh", O_CREAT | O_WRONLY | O_TRUNC, 0755);
+        const int fd = ::open(micScriptPath, O_CREAT | O_WRONLY | O_TRUNC, 0755);
         if (fd < 0)
             return;
         constexpr std::size_t length = sizeof(kScript) - 1;
@@ -618,14 +628,12 @@ private:
     // Deletes any stale result file, then fires a detached host curl that writes the new one atomically.
     void beginFetch(const char* url) const noexcept
     {
-        NS_DEC(kResultsPathUnlink, kResultsPathEnc);
-        ::unlink(kResultsPathUnlink);
+        resolveRadioPaths();
+        ::unlink(resultsPath);
 
-        StringBuilderStorage<768> storage;
+        StringBuilderStorage<1024> storage;
         auto builder = storage.builder();
-        NS_DEC(kResultsPart, kResultsPartPathEnc);
-        NS_DEC(kResults, kResultsPathEnc);
-        builder.put("curl -s --max-time 20 '", url, "' -o ", kResultsPart.c_str(), " && mv -f ", kResultsPart.c_str(), ' ', kResults.c_str());
+        builder.put("curl -s --max-time 20 '", url, "' -o ", resultsPartPath, " && mv -f ", resultsPartPath, ' ', resultsPath);
 
         // Reap any previous fetch shell before we lose its pid.
         if (fetchPid > 0) {
@@ -800,8 +808,24 @@ private:
     // Identity-bearing literals are kept encrypted (Utils/NsStr.h); decrypt to the stack at use.
     static constexpr ns_str::Encrypted<sizeof("/usr/bin/steam-runtime-launch-client")> kLaunchClientPathEnc{"/usr/bin/steam-runtime-launch-client"};
     static constexpr ns_str::Encrypted<sizeof("osiris-radio")> kMarkerEnc{"osiris-radio"};
-    static constexpr ns_str::Encrypted<sizeof("/tmp/osiris-radio-results.json")> kResultsPathEnc{"/tmp/osiris-radio-results.json"};
-    static constexpr ns_str::Encrypted<sizeof("/tmp/osiris-radio-results.json.part")> kResultsPartPathEnc{"/tmp/osiris-radio-results.json.part"};
+
+    // The radio results JSON is written by a HOST-side curl (spawnHostShell) and read back from
+    // inside the container, so it lives in the writable exchange root (Utils/NsPaths.h) - since
+    // the 2026-10-04 Steam client update the two sides no longer share /tmp. Resolved once.
+    inline static char resultsPath[192];
+    inline static char resultsPartPath[192];
+    inline static char micScriptPath[192];
+    inline static bool radioPathsResolved = false;
+
+    static void resolveRadioPaths() noexcept
+    {
+        if (radioPathsResolved)
+            return;
+        radioPathsResolved = true;
+        static_cast<void>(ns_paths::join(resultsPath, sizeof(resultsPath), "osiris-radio-results.json"));
+        static_cast<void>(ns_paths::join(resultsPartPath, sizeof(resultsPartPath), "osiris-radio-results.json.part"));
+        static_cast<void>(ns_paths::join(micScriptPath, sizeof(micScriptPath), "ns_mic_radio.sh"));
+    }
 
     // Feature objects are rebuilt per command, so all cross-call state is static.
     inline static pid_t currentPid{0};

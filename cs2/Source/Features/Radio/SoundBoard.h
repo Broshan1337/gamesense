@@ -19,6 +19,7 @@
 #include <GameClient/NetworkGameClientPointer.h>
 #include <GameClient/NetMessageFactory.h>
 #include <HookContext/HookContextMacros.h>
+#include <Utils/NsPaths.h>
 #include <Utils/VerifyConsole.h>
 
 // SOUND BOARD - in-process voice injection (replaces the host-script airhorn pipeline; the
@@ -86,8 +87,14 @@ inline EncodeFn opusEncode = nullptr;
 // ([u16 len][frame] framing). Each chunk re-opens/appends/closes: the game's own fd management
 // closes arbitrary fd NUMBERS (one landed on our persistent dump fd mid-clip once - the dump
 // stayed 0 bytes with mode 000 from an omitted open() mode argument), so nothing long-lived.
-inline void debugAppend(const char* path, const void* data, std::size_t length) noexcept
+// Appends to a diagnostics file inside the exchange root (NsPaths.h); `name` is relative.
+// Reopened per call on purpose (comment below) - and callers pass plain file NAMES, so the
+// debug dumps follow the exchange root everywhere.
+inline void debugAppend(const char* name, const void* data, std::size_t length) noexcept
 {
+    char path[ns_paths::kMaxPath];
+    if (!ns_paths::join(path, sizeof(path), name))
+        return;
     const int fd = ::open(path, 0x401 /* O_WRONLY|O_APPEND */ | 0100 /* O_CREAT */, 0644);
     if (fd < 0)
         return;
@@ -442,7 +449,7 @@ private:
         }
         std::memcpy(frame, clipPcm + playPos, take * sizeof(std::int16_t)); // tail stays zero-padded
         playPos += take;
-        debugAppend("/tmp/ns_board_pcm_debug.raw", frame, take * sizeof(std::int16_t));
+        debugAppend("ns_board_pcm_debug.raw", frame, take * sizeof(std::int16_t));
 
         std::uint8_t opusFrame[400];
         const std::int32_t frameLength = opusEncode(opusEncoder, frame, kSamplesPerFrame, opusFrame, sizeof(opusFrame));
@@ -451,8 +458,8 @@ private:
             return;
         }
         const std::uint16_t frameSize = static_cast<std::uint16_t>(frameLength);
-        debugAppend("/tmp/ns_board_opus_debug.frames", &frameSize, sizeof(frameSize));
-        debugAppend("/tmp/ns_board_opus_debug.frames", opusFrame, static_cast<std::size_t>(frameLength));
+        debugAppend("ns_board_opus_debug.frames", &frameSize, sizeof(frameSize));
+        debugAppend("ns_board_opus_debug.frames", opusFrame, static_cast<std::size_t>(frameLength));
 
         std::uint8_t payload[1024];
         const std::size_t payloadSize = makeVoiceEnvelope(opusFrame, static_cast<std::size_t>(frameLength),

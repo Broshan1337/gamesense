@@ -1025,7 +1025,7 @@ inline HttpSlot* acquireHttpSlot(lua_State* L)
     }
     if (!slot)
         return nullptr;
-    std::snprintf(slot->outPath, sizeof(slot->outPath), "/tmp/ns_lua_http_%d.txt", slotIndex);
+    std::snprintf(slot->outPath, sizeof(slot->outPath), "%s/ns_lua_http_%d.txt", ns_paths::root(), slotIndex);
     ::unlink(slot->outPath);
     slot->active = true;
     slot->processDone = false;
@@ -1096,15 +1096,15 @@ inline int l_httpGet(lua_State* L)
         return luaL_error(L, "http.get: too many concurrent requests");
     }
 
-    char configPath[64];
-    std::snprintf(configPath, sizeof(configPath), "/tmp/ns_lua_http_%d.cfg", static_cast<int>(slot - httpSlots));
+    char configPath[ns_paths::kMaxPath];
+    std::snprintf(configPath, sizeof(configPath), "%s/ns_lua_http_%d.cfg", ns_paths::root(), static_cast<int>(slot - httpSlots));
     ::unlink(configPath);
     if (!writeCurlConfig(configPath, "GET", url, nullptr, 0, nullptr)) {
         discardHttpSlot(L, slot);
         return luaL_error(L, "http.get: failed to write curl config");
     }
 
-    char command[512];
+    char command[1024];
     std::snprintf(command, sizeof(command), "curl -s --max-time 20 -K '%s' -o '%s' && mv -f '%s' '%s'",
         configPath, slot->outPath, slot->outPath, slot->outPath);
     slot->pid = spawnHostShell(command);
@@ -1182,12 +1182,12 @@ inline int l_httpRequest(lua_State* L)
     }
     const int slotIndex = static_cast<int>(slot - httpSlots);
 
-    char configPath[64];
-    char bodyPath[64] = "";
-    std::snprintf(configPath, sizeof(configPath), "/tmp/ns_lua_http_%d.cfg", slotIndex);
+    char configPath[ns_paths::kMaxPath];
+    char bodyPath[ns_paths::kMaxPath] = "";
+    std::snprintf(configPath, sizeof(configPath), "%s/ns_lua_http_%d.cfg", ns_paths::root(), slotIndex);
     ::unlink(configPath);
     if (body) {
-        std::snprintf(bodyPath, sizeof(bodyPath), "/tmp/ns_lua_http_%d.body", slotIndex);
+        std::snprintf(bodyPath, sizeof(bodyPath), "%s/ns_lua_http_%d.body", ns_paths::root(), slotIndex);
         ::unlink(bodyPath);
         const int fd = ::open(bodyPath, O_CREAT | O_WRONLY | O_TRUNC, 0600);
         if (fd < 0) {
@@ -1211,7 +1211,7 @@ inline int l_httpRequest(lua_State* L)
         return luaL_error(L, "http.request: failed to write curl config");
     }
 
-    char command[512];
+    char command[1024];
     std::snprintf(command, sizeof(command), "curl -s --max-time 20 -K '%s' -o '%s' && mv -f '%s' '%s'",
         configPath, slot->outPath, slot->outPath, slot->outPath);
     slot->pid = spawnHostShell(command);
@@ -2112,7 +2112,9 @@ static SteamApi steamApi;
 // same contract as gui_log, but without pulling the platform-API mock surface into the tests).
 static void luaSteamLog(const char* fmt, ...) noexcept
 {
-    NS_STR(steamLogPath, "/tmp/gamesense_gui.log");
+    char steamLogPath[ns_paths::kMaxPath];
+    if (!ns_paths::joinLog(steamLogPath, sizeof(steamLogPath), "gamesense_gui.log"))
+        return;
     const int fd = ::open(steamLogPath, O_CREAT | O_WRONLY | O_APPEND, 0666);
     if (fd < 0)
         return;

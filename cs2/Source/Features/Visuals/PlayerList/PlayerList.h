@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <ctime>
 
 #include <CS2/Classes/Entities/C_CSPlayerPawn.h>
 #include <CS2/Classes/Entities/CCSPlayerController.h>
@@ -9,6 +10,7 @@
 #include <Features/Visuals/PlayerList/PlayerListConfigVariables.h>
 #include <Features/Visuals/PlayerList/PlayerListSnapshot.h>
 #include <GameClient/Entities/PlayerController.h>
+#include <UI/ImGui/GuiLog.h>
 #include <GameClient/Entities/PlayerPawn.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
 #include <HookContext/HookContextMacros.h>
@@ -51,19 +53,40 @@ public:
         const auto actionTrackingOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayerController", "m_pActionTrackingServices");
         const auto matchStatsOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayerController_ActionTrackingServices", "m_matchStats");
         const auto killsOffset = hookContext.schemaSystem().getFieldOffset("CSPerRoundStats_t", "m_iKills");
-        if (!nameOffset.has_value() || !maxHealthOffset.has_value())
+        if (!nameOffset.has_value() || !maxHealthOffset.has_value()) {
+            // 2026-10-04 diagnosis: this bail used to be SILENT - an empty snapshot starved
+            // the player list, the RPC match state ("clear") and every schema-reading feature
+            // with zero visible errors. Throttled visibility of the exact failing stage:
+            static std::int64_t lastDiagNs = 0;
+            timespec ts{};
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            const std::int64_t nowNs = static_cast<std::int64_t>(ts.tv_sec) * 1'000'000'000LL + ts.tv_nsec;
+            if (nowNs - lastDiagNs > 10'000'000'000LL) {
+                lastDiagNs = nowNs;
+                gui_log::write("[matchdiag] schema lookup failed: CCSPlayerController.m_iszPlayerName -> %s",
+                    hookContext.schemaSystem().diagnoseFieldLookup("CCSPlayerController", "m_iszPlayerName"));
+            }
             return;
+        }
 
         player_list::Row rows[player_list::kMaxRows];
         int rowSlot = 0;
 
+        // CHAINDIAG: what does the entity walk actually see? (throttled 10s) - splits
+        // "run never called" from "entity list empty" from "no controllers classified"
+        // from "rows dropped before the UI" - the 2026-10-04 all-features-dead case.
+        int chainEntities = 0;
+        int chainControllers = 0;
+
         hookContext.template make<EntitySystem>().forEachNetworkableEntityIdentity([&](const auto& entityIdentity) {
+            ++chainEntities;
             if (rowSlot >= player_list::kMaxRows)
                 return;
 
             const auto entityTypeInfo = hookContext.entityClassifier().classifyEntity(entityIdentity.entityClass);
             if (!entityTypeInfo.template is<cs2::CCSPlayerController>())
                 return;
+            ++chainControllers;
 
             auto&& controller = hookContext.template make<PlayerController>(static_cast<cs2::CCSPlayerController*>(entityIdentity.entity));
             auto* const controllerEntity = static_cast<cs2::C_BaseEntity*>(entityIdentity.entity);
@@ -145,6 +168,19 @@ public:
         }
 
         player_list::publish(rows, rowSlot);
+
+        // CHAINDIAG (throttled 10s): the full pipeline verdict each tick.
+        {
+            static std::int64_t lastDiagNs = 0;
+            timespec ts{};
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            const std::int64_t nowNs = static_cast<std::int64_t>(ts.tv_sec) * 1'000'000'000LL + ts.tv_nsec;
+            if (lastDiagNs == 0 || nowNs - lastDiagNs > 10'000'000'000LL) {
+                lastDiagNs = nowNs;
+                gui_log::write("[chaindiag] plist: classifierInit=%d identities=%d controllers=%d rows=%d",
+                    hookContext.entityClassifier().initialized() ? 1 : 0, chainEntities, chainControllers, rowSlot);
+            }
+        }
     }
 
 private:

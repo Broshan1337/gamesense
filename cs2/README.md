@@ -14,8 +14,12 @@ cmake --build cs2/build-dbg --target Neversnooze
 
 Inject with `sudo cs2/inject.sh` (it prompts: release from `cs2/build/`, debug from
 `cs2/build-dbg/`; it refuses stale builds). Work in a debug build first — crashes give full
-logs there, and the in-game log lives at `/tmp/gamesense_gui.log` (anomaly-only: a healthy
-session prints nothing).
+logs there, and the in-game log lives at `$HOME/OsirisCS2/logs/gamesense_gui.log` (anomaly-only:
+a healthy session prints nothing). All module diagnostics and the loader/module exchange files
+(unload request, RPC/persona/radio helper scripts) live under that exchange root — `/tmp`
+stopped being shared between the Steam container and the host with the 2026-10-04 Steam client
+update, so `/tmp` paths no longer work for anything the module writes (see
+`Source/Utils/NsPaths.h`).
 
 Tests: `cmake -B cs2/build-tests -S cs2 -DENABLE_TESTS=unit` then
 `cmake --build cs2/build-tests && ctest --test-dir cs2/build-tests`.

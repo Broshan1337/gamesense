@@ -38,7 +38,8 @@
 #include <GameClient/KeyboardState.h>
 #include <imgui.h>
 #include <UI/ImGui/Neverlose/Neverlose.h> // neverlose::uiScale for the renderer.scale binding
-#include <Utils/NsStr.h> // LuaApi.h is included inside namespace lua and cannot include headers itself
+#include <Utils/NsPaths.h> // LuaApi.h is included inside namespace lua and cannot include headers itself
+#include <Utils/NsStr.h> // ditto
 
 struct lua_State;
 
@@ -71,7 +72,7 @@ struct HttpSlot {
     pid_t pid = 0;
     int scriptIndex = -1;
     int callbackRef = -1; // LUA_REGISTRYINDEX ref to the response callback
-    char outPath[64] = {};
+    char outPath[192] = {};
 };
 
 // Pages a gui.* item can live on. -1 (kScriptSubtab) = the script's own sub-tab on the Scripts

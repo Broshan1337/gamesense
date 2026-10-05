@@ -542,7 +542,8 @@ public:
     }
 
     // Pellets fired per shot (1 for rifles/pistols, many for shotguns), from the weapon's VData
-    // (m_nNumBullets, offset 0x738 - confirmed against the current cs2-dumper output). The cone
+    // (m_nNumBullets, offset 0x730 - schema-confirmed, stable across the 09-23/09-26/10-03
+    // builds per cs2-dumper). The cone
     // generator advances the RNG stream once per bullet, so the predictor must pass this. {} if VData
     // is not resolved yet (freshly spawned weapon).
     [[nodiscard]] Optional<int> numBullets() const noexcept
@@ -686,8 +687,9 @@ public:
         return inaccuracy <= penalty.value() + jumpApex.value() + tolerance;
     }
 
-    // The weapon's current recoil index (m_flRecoilIndex, offset 0x2690 - confirmed against the
-    // current cs2-dumper output): how many shots into the current spray this is. The cone generator
+    // The weapon's current recoil index (m_flRecoilIndex, offset 0x28B8 - schema-confirmed,
+    // stable across the 09-23/09-26/10-03 builds per cs2-dumper; the old 0x2690 predates the
+    // 09-23 layout shift): how many shots into the current spray this is. The cone generator
     // factors it in, so the predictor must pass the live value.
     [[nodiscard]] Optional<float> recoilIndex() const noexcept
     {
@@ -701,8 +703,8 @@ public:
 private:
     // cs2-dumper offsets (2026-08-20 build). m_nNumBullets is on CCSWeaponBaseVData; m_flRecoilIndex
     // is on C_CSWeaponBase (read straight off the weapon entity).
-    static constexpr std::ptrdiff_t kNumBulletsOffset = 0x738;
-    static constexpr std::ptrdiff_t kRecoilIndexOffset = 0x2690;
+    static constexpr std::ptrdiff_t kNumBulletsOffset = 0x730;
+    static constexpr std::ptrdiff_t kRecoilIndexOffset = 0x28B8;
 
     // Upper bound for the accuracy-state block inaccuracyAtVelocity backs up on the stack. velocity's
     // real span is 40 bytes (m_flTurningInaccuracyDelta..m_flRecoilIndex); 64 leaves headroom if a game

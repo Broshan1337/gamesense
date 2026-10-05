@@ -8,6 +8,7 @@
 #include "Platform/SelfUnload.h"
 #include "Utils/ReturnAddress.h"
 #include <Utils/CrashLogger.h>
+#include <UI/ImGui/GuiLog.h>
 #include <Utils/RetAddrSpoofer.h>
 #include <Utils/SessionBind.h>
 #include <Security/Honeypots.h>
@@ -451,9 +452,9 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     hookContext.template make<ChatTools>().restoreClanTag();
     // Remove this session's integrity-baseline report (loader watchdog liveness signal).
     {
-        char path[64];
-        if (const int written = std::snprintf(path, sizeof(path), "/tmp/ns_module_integrity_%d",
-                LinuxPlatformApi::processId()); written > 0 && written < static_cast<int>(sizeof(path)))
+        char path[192];
+        if (ns_paths::joinFormat(path, sizeof(path), "ns_module_integrity", "_%d",
+                LinuxPlatformApi::processId()))
             ::unlink(path);
     }
     hookContext.template make<userinfo_flood::UserInfoFlood>().onUnload();
@@ -514,6 +515,19 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
 // including the one that confirmed the fix.
 void Source2ClientHook_onFrameStageNotify(cs2::CSource2Client* thisptr, int frameStage) noexcept
 {
+    // CHAINDIAG: FSN heartbeat (throttled) - alive means the client hook chain works.
+    {
+        static std::uint32_t fsnCalls = 0;
+        static std::int64_t lastLogNs = 0;
+        ++fsnCalls;
+        timespec ts{};
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        const std::int64_t nowNs = static_cast<std::int64_t>(ts.tv_sec) * 1'000'000'000LL + ts.tv_nsec;
+        if (lastLogNs == 0 || nowNs - lastLogNs > 10'000'000'000LL) {
+            lastLogNs = nowNs;
+            gui_log::write("[chaindiag] fsn alive, calls=%u lastStage=%d", fsnCalls, frameStage);
+        }
+    }
     // Quiesce pattern shared by all hook entry points: during teardown we still deliver the
     // original (a missed frame stage glitches the client) while skipping ALL feature logic.
     const bool shuttingDown = HookQuiesce::isShuttingDown();
@@ -648,6 +662,19 @@ static int buildLuaEventArgs(lua::EventArg* out, const char* eventName, cs2::IGa
 // dispatcher pattern).
 bool GameEventManagerHook_onFireEventClientSide(cs2::IGameEventManager2* thisptr, cs2::IGameEvent* event) noexcept
 {
+    // CHAINDIAG: game-event heartbeat (hitmarker/hitsound/WorldColors all gate off this).
+    {
+        static std::uint32_t gemEvents = 0;
+        static std::int64_t lastLogNs = 0;
+        ++gemEvents;
+        timespec ts{};
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        const std::int64_t nowNs = static_cast<std::int64_t>(ts.tv_sec) * 1'000'000'000LL + ts.tv_nsec;
+        if (lastLogNs == 0 || nowNs - lastLogNs > 10'000'000'000LL) {
+            lastLogNs = nowNs;
+            gui_log::write("[chaindiag] gem alive, events=%u", gemEvents);
+        }
+    }
     const bool shuttingDown = HookQuiesce::isShuttingDown();
     if (shuttingDown && !HookContext<GlobalContext>::isGlobalContextComplete())
         return true;
@@ -705,6 +732,20 @@ bool GameEventManagerHook_onFireEventClientSide(cs2::IGameEventManager2* thisptr
 // AFTER it and edit the finished command. Running first would just have the original overwrite it.
 void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCmd* cmd) noexcept
 {
+    // CHAINDIAG: is the input chain alive in-match? (2026-10-04: every CreateMove-gated
+    // feature - triggerbot/bhop/strafer - dead with zero errors; this tells alive from dead.)
+    {
+        static std::uint32_t createMoveCalls = 0;
+        static std::int64_t lastLogNs = 0;
+        ++createMoveCalls;
+        timespec ts{};
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        const std::int64_t nowNs = static_cast<std::int64_t>(ts.tv_sec) * 1'000'000'000LL + ts.tv_nsec;
+        if (lastLogNs == 0 || nowNs - lastLogNs > 10'000'000'000LL) {
+            lastLogNs = nowNs;
+            gui_log::write("[chaindiag] createmove alive, calls=%u slot=%d", createMoveCalls, slot);
+        }
+    }
     // 0x370 entry / 0x371 normal tail (2026-09-26 22:15 crash: the game destroyed an
     // input-system object whose per-slot command ring held a dead-stack pointer; these
     // breadcrumbs prove which input path ran last, see hud_root_walk 0x376/0x377 for the
@@ -1003,6 +1044,9 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     // [status] entries; dump them once on the first rendered frame (engine console is ready by
     // now - WelcomeSound's rationale, same pattern).
     StatusReport::dumpOnce([](const char* message, bool ok) {
+        // Mirror into the gui log: the engine console is ephemeral, but the gui log survives
+        // the session on the host - the only way to read the init health report after a crash.
+        gui_log::write("[status] %s %s", ok ? "OK" : "FAIL-CLOSED", message);
         VerifyConsole::write(0.0f, "status", "%s %s", ok ? "OK" : "FAIL-CLOSED", message);
     });
 
@@ -1010,11 +1054,15 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     // The ImGui menu's Unload button sets a present-thread flag; the teardown itself stays on
     // this thread like every other unload path. The LOADER's unload button cannot use dlopen/
     // dlclose anymore (the VAC hardening unlinked our link_map node, so RTLD_NOLOAD finds
-    // nothing) - it instead writes /tmp/ns_unload_request, which is consumed here: same
-    // present-thread flag, same teardown path.
-    if (::access("/tmp/ns_unload_request", F_OK) == 0) {
-        ::unlink("/tmp/ns_unload_request");
-        GUI::requestUnload();
+    // nothing) - it instead writes <exchangeRoot>/ns_unload_request (NsPaths.h), which is
+    // consumed here: same present-thread flag, same teardown path.
+    {
+        char unloadRequestPath[192];
+        if (ns_paths::join(unloadRequestPath, sizeof(unloadRequestPath), "ns_unload_request")
+            && ::access(unloadRequestPath, F_OK) == 0) {
+            ::unlink(unloadRequestPath);
+            GUI::requestUnload();
+        }
     }
     // SESSION BIND: one-time injection-trailer verify + loader liveness (Utils/SessionBind.h).
     // Fail-closed: a module injected by anything but our loader releases itself here; an

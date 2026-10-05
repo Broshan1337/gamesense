@@ -257,10 +257,16 @@ bool GUI::init() noexcept
 
     gui_log::write("init: begin");
 
-    // STALE-REQUEST GUARD: an /tmp/ns_unload_request left over from a PREVIOUS module lifetime
+    // STALE-REQUEST GUARD: an ns_unload_request left over from a PREVIOUS module lifetime
     // (e.g. an unload that failed against an older build) must not unload this fresh instance
     // on its first frame. Wipe it here - anything written AFTER this point is a genuine request.
-    ::unlink("/tmp/ns_unload_request");
+    // Also wipe the legacy /tmp location: a pre-migration build's leftover must not trip us either.
+    {
+        char unloadRequestPath[192];
+        if (ns_paths::join(unloadRequestPath, sizeof(unloadRequestPath), "ns_unload_request"))
+            ::unlink(unloadRequestPath);
+        ::unlink("/tmp/ns_unload_request");
+    }
 
     if (!gui_sdl::resolveFunctions()) {
         StatusReport::record("GUI: SDL3 function resolution failed - menu disabled", false);

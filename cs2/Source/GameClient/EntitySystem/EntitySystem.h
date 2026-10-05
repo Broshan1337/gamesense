@@ -12,6 +12,8 @@
 #include <CS2/Classes/EntitySystem/CGameEntitySystem.h>
 #include <GameClient/EntitySystem/EntityIdentity.h>
 #include <MemoryPatterns/PatternTypes/EntitySystemPatternTypes.h>
+#include <UI/ImGui/GuiLog.h>
+#include <ctime>
 
 template <typename HookContext>
 class EntitySystem {
@@ -73,6 +75,30 @@ public:
     void forEachNetworkableEntityIdentity(F&& f) const noexcept
     {
         const auto entityList = getEntityList();
+
+        // CHAINDIAG: BEFORE the early return - what does getEntityList actually compute?
+        // (2026-10-04: identities=0 in-match with a live entity list. First probe sat after
+        // the null-return and could never fire in the failure case - its silence WAS the
+        // verdict: entityList == nullptr. This placement splits "es null" / "offset wrong".)
+        {
+            static std::int64_t lastDiagNs = 0;
+            static std::uint32_t diagCount = 0;
+            const bool first = lastDiagNs == 0;
+            timespec ts{};
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            const std::int64_t nowNs = static_cast<std::int64_t>(ts.tv_sec) * 1'000'000'000LL + ts.tv_nsec;
+            if (first || nowNs - lastDiagNs > 10'000'000'000LL) {
+                if (++diagCount <= 12) {   // cap: 2 minutes of diagnosis, then silent
+                    lastDiagNs = nowNs;
+                    const auto offset = hookContext.patternSearchResults().template get<EntityListOffset>();
+                    const auto es = entitySystem();
+                    gui_log::write("[chaindiag] getEntityList: es=%p offset=%d list=%p",
+                        reinterpret_cast<const void*>(es),
+                        offset ? static_cast<int>(offset.rawOffset()) : -1,
+                        reinterpret_cast<const void*>(entityList));
+                }
+            }
+        }
         if (!entityList)
             return;
 

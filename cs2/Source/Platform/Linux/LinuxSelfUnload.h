@@ -8,6 +8,8 @@
 
 #include "LinuxPlatformApi.h"
 
+#include <Utils/NsPaths.h>
+
 // Unmaps this library from the game process, so that injecting it again into the SAME running game
 // works.
 //
@@ -41,14 +43,17 @@
 // is a compile error, not a crash at unload time in front of the user.
 class LinuxSelfUnload {
 public:
-    // Append-only diagnostics for the unload path. /tmp is shared between the Steam runtime
-    // container and the host shell, so failures here are visible from outside the game. Every
-    // stage of the unload logs; if the library ever stays mapped, this file says which stage
-    // failed (or that the worker never ran at all). Best-effort: failures to log are ignored.
+    // Append-only diagnostics for the unload path. The exchange root (NsPaths.h) is writable
+    // AND visible from the host shell, so failures here are visible from outside the game.
+    // Every stage of the unload logs; if the library ever stays mapped, this file says which
+    // stage failed (or that the worker never ran at all). Best-effort: failures to log are ignored.
     static void log(const char* message) noexcept
     {
         // O_WRONLY | O_APPEND | O_CREAT, 0644 - numeric because fcntl flags under -nostdlib.
-        const auto fd = LinuxPlatformApi::open("/tmp/libMangoHud_unload.log", 0x441, 0644);
+        char logPath[ns_paths::kMaxPath];
+        if (!ns_paths::joinLog(logPath, sizeof(logPath), "libMangoHud_unload.log"))
+            return;
+        const auto fd = LinuxPlatformApi::open(logPath, 0x441, 0644);
         if (fd < 0)
             return;
         std::size_t length = 0;

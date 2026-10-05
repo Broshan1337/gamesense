@@ -57,6 +57,17 @@ public:
                 resultToStore = result.abs2(operation == CodePatternOperation::Abs4 ? 4 : 5);
             } else if (operation == CodePatternOperation::Read) {
                 resultToStore = result.read();
+            } else if (operation == CodePatternOperation::Read8) {
+                // THE 2026-10-04 ALL-FEATURES-DEAD ROOT CAUSE: this branch did not exist -
+                // every .read8() pattern (~25 of them: entity list, round timers, scene-node
+                // offsets, weapon services...) stored ZEROS at runtime. The offline validator
+                // emulates the ops itself, so `pattern_forge validate` stayed green while the
+                // live module resolved every read8 pattern to 0 -> falsy FieldOffsets ->
+                // getEntityList() nullptr -> ESP/player list/glow/aimbot-targeting all dead.
+                resultToStore = result.read8();
+            } else {
+                // Unknown operation would silently zero - fail loud in debug builds.
+                assert(false && "unhandled CodePatternOperation in findPatterns");
             }
             results.store(patternIndex, resultToStore);
             ++patternIndex;

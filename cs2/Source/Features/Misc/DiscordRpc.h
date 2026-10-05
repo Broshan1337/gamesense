@@ -15,6 +15,7 @@
 #include <Features/Radio/RadioManager.h>
 #include <Features/Visuals/PlayerList/PlayerListSnapshot.h>
 #include <HookContext/HookContextMacros.h>
+#include <Utils/NsPaths.h>
 #include <Utils/StringBuilder.h>
 
 // posix_spawn environment (unistd.h only declares it under feature macros - mirror RadioManager;
@@ -27,8 +28,8 @@ extern "C" char** environ;
 //   * THIS feature (game process, present thread) gathers match data - team sizes, alive/dead
 //     per side and the local player's team damage from the shared player-list snapshot, match
 //     kind from the game_type/game_mode cvars - and renders the two user-editable template lines
-//     into /tmp/ns_discord_rpc.json (atomic rename, content-gated).
-//   * A HOST-SIDE python relay (/tmp/ns_discord_rpc.py, spawned once through
+//     into <exchangeRoot>/ns_discord_rpc.json (atomic rename, content-gated).
+//   * A HOST-SIDE python relay (ns_discord_rpc.py in the exchange root, spawned once through
 //     steam-runtime-launch-client) owns the actual connection to the Discord desktop client's
 //     local IPC socket: it polls the JSON file, reconnects when Discord drops the link, manages
 //     the "elapsed" timestamp itself (the game cannot produce a unix epoch) and clears the
@@ -138,9 +139,25 @@ public:
     }
 
 private:
-    static constexpr const char* kStatePath = "/tmp/ns_discord_rpc.json";
-    static constexpr const char* kStatePartPath = "/tmp/ns_discord_rpc.json.part";
-    static constexpr const char* kRelayScriptPath = "/tmp/ns_discord_rpc.py";
+    // Paths are resolved once into the writable exchange root (Utils/NsPaths.h). The relay
+    // script runs on the HOST (steam-runtime-launch-client --host) while the state json is
+    // written from inside the container - since the 2026-10-04 Steam client update the two
+    // sides no longer share /tmp, so both live under $HOME/OsirisCS2, visible to both.
+    inline static char statePath[192];
+    inline static char statePartPath[192];
+    inline static char relayScriptPath[192];
+    inline static bool relayPathsResolved = false;
+
+    static void resolveRelayPaths() noexcept
+    {
+        if (relayPathsResolved)
+            return;
+        relayPathsResolved = true;
+        static_cast<void>(ns_paths::join(statePath, sizeof(statePath), "ns_discord_rpc.json"));
+        static_cast<void>(ns_paths::join(statePartPath, sizeof(statePartPath), "ns_discord_rpc.json.part"));
+        static_cast<void>(ns_paths::join(relayScriptPath, sizeof(relayScriptPath), "ns_discord_rpc.py"));
+    }
+
     static constexpr const char* kLaunchClientPath = "/usr/bin/steam-runtime-launch-client";
     static constexpr const char* kLargeImageKey = "ns2";
     static constexpr const char* kDefaultDetails = "{mode} | {t}v{ct} | alive {alive} | dead {dead} | team dmg {tdmg}";
@@ -288,6 +305,7 @@ private:
     // cause pointless SET_ACTIVITY frames.
     void writeStateFile(const MatchState* match, const char* station) noexcept
     {
+        resolveRelayPaths();
         loadTemplatesOnce();
 
         char rendered[2048];
@@ -322,7 +340,7 @@ private:
 
         std::snprintf(lastRendered, sizeof(lastRendered), "%s", rendered);
 
-        const int fd = ::open(kStatePartPath, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+        const int fd = ::open(statePartPath, O_CREAT | O_WRONLY | O_TRUNC, 0666);
         if (fd < 0)
             return;
         const std::size_t length = std::strlen(rendered);
@@ -331,13 +349,13 @@ private:
             const auto chunk = ::write(fd, rendered + written, length - written);
             if (chunk <= 0) {
                 ::close(fd);
-                ::unlink(kStatePartPath);
+                ::unlink(statePartPath);
                 return;
             }
             written += static_cast<std::size_t>(chunk);
         }
         ::close(fd);
-        ::rename(kStatePartPath, kStatePath);
+        ::rename(statePartPath, statePath);
     }
 
     // --- template sidecar (<configDir>/discord_rpc.txt: details line, then state line) ---
@@ -405,8 +423,8 @@ private:
 
     // --- relay lifecycle ----------------------------------------------------------------
 
-    // The relay script is too long for the spawnHostShell command buffer - written to /tmp once
-    // per game process (like the mic broadcast switch script).
+    // The relay script is too long for the spawnHostShell command buffer - written to the
+    // exchange root once per game process (like the mic broadcast switch script).
     void writeRelayScriptOnce() noexcept
     {
         if (relayScriptWritten)
@@ -417,7 +435,7 @@ private:
 import json, os, socket, struct, time
 
 CLIENT_ID = "1545419869732995173"
-STATE = "/tmp/ns_discord_rpc.json"
+STATE = "%STATE%"
 
 # Opcode numbering per arRPC / the official modern Discord SDK (NOT the legacy discord-rpc C++
 # library, whose Frame=0/Handshake=2 numbering makes arRPC read the handshake as CLOSE and hang
@@ -489,7 +507,7 @@ def main():
     last_seen = None
     while True:
         try:
-            with open("/tmp/ns_discord_rpc.json") as f:
+            with open(STATE) as f:
                 content = f.read()
         except OSError:
             content = None
@@ -571,14 +589,17 @@ def main():
 main()
 )";
 
-        const int fd = ::open(kRelayScriptPath, O_CREAT | O_WRONLY | O_TRUNC, 0755);
+        resolveRelayPaths();
+        const int fd = ::open(relayScriptPath, O_CREAT | O_WRONLY | O_TRUNC, 0755);
         if (fd < 0)
             return;
         // The brand literals are encrypted (NsStr.h) - they exist here only as substitute
         // tokens in the script text and are spliced in as the decrypted plaintext on write.
+        // %STATE% is spliced with the exchange-root state path (NsPaths.h), so the host-side
+        // relay reads exactly where the module writes.
         NS_STR(brandLarge, "Neversnooze");
         NS_STR(brandSmall, "nonprime.club");
-        char scriptBuf[sizeof(kRelay) + 128];
+        char scriptBuf[sizeof(kRelay) + 512];
         {
             const char* src = kRelay;
             char* w = scriptBuf;
@@ -595,6 +616,14 @@ main()
                 std::memcpy(w, brandSmall.c_str(), brandSmall.size());
                 w += brandSmall.size();
                 src = smallHit + 5;
+            }
+            while (const char* stateHit = std::strstr(src, "%STATE%")) {
+                std::memcpy(w, src, static_cast<std::size_t>(stateHit - src));
+                w += stateHit - src;
+                const auto stateLength = std::strlen(statePath);
+                std::memcpy(w, statePath, stateLength);
+                w += stateLength;
+                src = stateHit + 7;
             }
             std::memcpy(w, src, std::strlen(src) + 1);
         }
@@ -630,9 +659,14 @@ main()
 
     void spawnRelay() noexcept
     {
+        resolveRelayPaths();
         // exec python3 so the tracked pid IS the relay process (same pattern as the radio's
         // ffplay exec chain). If Discord is not running, the relay retries on its own loop.
-        relayPid = spawnHostShell("exec python3 /tmp/ns_discord_rpc.py");
+        char command[256];
+        const int commandLen = std::snprintf(command, sizeof(command), "exec python3 %s", relayScriptPath);
+        if (commandLen <= 0 || static_cast<std::size_t>(commandLen) >= sizeof(command))
+            return;
+        relayPid = spawnHostShell(command);
     }
 
     void killRelay() noexcept

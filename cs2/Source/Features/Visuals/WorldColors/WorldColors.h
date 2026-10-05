@@ -8,6 +8,7 @@
 #include <CS2/Classes/IGameEventManager2.h>
 #include <Config/ConfigVariable.h>
 #include <Features/Visuals/WorldColors/WorldColorsConfigVariables.h>
+#include <Utils/NsPaths.h>
 #include <Utils/NsStr.h>
 #include <Features/Visuals/WorldColors/WorldColorsState.h>
 #include <GameClient/ConVars/CvarSystem.h>
@@ -528,10 +529,13 @@ private:
     }
 
     // the particles-debug file exists -> collect distinct particle system names and print
-    // them (throttled by VerifyConsole) to the gui log.
+    // them (throttled by VerifyConsole) to the gui log. The file lives in the exchange root
+    // (NsPaths.h) so it can be created from the host shell while the game runs.
     [[nodiscard]] static bool particlesDebugEnabled() noexcept
     {
-        NS_STR(debugFile, "/tmp/osiris_particles_debug");
+        char debugFile[ns_paths::kMaxPath];
+        if (!ns_paths::join(debugFile, sizeof(debugFile), "osiris_particles_debug"))
+            return false;
         const int fd = LinuxPlatformApi::open(debugFile, 0 /* O_RDONLY */);
         if (fd >= 0) {
             LinuxPlatformApi::close(fd);

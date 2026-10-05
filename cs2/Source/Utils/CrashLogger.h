@@ -9,13 +9,15 @@
 
 #include <Platform/Linux/LinuxPlatformApi.h>
 #include <Utils/CrashGuard.h>
+#include <Utils/NsPaths.h>
 #include <Utils/NsStr.h>
 
 // Crash diagnostic logger (Linux). A SIGSEGV/SIGBUS inside a hook callback otherwise just kills
 // the game with a coredump that then needs a gdb session to decode. The handler writes the
 // faulting PC and fault address resolved to module+offset (any mapped module, not just ours -
 // the crash that motivated the module table sat in the Vulkan ICD), plus the breadcrumb trace
-// ring, to /tmp/gamesense_crash_<pid>_<tid>.txt. Feeding the two numbers into
+// ring, to <exchangeRoot>/logs/gamesense_crash_<pid>_<tid>.txt (exchange root = $HOME/OsirisCS2,
+// see NsPaths.h; /tmp fallback when home is unusable). Feeding the two numbers into
 // scratchpad/crash_diag.py re-derives the crash site offline.
 //
 // Covered signals: SEGV/BUS/ILL (memory faults) plus ABRT/FPE/TRAP/SYS. The
@@ -88,6 +90,12 @@ namespace CrashLogger
         traceRing[traceWriteIndex & (kTraceCapacity - 1)] = code;
         ++traceWriteIndex;
     }
+
+    // Resolved once by install() into the writable exchange root (NsPaths.h - see its
+    // header comment for why this left /tmp). The handler only appends "<pid>_<tid>.txt",
+    // so it stays signal-safe: no getenv, no mkdir, no allocation here.
+    inline char crashFilePrefix[160] = "/tmp/gamesense_crash_";
+    inline std::size_t crashFilePrefixLength = 21;
 
     inline void writeAll(int fd, const char* data, std::size_t length) noexcept
     {
@@ -341,12 +349,11 @@ namespace CrashLogger
         // Per-THREAD file: two threads can fault near-simultaneously (seen 2026-09-06: two
         // physics-event spew threads) and a shared path interleaved their writes line-by-line,
         // producing a self-contradictory report (crash A's pc + crash B's registers).
-        char path[64];
+        char path[192];
         {
-            NS_STR(crashPrefix, "/tmp/gamesense_crash_");
             char* w = path;
-            std::memcpy(w, crashPrefix, 21);
-            w += 21;
+            std::memcpy(w, crashFilePrefix, crashFilePrefixLength);
+            w += crashFilePrefixLength;
             w = appendDecimal(w, LinuxPlatformApi::processId());
             *w++ = '_';
             w = appendDecimal(w, LinuxPlatformApi::threadId());
@@ -463,6 +470,12 @@ namespace CrashLogger
 
     inline void install() noexcept
     {
+        // Resolve the diagnostics root FIRST (NsPaths.h) so a crash in the earliest init
+        // stages already lands in a writable, host-visible directory.
+        ns_paths::init();
+        if (ns_paths::joinLog(crashFilePrefix, sizeof(crashFilePrefix), "gamesense_crash_"))
+            crashFilePrefixLength = ns_paths::length(crashFilePrefix);
+
         scanMappedModules();
         // Name-agnostic self-resolution: the generic table merged by basename can miss the
         // memfd-loaded DSO (its maps line ends in " (deleted)", and OTHER deleted files merge

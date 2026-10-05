@@ -71,7 +71,7 @@ using CalculateSpreadFn = void(std::int16_t itemDefinitionIndex, int numBullets,
 STRONG_TYPE_ALIAS(PointerToCalculateSpreadFunction, CalculateSpreadFn*);
 
 // sub_14537D0 - CS2's UpdateAccuracyPenalty (velocity-cs2 "weapon_update_accuracy"). Exponentially
-// decays the weapon's m_fAccuracyPenalty (0x2680) and m_flRecoilIndex (0x2690) toward the current
+// decays the weapon's m_fAccuracyPenalty (0x28A8) and m_flRecoilIndex (0x28B8) toward the current
 // tick and stamps the last-update tick, so GetInaccuracy/GetSpread read a value that is CURRENT
 // rather than stale from the last game update. Must be called on the weapon right before reading its
 // inaccuracy/spread for a prediction, or the predicted cone lags the real one (badly for fast-firing

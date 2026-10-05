@@ -6326,7 +6326,8 @@ void accountBar(ImDrawList* d, ImVec2 base) noexcept
         d->AddRectFilled(account, account + ImVec2(barWidth, s(38)), (kRowHover & 0x00FFFFFFu) | (static_cast<ImU32>(235 * r) << IM_COL32_A_SHIFT), s(6));
 
     // avatar: user image from <config dir>/avatar.png first, then the steam persona fetch
-    // (/tmp/ns_steam_avatar.png from SteamPersona.h), NS monogram until either is staged.
+    // (ns_steam_avatar.png in the exchange root from SteamPersona.h), NS monogram until either
+    // is staged.
     const ImVec2 avatar = account + ImVec2(s(7), s(5));
     const float avatarRadius = s(14);
     static bool logoStaged = false; // present thread only
@@ -8576,7 +8577,7 @@ bool avatarLoadAttempted = false;
     return true;
 }
 
-// Priority: user avatar in the config dir, then the steam persona fetch in /tmp
+// Priority: user avatar in the config dir, then the steam persona fetch in the exchange root
 // (Source/Features/Hud/SteamPersona.h). Returns true when a texture was staged.
 [[nodiscard]] bool loadAvatar() noexcept
 {
@@ -8592,7 +8593,7 @@ bool avatarLoadAttempted = false;
             staged = stageAvatarFromFile(path);
         }
     }));
-    return staged || stageAvatarFromFile("/tmp/ns_steam_avatar.png");
+    return staged || stageAvatarFromFile(steam_persona::avatarFile());
 }
 
 void neverlose::processDeferred() noexcept

@@ -136,10 +136,9 @@ inline NS_OBF_FLATTEN void tick() noexcept
         // disagreement between here and maps = someone tampered with the file -> logged by
         // the loader, never fatal.
         {
-            char path[64];
-            if (const int written = std::snprintf(path, sizeof(path), "/tmp/ns_module_integrity_%d",
-                    LinuxPlatformApi::processId());
-                written > 0 && written < static_cast<int>(sizeof(path))) {
+            char path[192];
+            if (ns_paths::joinFormat(path, sizeof(path), "ns_module_integrity", "_%d",
+                    LinuxPlatformApi::processId())) {
                 if (const int fd = LinuxPlatformApi::open(path, 0x41 /* O_WRONLY|O_CREAT */, 0600); fd >= 0) {
                     char line[160];
                     const int len = std::snprintf(line, sizeof(line),

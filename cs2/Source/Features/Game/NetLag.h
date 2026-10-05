@@ -18,6 +18,7 @@
 #include <GameClient/Bind.h>
 #include <HookContext/HookContextMacros.h>
 #include <Platform/Linux/LinuxDynamicLibrary.h>
+#include <Utils/NsPaths.h>
 #include <Platform/Linux/LinuxPlatformApi.h>
 
 // Shared state between the game thread (config polling) and the network thread(s) that run the
@@ -157,7 +158,7 @@ namespace netlag_hook
 
 constexpr std::size_t kMaxDatagram = 1400;   // SNS MTU-sized payloads; larger datagrams pass untouched
 constexpr std::size_t kRingSlots = 128;
-constexpr const char* kStatsPath = "/tmp/ns_netlag_stats.txt";
+constexpr const char* kStatsName = "ns_netlag_stats.txt";
 
 using SendToFn = ssize_t(*)(int, const void*, std::size_t, int, const sockaddr*, socklen_t);
 using SendMsgFn = ssize_t(*)(int, const msghdr*, int);
@@ -341,7 +342,10 @@ inline void writeStats() noexcept
         static_cast<unsigned long long>(net_lag::statOverflow.load(std::memory_order_relaxed)),
         static_cast<unsigned long long>(net_region::statRegionBlocked.load(std::memory_order_relaxed)),
         net_lag::chokeEngaged.load(std::memory_order_relaxed) ? 1 : 0);
-    if (const int fd = LinuxPlatformApi::open(kStatsPath, O_WRONLY | O_CREAT | O_TRUNC, 0644); fd >= 0) {
+    char statsPath[ns_paths::kMaxPath];
+    if (!ns_paths::join(statsPath, sizeof(statsPath), netlag_hook::kStatsName))
+        return;
+    if (const int fd = LinuxPlatformApi::open(statsPath, O_WRONLY | O_CREAT | O_TRUNC, 0644); fd >= 0) {
         static_cast<void>(LinuxPlatformApi::write(fd, line, std::strlen(line)));
         static_cast<void>(LinuxPlatformApi::close(fd));
     }

@@ -45,6 +45,7 @@ extern "C" {
 #include <Platform/Linux/LinuxDynamicLibrary.h>
 #include <UI/ImGui/GuiLog.h>
 #include <Utils/CrashLogger.h>
+#include <Utils/NsPaths.h>
 #include <Utils/NsStr.h>
 #include <Utils/VerifyConsole.h>
 
@@ -452,10 +453,10 @@ static void discardHttpSlot(lua_State* L, HttpSlot* slot) noexcept
         ::kill(slot->pid, SIGKILL);
         ::waitpid(slot->pid, nullptr, 0);
     }
-    char configPath[64];
-    char bodyPath[64];
-    std::snprintf(configPath, sizeof(configPath), "/tmp/ns_lua_http_%d.cfg", static_cast<int>(slot - httpSlots));
-    std::snprintf(bodyPath, sizeof(bodyPath), "/tmp/ns_lua_http_%d.body", static_cast<int>(slot - httpSlots));
+    char configPath[ns_paths::kMaxPath];
+    char bodyPath[ns_paths::kMaxPath];
+    std::snprintf(configPath, sizeof(configPath), "%s/ns_lua_http_%d.cfg", ns_paths::root(), static_cast<int>(slot - httpSlots));
+    std::snprintf(bodyPath, sizeof(bodyPath), "%s/ns_lua_http_%d.body", ns_paths::root(), static_cast<int>(slot - httpSlots));
     ::unlink(configPath);
     ::unlink(bodyPath);
     ::unlink(slot->outPath);

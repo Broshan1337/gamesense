@@ -11,6 +11,8 @@
 
 #include <imgui.h>
 
+#include <Utils/NsPaths.h>
+
 // posix_spawn environment (unistd.h only declares it under feature macros - mirror RadioManager;
 // must stay at global scope).
 extern "C" char** environ;
@@ -18,8 +20,8 @@ extern "C" char** environ;
 // Local Steam persona for the account bar (name + avatar.png for the existing avatar loader).
 //
 // All IO happens on the HOST (the Steam client's own data lives there; the game runs inside the
-// Steam container): a small shell script written once to /tmp/ns_steam_persona.sh and spawned
-// through steam-runtime-launch-client reads
+// Steam container): a small shell script written once to <exchangeRoot>/ns_steam_persona.sh and
+// spawned through steam-runtime-launch-client reads
 //   ~/.local/share/Steam/config/loginusers.vdf   -> most recently used account (newest
 //                                                   timestamp - NOTE: a Steam client update
 //                                                   (~Sep 2026) changed the field casing from
@@ -38,8 +40,33 @@ extern "C" char** environ;
 namespace steam_persona
 {
 
-static constexpr const char* kScriptPath = "/tmp/ns_steam_persona.sh";
-static constexpr const char* kNamePath = "/tmp/ns_steam_persona.txt";
+// Paths are resolved once into the writable exchange root (NsPaths.h). The script runs on
+// the HOST side (steam-runtime-launch-client --host, or /bin/sh as the fallback) while the
+// module runs inside the Steam runtime container - since the 2026-10-04 Steam client update
+// the two sides no longer share /tmp, so the outputs live under $HOME/OsirisCS2, which both
+// sides see. The script takes the exchange root as $1 ("OUT") so the single constexpr script
+// text works for both spawn paths.
+inline char scriptPath[192];
+inline char namePath[192];
+inline char avatarPath[192];
+inline bool pathsResolved = false;
+
+inline void resolvePaths() noexcept
+{
+    if (pathsResolved)
+        return;
+    pathsResolved = true;
+    static_cast<void>(ns_paths::join(scriptPath, sizeof(scriptPath), "ns_steam_persona.sh"));
+    static_cast<void>(ns_paths::join(namePath, sizeof(namePath), "ns_steam_persona.txt"));
+    static_cast<void>(ns_paths::join(avatarPath, sizeof(avatarPath), "ns_steam_avatar.png"));
+}
+
+// The menu's avatar staging consumes the fetched avatar (see Neverlose.cpp loadAvatar).
+[[nodiscard]] inline const char* avatarFile() noexcept
+{
+    resolvePaths();
+    return avatarPath;
+}
 
 inline bool scriptWritten = false;
 inline int fetchAttempts = 0;
@@ -51,6 +78,7 @@ inline constexpr int kMaxFetchAttempts = 40;     // ~10 min of retries, then giv
 inline constexpr float kFetchRetryDelay = 15.0f;
 
 inline constexpr char kScript[] = R"(#!/bin/sh
+OUT="$1"
 V="$HOME/.local/share/Steam/config/loginusers.vdf"
 C="$HOME/.local/share/Steam/config/avatarcache"
 [ -f "$V" ] || exit 0
@@ -68,27 +96,28 @@ NAME=$(awk -v sid="\"$SID\"" '
   inblk && tolower($0) ~ /"personaname"/ {
     n = split($0, a, "\""); print a[n-1]; exit }' "$V")
 
-printf "%s" "$NAME" > /tmp/ns_steam_persona.txt
+printf "%s" "$NAME" > "$OUT/ns_steam_persona.txt"
 
 if [ -f "$C/$SID.png" ]; then
-  cp "$C/$SID.png" /tmp/ns_steam_avatar.png
+  cp "$C/$SID.png" "$OUT/ns_steam_avatar.png"
 else
   URL=$(curl -s --max-time 15 "https://steamcommunity.com/profiles/$SID/?xml=1" | grep -o '<avatarFull><!\[CDATA\[[^]]*\]\]></avatarFull>' | head -1 | sed 's/.*\[CDATA\[//; s/\]\].*//')
   if [ -n "$URL" ]; then
-    curl -s --max-time 20 "$URL" -o /tmp/ns_steam_avatar.png.part && mv -f /tmp/ns_steam_avatar.png.part /tmp/ns_steam_avatar.png
+    curl -s --max-time 20 "$URL" -o "$OUT/ns_steam_avatar.png.part" && mv -f "$OUT/ns_steam_avatar.png.part" "$OUT/ns_steam_avatar.png"
   fi
 fi
 )";
 
-// Writes the script once and spawns it fire-and-forget; outputs are polled from /tmp. The spawn
-// itself retries (rate-limited) while no name has arrived, because a single failed spawn used to
-// mean the fallback label for the whole session. The launcher is resolved at spawn time:
-// /usr/bin/steam-runtime-launch-client is the canonical in-container path, the pv-runtime copies
-// under the Steam dir are the fallback (the Steam client dir is mounted into the container), and
-// a direct /bin/sh run is the last resort - the script's [ -f ... ] guards make that a harmless
-// no-op when the Steam client's config is not shared into the container.
+// Writes the script once and spawns it fire-and-forget; outputs are polled from the exchange
+// root. The spawn itself retries (rate-limited) while no name has arrived, because a single
+// failed spawn used to mean the fallback label for the whole session. The launcher is resolved
+// at spawn time: /usr/bin/steam-runtime-launch-client is the canonical in-container path, the
+// pv-runtime copies under the Steam dir are the fallback (the Steam client dir is mounted into
+// the container), and a direct /bin/sh run is the last resort - the script's [ -f ... ] guards
+// make that a harmless no-op when the Steam client's config is not shared into the container.
 inline void spawnFetch() noexcept
 {
+    resolvePaths();
     char launcher[512];
     std::snprintf(launcher, sizeof(launcher), "%s", "/usr/bin/steam-runtime-launch-client");
     bool useLauncher = ::access(launcher, X_OK) == 0;
@@ -111,6 +140,12 @@ inline void spawnFetch() noexcept
     }
 
     pid_t pid{};
+    // "exec sh <script> <root>" - the root argument becomes the script's $1 (OUT), so the
+    // host-side sh writes the persona/avatar outputs where the module reads them back.
+    char command[640];
+    const int commandLen = std::snprintf(command, sizeof(command), "exec sh %s %s", scriptPath, ns_paths::root());
+    if (commandLen <= 0 || static_cast<std::size_t>(commandLen) >= sizeof(command))
+        return;
     if (useLauncher) {
         char* const argv[] = {
             const_cast<char*>("steam-runtime-launch-client"),
@@ -118,7 +153,7 @@ inline void spawnFetch() noexcept
             const_cast<char*>("--"),
             const_cast<char*>("sh"),
             const_cast<char*>("-c"),
-            const_cast<char*>("exec sh /tmp/ns_steam_persona.sh"),
+            command,
             nullptr,
         };
         if (::posix_spawn(&pid, launcher, nullptr, nullptr, argv, environ) == 0)
@@ -127,7 +162,7 @@ inline void spawnFetch() noexcept
         char* const argv[] = {
             const_cast<char*>("/bin/sh"),
             const_cast<char*>("-c"),
-            const_cast<char*>("exec sh /tmp/ns_steam_persona.sh"),
+            command,
             nullptr,
         };
         if (::posix_spawn(&pid, "/bin/sh", nullptr, nullptr, argv, environ) == 0)
@@ -137,6 +172,7 @@ inline void spawnFetch() noexcept
 
 inline void ensureFetchStarted() noexcept
 {
+    resolvePaths();
     if (personaName[0] != '\0')
         return; // name fetched (avatar staging retries separately) - done for this session
     if (fetchAttempts >= kMaxFetchAttempts)
@@ -148,7 +184,7 @@ inline void ensureFetchStarted() noexcept
 
     if (!scriptWritten) {
         scriptWritten = true;
-        const int fd = ::open(kScriptPath, O_CREAT | O_WRONLY | O_TRUNC, 0755);
+        const int fd = ::open(scriptPath, O_CREAT | O_WRONLY | O_TRUNC, 0755);
         if (fd >= 0) {
             constexpr std::size_t length = sizeof(kScript) - 1;
             std::size_t written = 0;
@@ -167,13 +203,14 @@ inline void ensureFetchStarted() noexcept
     spawnFetch();
 }
 
-// Cached persona name; re-reads /tmp at most every 2s until a non-empty name arrives.
-// "" = not fetched yet (caller renders its fallback label).
+// Cached persona name; re-reads the exchange-root output at most every 2s until a non-empty
+// name arrives. "" = not fetched yet (caller renders its fallback label).
 inline const char* name() noexcept
 {
     if (personaName[0] == '\0' && ImGui::GetTime() >= nextNameRead) {
         nextNameRead = ImGui::GetTime() + 2.0f;
-        const int fd = ::open(kNamePath, O_RDONLY);
+        resolvePaths();
+        const int fd = ::open(namePath, O_RDONLY);
         if (fd >= 0) {
             char buffer[96];
             const ssize_t bytes = ::read(fd, buffer, sizeof(buffer) - 1);

@@ -1,16 +1,16 @@
 {
  "binaries": {
-  "client": 1791012932.1088295,
-  "tier0": 1790178496.0963743,
-  "sound": 1790945109.3314385,
-  "fs": 1790945108.8364313,
-  "panorama": 1790945109.6294427,
-  "scene": 1790945109.6294427,
-  "schema": 1790945109.0364342,
-  "engine2": 1790945109.6294427,
-  "server": 1790945109.925447,
-  "networksystem": 1790945108.7384298,
-  "particles": 1790945108.8394313
+  "client": 1791130664.903292,
+  "tier0": 1790439056.8979213,
+  "sound": 1791130663.9632936,
+  "fs": 1791130663.9632936,
+  "panorama": 1791130663.9632936,
+  "scene": 1791130663.8652945,
+  "schema": 1791130663.4602973,
+  "engine2": 1791130664.3572907,
+  "server": 1791130664.903292,
+  "networksystem": 1791130663.8642943,
+  "particles": 1791130663.2832987
  },
  "patterns": {
   "OffsetToGlowProperty": {
@@ -699,7 +699,9 @@
   },
   "PointerToRegenerateWeaponSkin": {
    "module": "client",
-   "status": "BROKEN"
+   "status": "ok",
+   "site": "0x1491950",
+   "resolved": "-0x192d9e57"
   },
   "PointerToSetAttributeValueByName": {
    "module": "client",

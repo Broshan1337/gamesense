@@ -76,6 +76,11 @@ struct WeaponPatterns {
             // Forged with pattern_forge.py forge --direct (literal prologue, exactly-once,
             // match == target; the fn is referenced only by call rel32, which the default
             // rip-ref forge does not see).
+            // 2026-10-04: a rip-ref re-anchor briefly replaced this with a pattern landing
+            // mid-function at 0x1466900 (calling it jumps into another fn's body); reverted
+            // to the direct prologue after re-verifying the full semantic chain on the new
+            // build (entry 0x1491950, vdata getter 0xd8c540, [+0x4e8]/[+0xaf0], vtable+0xC50,
+            // [this+0x4f8] -> [+0x520]).
             .template addPattern<PointerToRegenerateWeaponSkin, CodePattern{"55 48 89 E5 41 57 41 56 49 89 FE 41 55 41 54 49 89 F4 53 48 81 EC 88 02 00 00"}>()
             // C_EconItemView::SetAttributeValueByName(this, const char* attributeName, float
             // value) - the real internal attribute-write path. Found via string xref to

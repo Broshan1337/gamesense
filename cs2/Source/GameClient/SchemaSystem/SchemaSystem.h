@@ -237,6 +237,36 @@ public:
         std::fprintf(outFile, "  total fields: %d\n", count);
     }
 
+    // One-shot health probe for the live schema-query path: walks the SAME chain as
+    // getFieldOffset and reports the stage where it stops, so a silently-empty snapshot
+    // (2026-10-04: player list / match state starved with zero visible errors) can be told
+    // apart between "scope walk broken", "iterator fns missing" and "field-name drift".
+    [[nodiscard]] const char* diagnoseFieldLookup(const char* className, const char* fieldName) const noexcept
+    {
+        const auto classBinding = findDeclaredClassOrEnum(className);
+        if (!classBinding)
+            return "classBinding NOT FOUND (scope walk broken)";
+        const auto beginIterator = hookContext.patternSearchResults().template get<PointerToSchemaBeginFieldIterator>();
+        const auto hasNext = hookContext.patternSearchResults().template get<PointerToSchemaFieldIteratorHasNext>();
+        const auto current = hookContext.patternSearchResults().template get<PointerToSchemaFieldIteratorCurrent>();
+        const auto next = hookContext.patternSearchResults().template get<PointerToSchemaFieldIteratorNext>();
+        const auto offset = hookContext.patternSearchResults().template get<PointerToSchemaFieldIteratorOffset>();
+        if (!beginIterator || !hasNext || !current || !next || !offset)
+            return "iterator function pointers missing";
+        alignas(8) std::array<std::byte, kIteratorStorageSize> iterator{};
+        beginIterator(iterator.data(), classBinding, kFieldIterationKind);
+        int seen = 0;
+        while (hasNext(iterator.data())) {
+            if (const auto realName = currentFieldName(iterator.data()); realName && std::strcmp(realName, fieldName) == 0)
+                return "ok";
+            ++seen;
+            next(iterator.data());
+        }
+        static thread_local char buffer[64];
+        std::snprintf(buffer, sizeof(buffer), "field NOT FOUND (%d fields seen)", seen);
+        return buffer;
+    }
+
     [[nodiscard]] std::optional<std::int32_t> getFieldOffset(const char* className, const char* fieldName) const noexcept
     {
         const auto classBinding = findDeclaredClassOrEnum(className);
