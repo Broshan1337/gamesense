@@ -44,6 +44,8 @@ public:
 
     [[nodiscard]] decltype(auto) getHandle() const noexcept
     {
+        if (!offsetsUsable())
+            return cs2::PanelHandle{};
         return hookContext.patternSearchResults().template get<OffsetToPanelHandle>().of(panel).valueOr(cs2::PanelHandle{});
     }
 
@@ -285,16 +287,22 @@ private:
 
     [[nodiscard]] PanoramaUiPanelClasses classes() const noexcept
     {
+        if (!offsetsUsable())
+            return PanoramaUiPanelClasses{nullptr};
         return PanoramaUiPanelClasses{hookContext.patternSearchResults().template get<PanelClassesVectorOffset>().of(panel).get()};
     }
 
     [[nodiscard]] decltype(auto) getParentWindow() const noexcept
     {
+        if (!offsetsUsable())
+            return hookContext.template make<TopLevelWindow>(nullptr);
         return hookContext.template make<TopLevelWindow>(hookContext.patternSearchResults().template get<ParentWindowOffset>().of(panel).valueOr(nullptr));
     }
 
     [[nodiscard]] Optional<bool> hasFlag(cs2::EPanelFlag flag) const noexcept
     {
+        if (!offsetsUsable())
+            return {};
         return (hookContext.patternSearchResults().template get<OffsetToPanelFlags>().of(panel).toOptional() & flag) != 0;
     }
 
@@ -332,11 +340,18 @@ private:
 
     [[nodiscard]] cs2::CPanelStyle* getStyle() const noexcept
     {
+        // 2026-10-05: with a stale offset this used to return THE PANEL ITSELF
+        // (offset 0 -> panel+0) and every style write corrupted the panel's own
+        // fields - the game's layout engine then crashed on the corrupted panel.
+        if (!offsetsUsable())
+            return nullptr;
         return hookContext.patternSearchResults().template get<PanelStyleOffset>().of(panel).get();
     }
 
     [[nodiscard]] const char* getId() const noexcept
     {
+        if (!offsetsUsable())
+            return "";
         if (const auto id = hookContext.patternSearchResults().template get<OffsetToPanelId>().of(panel).get(); id && id->m_pString)
             return id->m_pString;
         return "";
@@ -344,4 +359,23 @@ private:
 
     HookContext& hookContext;
     cs2::CUIPanel* panel;
+
+    // 2026-10-05: the panorama pool offsets (PanelStyle, ParentWindow, PanelId, Flags,
+    // Handle, ClassesVector, ChildPanelsCount/Array) went stale on the 2026-10-05 game
+    // update - several resolve to zero or multiple sites and uniqueness zeroes them.
+    // A ZEROED member offset makes .of(panel) point at THE PANEL OBJECT ITSELF, so any
+    // write through it corrupts the panel's own fields (id ptr, children, flags) and the
+    // game's layout engine then crashes on the corrupted panel (the deterministic
+    // libclient+0x1cff6cc UI crash, 8 dumps on file). Every accessor here gates on this.
+    [[nodiscard]] bool offsetsUsable() const noexcept
+    {
+        return hookContext.patternSearchResults().template get<PanelStyleOffset>()
+            && hookContext.patternSearchResults().template get<ParentWindowOffset>()
+            && hookContext.patternSearchResults().template get<OffsetToPanelId>()
+            && hookContext.patternSearchResults().template get<OffsetToPanelFlags>()
+            && hookContext.patternSearchResults().template get<OffsetToPanelHandle>()
+            && hookContext.patternSearchResults().template get<PanelClassesVectorOffset>()
+            && hookContext.patternSearchResults().template get<ChildPanelsCountOffset>()
+            && hookContext.patternSearchResults().template get<ChildPanelsArrayOffset>();
+    }
 };

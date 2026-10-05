@@ -8,7 +8,10 @@
   # built from this flake pairs with everything else AND with the cmake-built
   # loader/modules (the loader's CMakeLists reads the same keydir at build time).
   # Rotation = replace the file, rebuild everything that takes key-material.
-  inputs.keydir.url = "path:/home/d/.config/neversnooze-keys";
+  inputs.keydir = {
+    url = "path:/home/d/.config/neversnooze-keys";
+    flake = false;
+  };
 
   outputs = {
     self,

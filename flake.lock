@@ -1,5 +1,18 @@
 {
   "nodes": {
+    "keydir": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1791133509,
+        "narHash": "sha256-BYx17aNbBFxqi4akPfG31nunsRTHe8IG397+VYrF6hs=",
+        "path": "/home/d/.config/neversnooze-keys",
+        "type": "path"
+      },
+      "original": {
+        "path": "/home/d/.config/neversnooze-keys",
+        "type": "path"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1791048980,
@@ -18,6 +31,7 @@
     },
     "root": {
       "inputs": {
+        "keydir": "keydir",
         "nixpkgs": "nixpkgs"
       }
     }
