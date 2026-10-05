@@ -41,9 +41,9 @@ struct PanoramaUiPanelPatterns {
             // iterate/remove pair at panorama .text+0x278035 (remove twin at +0x25cef9,
             // same count/array) - exactly-once with wildcards at the read offsets.
             // count = panel+0x2C8, array = +0x2D0 (count + 8 - the structural rule holds).
-            .template addPattern<ChildPanelsCountOffset, CodePattern{"8B B8 ? 02 00 00 85 FF 7E 44 48 8B 88 D0 02 00 00"}.add(2).read8()>()
+            .template addPattern<ChildPanelsCountOffset, CodePattern{"8B B8 ? ? ? ? 85 FF 7E 44 48 8B 88 D0 02 00 00"}.add(2).read()>()
             // ARRAY anchor: the same site's array load; 4-byte disp32 at +13 from the count.
-            .template addPattern<ChildPanelsArrayOffset, CodePattern{"8B B8 ? 02 00 00 85 FF 7E 44 48 8B 88 ? ? ? ?"}.add(13).read()>()
+            .template addPattern<ChildPanelsArrayOffset, CodePattern{"8B B8 ? ? ? ? 85 FF 7E 44 48 8B 88 ? ? ? ?"}.add(13).read()>()
             .template addPattern<PanelClassesVectorOffset, CodePattern{"97 ? ? ? ? 85 D2 7E ? 48 8B 87"}.add(1).read()>()
             .template addPattern<PanelStyleOffset, CodePattern{"67 ? 53 48 83"}.add(1).add(1).read8()>()
             .template addPattern<ParentWindowOffset, CodePattern{"? 48 85 D2 74 ? 48 89 53"}.read8()>()
