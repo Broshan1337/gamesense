@@ -3,18 +3,29 @@
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
+  # The dev keydir as a flake input: keeps the key material OUT of the repo while
+  # staying pure-eval-safe (path inputs are copied to the store). Every artifact
+  # built from this flake pairs with everything else AND with the cmake-built
+  # loader/modules (the loader's CMakeLists reads the same keydir at build time).
+  # Rotation = replace the file, rebuild everything that takes key-material.
+  inputs.keydir.url = "path:/home/d/.config/neversnooze-keys";
+
   outputs = {
     self,
     nixpkgs,
+    keydir,
   }: let
     system = "x86_64-linux";
     pkgs = nixpkgs.legacyPackages.${system};
   in {
     packages.${system} = rec {
-      # Fresh keydir (payload_private.pem / payload_sym.key / heartbeat.key) plus the
-      # module-side SessionBindKey.h. Shared by the modules (compile-time trailer key)
-      # and the loader (payload packing + verification) so the whole chain stays in sync.
-      key-material = pkgs.callPackage ./nix/key-material.nix {};
+      # Dev keydir (~/.config/neversnooze-keys) - the SAME key material the cmake
+      # flow uses ($ENV{HOME}/.config/neversnooze-keys in the loader's CMakeLists),
+      # pinned so nix-built and cmake-built artifacts always pair. Key rotation =
+      # rotate the file, then rebuild everything that takes key-material.
+      key-material = pkgs.callPackage ./nix/key-material.nix {
+        devKeydir = keydir;
+      };
 
       # libMangoHud.so (Neversnooze CS2 module) + 64-bit libSteamModule.so
       cs2-module = pkgs.callPackage ./nix/cs2-module.nix {
