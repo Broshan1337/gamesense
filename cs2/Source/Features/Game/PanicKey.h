@@ -33,8 +33,19 @@ public:
     void run() const noexcept
     {
         const int bindValue = GET_CONFIG_VAR(panic_vars::Bind);
-        if (bindValue <= Bind::kOff || bindValue > Bind::kLast)
-            return;   // key disabled -> state keeps whatever it was (menu choice wins next toggle)
+        if (bindValue <= Bind::kOff || bindValue > Bind::kLast) {
+            // 2026-10-05 trap fix: an ENGAGED panic with the key unbound used to be
+            // unrecoverable - the release path needs a pressable bound key, and a config
+            // that lost the bind (fresh default.cfg, a rebind capture that never fired)
+            // left the latch stuck ENGAGED forever ("aimbot completely disabled and won't
+            // turn back on"). The panic is a temporary failsafe: with no way to press it,
+            // it releases (and the bind can be re-set in the menu afterwards).
+            if (panicActive) {
+                panicActive = false;
+                VerifyConsole::write(0.0f, "panic", "bind removed - combat features re-enabled");
+            }
+            return;
+        }
 
         const bool down = Bind::isDown(bindValue);
 
