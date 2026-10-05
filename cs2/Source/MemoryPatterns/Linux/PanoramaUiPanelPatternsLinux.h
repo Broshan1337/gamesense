@@ -35,12 +35,16 @@ struct PanoramaUiPanelPatterns {
             // twins 0x25CEB9/0x277FF5 read 0x2C8, three decoys read 0x240/0x80/0xA04); extended
             // through the rel32 jle (0F 8E - the 0x277FF5 twin recompiled to a rel8 jle) into
             // the array read's first bytes -> exactly-once at 0x25CEB9.
-            .template addPattern<ChildPanelsCountOffset, CodePattern{"8B B8 ? ? ? ? 85 FF 0F 8E ? ? ? ? 48 8B 88"}.add(2).read()>()
-            // ARRAY anchor: the same site's array read. The 0x277FF5 twin is byte-identical for
-            // 11 bytes, so the trailing "EB ? 66" (site 1's jmp + multi-byte-nop padding; the
-            // twin's padding = 0F 1F 00) disambiguates -> exactly-once at 0x25CEC7.
-            // add(3), not add(2): the REX prefix puts the disp32 at insn+3.
-            .template addPattern<ChildPanelsArrayOffset, CodePattern{"48 8B 88 ? ? ? ? 48 63 F7 31 D2 EB ? 66"}.add(3).read()>()
+            // 2026-10-05 re-forge (the 2026-10-04 5GB update recompiled the count load as
+            // mov rax,[rax+..] where the old shape had mov rcx + a different array reg; the
+            // old shapes vanished -> both offsets zeroed -> children() empty -> panel
+            // recycle/hide/HUD-walk dead). Anchor: the children collector, exactly-once
+            // with full wildcards (verified 1 match). count = panel+0xCA0, array = +0xCA8
+            // (count + 8 - the structural rule survived, the code shape did not).
+            .template addPattern<ChildPanelsCountOffset, CodePattern{"8B B8 ? ? ? ? 85 FF 0F 8E ? ? ? ? 48 8B 80 ? ? ? ?"}.add(2).read()>()
+            // ARRAY anchor: the same site's array load (48 8B 80 = rax this time); disp32
+            // at +17 from the count anchor (REX + mov r/m64 shifts it by one vs the count).
+            .template addPattern<ChildPanelsArrayOffset, CodePattern{"8B B8 ? ? ? ? 85 FF 0F 8E ? ? ? ? 48 8B 80 ? ? ? ?"}.add(17).read()>()
             .template addPattern<PanelClassesVectorOffset, CodePattern{"97 ? ? ? ? 85 D2 7E ? 48 8B 87"}.add(1).read()>()
             .template addPattern<PanelStyleOffset, CodePattern{"67 ? 53 48 83"}.add(1).add(1).read8()>()
             .template addPattern<ParentWindowOffset, CodePattern{"? 48 85 D2 74 ? 48 89 53"}.read8()>()
