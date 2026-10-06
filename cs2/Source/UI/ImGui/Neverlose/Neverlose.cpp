@@ -427,6 +427,7 @@ struct State {
     enum class Capture { Inactive, WaitingRelease, WaitingPress };
     Capture capture = Capture::Inactive;
     int captureOwner = -1;
+    float captureAge = 0.0f;   // time spent in WaitingRelease (2s cap - see the two capture sites)
     int editingSlider = -1; // control id of the slider whose pill is being text-edited
     char editBuffer[12] = "";
     bool profileOpen = false;
@@ -1644,12 +1645,14 @@ void featureBindPopover(ImDrawList* d) noexcept
         if (clicked && state.capture == State::Capture::Inactive) {
             state.capture = State::Capture::WaitingRelease;
             state.captureOwner = State::kFeatureBindCaptureOwner;
+            state.captureAge = 0.0f;
         }
 
         bool held = false;
         if (state.captureOwner == State::kFeatureBindCaptureOwner) {
             if (state.capture == State::Capture::WaitingRelease) {
-                if (!gui_sdl::anyInputHeld())
+                state.captureAge += ImGui::GetIO().DeltaTime;
+                if (!gui_sdl::anyInputHeld() || state.captureAge > 2.0f) // same missed-KEY-UP cap as keybindRow
                     state.capture = State::Capture::WaitingPress;
             } else if (state.capture == State::Capture::WaitingPress) {
                 if (gui_sdl::scancodeDown[76]) { // Delete clears
@@ -2109,12 +2112,18 @@ bool keybindRow(const char* label, int* bindValue, int id) noexcept
         if (ImGui::IsItemClicked()) {
             state.capture = State::Capture::WaitingRelease;
             state.captureOwner = id;
+            state.captureAge = 0.0f;
         } else if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && *bindValue != Bind::kOff) {
             *bindValue = Bind::kOff; // right-click clears the bind
         }
     } else if (state.captureOwner == id) {
+        // 2026-10-05: WaitingRelease waits for EVERY key/button to be released via the
+        // event-fed scancodeDown array - one missed KEY-UP (alt-tab, focus loss, a game-side
+        // stall dropping events) stuck the capture at "RELEASE ALL" forever and the whole
+        // binds panel became unrebindable. Cap the phase at 2 seconds.
         if (state.capture == State::Capture::WaitingRelease) {
-            if (!gui_sdl::anyInputHeld())
+            state.captureAge += ImGui::GetIO().DeltaTime;
+            if (!gui_sdl::anyInputHeld() || state.captureAge > 2.0f)
                 state.capture = State::Capture::WaitingPress;
         } else if (state.capture == State::Capture::WaitingPress) {
             if (gui_sdl::scancodeDown[76]) { // Delete clears the bind
