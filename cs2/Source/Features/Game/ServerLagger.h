@@ -663,10 +663,12 @@ private:
             channel = net_messages::getClientChannel(clientPointer.get());
             if (channel) {
                 ready = net_messages::channelReady(channel);
-                // CNetChan+0x70DA = the overflow flag slot 42 (transmit) gates on - the state
+                // CNetChan+0x8CE1 = the overflow flag slot 42 (transmit) gates on - the state
                 // whose set-state ends in the "Overflow error" disconnect (verified by the
-                // slot-48/42 disassembly + the reproduced overflow kick).
-                overflowFlag = *reinterpret_cast<const volatile std::uint8_t*>(static_cast<const std::uint8_t*>(channel) + 0x70DA);
+                // slot-48/42 disassembly + the reproduced overflow kick). The member moved
+                // +0x27/+0x28 in the CNetChan struct with the 2026-10-06 update (was 0x8CBA
+                // on dce58989, 0x70DA on build 14181).
+                overflowFlag = *reinterpret_cast<const volatile std::uint8_t*>(static_cast<const std::uint8_t*>(channel) + 0x8CE1);
             }
         }
         const char* const binding = resolved ? "ok" : (resolutionFailed ? "FAIL(latched)" : "unresolved");

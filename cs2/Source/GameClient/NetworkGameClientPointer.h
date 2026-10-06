@@ -18,8 +18,8 @@
 // module base + vmt range are cached once (getVmtSection() open()s and mmap()s the module file,
 // so it must never run per tick).
 //
-// Layout facts verified against the live process + disassembly (2026-09-12):
-//   client tick field  = +0x388 (vtable slot 5 body: mov eax, [rdi+0x388])
+// Layout facts verified against the live process + disassembly (updated 2026-10-06, build 11087116):
+//   client tick field  = +0x3A8 (vtable slot 5 body: mov eax, [rdi+0x3A8]; was +0x388 pre-5GB-update)
 //   channel array      = +0xF0, 24-byte stride, GetChannel(slot) = vtable slot 41
 struct NetworkGameClientPointer {
     NetworkGameClientPointer() noexcept
@@ -56,7 +56,7 @@ private:
         if (!engineVmtContains(std::uintptr_t(vtable)))
             return false;
         const auto tick = *reinterpret_cast<const volatile std::int32_t*>(
-            reinterpret_cast<std::uintptr_t>(client) + 0x388);
+            reinterpret_cast<std::uintptr_t>(client) + 0x3A8);
         return tick >= 0 && tick < (1 << 24);
     }
 

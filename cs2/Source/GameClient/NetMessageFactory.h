@@ -67,8 +67,9 @@ inline constexpr std::size_t kSlotChannelSendData = 42 * 8; // CNetChan: build+s
 inline constexpr std::size_t kSlotChannelReady = 47 * 8;    // CNetChan: send-window check
 inline constexpr std::size_t kSlotClientGetChannel = 41 * 8;// CNetworkGameClient::GetChannel(slot)
 
-// CNetworkGameClient tick field (verified: GetTick vtable slot 5 body reads [this+0x388]).
-inline constexpr std::uintptr_t kClientTickFieldOffset = 0x388;
+// CNetworkGameClient tick field (verified on build 11087116 AND dce58989: GetTick vtable
+// slot 5 body reads [this+0x3A8] - moved from +0x388 in the 5GB update).
+inline constexpr std::uintptr_t kClientTickFieldOffset = 0x3A8;
 
 using FindRecordFn = void* (*)(void* manager, int messageId);
 using GetInfoFn = void* (*)(void* manager, void* record);

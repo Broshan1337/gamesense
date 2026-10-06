@@ -1,773 +1,771 @@
 {
  "binaries": {
-  "client": 1791305852.2155929,
-  "tier0": 1791305851.3261385,
+  "client": 1791012932.1088295,
+  "tier0": 1790178496.0963743,
   "sound": 1790945109.3314385,
-  "fs": 1791305851.9175885,
-  "panorama": 1791305852.2165928,
+  "fs": 1790945108.8364313,
+  "panorama": 1790945109.6294427,
   "scene": 1790945109.6294427,
   "schema": 1790945109.0364342,
-  "engine2": 1791305851.7216065,
-  "server": 1791305852.2155929,
-  "networksystem": 1791305852.2155929,
+  "engine2": 1790945109.6294427,
+  "server": 1790945109.925447,
+  "networksystem": 1790945108.7384298,
   "particles": 1790945108.8394313
  },
  "patterns": {
   "OffsetToGlowProperty": {
    "module": "client",
    "status": "ok",
-   "site": "0xf8b6f0",
-   "resolved": "0xf8c467"
+   "site": "0xf8b0f0",
+   "resolved": "0xf8be67"
   },
   "OffsetToIsBeingPlanted": {
    "module": "client",
    "status": "ok",
-   "site": "0x146ea82",
-   "resolved": "0x1471836"
+   "site": "0x146e482",
+   "resolved": "0x1471236"
   },
   "OffsetToArmingEndTime": {
    "module": "client",
    "status": "ok",
-   "site": "0x14a4b73",
-   "resolved": "0x14a792b"
+   "site": "0x14a4573",
+   "resolved": "0x14a732b"
   },
   "MainMenuPanelPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x19c512a",
-   "resolved": "0x49a8f38"
+   "site": "0x19c4b2a",
+   "resolved": "0x49a57b8"
   },
   "GlobalVarsPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x18ecd6f",
-   "resolved": "0x4683858"
+   "site": "0x18ec76f",
+   "resolved": "0x46800f8"
   },
   "TransformTranslate3dVMT": {
    "module": "client",
    "status": "ok",
-   "site": "0x1c19eaa",
-   "resolved": "0x4527918"
+   "site": "0x1c198aa",
+   "resolved": "0x4524218"
   },
   "TransformScale3dVMT": {
    "module": "client",
    "status": "ok",
-   "site": "0x1c19ee6",
-   "resolved": "0x4527968"
+   "site": "0x1c198e6",
+   "resolved": "0x4524268"
   },
   "WorldToProjectionMatrixPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x19ce0ce",
-   "resolved": "0x4943600"
+   "site": "0x19cdace",
+   "resolved": "0x493fe80"
   },
   "ViewToProjectionMatrixPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x19ce0d8",
-   "resolved": "0x4943640"
+   "site": "0x19cdad8",
+   "resolved": "0x493fec0"
   },
   "ViewRenderPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x1904615",
-   "resolved": "0x4943710"
+   "site": "0x1904015",
+   "resolved": "0x493ff90"
   },
   "LocalPlayerControllerPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x1623a80",
-   "resolved": "0x4903f18"
+   "site": "0x1623480",
+   "resolved": "0x4900798"
   },
   "GameEventManagerGlobalPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x18d3340",
-   "resolved": "0x4935258"
+   "site": "0x18d2d40",
+   "resolved": "0x4931ad8"
   },
   "ChatPrintFunction": {
    "module": "client",
    "status": "ok",
-   "site": "0x209c470",
-   "resolved": "-0x186cf337"
+   "site": "0x20995b0",
+   "resolved": "-0x186d21f7"
   },
   "ChangeTeammateColorCycle": {
    "module": "client",
    "status": "ok",
-   "site": "0x1e0b980",
-   "resolved": "-0x1895fe27"
+   "site": "0x1e0b280",
+   "resolved": "-0x18960527"
   },
   "HudChatDelegatePointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x209c2e0",
-   "resolved": "0x49e61d8"
+   "site": "0x2099420",
+   "resolved": "0x49e2a58"
   },
   "CSGOInputPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x1b09008",
-   "resolved": "0x4951ac0"
+   "site": "0x1b08a08",
+   "resolved": "0x494e340"
   },
   "PlayerRankingDataPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x1f73298",
-   "resolved": "0x4950b60"
+   "site": "0x1f703d8",
+   "resolved": "0x494d3e0"
   },
   "EconSystemAccessor": {
    "module": "client",
    "status": "ok",
-   "site": "0x1ee467e",
-   "resolved": "0x14efe30"
+   "site": "0x1ee3cbe",
+   "resolved": "0x14ef830"
   },
   "GameAccountClientAccessor": {
    "module": "client",
    "status": "ok",
-   "site": "0x1ee467e",
-   "resolved": "0x14f1b60"
+   "site": "0x1ee3cbe",
+   "resolved": "0x14f1560"
   },
   "CreateSubtickMoveStep": {
    "module": "client",
    "status": "ok",
-   "site": "0x192c6e0",
-   "resolved": "0x10f9010"
+   "site": "0x192c0e0",
+   "resolved": "0x10f8a10"
   },
   "RepeatedPtrFieldAddAllocated": {
    "module": "client",
    "status": "ok",
-   "site": "0x21b3a16",
-   "resolved": "-0x749c7291"
+   "site": "0x21b0ad6",
+   "resolved": "-0x749ca1d1"
   },
   "GetUserCmd": {
    "module": "client",
    "status": "ok",
-   "site": "0x1624b90",
-   "resolved": "-0x19146c17"
+   "site": "0x1624590",
+   "resolved": "-0x19147217"
   },
   "AbandonCooldownGate": {
    "module": "client",
    "status": "ok",
-   "site": "0x1b28608",
-   "resolved": "-0x7501236c"
+   "site": "0x1b28008",
+   "resolved": "-0x7501296c"
   },
   "ManageGlowSceneObjectPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x19087e0",
-   "resolved": "0x10d8ee39"
+   "site": "0x19081e0",
+   "resolved": "0x10d8e839"
   },
   "SetSceneObjectAttributeFloat4": {
    "module": "client",
    "status": "ok",
-   "site": "0xd3a320",
-   "resolved": "0x6ee30979"
+   "site": "0xd39d20",
+   "resolved": "0x6ee30379"
   },
   "PointerToClientMode": {
    "module": "client",
    "status": "ok",
-   "site": "0x1aceede",
-   "resolved": "0x4955d60"
+   "site": "0x1ace8de",
+   "resolved": "0x49525e0"
   },
   "CvarPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0xf74206",
-   "resolved": "0x49edcd8"
+   "site": "0xf73c06",
+   "resolved": "0x49ea558"
   },
   "OffsetToGameSceneNode": {
    "module": "client",
    "status": "ok",
-   "site": "0xdaa06a",
-   "resolved": "0xdaa513"
+   "site": "0xda9a6a",
+   "resolved": "0xda9f13"
   },
   "OffsetToHealth": {
    "module": "client",
    "status": "ok",
-   "site": "0x1876343",
-   "resolved": "0x1876805"
+   "site": "0x1875d43",
+   "resolved": "0x1876205"
   },
   "OffsetToLifeState": {
    "module": "client",
    "status": "ok",
-   "site": "0xd91910",
-   "resolved": "0xd91ddb"
+   "site": "0xd91310",
+   "resolved": "0xd917db"
   },
   "OffsetToTeamNumber": {
    "module": "client",
    "status": "ok",
-   "site": "0x158b3b2",
-   "resolved": "0x158b90d"
+   "site": "0x158adb2",
+   "resolved": "0x158b30d"
   },
   "OffsetToVData": {
    "module": "client",
    "status": "ok",
-   "site": "0xdb302a",
-   "resolved": "0xdb3526"
+   "site": "0xdb2a2a",
+   "resolved": "0xdb2f26"
   },
   "OffsetToRenderComponent": {
    "module": "client",
    "status": "ok",
-   "site": "0x146a05b",
-   "resolved": "0x146a50b"
+   "site": "0x1469a5b",
+   "resolved": "0x1469f0b"
   },
   "OffsetToOwnerEntity": {
    "module": "client",
    "status": "ok",
-   "site": "0xdb312b",
-   "resolved": "0xdb37c8"
+   "site": "0xdb2b2b",
+   "resolved": "0xdb31c8"
   },
   "GetAbsOriginFunction": {
    "module": "client",
    "status": "ok",
-   "site": "0xd1d0a7",
-   "resolved": "0xd8fcd0"
+   "site": "0xd1caa7",
+   "resolved": "0xd8f6d0"
   },
   "EntitySystemPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x174809b",
-   "resolved": "0x4918570"
+   "site": "0x1747a9b",
+   "resolved": "0x4914df0"
   },
   "EntityListOffset": {
    "module": "client",
    "status": "ok",
-   "site": "0x2f1f623",
-   "resolved": "0x5646373a"
+   "site": "0x2f1c763",
+   "resolved": "0x5646087a"
   },
   "OffsetToEntityClasses": {
    "module": "client",
    "status": "ok",
-   "site": "0x2f2e740",
-   "resolved": "0x2f2f1e7"
+   "site": "0x2f2b880",
+   "resolved": "0x2f2c327"
   },
   "GameRulesPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x195d088",
-   "resolved": "0x493abf0"
+   "site": "0x195ca88",
+   "resolved": "0x4937470"
   },
   "RoundStartTimeOffset": {
    "module": "client",
    "status": "ok",
-   "site": "0x138d893",
-   "resolved": "-0x1e3de2fe"
+   "site": "0x138d293",
+   "resolved": "-0x1e3de8fe"
   },
   "OffsetToRoundRestartTime": {
    "module": "client",
    "status": "ok",
-   "site": "0x1d10ae4",
-   "resolved": "-0x35ffe5a8"
+   "site": "0x1d104e4",
+   "resolved": "-0x35ffeba8"
   },
   "OffsetToRoundLength": {
    "module": "client",
    "status": "ok",
-   "site": "0x138d748",
-   "resolved": "0x5ec41faf"
+   "site": "0x138d148",
+   "resolved": "0x5ec419af"
   },
   "OffsetToRoundWinStatus": {
    "module": "client",
    "status": "ok",
-   "site": "0x1b1e06b",
-   "resolved": "0x1b1ea14"
+   "site": "0x1b1da6b",
+   "resolved": "0x1b1e414"
   },
   "OffsetToGameSceneNodeOwner": {
    "module": "client",
    "status": "ok",
-   "site": "0x16f6da0",
-   "resolved": "0x53fab5d7"
+   "site": "0x16f67a0",
+   "resolved": "0x53faafd7"
   },
   "OffsetToChildGameSceneNode": {
    "module": "client",
    "status": "ok",
-   "site": "0x16f71b2",
-   "resolved": "-0x230b4609"
+   "site": "0x16f6bb2",
+   "resolved": "-0x230b4c09"
   },
   "OffsetToNextSiblingGameSceneNode": {
    "module": "client",
    "status": "ok",
-   "site": "0x16f71c4",
-   "resolved": "-0x230b45f0"
+   "site": "0x16f6bc4",
+   "resolved": "-0x230b4bf0"
   },
   "GameSceneNodeSetMeshGroupMaskFunction": {
    "module": "client",
    "status": "ok",
-   "site": "0x180aa20",
-   "resolved": "-0x1df7ca94"
+   "site": "0x180a420",
+   "resolved": "-0x1df7d094"
   },
   "GameSceneNodeSetSkeletonFunction": {
    "module": "client",
    "status": "ok",
-   "site": "0x1807240",
-   "resolved": "-0x1df80274"
+   "site": "0x1806c40",
+   "resolved": "-0x1df80874"
   },
   "OffsetToFrametime": {
    "module": "client",
    "status": "ok",
-   "site": "0xe408fe",
-   "resolved": "0x10f3fc12"
+   "site": "0xe402fe",
+   "resolved": "0x10f3f612"
   },
   "OffsetToIsGlowing": {
    "module": "client",
    "status": "ok",
-   "site": "0x195da2b",
-   "resolved": "-0x7922257f"
+   "site": "0x195d42b",
+   "resolved": "-0x79222b7f"
   },
   "OffsetToGlowSceneObjectEntity": {
    "module": "client",
    "status": "ok",
-   "site": "0x19077da",
-   "resolved": "0x19078be"
+   "site": "0x19071da",
+   "resolved": "0x19072be"
   },
   "OffsetToGlowSceneObjectAttachedSceneObject": {
    "module": "client",
    "status": "ok",
-   "site": "0x1908a24",
-   "resolved": "0x1908b05"
+   "site": "0x1908424",
+   "resolved": "0x1908505"
   },
   "OffsetToCarriedHostage": {
    "module": "client",
    "status": "ok",
-   "site": "0x1526456",
-   "resolved": "0x15263a5"
+   "site": "0x1525e56",
+   "resolved": "0x1525da5"
   },
   "OffsetToFireEffectTickBegin": {
    "module": "client",
    "status": "ok",
-   "site": "0x1b78e00",
-   "resolved": "0x1b7a7f8"
+   "site": "0x1b78800",
+   "resolved": "0x1b7a1f8"
   },
   "OffsetToFireLifetime": {
    "module": "client",
    "status": "ok",
-   "site": "0x1b78f5d",
-   "resolved": "0x1b7a93d"
+   "site": "0x1b7895d",
+   "resolved": "0x1b7a33d"
   },
   "OffsetAllocVirtualMethod": {
    "module": "client",
    "status": "ok",
-   "site": "0x41b8e05",
-   "resolved": "0x47a8da26"
+   "site": "0x41b5b45",
+   "resolved": "0x47a8a766"
   },
   "PanelConstructorPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x40b6d90",
-   "resolved": "-0x166b4a17"
+   "site": "0x40b3ed0",
+   "resolved": "-0x166b78d7"
   },
   "SetSelectedIndexFunctionPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x408fe70",
-   "resolved": "-0x166db937"
+   "site": "0x408cfb0",
+   "resolved": "-0x166de7f7"
   },
   "SetImageFunctionPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x412ebf0",
-   "resolved": "-0x1663cbb7"
+   "site": "0x412bd30",
+   "resolved": "-0x1663fa77"
   },
   "ImagePanelConstructorPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x1ec8038",
-   "resolved": "0x412e410"
+   "site": "0x1ec76b8",
+   "resolved": "0x412b530"
   },
   "ImagePanelClassSize": {
    "module": "client",
    "status": "ok",
-   "site": "0x1ec801a",
-   "resolved": "0x1ec80fc"
+   "site": "0x1ec769a",
+   "resolved": "0x1ec777c"
   },
   "ImagePropertiesOffset": {
    "module": "client",
    "status": "ok",
-   "site": "0x4133be3",
-   "resolved": "-0x29677bd9"
+   "site": "0x4130933",
+   "resolved": "-0x2967ae89"
   },
   "OffsetToImagePath": {
    "module": "client",
    "status": "ok",
-   "site": "0x412f21d",
-   "resolved": "0x412f2bc"
+   "site": "0x412c35d",
+   "resolved": "0x412c3fc"
   },
   "LabelPanelConstructorPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x40daa07",
-   "resolved": "0x41360d0"
+   "site": "0x40d7b47",
+   "resolved": "0x4132e10"
   },
   "SetLabelTextFunctionPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x4140c5c",
-   "resolved": "0x41400e0"
+   "site": "0x413d99c",
+   "resolved": "0x413ce20"
   },
   "LabelPanelObjectSize": {
    "module": "client",
    "status": "ok",
-   "site": "0x40daa01",
-   "resolved": "0x40dab0d"
+   "site": "0x40d7b41",
+   "resolved": "0x40d7c4d"
   },
   "UiEnginePointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x408c3b3",
-   "resolved": "0x4b9e4d8"
+   "site": "0x40894f3",
+   "resolved": "0x4b9ad58"
   },
   "SetParentFunctionOffset": {
    "module": "client",
    "status": "ok",
-   "site": "0x40aecb0",
-   "resolved": "0x40aeda7"
+   "site": "0x40abdf0",
+   "resolved": "0x40abee7"
   },
   "SetVisibleFunctionOffset": {
    "module": "client",
    "status": "ok",
-   "site": "0x169583d",
-   "resolved": "0x1695ade"
+   "site": "0x169523d",
+   "resolved": "0x16954de"
   },
   "GetAttributeStringFunctionOffset": {
    "module": "client",
    "status": "ok",
-   "site": "0x1d6bddb",
-   "resolved": "0x1d6c6b9"
+   "site": "0x1d6b6db",
+   "resolved": "0x1d6bfb9"
   },
   "SetAttributeStringFunctionOffset": {
    "module": "client",
    "status": "ok",
-   "site": "0x1d4bbaa",
-   "resolved": "0x1d4bcc0"
+   "site": "0x1d4b4aa",
+   "resolved": "0x1d4b5c0"
   },
   "PlantedC4sPointer": {
    "module": "client",
    "status": "ok",
-   "site": "0x1b4d190",
-   "resolved": "0x47c22c8"
+   "site": "0x1b4cb90",
+   "resolved": "0x47beb48"
   },
   "BombSiteOffset": {
    "module": "client",
    "status": "ok",
-   "site": "0x1ab7490",
-   "resolved": "0x1ab86b1"
+   "site": "0x1ab6e90",
+   "resolved": "0x1ab80b1"
   },
   "BombTickingOffset": {
    "module": "client",
    "status": "ok",
-   "site": "0x1485698",
-   "resolved": "0x14868be"
+   "site": "0x1485098",
+   "resolved": "0x14862be"
   },
   "BombBlowTimeOffset": {
    "module": "client",
    "status": "ok",
-   "site": "0x1485632",
-   "resolved": "0x148687a"
+   "site": "0x1485032",
+   "resolved": "0x148627a"
   },
   "BombDefuserOffset": {
    "module": "client",
    "status": "ok",
-   "site": "0x1589d28",
-   "resolved": "0x158af97"
+   "site": "0x1589728",
+   "resolved": "0x158a997"
   },
   "BombDefuseEndTimeOffset": {
    "module": "client",
    "status": "ok",
-   "site": "0x1b4d208",
-   "resolved": "0x1b4e472"
+   "site": "0x1b4cc08",
+   "resolved": "0x1b4de72"
   },
   "OffsetToBasePawnHandle": {
    "module": "client",
    "status": "ok",
-   "site": "0x1604d80",
-   "resolved": "0x16055c6"
+   "site": "0x1604780",
+   "resolved": "0x1604fc6"
   },
   "OffsetToPlayerColor": {
    "module": "client",
    "status": "ok",
-   "site": "0x153004b",
-   "resolved": "0x1530a32"
+   "site": "0x152fa4b",
+   "resolved": "0x1530432"
   },
   "OffsetToPlayerPawnImmunity": {
    "module": "client",
    "status": "ok",
-   "site": "0x153539e",
-   "resolved": "0x153974e"
+   "site": "0x1534d9e",
+   "resolved": "0x153914e"
   },
   "OffsetToWeaponServices": {
    "module": "client",
    "status": "ok",
-   "site": "0x1394981",
-   "resolved": "0x1395c00"
+   "site": "0x1394381",
+   "resolved": "0x1395600"
   },
   "OffsetToPlayerController": {
    "module": "client",
    "status": "ok",
-   "site": "0xfe8fca",
-   "resolved": "0xfea415"
+   "site": "0xfe89ca",
+   "resolved": "0xfe9e15"
   },
   "OffsetToIsDefusing": {
    "module": "client",
    "status": "ok",
-   "site": "0x148589d",
-   "resolved": "0x14885d3"
+   "site": "0x148529d",
+   "resolved": "0x1487fd3"
   },
   "OffsetToIsPickingUpHostage": {
    "module": "client",
    "status": "ok",
-   "site": "0x13961ba",
-   "resolved": "0x1398ef1"
+   "site": "0x1395bba",
+   "resolved": "0x13988f1"
   },
   "OffsetToHostageServices": {
    "module": "client",
    "status": "ok",
-   "site": "0x1520f96",
-   "resolved": "0x152249f"
+   "site": "0x1520996",
+   "resolved": "0x1521e9f"
   },
   "OffsetToFlashBangEndTime": {
    "module": "client",
    "status": "ok",
-   "site": "0x1c332f8",
-   "resolved": "0x1c34783"
+   "site": "0x1c32cf8",
+   "resolved": "0x1c34183"
   },
   "OffsetToPlayerPawnSceneObjectUpdaterHandle": {
    "module": "client",
    "status": "ok",
-   "site": "0x1a96a32",
-   "resolved": "0x1a996b8"
+   "site": "0x1a96432",
+   "resolved": "0x1a990b8"
   },
   "OffsetToIsScoped": {
    "module": "client",
    "status": "ok",
-   "site": "0x15a053d",
-   "resolved": "0x15a3272"
+   "site": "0x159ff3d",
+   "resolved": "0x15a2c72"
   },
   "PointerToPlayerResource": {
    "module": "client",
    "status": "ok",
-   "site": "0x1c29065",
-   "resolved": "0x48fa608"
+   "site": "0x1c28a65",
+   "resolved": "0x48f6e88"
   },
   "GetBombsiteACenter": {
    "module": "client",
    "status": "ok",
-   "site": "0x1d03595",
-   "resolved": "0x1593be0"
+   "site": "0x1d02f95",
+   "resolved": "0x15935e0"
   },
   "GetBombsiteBCenter": {
    "module": "client",
    "status": "ok",
-   "site": "0x1d25239",
-   "resolved": "0x1593c50"
+   "site": "0x1d24c39",
+   "resolved": "0x1593650"
   },
   "OffsetToPortraitWorldEntities": {
    "module": "client",
    "status": "ok",
-   "site": "0x1cd2713",
-   "resolved": "0x57566f91"
+   "site": "0x1cd2113",
+   "resolved": "0x57566991"
   },
   "OffsetToPortraitWorldMapEntities": {
    "module": "client",
    "status": "ok",
-   "site": "0x1cc531e",
-   "resolved": "0x1cc53f5"
+   "site": "0x1cc4d1e",
+   "resolved": "0x1cc4df5"
   },
   "OffsetToSceneObjectUpdaters": {
    "module": "client",
    "status": "ok",
-   "site": "0xd31692",
-   "resolved": "0x48ee93ce"
+   "site": "0xd31092",
+   "resolved": "0x48ee8dce"
   },
   "OffsetToSceneObject": {
    "module": "client",
    "status": "ok",
-   "site": "0xf8b433",
-   "resolved": "0x105f775c"
+   "site": "0xf8ae33",
+   "resolved": "0x105f715c"
   },
   "SliderSetValueFunction": {
    "module": "client",
    "status": "ok",
-   "site": "0x4165b1d",
-   "resolved": "0x4165850"
+   "site": "0x416285d",
+   "resolved": "0x4162590"
   },
   "OffsetToDidSmokeEffect": {
    "module": "client",
    "status": "ok",
-   "site": "0x144eee2",
-   "resolved": "0x14501d8"
+   "site": "0x144e8e2",
+   "resolved": "0x144fbd8"
   },
   "OffsetToSmokeEffectTickBegin": {
    "module": "client",
    "status": "ok",
-   "site": "0x144eedc",
-   "resolved": "0x14501ca"
+   "site": "0x144e8dc",
+   "resolved": "0x144fbca"
   },
   "TextEntrySetTextFunction": {
    "module": "client",
    "status": "ok",
-   "site": "0x1cf5644",
-   "resolved": "0x417baf0"
+   "site": "0x1cf5044",
+   "resolved": "0x4178830"
   },
   "OffsetToPortraitWorld": {
    "module": "client",
    "status": "ok",
-   "site": "0x1cbd76f",
-   "resolved": "-0x65839d25"
+   "site": "0x1cbd16f",
+   "resolved": "-0x6583a325"
   },
   "OffsetTo3dPanelFov": {
    "module": "client",
    "status": "ok",
-   "site": "0x1ca42b1",
-   "resolved": "0x1ca4afb"
+   "site": "0x1ca3cb1",
+   "resolved": "0x1ca44fb"
   },
   "OffsetTo3dPanelFovWeight": {
    "module": "client",
    "status": "ok",
-   "site": "0x1ca42c1",
-   "resolved": "0x1ca4b14"
+   "site": "0x1ca3cc1",
+   "resolved": "0x1ca4514"
   },
   "SetItemItemIdFunction": {
    "module": "client",
    "status": "ok",
-   "site": "0x1cc7993",
-   "resolved": "0x1cc72a0"
+   "site": "0x1cc7393",
+   "resolved": "0x1cc6ca0"
   },
   "OffsetToItem3dPanelUnknownField": {
    "module": "client",
    "status": "ok",
-   "site": "0x1caece4",
-   "resolved": "-0x4825ceac"
+   "site": "0x1cae6e4",
+   "resolved": "-0x4825d4ac"
   },
   "OffsetToStartWeaponLookAt": {
    "module": "client",
    "status": "ok",
-   "site": "0x1c7e680",
-   "resolved": "0x1c7f139"
+   "site": "0x1c7e080",
+   "resolved": "0x1c7eb39"
   },
   "OffsetToItem3dPanelProperties": {
    "module": "client",
    "status": "ok",
-   "site": "0x1cc7426",
-   "resolved": "0x1cc7d21"
+   "site": "0x1cc6e26",
+   "resolved": "0x1cc7721"
   },
   "OffsetToClipAmmo": {
    "module": "client",
    "status": "ok",
-   "site": "0x140a952",
-   "resolved": "0x140d112"
+   "site": "0x140a352",
+   "resolved": "0x140cb12"
   },
   "OffsetToWeaponSceneObjectUpdaterHandle": {
    "module": "client",
    "status": "ok",
-   "site": "0x14d57c3",
-   "resolved": "0x14d834a"
+   "site": "0x14d51c3",
+   "resolved": "0x14d7d4a"
   },
   "PointerToGetInaccuracyFunction": {
    "module": "client",
    "status": "ok",
-   "site": "0x148bb00",
-   "resolved": "-0x192dfca7"
+   "site": "0x148b500",
+   "resolved": "-0x192e02a7"
   },
   "PointerToGetSpreadFunction": {
    "module": "client",
    "status": "ok",
-   "site": "0x148d930",
-   "resolved": "-0x192dde77"
+   "site": "0x148d330",
+   "resolved": "-0x192de477"
   },
   "PointerToSpreadSeedFunction": {
    "module": "client",
    "status": "ok",
-   "site": "0x1b47ae0",
-   "resolved": "0x4a850439"
+   "site": "0x1b474e0",
+   "resolved": "0x4a84fe39"
   },
   "PointerToCalculateSpreadFunction": {
    "module": "client",
    "status": "ok",
-   "site": "0x1b48580",
-   "resolved": "-0x18c23227"
+   "site": "0x1b47f80",
+   "resolved": "-0x18c23827"
   },
   "PointerToUpdateAccuracyPenaltyFunction": {
    "module": "client",
    "status": "ok",
-   "site": "0x1491150",
-   "resolved": "-0x192da657"
+   "site": "0x1490b50",
+   "resolved": "-0x192dac57"
   },
   "PointerToGetAimPunchFunction": {
    "module": "client",
    "status": "ok",
-   "site": "0x1515420",
-   "resolved": "-0xd9c9be9"
+   "site": "0x1514e20",
+   "resolved": "-0xd9ca1e9"
   },
   "PointerToRegenerateWeaponSkin": {
    "module": "client",
-   "status": "ok",
-   "site": "0x1491f50",
-   "resolved": "-0x192d9857"
+   "status": "BROKEN"
   },
   "PointerToSetAttributeValueByName": {
    "module": "client",
    "status": "ok",
-   "site": "0x2081b40",
-   "resolved": "-0x186e9c67"
+   "site": "0x207ec80",
+   "resolved": "-0x186ecb27"
   },
   "PointerToResolveSubclassData": {
    "module": "client",
    "status": "ok",
-   "site": "0x1c66920",
-   "resolved": "-0x18b04e87"
+   "site": "0x1c66320",
+   "resolved": "-0x18b05487"
   },
   "PointerToUpdateWeaponData": {
    "module": "client",
    "status": "ok",
-   "site": "0x14d6730",
-   "resolved": "-0x19295077"
+   "site": "0x14d6130",
+   "resolved": "-0x19295677"
   },
   "PointerToUpdateSubclass": {
    "module": "client",
    "status": "ok",
-   "site": "0xddcab8",
-   "resolved": "-0x1998ece7"
+   "site": "0xddc4b8",
+   "resolved": "-0x1998f2e7"
   },
   "PointerToGetItemDefinitionByIndex": {
    "module": "client",
    "status": "ok",
-   "site": "0x2071be0",
-   "resolved": "-0x186f9bc7"
+   "site": "0x206ed20",
+   "resolved": "-0x186fca87"
   },
   "PointerToSetModel": {
    "module": "client",
    "status": "ok",
-   "site": "0x161e590",
-   "resolved": "-0x1914d217"
+   "site": "0x161df90",
+   "resolved": "-0x1914d817"
   },
   "PointerToGetPaintKitDefinition": {
    "module": "client",
    "status": "ok",
-   "site": "0x20738e0",
-   "resolved": "-0x186f7ec7"
+   "site": "0x2070a20",
+   "resolved": "-0x186fad87"
   },
   "PointerToUpdateCompositeMaterial": {
    "module": "client",
    "status": "ok",
-   "site": "0x4215f00",
-   "resolved": "-0x165558a7"
+   "site": "0x4212800",
+   "resolved": "-0x16558fa7"
   },
   "OffsetToActiveWeapon": {
    "module": "client",
    "status": "ok",
-   "site": "0x15ce8d9",
-   "resolved": "0xe23141"
+   "site": "0x15ce2d9",
+   "resolved": "0xe22b41"
   },
   "OffsetToWeapons": {
    "module": "client",
    "status": "ok",
-   "site": "0x15d4980",
-   "resolved": "0x50e891ce"
+   "site": "0x15d4380",
+   "resolved": "0x50e88bce"
   },
   "OffsetToWeaponName": {
    "module": "client",
    "status": "ok",
-   "site": "0x138492f",
-   "resolved": "0x1385055"
+   "site": "0x138432f",
+   "resolved": "0x1384a55"
   },
   "OffsetToSceneObjectFlags": {
    "module": "scene",
@@ -886,98 +884,98 @@
   "SetPanelStylePropertyFunctionPointer": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x33df27",
-   "resolved": "0x33dd60"
+   "site": "0x33c2a7",
+   "resolved": "0x33c0e0"
   },
   "PointerToStylePropertySymbols": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x2c1dca",
-   "resolved": "0x6b7728"
+   "site": "0x2c014a",
+   "resolved": "0x6b47a8"
   },
   "GetPanelPointerFunctionPointer": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x1f3010",
-   "resolved": "-0x36afb961"
+   "site": "0x1f1390",
+   "resolved": "-0x36afd5e1"
   },
   "RunScriptFunctionPointer": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x2341a0",
-   "resolved": "0x5b089f9"
+   "site": "0x232520",
+   "resolved": "0x5b06d79"
   },
   "MakeSymbolFunctionPointer": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x1ec970",
-   "resolved": "0x10154ebc"
+   "site": "0x1eacf0",
+   "resolved": "0x1015323c"
   },
   "OnDeletePanelFunctionPointer": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x1f1b00",
-   "resolved": "0x1015a04c"
+   "site": "0x1efe80",
+   "resolved": "0x101583cc"
   },
   "RegisterEventHandlerFunctionPointer": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x207790",
-   "resolved": "0x5adbfe9"
+   "site": "0x205b10",
+   "resolved": "0x5ada369"
   },
   "ChildPanelsCountOffset": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x25eb79",
-   "resolved": "0x25ee47"
+   "site": "0x25cef9",
+   "resolved": "0x25d1c7"
   },
   "ChildPanelsArrayOffset": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x25eb87",
-   "resolved": "0x25ee5e"
+   "site": "0x25cf07",
+   "resolved": "0x25d1de"
   },
   "PanelClassesVectorOffset": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x24cc4a",
-   "resolved": "0x24cdaf"
+   "site": "0x24afca",
+   "resolved": "0x24b12f"
   },
   "PanelStyleOffset": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x2734ca",
-   "resolved": "-0x7c9077c9"
+   "site": "0x27184a",
+   "resolved": "-0x7c909449"
   },
   "ParentWindowOffset": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x27990c",
-   "resolved": "-0x2d531ed0"
+   "site": "0x277c8c",
+   "resolved": "-0x2d533b50"
   },
   "OffsetToPanelId": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x25993c",
-   "resolved": "-0x7bcb66ab"
+   "site": "0x257cbc",
+   "resolved": "-0x7bcb832b"
   },
   "OffsetToPanelFlags": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x250c92",
-   "resolved": "0x250dbe"
+   "site": "0x24f012",
+   "resolved": "0x24f13e"
   },
   "OffsetToPanelHandle": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x1efac0",
-   "resolved": "0x1efdc7"
+   "site": "0x1ede40",
+   "resolved": "0x1ee147"
   },
   "UiScaleFactorOffset": {
    "module": "panorama",
    "status": "ok",
-   "site": "0x31dd2f",
-   "resolved": "0x15bd2553"
+   "site": "0x31c0af",
+   "resolved": "0x15bd08d3"
   }
  }
 }
