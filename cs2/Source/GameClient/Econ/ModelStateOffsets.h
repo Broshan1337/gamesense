@@ -16,7 +16,9 @@
 // through it clobbered the CBaseAnimGraph_API registry (entry-3 fn slot -> qword 2 -> the
 // game's map-load walk called it -> the rip=2 crashes; caught with a gdb HW watchpoint).
 // Schema chain (fresh dumper): m_skeletonInstance @ +0x80, m_modelState @ +0x140,
-// m_MeshGroupMask @ +0x248, m_hModel @ +0xA0.
+// m_MeshGroupMask @ +0x208 (520 decimal; an earlier revision of this comment said +0x248 - a
+// hex typo, the runtime value was always schema-resolved so behavior was never affected),
+// m_hModel @ +0xA0.
 struct ModelStateOffsets {
     explicit ModelStateOffsets(auto&& schemaSystem) noexcept
         : bodyComponent{resolve(schemaSystem, "C_BaseEntity", "m_CBodyComponent")}

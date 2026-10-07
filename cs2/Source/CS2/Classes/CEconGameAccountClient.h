@@ -16,8 +16,10 @@ namespace cs2
 // The same layout the Windows build uses - nElevatedState really is at 0x30 on both.
 struct CEconGameAccountClient {
     // Offset from the object returned by EconSystemAccessor to the econ client
-    // (`mov rax, [rax+115868h]`).
-    static constexpr int kEconClientOffset = 0x115868;
+    // (`mov rax, [rax+12C848h]` - moved from 0x115868 in the 1.41.8.2 recompile; the live
+    // EconSystemAccessor pattern embeds the literal bytes 48 8B 80 48 C8 12 00, so if this
+    // constant and the pattern ever disagree, the PATTERN is the current one).
+    static constexpr int kEconClientOffset = 0x12C848;
 
     // The shared-object cache handle that econ client holds, which the account-client accessor
     // takes as its only argument (`mov rdi, [rax+68h]`).

@@ -7,8 +7,10 @@
 #include <CS2/Constants/DllNames.h>
 #include <Platform/DynamicLibrary.h>
 
-// Resolves the live CEngineClient singleton via the exported CreateInterface entry point - the
-// same mechanism as GameEventManagerPointer.h and Source2ClientPointer.h, with one difference
+// Resolves the live CEngineClient singleton via the exported CreateInterface entry point -
+// the same mechanism as Source2ClientPointer.h (the event manager is the one interface this
+// does NOT work for - GAMEEVENTSMANAGER002 is not in libclient's CreateInterface list, see
+// ClientPatternsLinux.h), with one difference
 // that matters: this interface lives in libengine2.so, not libclient.so, so both the module the
 // CreateInterface symbol is taken from AND the module the returned object's vtable is validated
 // against are ENGINE_DLL.

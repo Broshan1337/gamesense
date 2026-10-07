@@ -8,12 +8,34 @@
 
 bool GameEventManagerHook_onFireEventClientSide(cs2::IGameEventManager2* thisptr, cs2::IGameEvent* event) noexcept;
 
-// CGameEventManager is a process-lifetime singleton, same reasoning as Source2ClientHook - the
-// resolved pointer is stored directly rather than tracked through a live pointer-to-pointer.
+// Hooks CGameEventManager::FireEventClientSide (vtable slot 9).
+//
+// 2026-10-06 ROOT-CAUSE FIX. Until today this hook received the address of a global and treated
+// *global as the event manager. That global was NOT the event manager - it is the
+// Source2EngineToClient001 interface instance (its only writer in libclient.so is
+// `lea rdi,"Source2EngineToClient001"; call rbx; mov [global],rax`), so the hook was
+// VMT-swapping the ENGINE-CLIENT interface and hooking ITS slot 9. Consequences, all matching
+// the crash history documented below: every "slot 9" dispatch was an engine->client call, the
+// hook body read a non-event pointer through the game_events:: accessors, and every
+// event-driven feature starved. The old comments ("engine-side event manager singleton",
+// "engine2 keeps its own global at engine2+0x9F60C8", the 256-slot floor) were rationalizations
+// of that wrong object - the real CGameEventManager's composite lives in libclient and the
+// shared libclient-built VmtLengthCalculator scans it fine.
+//
+// The real manager is a placement-constructed static inside libclient.so (RTTI-confirmed
+// _ZTI17CGameEventManager), resolved by pattern to the object's own address - hence this class
+// stores the instance directly (same reasoning as Source2ClientHook; there is no
+// pointer-to-pointer to track). It is NOT obtainable via CreateInterface: libclient's interface
+// list has exactly 8 static registrations and GAMEEVENTSMANAGER002 is not one of them (walked
+// from the exported CreateInterface's registry head on 1.41.8.8 and 1.41.8.9).
+//
+// Slot 9 verified on 1.41.8.9: slot 9 = 0x16F1AC0 = `mov ecx,1; xor edx,edx; jmp
+// <core dispatcher>` - the FireEventClientSide thin forwarder (matches the IGameEventManager2.h
+// derivation; Itanium destructor slots shift the Windows index by one, as everywhere else).
 class GameEventManagerHook {
 public:
-    GameEventManagerHook(cs2::IGameEventManager2** gameEventManagerGlobal, const VmtLengthCalculator& vmtLengthCalculator) noexcept
-        : gameEventManagerGlobal{gameEventManagerGlobal}
+    GameEventManagerHook(cs2::IGameEventManager2* gameEventManager, const VmtLengthCalculator& vmtLengthCalculator) noexcept
+        : gameEventManager{gameEventManager}
         , vmtLengthCalculator{vmtLengthCalculator}
     {
     }
@@ -23,52 +45,30 @@ public:
         return originalFireEventClientSide;
     }
 
-    // Dereferenced late, never cached at construction: the global is populated by the client's
-    // own init, which is not guaranteed to have run by the time FullGlobalContext is built.
-    [[nodiscard]] cs2::IGameEventManager2* getGameEventManager() const noexcept
-    {
-        return gameEventManagerGlobal ? *gameEventManagerGlobal : nullptr;
-    }
-
     void uninstall() const noexcept
     {
-        if (const auto gameEventManager = getGameEventManager())
+        if (gameEventManager)
             hook.uninstall(*reinterpret_cast<std::uintptr_t**>(gameEventManager));
     }
 
     [[nodiscard]] bool isInstalled() const noexcept
     {
-        const auto gameEventManager = getGameEventManager();
         return hook.wasEverInstalled() && gameEventManager && hook.isInstalled(*reinterpret_cast<std::uintptr_t**>(gameEventManager));
     }
 
     void install() noexcept
     {
-        // 09-26 RE-ENABLED: slot 9 verified (0x16f4680 = FireEventClientSide impl via the
-        // shared listener-iteration). The 10:46/11:01 crashes were the FSN CLONE SIZE (37
-        // slots on a 449-slot composite = pool overrun), not the GEM.
-        const auto gameEventManager = getGameEventManager();
-        // minSlots 256 (2026-09-27 fix for the 5x tier0-free crashes): the hooked object is
-        // the ENGINE-side event manager singleton (engine2 keeps its own global to it at
-        // engine2+0x9F60C8), NOT the client's 167-slot CGameEventManager composite the old
-        // 170 floor was sized from. The game dispatches it POSITIONALLY far higher: measured
-        // across ALL call sites loading the object from the global - libclient 844 sites up
-        // to [vptr+0x5A8] (slot 181), libengine2 5 sites up to [vptr+0x568] (slot 173).
-        // The old 170-slot clone (172 entries = 0x560 bytes) left slots 172-181 reading
-        // PAST the buffer into the next pool allocation (the input-hook clone), so
-        // engine2's slot-173 call (0x4EDA5E, this = a stack struct) landed on the input
-        // clone's slot-1 copy 0x1AD3780 = the CCSGOInput DELETING DESTRUCTOR -> it
-        // "deleted" the stack pointer -> tier0 bundled-allocator free crash. 256 covers
-        // every observed site with margin; the clone is byte-faithful, so extra copied
-        // slots are inert. Do NOT shrink this back to a composite guess: the shared
-        // calculator is built from libclient sections and cannot scan this engine2-side
-        // vtable (scan = 0), so the floor is the only bound.
-        if (gameEventManager && hook.install(vmtLengthCalculator, *reinterpret_cast<std::uintptr_t**>(gameEventManager), 256)) {
+        // minSlots: the composite measures ~170 slots (the historical floor was sized from the
+        // real manager's 167-slot composite - that number was correct, it was the OBJECT that
+        // was wrong). The shared calculator scans libclient sections, which now actually cover
+        // this vtable, so the scan finds the true length and 170 is just the floor guarantee
+        // for the hooked slot.
+        if (gameEventManager && hook.install(vmtLengthCalculator, *reinterpret_cast<std::uintptr_t**>(gameEventManager), 170)) {
             originalFireEventClientSide = hook.hook(9, &GameEventManagerHook_onFireEventClientSide);
         }
     }
 
-    cs2::IGameEventManager2** gameEventManagerGlobal;
+    cs2::IGameEventManager2* gameEventManager;
     VmtLengthCalculator vmtLengthCalculator;
     VmtSwapper hook;
     cs2::IGameEventManager2::FireEventClientSide* originalFireEventClientSide{ nullptr };

@@ -100,6 +100,14 @@ private:
             if (!channel.sfx)
                 continue;
 
+            // Defense in depth for the paired origin array: on 1.41.8.9 each ChannelInfo2
+            // mirrors the channel guid at +0xC (verified in libsoundsystem.so). If the layout
+            // ever shifts again, a stale offset would hand us a garbage origin (icons spawned
+            // at wild positions) while names still classify - the guid check turns that failure
+            // mode into "sound dropped" instead of "wrong icon on screen".
+            if (i >= channelInfo2.size || channelInfo2.memory[i].guid != channel.guid)
+                continue;
+
             std::array<char, 1024> buffer;
             fileNames.getString(channel.sfx->fileNameHandle, buffer);
             buffer.back() = '\0';

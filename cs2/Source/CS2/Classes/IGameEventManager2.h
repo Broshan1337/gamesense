@@ -11,14 +11,18 @@ namespace cs2 {
 struct IGameEvent;
 
 // The classic Source engine event-dispatch interface, still present in CS2's Source 2 client
-// under its original name and interface-registry string ("GAMEEVENTSMANAGER002" - see
-// GameEventManagerPointer.h). Concrete implementation is CGameEventManager; FireEventClientSide
+// under its original name. NOTE: despite the name being a real string in the binary,
+// CreateInterface("GAMEEVENTSMANAGER002") returns null - libclient's CreateInterface list holds
+// exactly 8 static registrations (walked on 1.41.8.8/1.41.8.9) and this is not one of them. The
+// concrete CGameEventManager is reached by pattern instead (see the
+// GameEventManagerGlobalPointer anchor in ClientPatternsLinux.h). FireEventClientSide
 // is vtable slot 9 there (confirmed via IDA MCP this session: found the real internal dispatcher
 // via two of its own log/warning strings, then found the thin 2-argument public wrapper
 // (sub_169DB30, `return coreDispatch(this, event, 0, 1)` - the `1` matches the exact boolean
 // that gates the core dispatcher's "Game event ..." client-side log line, as opposed to the
 // "Server event ..." branch taken when that flag is 0), then located that wrapper's address
-// directly inside CGameEventManager's vtable at byte offset 0x48 past the vtable's own start).
+// directly inside CGameEventManager's vtable at byte offset 0x48 past the vtable's own start;
+// re-verified on 1.41.8.9 - slot 9 = 0x16F1AC0, the same `mov ecx,1; xor edx,edx; jmp` forwarder).
 struct IGameEventManager2 {
     using FireEventClientSide = bool(IGameEventManager2* thisptr, IGameEvent* event);
 };

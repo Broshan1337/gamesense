@@ -15,6 +15,7 @@
 #include <CS2/Constants/TeamNumberConstants.h>
 #include <CS2/Constants/DllNames.h>
 #include <Features/Radio/RadioConfigVariables.h>
+#include <Features/Radio/RadioNowPlayingParser.h>
 #include <Features/Radio/RadioStationParser.h>
 #include <GameClient/Bind.h>
 #include <GameClient/ConVars/CvarSystem.h>
@@ -33,8 +34,9 @@
 
 // Web radio backed by the RadioTime / TuneIn OPML API - the same endpoints the reference implementation
 // uses (Browse.ashx?c=local for the region's local stations, Search.ashx for queries, Tune.ashx to turn
-// a station id into a playable stream URL). We don't decode audio ourselves: ffplay does, ON THE HOST,
-// because CS2 runs inside the Steam Linux Runtime container (pressure-vessel) where ffplay does not exist
+// a station id into a playable stream URL). We don't decode audio ourselves: mpv does, ON THE HOST
+// (ffplay fallback with identical flags semantics), because CS2 runs inside the Steam Linux Runtime
+// container (pressure-vessel) where neither player exists
 // and only /usr/bin:/bin are on PATH. Everything therefore runs through `steam-runtime-launch-client
 // --host`, which executes on the host (host PATH, host libraries, host network, host audio proxied back
 // in via PULSE_SERVER). curl also runs host-side. The results JSON lives in the writable
@@ -138,6 +140,80 @@ public:
     // survives across result list changes.
     [[nodiscard]] const char* lastPlayedName() const noexcept { return lastPlayedNameBuf; }
 
+    // --- now playing (HUD box) ---
+
+    // Called every frame from the present thread (renderGameOverlay, next to updateMicBroadcast):
+    // 1. live volume - the Radio tab slider writes the config var; while mpv plays, diffs are
+    //    pushed into its IPC socket (throttled ~150ms) so volume changes apply mid-stream with
+    //    no re-play. ffplay fallback applies at the next play instead (socket connect fails).
+    // 2. every ~2s: read the burst probe's title file while a station plays, or - when nothing
+    //    plays and ShowMediaPlayers is on - fire one host `playerctl` burst (in flight cap: the
+    //    previous burst must have exited before the next spawns) and parse its MPRIS record.
+    void updateNowPlaying() const noexcept
+    {
+        const int volume = static_cast<int>(GET_CONFIG_VAR(radio_vars::Volume));
+        if (currentPid > 0 && volume != appliedVolume && ++volumeApplyCounter >= 9) {
+            volumeApplyCounter = 0;
+            appliedVolume = volume;
+            writeVolumeScriptOnce();
+            StringBuilderStorage<320> storage;
+            auto builder = storage.builder();
+            builder.put("exec python3 ", volScriptPath, ' ', radioSocketPath, ' ', volume);
+            if (volPid > 0)
+                ::waitpid(volPid, nullptr, WNOHANG);
+            volPid = spawnHostShell(builder.cstring());
+        }
+
+        if (++nowPlayingCounter < 128) // ~2s at 60fps
+            return;
+        nowPlayingCounter = 0;
+        resolveRadioPaths();
+
+        // reap finished background helpers (one in flight each)
+        if (mprisPid > 0 && ::waitpid(mprisPid, nullptr, WNOHANG) == mprisPid)
+            mprisPid = 0;
+        if (volPid > 0 && ::waitpid(volPid, nullptr, WNOHANG) == volPid)
+            volPid = 0;
+
+        if (isPlaying()) {
+            readFileInto(nowPlayingTrackBuf, sizeof(nowPlayingTrackBuf), metaFilePath);
+            return;
+        }
+
+        // MPRIS fallback: mirror the host desktop's media player while no station plays.
+        if (!GET_CONFIG_VAR(radio_vars::ShowMediaPlayers)) {
+            clearMpris();
+            return;
+        }
+        if (mprisPid == 0) {
+            StringBuilderStorage<512> storage;
+            auto builder = storage.builder();
+            builder.put("playerctl metadata --format '{{playerName}}", '\x1f', "{{title}}", '\x1f',
+                        "{{artist}}", '\x1f', "{{status}}", "' > ", mprisPartPath,
+                        " 2>/dev/null && mv -f ", mprisPartPath, ' ', mprisFilePath,
+                        " || rm -f ", mprisFilePath);
+            mprisPid = spawnHostShell(builder.cstring());
+        }
+        char fileBuffer[512];
+        if (!readFileInto(fileBuffer, sizeof(fileBuffer), mprisFilePath)) {
+            clearMpris();
+            return;
+        }
+        MprisNowPlaying playing{};
+        if (RadioNowPlayingParser::parseMprisLine(fileBuffer, playing)) {
+            copyText(mprisPlayerBuf, playing.player, static_cast<int>(sizeof(mprisPlayerBuf)));
+            copyText(mprisTitleBuf, playing.title, static_cast<int>(sizeof(mprisTitleBuf)));
+            copyText(mprisArtistBuf, playing.artist, static_cast<int>(sizeof(mprisArtistBuf)));
+            mprisPaused = playing.paused;
+        }
+    }
+
+    [[nodiscard]] const char* nowPlayingTrack() const noexcept { return nowPlayingTrackBuf; }
+    [[nodiscard]] const char* mprisPlayerName() const noexcept { return mprisPlayerBuf; }
+    [[nodiscard]] const char* mprisTrack() const noexcept { return mprisTitleBuf; }
+    [[nodiscard]] const char* mprisArtist() const noexcept { return mprisArtistBuf; }
+    [[nodiscard]] bool mprisIsPaused() const noexcept { return mprisPaused; }
+
     // Returns true (once) after new results have been parsed, so the UI only repaints when something
     // actually changed.
     [[nodiscard]] bool consumeDirty() const noexcept
@@ -168,7 +244,8 @@ public:
 
     // Stops any current stream. Kills the host ffplay by its marker (the container-side launch-client
     // cannot reach it), then reaps our tracked launch-client. The pkill runs synchronously so a
-    // following play cannot race it.
+    // following play cannot race it. Also kills the now-playing burst probe (tracked pid + the
+    // marker in its argv catch it either way) and clears the track cache.
     void stop() const noexcept
     {
         NS_DEC(kMarker, kMarkerEnc);
@@ -191,6 +268,14 @@ public:
             ::waitpid(currentPid, nullptr, 0);
             currentPid = 0;
         }
+        if (metaPid > 0) {
+            ::kill(metaPid, SIGKILL);
+            ::waitpid(metaPid, nullptr, 0);
+            metaPid = 0;
+        }
+        nowPlayingTrackBuf[0] = '\0';
+        resolveRadioPaths();
+        ::unlink(metaFilePath);
     }
 
     // --- favorites + recents ---
@@ -607,22 +692,226 @@ private:
     }
 
     // Resolves a station id to a stream URL and plays it, entirely host-side: curl the Tune.ashx playlist,
-    // take the first http(s) line, and exec ffplay on it. The id comes from TuneIn and is alphanumeric
-    // (e.g. "s307738"), so interpolating it into the shell command is safe.
+    // take the first http(s) line, and exec mpv on it (ffplay when mpv is missing; both treat volume
+    // 100 as unity so the slider maps 1:1). mpv exposes --input-ipc-server so volume changes apply
+    // live mid-stream; ffplay has no such control and re-reads the volume at the next play instead.
+    // The id comes from TuneIn and is alphanumeric (e.g. "s307738"), so interpolating it into the
+    // shell command is safe. Also (re)spawns the now-playing burst probe: it carries the playback
+    // marker in its argv (so stop()'s marker pkill catches it too), resolves the same Tune URL,
+    // and polls the stream's ICY metadata a few KB at a time - never a second live stream.
     void playId(const char* id) const noexcept
     {
         stop();
 
-        StringBuilderStorage<512> storage;
-        auto builder = storage.builder();
         NS_DEC(kMarkerPlay, kMarkerEnc);
+        writeMetaProbeOnce();
+        StringBuilderStorage<512> probeStorage;
+        auto probeBuilder = probeStorage.builder();
+        probeBuilder.put("exec python3 ", metaScriptPath, ' ', id, ' ', kMarkerPlay.c_str(), ' ', metaFilePath);
+        if (metaPid > 0) {
+            ::waitpid(metaPid, nullptr, WNOHANG);
+            metaPid = 0;
+        }
+        metaPid = spawnHostShell(probeBuilder.cstring());
+
+        resolveRadioPaths();
+        ::unlink(radioSocketPath); // mpv refuses to create its IPC socket over an existing file
+        const int volume = static_cast<int>(GET_CONFIG_VAR(radio_vars::Volume));
+        appliedVolume = volume; // baked into the command line below; diffs apply live from here
+
+        StringBuilderStorage<768> storage;
+        auto builder = storage.builder();
         builder.put("U=$(curl -s --max-time 15 'https://opml.radiotime.com/Tune.ashx?id=", id,
-                    "' | grep -m1 -E '^https?://'); [ -n \"$U\" ] && exec ffplay -nodisp -autoexit -loglevel quiet -window_title ",
-                    kMarkerPlay.c_str(), " -volume ", static_cast<int>(GET_CONFIG_VAR(radio_vars::Volume)), " \"$U\"");
+                    "' | grep -m1 -E '^https?://'); [ -n \"$U\" ] && { rm -f ", radioSocketPath, "; "
+                    "if command -v mpv >/dev/null 2>&1; then "
+                    "exec mpv --config=no --no-video --really-quiet --no-terminal --input-ipc-server=", radioSocketPath,
+                    " --title=", kMarkerPlay.c_str(), " --volume=", volume, " \"$U\"; "
+                    "else exec ffplay -nodisp -autoexit -loglevel quiet -window_title ", kMarkerPlay.c_str(),
+                    " -volume ", volume, " \"$U\"; fi; }");
 
         const pid_t pid = spawnHostShell(builder.cstring());
         if (pid > 0)
             currentPid = pid;
+    }
+
+    // The now-playing burst probe (ns_radio_meta.py, stdlib-only python3 - verified present on the
+    // host like ffplay/curl before it). One connect grabs the first ICY block (~2 KB) instead of
+    // holding a second live stream: ~130 KB/hour of metadata traffic vs ~56 MB/hour a persistent
+    // probe would burn, and title freshness of <=60s is invisible for songs that last minutes.
+    static void writeMetaProbeOnce() noexcept
+    {
+        if (metaScriptWritten)
+            return;
+        metaScriptWritten = true;
+        resolveRadioPaths();
+
+        static constexpr char kScript[] =
+            "#!/usr/bin/env python3\n"
+            "# Radio now-playing burst probe (written by the game module): resolve the station's\n"
+            "# stream URL from TuneIn, connect ONCE with Icy-MetaData, read only the first metadata\n"
+            "# block (~2 KB - the title rides the top of the stream), write it out, disconnect.\n"
+            "# Repeats once a minute while the player lives: ~130 KB/hour, vs ~56 MB/hour for a\n"
+            "# second persistent stream connection. Self-terminates with the player (pgrep of the\n"
+            "# playback marker, which this script also carries in argv so stop()'s pkill finds it).\n"
+            "import os, re, socket, ssl, subprocess, sys, time\n"
+            "station_id, marker, out_path = sys.argv[1], sys.argv[2], sys.argv[3]\n"
+            "deadline = time.time() + 4 * 3600\n"
+            "current = None\n"
+            "def player_alive():\n"
+            "    for pat in (\"mpv.*\" + marker, \"ffplay.*\" + marker):\n"
+            "        try:\n"
+            "            if subprocess.run([\"pgrep\", \"-f\", pat], stdout=subprocess.DEVNULL,\n"
+            "                              stderr=subprocess.DEVNULL).returncode == 0:\n"
+            "                return True\n"
+            "        except OSError:\n"
+            "            return True  # cannot check - assume alive; the hard cap still bounds this\n"
+            "    return False\n"
+            "def fetch_title():\n"
+            "    try:\n"
+            "        import urllib.request\n"
+            "        page = urllib.request.urlopen(\"https://opml.radiotime.com/Tune.ashx?id=\" + station_id,\n"
+            "                                      timeout=12).read(4096).decode(\"utf-8\", \"replace\")\n"
+            "    except Exception:\n"
+            "        return None\n"
+            "    m = re.search(r\"https?://\\S+\", page)\n"
+            "    if not m:\n"
+            "        return None\n"
+            "    url = m.group(0)\n"
+            "    try:\n"
+            "        scheme, _, rest = url.partition(\"://\")\n"
+            "        host, _, path = rest.partition(\"/\")\n"
+            "        raw = socket.create_connection((host, 443 if scheme == \"https\" else 80), timeout=10)\n"
+            "        if scheme == \"https\":\n"
+            "            raw = ssl.create_default_context().wrap_socket(raw, server_hostname=host)\n"
+            "        raw.sendall((\"GET /%s HTTP/1.1\\r\\nHost: %s\\r\\nIcy-MetaData: 1\\r\\n\"\n"
+            "                     \"Connection: close\\r\\nUser-Agent: Mozilla/5.0\\r\\n\\r\\n\" % (path, host)).encode())\n"
+            "        buf = b\"\"\n"
+            "        while b\"\\r\\n\\r\\n\" not in buf:\n"
+            "            chunk = raw.recv(4096)\n"
+            "            if not chunk:\n"
+            "                return None\n"
+            "            buf += chunk\n"
+            "        head, buf = buf.split(b\"\\r\\n\\r\\n\", 1)\n"
+            "        metaint = 0\n"
+            "        for line in head.decode(\"latin1\").split(\"\\r\\n\"):\n"
+            "            if line.lower().startswith(\"icy-metaint:\"):\n"
+            "                try:\n"
+            "                    metaint = int(line.split(\":\", 1)[1].strip())\n"
+            "                except ValueError:\n"
+            "                    metaint = 0\n"
+            "        if not metaint:\n"
+            "            return None  # station publishes no in-band titles - stay station-only\n"
+            "        for _ in range(96):  # the title is near the top; a handful of blocks is plenty\n"
+            "            while len(buf) < metaint + 1:\n"
+            "                chunk = raw.recv(65536)\n"
+            "                if not chunk:\n"
+            "                    return None\n"
+            "                buf += chunk\n"
+            "            buf = buf[metaint:]\n"
+            "            ln = buf[0]\n"
+            "            buf = buf[1:]\n"
+            "            if ln:\n"
+            "                while len(buf) < ln * 16:\n"
+            "                    chunk = raw.recv(65536)\n"
+            "                    if not chunk:\n"
+            "                        return None\n"
+            "                    buf += chunk\n"
+            "                block, buf = buf[:ln * 16], buf[ln * 16:]\n"
+            "                t = re.search(r\"StreamTitle='([^']*)'\", block.decode(\"latin1\"))\n"
+            "                if t and t.group(1):\n"
+            "                    return t.group(1)\n"
+            "        return None\n"
+            "    except Exception:\n"
+            "        return None\n"
+            "def store(title):\n"
+            "    global current\n"
+            "    if title == current:\n"
+            "        return\n"
+            "    current = title\n"
+            "    try:\n"
+            "        tmp = out_path + \".part\"\n"
+            "        with open(tmp, \"w\") as f:\n"
+            "            f.write(title)\n"
+            "        os.replace(tmp, out_path)\n"
+            "    except OSError:\n"
+            "        pass\n"
+            "time.sleep(15)  # playback startup grace (Tune resolve + stream connect)\n"
+            "while time.time() < deadline:\n"
+            "    if not player_alive():\n"
+            "        break\n"
+            "    t = fetch_title()\n"
+            "    if t:\n"
+            "        store(t)\n"
+            "    time.sleep(60)\n";
+
+        writeScriptFile(metaScriptPath, kScript, sizeof(kScript) - 1);
+    }
+
+    // Volume one-shot (ns_radio_vol.py): pushes one set_property into mpv's IPC socket. stdlib
+    // only; a failed connect (ffplay fallback / mpv already gone) exits silently - the volume
+    // then applies at the next play, exactly like the pre-IPC behavior.
+    static void writeVolumeScriptOnce() noexcept
+    {
+        if (volScriptWritten)
+            return;
+        volScriptWritten = true;
+        resolveRadioPaths();
+
+        static constexpr char kScript[] =
+            "#!/usr/bin/env python3\n"
+            "# Radio live-volume one-shot (written by the game module): push one set_property\n"
+            "# into mpv's IPC socket. A failed connect means ffplay fallback or a dead player -\n"
+            "# volume then applies at the next play.\n"
+            "import json, socket, sys\n"
+            "sock_path, volume = sys.argv[1], float(sys.argv[2])\n"
+            "try:\n"
+            "    s = socket.socket(socket.AF_UNIX)\n"
+            "    s.settimeout(2)\n"
+            "    s.connect(sock_path)\n"
+            "    s.send((json.dumps({\"command\": [\"set_property\", \"volume\", volume]}) + \"\\n\").encode())\n"
+            "    s.close()\n"
+            "except OSError:\n"
+            "    pass\n";
+
+        writeScriptFile(volScriptPath, kScript, sizeof(kScript) - 1);
+    }
+
+    static void writeScriptFile(const char* path, const char* data, std::size_t length) noexcept
+    {
+        const int fd = ::open(path, O_CREAT | O_WRONLY | O_TRUNC, 0755);
+        if (fd < 0)
+            return;
+        std::size_t written = 0;
+        while (written < length) {
+            const ssize_t chunk = ::write(fd, data + written, length - written);
+            if (chunk <= 0)
+                break;
+            written += static_cast<std::size_t>(chunk);
+        }
+        ::close(fd);
+    }
+
+    // open+pread+close of a small exchange-root file, null-terminated. False when absent/empty
+    // (the normal state while a fetch is in flight).
+    [[nodiscard]] static bool readFileInto(char* buffer, std::size_t cap, const char* path) noexcept
+    {
+        const int fd = ::open(path, O_RDONLY);
+        if (fd < 0)
+            return false;
+        const auto readBytes = ::pread(fd, buffer, cap - 1, 0);
+        ::close(fd);
+        if (readBytes <= 0)
+            return false;
+        buffer[readBytes] = '\0';
+        return true;
+    }
+
+    static void clearMpris() noexcept
+    {
+        mprisPlayerBuf[0] = '\0';
+        mprisTitleBuf[0] = '\0';
+        mprisArtistBuf[0] = '\0';
+        mprisPaused = false;
     }
 
     // Deletes any stale result file, then fires a detached host curl that writes the new one atomically.
@@ -811,10 +1100,17 @@ private:
 
     // The radio results JSON is written by a HOST-side curl (spawnHostShell) and read back from
     // inside the container, so it lives in the writable exchange root (Utils/NsPaths.h) - since
-    // the 2026-10-04 Steam client update the two sides no longer share /tmp. Resolved once.
+    // the 2026-10-04 Steam client update the two sides no longer share /tmp. Same for the
+    // now-playing probe/title/volume/MPRIS files and mpv's IPC socket. Resolved once.
     inline static char resultsPath[192];
     inline static char resultsPartPath[192];
     inline static char micScriptPath[192];
+    inline static char metaScriptPath[192];
+    inline static char metaFilePath[192];
+    inline static char volScriptPath[192];
+    inline static char mprisFilePath[192];
+    inline static char mprisPartPath[192];
+    inline static char radioSocketPath[192];
     inline static bool radioPathsResolved = false;
 
     static void resolveRadioPaths() noexcept
@@ -825,6 +1121,12 @@ private:
         static_cast<void>(ns_paths::join(resultsPath, sizeof(resultsPath), "osiris-radio-results.json"));
         static_cast<void>(ns_paths::join(resultsPartPath, sizeof(resultsPartPath), "osiris-radio-results.json.part"));
         static_cast<void>(ns_paths::join(micScriptPath, sizeof(micScriptPath), "ns_mic_radio.sh"));
+        static_cast<void>(ns_paths::join(metaScriptPath, sizeof(metaScriptPath), "ns_radio_meta.py"));
+        static_cast<void>(ns_paths::join(metaFilePath, sizeof(metaFilePath), "osiris-radio-meta.txt"));
+        static_cast<void>(ns_paths::join(volScriptPath, sizeof(volScriptPath), "ns_radio_vol.py"));
+        static_cast<void>(ns_paths::join(mprisFilePath, sizeof(mprisFilePath), "osiris-mpris.txt"));
+        static_cast<void>(ns_paths::join(mprisPartPath, sizeof(mprisPartPath), "osiris-mpris.txt.part"));
+        static_cast<void>(ns_paths::join(radioSocketPath, sizeof(radioSocketPath), "osiris-radio.sock"));
     }
 
     // Feature objects are rebuilt per command, so all cross-call state is static.
@@ -837,6 +1139,21 @@ private:
     inline static char resultsHeader[128]{};
     inline static char lastPlayedId[sizeof(RadioStation::id)]{};
     inline static char lastPlayedNameBuf[sizeof(RadioStation::text)]{};
+    // Now-playing (HUD box) state. Playback/probe pids plus the parsed snapshots the HUD reads;
+    // all touched from the present thread only (renderGameOverlay-driven), like the rest.
+    inline static pid_t metaPid{0};
+    inline static pid_t mprisPid{0};
+    inline static pid_t volPid{0};
+    inline static char nowPlayingTrackBuf[128]{};
+    inline static char mprisPlayerBuf[48]{};
+    inline static char mprisTitleBuf[128]{};
+    inline static char mprisArtistBuf[128]{};
+    inline static bool mprisPaused{false};
+    inline static int nowPlayingCounter{0};
+    inline static int volumeApplyCounter{0};
+    inline static int appliedVolume{-1};
+    inline static bool metaScriptWritten{false};
+    inline static bool volScriptWritten{false};
     inline static bool micBroadcastActive{false};
     inline static char micBroadcastStation[sizeof(RadioStation::id)]{};
     inline static bool broadcastScriptWritten{false};

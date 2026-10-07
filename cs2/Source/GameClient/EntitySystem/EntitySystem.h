@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
 
 #include <CS2/Classes/Entities/CEntityInstance.h>
@@ -101,6 +102,49 @@ public:
         }
         if (!entityList)
             return;
+
+        // ONE-SHOT identity-page stride probe (2026-10-06 audit): sizeof(CEntityIdentity) == 112
+        // is a hand-written static_assert, but the long-standing community stride was 120 (the
+        // schema cannot see internal tail members, so only the game's own data can arbitrate).
+        // A correct stride makes chunk[0][i].handle.index() == i for every populated slot (the
+        // game fills identity pages positionally). Probe the first four slots under both strides
+        // and log the verdict once - a wrong stride fails silently (the handle-vs-index guard
+        // turns everything into null lookups), which is exactly the 2026-10-04 "identities=0
+        // with a live entity list" symptom class. Only indices 0..3 are probed so every read
+        // stays inside the page even if the true stride is the larger one; the probe retries
+        // (cheap: a handful of loads) while inconclusive, e.g. before a live entity list exists.
+        {
+            static int strideVerdict = 0;   // 0 = not yet determined; 112 / 120 = measured; -1 = gave up
+            static bool inconclusiveLogged = false;
+            if (strideVerdict == 0) {
+                if (const auto* const chunk0 = entityList->chunks[0]) {
+                    auto matches = [chunk0](std::size_t stride) {
+                        int hits = 0;
+                        for (std::size_t i = 0; i < 4; ++i) {
+                            const auto& identity = *reinterpret_cast<const cs2::CEntityIdentity*>(
+                                reinterpret_cast<const std::byte*>(chunk0) + i * stride);
+                            if (identity.entity && identity.handle.index().value == static_cast<int>(i))
+                                ++hits;
+                        }
+                        return hits;
+                    };
+                    const int hits112 = matches(112);
+                    const int hits120 = matches(120);
+                    if (hits112 == 4 && hits120 != 4) {
+                        strideVerdict = 112;
+                        gui_log::write("[chaindiag] identity stride probe: 112 (sizeof) confirmed, 4/4 handle matches");
+                    } else if (hits120 == 4 && hits112 != 4) {
+                        strideVerdict = 120;
+                        gui_log::write("[chaindiag] identity stride probe: 120 - sizeof(CEntityIdentity)=112 IS WRONG, "
+                                       "identities past slot 0 are misread; stop and re-derive the layout");
+                    } else if (!inconclusiveLogged) {
+                        inconclusiveLogged = true;
+                        gui_log::write("[chaindiag] identity stride probe inconclusive (hits112=%d hits120=%d), "
+                                       "will retry while slots stay empty", hits112, hits120);
+                    }
+                }
+            }
+        }
 
         for (auto chunkIndex = 0; chunkIndex < cs2::CConcreteEntityList::kNumberOfNetworkableEntityChunks; ++chunkIndex) {
             const auto* const chunk = entityList->chunks[chunkIndex];

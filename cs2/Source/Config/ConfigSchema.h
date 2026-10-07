@@ -800,6 +800,11 @@ private:
         configConversion.boolean(u8"AirhornHeadshot", loadVariable<radio_vars::AirhornHeadshot>(), saveVariable<radio_vars::AirhornHeadshot>());
         configConversion.boolean(u8"AirhornRoundWin", loadVariable<radio_vars::AirhornRoundWin>(), saveVariable<radio_vars::AirhornRoundWin>());
         configConversion.uint(u8"VoiceKey", loadVariable<radio_vars::VoiceKeyBind>(), saveVariable<radio_vars::VoiceKeyBind>());
+        // NOW PLAYING HUD box (appended LAST - order-sensitive parser).
+        configConversion.boolean(u8"ShowNowPlaying", loadVariable<radio_vars::ShowNowPlaying>(), saveVariable<radio_vars::ShowNowPlaying>());
+        configConversion.boolean(u8"ShowMediaPlayers", loadVariable<radio_vars::ShowMediaPlayers>(), saveVariable<radio_vars::ShowMediaPlayers>());
+        configConversion.floating(u8"BoxOffsetX", loadVariable<radio_vars::NowPlayingOffsetX>(), saveVariable<radio_vars::NowPlayingOffsetX>());
+        configConversion.floating(u8"BoxOffsetY", loadVariable<radio_vars::NowPlayingOffsetY>(), saveVariable<radio_vars::NowPlayingOffsetY>());
         configConversion.endObject();
 
         // SOUND BOARD (in-process voice injection; appended LAST per the ordering rule).

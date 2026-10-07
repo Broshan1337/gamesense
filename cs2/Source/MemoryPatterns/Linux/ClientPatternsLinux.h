@@ -35,18 +35,34 @@ struct ClientPatterns {
             .template addPattern<ViewToProjectionMatrixPointer, CodePattern{"EE 48 8D 0D ? ? ? ? 48 8D 15 ? ? ? ? 48"}.add(4).abs()>()
             .template addPattern<ViewRenderPointer, CodePattern{"48 8D 05 ? ? ? ? 48 89 38 48 85"}.add(3).abs()>()
             .template addPattern<LocalPlayerControllerPointer, CodePattern{"48 83 3D ? ? ? ? ? 0F 95 C0 C3"}.add(3).abs(5)>()
-            // Resolves the client's g_pGameEventManager global (0x492F258 as of the 2026-09-23
-            // update, was 0x4806390 on 2026-08-25) out of a multi-event listener-registration
-            // function that loads it with `lea r12,[rip+disp]` and immediately calls through
-            // the manager's vtable+0x310 (event lookup) before the registration parade
-            // ("round_start" among the registered names - the function is one of the few that
-            // reference the "round_start" string AND call [vtable+0x20] per listener).
-            // 2026-09-23: the old registrar (struct offsets 0x928/0xB28 family) was replaced -
-            // this new one recompiled with a different prologue (push r14/r13 order) and the
-            // struct-offset fingerprints vanished. Re-derived from the "round_start" string
-            // xref at the registration site. add(32).abs() lands on the lea r12 disp32 ->
-            // the global. Verified exactly-once via offline wildcard scan.
-            .template addPattern<GameEventManagerGlobalPointer, CodePattern{"55 48 89 E5 41 56 41 55 4C 8D 35 ? ? ? ? 41 54 4C 8D 6D B0 53 48 89 FB 48 83 EC 30 4C 8D 25 ? ? ? ? 49 8B 3C 24 48 8B 07 FF 90 10 03 00 00"}.add(32).abs()>()
+            // The client's CGameEventManager. Two facts drive this anchor (re-verified on
+            // 1.41.8.9, 2026-10-06):
+            //  1. It is NOT reachable via CreateInterface("GAMEEVENTSMANAGER002"): libclient's
+            //     interface list has exactly 8 static InterfaceReg nodes (Source2ClientConfig001,
+            //     EmptyWorldService001_Client, GameClientExports001, Source2Client002,
+            //     ClientToolsInfo_001, Source2ClientPrediction001, Source2ClientUI001,
+            //     LegacyGameUI001 - walked from the exported CreateInterface's registry head,
+            //     0x49ED120 on this build) and the event manager is placed into the game-system
+            //     registry instead. The "GAMEEVENTSMANAGER002" string in .rodata has zero code
+            //     references. (The old comment that claimed the resolved global WAS
+            //     g_pGameEventManager at 0x492F258/0x4931AD8 was wrong end to end: that global is
+            //     the Source2EngineToClient001 interface instance - its only writer is
+            //     `lea rdi,"Source2EngineToClient001"; call rbx; mov [global],rax` - hooking it
+            //     VMT-swapped the engine-client interface, which is where the 09-26 crash wave
+            //     came from.)
+            //  2. It is NOT a pointer global either: the client placement-constructs the object
+            //     in place at a fixed .bss address (RTTI-confirmed _ZTI17CGameEventManager ->
+            //     vtable 0x44D8470, ctor 0x1719860 on 1.41.8.9). This pattern resolves THE
+            //     OBJECT's address (the type is IGameEventManager2*, not **).
+            //
+            // Anchor = the placement-construction idiom: lea r15,[object]; lea rdi,[factory
+            // node]; call <game-system registrar>; mov rdi,r15; call <CGameEventManager::ctor>;
+            // mov rsi,r15; mov rdx,r12; lea rdi,[dtor node]. The tail past the ctor call is
+            // load-bearing: ClientModeCSNormal is built by the same idiom a page earlier, and
+            // only the GEM site continues mov rdx,r12 (the clientmode site goes mov rdx,rbx /
+            // xor r15d,r15d). add(3).abs() lands on the first lea's disp32 -> the placement
+            // address. Object 0x4918300 on 1.41.8.9; verified exactly-once.
+            .template addPattern<GameEventManagerGlobalPointer, CodePattern{"4C 8D 3D ? ? ? ? 48 8D 3D ? ? ? ? E8 ? ? ? ? 4C 89 FF E8 ? ? ? ? 4C 89 FE 4C 89 E2 48 8D 3D"}.add(3).abs()>()
             // Chat printing. ChatPrint (sub_1FFDF30) is matched on its own prologue.
             //
             // The delegate global (qword_48AA498) is taken from its tiny getter, sub_1FFDDA0,

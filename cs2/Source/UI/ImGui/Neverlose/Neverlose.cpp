@@ -4542,7 +4542,8 @@ void pageInventory() noexcept
 //
 // TuneIn/RadioTime web radio, driven through RadioManager: the regional local-station list,
 // free-text station search, and click-to-play. Fetches and playback run asynchronously on the
-// HOST (steam-runtime-launch-client -> curl/ffplay, see RadioManager.h); this page only draws
+// HOST (steam-runtime-launch-client -> curl/mpv with ffplay fallback, see RadioManager.h);
+// this page only draws
 // state and fires actions. One full-width card instead of the two-column flow: a list needs the
 // room, and the row pool below is driven by the live result count.
 
@@ -4712,7 +4713,8 @@ void pageRadio() noexcept
         d->PopClipRect();
     }
 
-    // Row 2: volume (standard slider primitive; applied to the next play).
+    // Row 2: volume (standard slider primitive; pushed live into mpv's IPC socket while a
+    // station plays - no re-press needed. ffplay fallback applies it at the next play).
     sliderVar<radio_vars::Volume>("Volume", ++controlId, "%");
 
     // Row 3: mic broadcast - while a station plays, CS2's mic capture is switched to the radio
@@ -4730,6 +4732,12 @@ void pageRadio() noexcept
     // The airhorn trigger toggles live on the SOUND tab; the mic routing machinery lives
     // here with the broadcast.
     keybindVar<radio_vars::VoiceKeyBind>("Voice Key (optional)", ++controlId);
+
+    // NOW PLAYING HUD box: the bottom-left element mirroring this tab's playback (station +
+    // track via the host-side ICY burst probe). While nothing plays it can instead mirror the
+    // host desktop's media players (MPRIS via playerctl). Both draggable in game.
+    toggleVar<radio_vars::ShowNowPlaying>("Show Now Playing HUD", ++controlId);
+    toggleVar<radio_vars::ShowMediaPlayers>("Show Desktop Players", ++controlId);
 
     // Sections: persisted favorites (star toggles back off) and this session's recently played.
     auto sectionHeader = [&](const char* title, const char* right) {
@@ -7219,6 +7227,7 @@ void drawPlayerListWindow() noexcept; // defined below
     float drawHitFeedWindow() noexcept; // defined below; top-left, returns window height (0 = not drawn)
     float drawStatusChipsWindow() noexcept; // defined below; bottom-left, returns window height (0 = not drawn)
 void drawLiveBadge() noexcept;
+void drawNowPlayingWindow(float combatListHeight) noexcept; // defined below; bottom-left, above COMBAT
 
 // Outer menu glow, drawn on the FOREGROUND draw list: the menu window clips its own draw list to
 // the shell rect, which is why the in-window version was invisible (only leaked out during the
@@ -7391,6 +7400,10 @@ void neverlose::renderGameOverlay() noexcept
     // open), so stopping a station always hands the microphone back - wherever the user is.
     withRadio([](auto&& radio) { radio.updateMicBroadcast(); });
 
+    // Now playing (HUD box): live volume push + throttled title/MPRIS polls. Same reasoning -
+    // the element tracks playback wherever the user is, Radio tab open or not.
+    withRadio([](auto&& radio) { radio.updateNowPlaying(); });
+
     // Discord Rich Presence: 1Hz throttled inside, cheap gates outside; runs with the menu open
     // or closed so the presence tracks the match.
     static_cast<void>(ui_config::withContext([](auto&& hookContext) {
@@ -7446,8 +7459,9 @@ void neverlose::renderGameOverlay() noexcept
     const float cheatOMeterHeight = drawCheatOMeterWindow(bindsListOffset);
     drawLagOMeterWindow(bindsListOffset + bindsListHeight + cheatOMeterHeight);
     // bottom-left / top-left boxes (the old Panorama meters, now on the same visual language)
-    drawCombatCountersWindow();
+    const float combatListHeight = drawCombatCountersWindow();
     drawStatusChipsWindow();
+    drawNowPlayingWindow(combatListHeight);
     drawHitFeedWindow();
     drawLiveBadge();
 
@@ -8089,6 +8103,136 @@ static float drawHudValuePill(ImDrawList* d, float x, float y, float pillHeight,
     textY(d, x + s(8), y, pillHeight, C(137, 142, 153), label, kTextSmall, nullptr);
     textY(d, x + s(8) + labelWidth + s(4), y, pillHeight, valueColor, value, kTextSmall, nullptr);
     return pillWidth;
+}
+
+// --- now playing (in-game HUD overlay) ---------------------------------------------------
+// Bottom-left box in the same visual family as COMBAT/STATUS. While a web-radio station plays
+// it shows the station + current track (host-side ICY burst probe via RadioManager); while
+// nothing plays it mirrors the host desktop's MPRIS media players (playerctl burst) instead,
+// so the element is never dead weight. Hidden entirely when the toggle is off or nothing is
+// playing anywhere. Interactive only while the menu is open (drag to reposition).
+
+static void copyCapped(char* dst, const char* src, std::size_t cap) noexcept
+{
+    std::size_t i = 0;
+    for (; src && src[i] != '\0' && i < cap - 1; ++i)
+        dst[i] = src[i];
+    dst[i] = '\0';
+}
+
+// Copies `text` into `buf`, cutting it down to maxWidth HUD pixels (kTextControl font) with a
+// trailing "..." - station and track names regularly overflow the 232px box.
+void truncateToWidth(char* buf, std::size_t cap, const char* text, float maxWidth) noexcept
+{
+    std::size_t len = 0;
+    while (text[len] != '\0' && len + 4 < cap) {
+        buf[len] = text[len];
+        ++len;
+    }
+    buf[len] = '\0';
+    ImFont* font = ImGui::GetFont();
+    if (font->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, buf).x <= maxWidth)
+        return;
+    while (len > 0) {
+        --len;
+        buf[len] = '.';
+        buf[len + 1] = '.';
+        buf[len + 2] = '.';
+        buf[len + 3] = '\0';
+        if (font->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, buf).x <= maxWidth)
+            return;
+    }
+}
+
+void drawNowPlayingWindow(float combatListHeight) noexcept
+{
+    if (!ui_config::get<radio_vars::ShowNowPlaying>())
+        return;
+
+    bool playing = false;
+    bool paused = false;
+    const char* stationName = nullptr;
+    const char* track = nullptr;
+    const char* playerName = nullptr;
+    const char* playerTitle = nullptr;
+    const char* playerArtist = nullptr;
+    withRadio([&](auto&& radio) {
+        playing = radio.isPlaying();
+        stationName = radio.lastPlayedName();
+        track = radio.nowPlayingTrack();
+        playerName = radio.mprisPlayerName();
+        playerTitle = radio.mprisTrack();
+        playerArtist = radio.mprisArtist();
+        paused = radio.mprisIsPaused();
+    });
+
+    char line1[160];
+    char line2[224];
+    line1[0] = '\0';
+    line2[0] = '\0';
+    if (playing) {
+        copyCapped(line1, stationName && stationName[0] != '\0' ? stationName : "radio", sizeof(line1));
+        if (track && track[0] != '\0')
+            copyCapped(line2, track, sizeof(line2));
+    } else if (playerName && playerName[0] != '\0' && playerTitle && playerTitle[0] != '\0') {
+        copyCapped(line1, playerName, sizeof(line1));
+        StringBuilderStorage<256> storage;
+        auto builder = storage.builder();
+        builder.put(playerTitle);
+        if (playerArtist && playerArtist[0] != '\0')
+            builder.put(" - ", playerArtist);
+        if (paused)
+            builder.put("  (paused)");
+        copyCapped(line2, builder.cstring(), sizeof(line2));
+    } else {
+        return; // nothing playing anywhere - no window at all
+    }
+
+    const float displayHeight = ImGui::GetIO().DisplaySize.y;
+    const float windowWidth = s(232.0f);
+    const float headerHeight = s(38.0f);
+    const float rowHeight = s(30.0f);
+    const int rowCount = line2[0] != '\0' ? 2 : 1;
+    const float listHeight = headerHeight + static_cast<float>(rowCount) * rowHeight + s(12.0f);
+
+    static HudWindowDragState dragState;
+    const float offX = static_cast<float>(ui_config::get<radio_vars::NowPlayingOffsetX>());
+    const float offY = static_cast<float>(ui_config::get<radio_vars::NowPlayingOffsetY>());
+    // bottom-left anchor above the COMBAT box (422); when combat isn't drawn take its slot
+    const float baseOffset = 422.0f + (combatListHeight > 0.0f ? combatListHeight + 6.0f : 0.0f);
+    ImGui::SetNextWindowPos(ImVec2(s(10.0f) + offX, displayHeight - s(baseOffset) - offY - listHeight), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(windowWidth, listHeight), ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(10.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, kSidebarBg);
+    ImGui::PushStyleColor(ImGuiCol_Border, C(52, 52, 58, 220));
+
+    if (ImGui::Begin("Now playing", nullptr, GUI::isMenuOpen() ? kHudBoxMenuOpenFlags : kHudBoxMenuClosedFlags)) {
+        ImDrawList* d = ImGui::GetWindowDrawList();
+        const ImVec2 winPos = ImGui::GetWindowPos();
+        const float winWidth = ImGui::GetWindowWidth();
+
+        drawHudBoxHeader(d, winPos, winWidth, headerHeight, "NOW PLAYING");
+
+        const ImU32 primary = paused ? hudWithAlpha(g_accent, 0.55f) : g_accent;
+        const ImU32 secondary = paused ? C(96, 100, 108) : C(150, 154, 165);
+
+        truncateToWidth(line1, sizeof(line1), line1, winWidth - s(44));
+        d->AddCircleFilled(winPos + ImVec2(s(18), headerHeight + rowHeight * 0.5f), s(3), primary);
+        textY(d, winPos.x + s(30), winPos.y + headerHeight + s(5), rowHeight, primary, line1, kTextControl, nullptr);
+
+        if (line2[0] != '\0') {
+            char line2Fit[sizeof(line2)];
+            truncateToWidth(line2Fit, sizeof(line2Fit), line2, winWidth - s(26));
+            textY(d, winPos.x + s(13), winPos.y + headerHeight + rowHeight + s(5), rowHeight, secondary, line2Fit, kTextControl, nullptr);
+        }
+
+        dragHudWindow<radio_vars::NowPlayingOffsetX, radio_vars::NowPlayingOffsetY, true>(dragState, offX, offY, d, winPos, winWidth, listHeight);
+    }
+    ImGui::End();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
 }
 
 // Bottom-left HITS / MISS / ACC counters, above the status chips box.

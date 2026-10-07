@@ -13,7 +13,6 @@
 #include <GameClient/FileNameSymbolTableState.h>
 #include <GameClient/Hud/HudState.h>
 #include <GameClient/MemAllocState.h>
-#include <GameClient/GameEventManagerPointer.h>
 #include <GameClient/Panorama/PanoramaSymbols.h>
 #include <GameClient/Source2ClientPointer.h>
 #include <OutlineGlow/GlowSceneObjectState.h>

@@ -23,10 +23,12 @@ STRONG_TYPE_ALIAS(WorldToProjectionMatrixPointer, cs2::VMatrix*);
 STRONG_TYPE_ALIAS(ViewToProjectionMatrixPointer, cs2::VMatrix*);
 STRONG_TYPE_ALIAS(ViewRenderPointer, cs2::CViewRender**);
 STRONG_TYPE_ALIAS(LocalPlayerControllerPointer, cs2::CCSPlayerController**);
-// The client's own g_pGameEventManager global. NOT obtainable via CreateInterface: the client
-// registers "GAMEEVENTSMANAGER002" into a separate runtime registry instead of adding it to
-// libclient.so's CreateInterface list, so that lookup returns null - see project notes.
-STRONG_TYPE_ALIAS(GameEventManagerGlobalPointer, cs2::IGameEventManager2**);
+// The client's CGameEventManager - the placement-constructed object's own address (not a
+// pointer to a pointer: the object is a static, not a global holding a pointer - see the
+// pattern comment in ClientPatternsLinux.h). Not obtainable via CreateInterface: the client
+// never registers "GAMEEVENTSMANAGER002" in libclient.so's CreateInterface list (it goes into
+// the game-system registry instead), so that lookup would return null.
+STRONG_TYPE_ALIAS(GameEventManagerGlobalPointer, cs2::IGameEventManager2*);
 // The chat message list, and the game's own function for appending a real entry to it. Both are
 // resolved by pattern rather than through any interface: the delegate is a plain module global
 // (libclient.so qword_48AA498) and the printer is a free function (sub_1FFDF30), neither of which

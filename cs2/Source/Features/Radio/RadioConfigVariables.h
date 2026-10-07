@@ -41,4 +41,24 @@ CONFIG_VARIABLE(AirhornFirstBlood, bool, true);
 CONFIG_VARIABLE(AirhornHeadshot, bool, false);
 CONFIG_VARIABLE(AirhornRoundWin, bool, false);
 
+// The bottom-left "NOW PLAYING" HUD box (drawNowPlayingWindow): station + track while a
+// web-radio station plays. Track titles come from the host-side ICY burst probe
+// (ns_radio_meta.py, ~2KB per minute) and simply stay empty for stations that publish none.
+CONFIG_VARIABLE(ShowNowPlaying, bool, true);
+
+// While NO station plays, the same box instead mirrors the host desktop's MPRIS media players
+// (Spotify, Firefox, mpv...) via a `playerctl` burst through the launch-client - so the element
+// is never dead weight. Radio playback always wins the box when it is active.
+CONFIG_VARIABLE(ShowMediaPlayers, bool, true);
+
+// Box position offsets from its default bottom-left anchor (above the COMBAT box). Float range
+// so the box can live anywhere on modern screens - the box is mouse-draggable in game and the
+// drag writes the same offsets (the status-chips pattern). Min is negative (BindsList
+// kOffsetRange precedent) precisely so the box can be dragged DOWN below its anchor: with a
+// 0-min range the clamp pins it 422px above the bottom edge and "move it to the bottom" is
+// impossible - reported live 2026-10-06.
+inline constexpr auto kOffsetRange = RangeConstrainedVariableParams<float>{.min = -4096.0f, .max = 4096.0f, .def = 0.0f};
+CONFIG_VARIABLE_RANGE(NowPlayingOffsetX, kOffsetRange);
+CONFIG_VARIABLE_RANGE(NowPlayingOffsetY, kOffsetRange);
+
 }
