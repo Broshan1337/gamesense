@@ -131,5 +131,30 @@ TEST_F(RadioNowPlayingParserTest, TruncatesLongTitleToBufferCapacity) {
     EXPECT_TRUE(RadioNowPlayingParser::parseMprisLine(line.data(), out));
     EXPECT_EQ(std::string{out.title}, longTitle.substr(0, sizeof(out.title) - 1));
 }
+TEST_F(RadioNowPlayingParserTest, SelectsPlayingMusicAheadOfPausedBrowser) {
+    const auto records = mprisLine("chromium", "Old video", "", "Paused") + "\n"
+        + mprisLine("mpv", "Current music", "Artist", "Playing") + "\n";
+    MprisNowPlaying out{};
+    ASSERT_TRUE(RadioNowPlayingParser::parseMprisOutput(records.c_str(), out));
+    EXPECT_STREQ(out.player, "mpv");
+    EXPECT_STREQ(out.title, "Current music");
+    EXPECT_FALSE(out.paused);
+}
+
+TEST_F(RadioNowPlayingParserTest, SkipsEmptyAndStoppedPlayersAndKeepsPausedFallback) {
+    const auto records = mprisLine("mopidy", "", "", "Playing") + "\n"
+        + mprisLine("browser", "Old song", "", "Stopped") + "\n"
+        + mprisLine("mpv", "Paused music", "", "Paused");
+    MprisNowPlaying out{};
+    ASSERT_TRUE(RadioNowPlayingParser::parseMprisOutput(records.c_str(), out));
+    EXPECT_STREQ(out.player, "mpv");
+    EXPECT_TRUE(out.paused);
+}
+
+TEST_F(RadioNowPlayingParserTest, ReplacingLongStreamTitleWithShortTitleTerminatesOutput) {
+    ASSERT_TRUE(RadioNowPlayingParser::extractStreamTitle("StreamTitle='A long track title';", buffer, sizeof(buffer)));
+    ASSERT_TRUE(RadioNowPlayingParser::extractStreamTitle("StreamTitle='Short';", buffer, sizeof(buffer)));
+    EXPECT_STREQ(buffer, "Short");
+}
 
 }

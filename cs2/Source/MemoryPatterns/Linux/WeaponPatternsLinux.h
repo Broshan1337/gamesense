@@ -48,17 +48,8 @@ struct WeaponPatterns {
             // schema-confirmed, verified in the decay math at 0x14947C0..0x1494814). The
             // prologue + globals-call + test/je chain stays the anchor; verified exactly-once.
             .template addPattern<PointerToUpdateAccuracyPenaltyFunction, CodePattern{"55 48 89 E5 41 54 53 48 89 FB 48 83 EC 10 E8 ? ? ? ? 48 85 C0 0F 84"}>()
-            // sub_14D31A0 - the aim-punch getter (see WeaponPatternTypes.h). Anchors on the prologue
-            // (push rbp / mov rbp,rsp / push r14 / push r13 / push r12 / push rbx / mov rbx,rdi /
-            // add rsp,-0x80) through the `cmp dword[rip+disp], -1` init-flag check, its jz, a call, and
-            // `mov esi,[rbx+0x48]` (the read of m_predictableBaseTick that fingerprints this as the
-            // aim-punch getter). RIP displacement, jz and call targets wildcarded. Verified exactly 1
-            // match in the current libclient.so via the IDA find_bytes tool.
-            // 2026-09-23 1.41.8.2: GetAimPunch moved to 0x1516720 and recompiled (a movsldup
-            // head, r15 carries the roll input, r13/r12 reshuffled; predictable/unpredictable
-            // punch offsets unchanged per schema: 0x48/0x4C/0x50/0x5C + 0xA0/0xA4). The
-            // leading movsldup keeps it unique; verified exactly-once.
-            .template addPattern<PointerToGetAimPunchFunction, CodePattern{"F3 0F 12 F1 55 48 89 E5 41 57 66 41 0F 7E CF 41 56 41 55 49 89 F5 BE 01 00 00 00 41 54 4C 8D 65 C4 53 48 89 FB 4C 89 E7 4C 8D 73 5C"}>()
+            // Read-only getter: interpolates predictable and unpredictable punch and adds them.
+            .template addPattern<PointerToGetAimPunchFunction, CodePattern{"55 48 8D 4F 5C 48 89 E5 41 55 44 0F B6 EA 41 54 48 8D 57 50 49 89 F4 45 89 E9 53 4D 89 E0 48 89 FB"}>()
             // C_CSWeaponBase::RegenerateSkin(this /*rdi*/, bool forceHighRes /*sil*/) - the
             // PER-WEAPON fn. 2026-09-27 (build dce58989) CORRECTION of a latent 09-23
             // re-anchor bug (THE "skins broken" root): the 09-23 anchor followed the

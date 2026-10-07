@@ -12,6 +12,7 @@
 #include <CS2/Constants/DllNames.h>
 #include <Features/Combat/AttackCommand.h>
 #include <Features/Combat/ShotGeometry.h>
+#include <Features/Combat/Rcs/RcsConfigVariables.h>
 #include <Features/Combat/SubtickShotWriter.h>
 #include <Features/Combat/Triggerbot/TriggerbotConfigVariables.h>
 #include <GameClient/Bind.h>
@@ -66,6 +67,7 @@ public:
     static void disarmStatics() noexcept
     {
         armed = false;
+        armedTarget = nullptr;
         fireAtTime = 0.0f;
     }
 
@@ -86,9 +88,6 @@ public:
             return;
         }
 
-        // Map change / reconnect rewinds curtime (server time restarts at 0). armed/fireAtTime are
-        // static, so without this a stale fireAtTime from the old world either never fires or fires
-        // instantly on the new one. Only ROLLBACKS count - curtime briefly stalling is normal.
         static float lastSeenCurtime = -1.0f;
         if (lastSeenCurtime > 0.0f && now.value() < lastSeenCurtime) {
             armed = false;
@@ -96,15 +95,16 @@ public:
         }
         lastSeenCurtime = now.value();
 
-        auto&& target = crosshairTarget(cmd);
+        auto&& target = crosshairTarget();
         if (!target) {
             disarm();
             return;
         }
 
-        // First frame on a target only starts the clock; nothing fires until the delay elapses.
-        if (!armed) {
+        auto* const rawTarget = static_cast<cs2::C_BaseEntity*>(target.baseEntity());
+        if (!armed || armedTarget != rawTarget) {
             armed = true;
+            armedTarget = rawTarget;
             const float delay = delaySeconds();
             fireAtTime = now.value() + delay;
             return;
@@ -113,10 +113,6 @@ public:
         if (now.value() < fireAtTime)
             return;
 
-        // Accuracy gates: past the delay, but hold fire until the shot is worth taking - the simple
-        // geometric cone check (AccuracyCheck), the head-only check, and the Monte-Carlo hitchance,
-        // each a no-op unless its config is on. Stays armed so it fires the instant the shot becomes
-        // worth taking.
         if (!wouldShotLand(target))
             return;
         if (!passesMaxAccuracyGate())
@@ -128,22 +124,9 @@ public:
         if (!passesSeededFire(target, cmd))
             return;
 
-        // On target, past the delay, accurate enough: fire THIS command. Stops again the moment the
-        // crosshair leaves the target or the feature/hold-key is let go, above.
         if (!hookContext.template make<AttackCommand>().press(cmd))
             return;
 
-        // Silent spread + punch compensation (see SubtickShotWriter): rewrite this command's
-        // input_history view samples so the fired bullet lands ON the crosshair instead of wherever
-        // the cone scatter carries it. Aim direction = the crosshair itself (the command's view
-        // angles); the punch subtraction keeps a held spray on target as the view kicks. Runs at this
-        // hook because the command is fully built here - and per tick, i.e. for EVERY bullet of a
-        // spray, with the weapon's then-current recoil index / inaccuracy.
-        //
-        // Measured build 14177 caveat: this hook's command carries NO input_history (see
-        // AttackCommand.h), so the writer early-outs and this compensation is dormant here - the
-        // AccuracyCheck / hitchance gates above are what hold moving shots. The rage aimbot's
-        // CreateMove-time writer is unaffected: its command does see the history.
         if (GET_CONFIG_VAR(triggerbot_vars::SpreadCompensation)) {
             auto&& localPawn = hookContext.activeLocalPlayerPawn();
             const UserCmd firedCmd{cmd};
@@ -151,17 +134,17 @@ public:
             const auto aimYaw = firedCmd.viewYaw();
             if (localPawn && aimPitch.hasValue() && aimYaw.hasValue()) {
                 float punchPitch = 0.0f, punchYaw = 0.0f;
-                if (const auto punch = localPawn.aimPunchAngle(); punch.hasValue()) {
+                const auto shots = localPawn.shotsFired();
+                const bool rcsApplied = GET_CONFIG_VAR(rcs_vars::Enabled) && shots.hasValue() && shots.value() >= 1;
+                if (const auto punch = localPawn.aimPunchAngle(); !rcsApplied && punch.hasValue()) {
                     punchPitch = punch.value().x;
                     punchYaw = punch.value().y;
                 }
-                // Return value deliberately ignored: the triggerbot's own accuracy/hitchance gates
-                // already decided to fire - the writer's "did the correction exist" verdict is only
-                // consumed by the rage aimbot's spread gate.
+
                 static_cast<void>(hookContext.template make<SubtickShotWriter>().run(cmd, localPawn,
                                                                                    aimPitch.value(), aimYaw.value(),
                                                                                    punchPitch, punchYaw,
-                                                                                   0.0f /* no backtrack rewind */,
+                                                                                   0.0f ,
                                                                                    true));
             }
         }
@@ -175,20 +158,17 @@ public:
 private:
     // The enemy player pawn under the crosshair, or a null-wrapped pawn (falsy) if there is nothing
     // shootable there. Returning the pawn rather than a bool lets the accuracy gate measure its range.
-    [[nodiscard]] PlayerPawn<HookContext> crosshairTarget(cs2::CUserCmd* cmd) const noexcept
+    [[nodiscard]] PlayerPawn<HookContext> crosshairTarget() const noexcept
     {
         const auto none = hookContext.template make<PlayerPawn>(static_cast<cs2::C_CSPlayerPawn*>(nullptr));
 
-        auto&& localPawn = hookContext.localPlayerController().pawn().template as<PlayerPawn>();
+        auto&& localPawn = hookContext.activeLocalPlayerPawn();
         if (!localPawn)
             return none;
 
         if (localPawn.isAlive() != true)
             return none;
 
-        // Guns only (the reference triggerbot skips knife / taser / grenades / C4): a weapon whose
-        // VData reports zero bullets cannot fire one, so pressing attack just swings or stabs.
-        // Unresolved VData fails open - the fresh-weapon edge case, not worth blinding the bot over.
         const auto bullets = localPawn.getActiveWeapon().numBullets();
         if (bullets.hasValue() && bullets.value() <= 0)
             return none;
@@ -201,8 +181,6 @@ private:
         if (!entity)
             return none;
 
-        // m_iIDEntIndex is whatever the crosshair is over, which includes hostages, doors and
-        // breakables. Only a player pawn is a target.
         auto&& baseEntity = hookContext.template make<BaseEntity>(static_cast<cs2::C_BaseEntity*>(entity));
         if (!baseEntity.classify().template is<cs2::C_CSPlayerPawn>())
             return none;
@@ -211,8 +189,6 @@ private:
         if (!target || target.isControlledByLocalPlayer())
             return none;
 
-        // isEnemy() already folds in the free-for-all case via teammatesAreEnemies(), so this is
-        // both the team check and the deathmatch exception in one.
         if (target.isEnemy() != true)
             return none;
 
@@ -220,33 +196,7 @@ private:
         if (!health.hasValue() || health.value() <= 0)
             return none;
 
-        // Spawn protection - the shot would not register, so taking it only gives the position away.
         if (const auto immune = target.hasImmunity(); immune.hasValue() && immune.value())
-            return none;
-
-        // STRICT CROSSHAIR CONFIRMATION. m_iIDEntIndex carries a forgiveness radius: the game flags
-        // you as "looking at" a pawn while the view ray only passes NEAR their hull. Firing on that
-        // alone just sprays compensated-but-off-target bullets - flash and sound, no damage, which
-        // reads exactly like fake bullets. Verify with our own exact eye-ray along the COMMAND's
-        // view angles (the angles this tick's bullet actually uses): the first thing the ray hits
-        // must be the target itself. A wall, another player, or nothing (= ray past their hull)
-        // all mean "not on target".
-        const UserCmd userCmd{cmd};
-        const auto aimPitch = userCmd.viewPitch();
-        const auto aimYaw = userCmd.viewYaw();
-        const auto eye = localPawn.eyePosition();
-        if (!aimPitch.hasValue() || !aimYaw.hasValue() || !eye.hasValue())
-            return none;
-
-        const auto basis = shot_geometry::angleVectors(aimPitch.value(), aimYaw.value());
-        constexpr float kTraceRange = 8192.0f;
-        const cs2::Vector end{eye.value().x + basis.forward.x * kTraceRange,
-                              eye.value().y + basis.forward.y * kTraceRange,
-                              eye.value().z + basis.forward.z * kTraceRange};
-        const auto trace = Tracing::traceLine(eye.value(), end, static_cast<void*>(static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity())));
-        if (!trace.didHit)
-            return none;
-        if (trace.hitEntity != static_cast<void*>(static_cast<cs2::C_BaseEntity*>(target.baseEntity())))
             return none;
 
         return target;
@@ -512,7 +462,7 @@ private:
 
         int index{};
         std::memcpy(&index, reinterpret_cast<const std::byte*>(static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity())) + *offset, sizeof(index));
-        if (index < 0)
+        if (index <= 0 || index >= 32768)
             return {};
         return index;
     }
@@ -588,6 +538,7 @@ private:
     static void disarm() noexcept
     {
         armed = false;
+        armedTarget = nullptr;
         fireAtTime = 0.0f;
     }
 
@@ -597,6 +548,7 @@ private:
 
     // Constant-initialised and trivially destructible, so no __cxa_guard under -nostdlib.
     inline static bool armed{false};
+    inline static cs2::C_BaseEntity* armedTarget{nullptr};
     inline static float fireAtTime{0.0f};
 
     // PRNG state for the randomised reaction delay. Zero means "not seeded yet"; nextRandom() seeds it

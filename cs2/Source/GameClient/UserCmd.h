@@ -222,22 +222,21 @@ public:
 
         std::byte* buttonsPb = nullptr;
         std::memcpy(&buttonsPb, base + cs2::CUserCmd::BaseMessage::kButtonsPbOffset, sizeof(buttonsPb));
-        if (!buttonsPb)
-            return false;
 
-        // Raw command words first, so the client's own prediction and the recomputed move_crc agree
-        // with what is sent. bank1 = held, bank2 = changed this tick.
         orInto(reinterpret_cast<std::byte*>(cmd) + cs2::CUserCmd::kButtonState1Offset, buttons);
         orInto(reinterpret_cast<std::byte*>(cmd) + cs2::CUserCmd::kButtonState2Offset, buttons);
 
-        // ...and the copy the server actually reads.
+        // CRC serialization copies the native banks into its own button protobuf.
+        // The command protobuf may still be absent before that original call.
+        if (!buttonsPb)
+            return true;
+
         using ButtonsPb = cs2::CUserCmd::BaseMessage::ButtonsPb;
         orInto(buttonsPb + ButtonsPb::kButtonState1Offset, buttons);
         orHasBit(buttonsPb + ButtonsPb::kHasBitsOffset, ButtonsPb::kButtonState1HasBit);
         orInto(buttonsPb + ButtonsPb::kButtonState2Offset, buttons);
         orHasBit(buttonsPb + ButtonsPb::kHasBitsOffset, ButtonsPb::kButtonState2HasBit);
 
-        // A sub-message that is not marked present is not serialized.
         orHasBit(base + cs2::CUserCmd::BaseMessage::kHasBitsOffset, cs2::CUserCmd::BaseMessage::kButtonsPbHasBit);
         return true;
     }

@@ -89,28 +89,12 @@ struct AimPunchAngles {
     float roll;
 };
 
-// sub_14D31A0 - CS2's aim-punch getter (velocity-cs2 "get_aim_punch"). Given a
-// CCSPlayer_AimPunchServices*, interpolates the PREDICTABLE (m_predictableBaseTick/InterpAmount/
-// Angle/AngleVel at 0x48/0x4C/0x50/0x5C) and UNPREDICTABLE (0xA0/0xA4) base punch angles to the
-// CURRENT tick and returns their sum - the live aim punch the game adds to the shoot angle (confirmed:
-// a caller `addps`es this straight into the view angle before firing). The aimbot subtracts it so a
-// spray stays on target as recoil kicks the view. Reads only - safe from the input hook. Only pitch/
-// yaw are used (roll is ~0 for aim punch).
-//
-// 2026-09-27 SIGNATURE CORRECTION (the mid-match SEGV class, RE'd from build 68f386a6): the
-// 5GB update changed the signature. The current function takes (this, PunchAccumulator* in
-// RSI, float in XMM0): it builds a local {int tick, float angle} pair and ADDS it into the
-// CALLER-SUPPLIED accumulator via 0x2F072D0 - which reads [rsi]/[rsi+4] UNCONDITIONALLY (no
-// null guard) - before interpolating the history (0x15173A0). The old "(double reserved,
-// float rollInput)" contract belonged to the pre-update function; calling the new one with
-// garbage in rsi fed an unmapped/garbage pair into the accumulator, the interpolation index
-// collapsed to cvttss2si's indefinite value (0x80000000 = INT_MIN - what cvttss2si returns
-// for NaN/overflow) and the history walk faulted at [history + INT_MIN*12] - both mid-match
-// crashes faulted at exactly array - 0x600000000, the INT_MIN*12 offset, verified to the byte.
-// A standalone read passes a ZEROED accumulator = zero extra accumulation = the base punch.
+// Read-only aim-punch getter. The old anchor selected the weapon recoil updater,
+// a void function, so treating its return registers as angles produced undefined recoil.
+// RSI points to a query tick/fraction and EDX supplies the interpolation flag.
 struct PunchAccumulator {
     std::int32_t tick;
-    float angle;
+    float fraction;
 };
-using GetAimPunchFn = AimPunchAngles(void* aimPunchServices, PunchAccumulator* accumulator, float interpInput);
+using GetAimPunchFn = AimPunchAngles(void* aimPunchServices, const PunchAccumulator* sampleTime, bool allowExtrapolation);
 STRONG_TYPE_ALIAS(PointerToGetAimPunchFunction, GetAimPunchFn*);

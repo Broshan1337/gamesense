@@ -90,12 +90,6 @@ public:
         if (!playerPawn)
             return {};
 
-        // MAP-TRANSITION SESSION GATE (AGENTS.md rule 0; the 2026-09-27 map-load crash):
-        // GetAimPunch walks the pawn's aim-punch history at [services+0x28], which is not
-        // built yet on a freshly-spawned pawn - the game itself only calls it after the
-        // entity is fully constructed. Covers every reader (Removals view-punch, Rcs,
-        // Aimbot, Triggerbot x2) in one place. CLOCK_MONOTONIC pawn-settle, NOT curtime -
-        // curtime is blind during the join window (old map's value until the GlobalVars swap).
         if (!pawn_settle::ready(playerPawn))
             return {};
 
@@ -112,12 +106,14 @@ public:
         if (!getAimPunch)
             return {};
 
-        // 2026-09-27 signature correction: the update added a caller-supplied accumulator
-        // pair in rsi (read unconditionally, no null guard). A zeroed pair = zero extra
-        // accumulation = the base predictable punch, which is what a standalone read wants.
-        // The old call left rsi = an uncontrolled register - the mid-match SEGV class.
-        PunchAccumulator zeroAccumulator{0, 0.0f};
-        const auto punch = getAimPunch(services, &zeroAccumulator, 0.0f);
+        const auto tick = hookContext.localPlayerController().tickBase();
+        if (!tick.hasValue() || tick.value() <= 0)
+            return {};
+        PunchAccumulator sampleTime{tick.value(), 0.0f};
+        // Query the read-only punch getter, never the recoil updater called by weapons.
+        const auto punch = getAimPunch(services, &sampleTime, false);
+        if (!__builtin_isfinite(punch.pitch) || !__builtin_isfinite(punch.yaw) || !__builtin_isfinite(punch.roll))
+            return {};
         return cs2::Vector{punch.pitch, punch.yaw, punch.roll};
     }
 

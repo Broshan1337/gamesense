@@ -50,12 +50,14 @@ public:
 
         int oi = 0;
         for (const char* p = title; *p != '\0'; ++p) {
-            if (*p == '\'')
-                return oi > 0; // terminating quote: empty title reads as "no title"
+            if (*p == '\'') {
+                out[oi] = '\0';
+                return oi > 0;
+            }
             if (oi < cap - 1)
                 out[oi++] = *p;
         }
-        return false; // ran to the end of the block without a closing quote
+        return false;
     }
 
     // Parses "<player>\x1f<title>\x1f<artist>\x1f<status>" (playerctl --format output).
@@ -87,7 +89,8 @@ public:
         if (fieldIndex < 3)
             return false;
 
-        if (fields[0][0] == '\0' || fields[1][0] == '\0')
+        if (fields[0][0] == '\0' || fields[1][0] == '\0'
+            || (!equals(fields[3], "Playing") && !equals(fields[3], "Paused")))
             return false;
 
         copy(out.player, fields[0], sizeof(out.player));
@@ -95,6 +98,31 @@ public:
         copy(out.artist, fields[2], sizeof(out.artist));
         out.paused = !equals(fields[3], "Playing");
         return true;
+    }
+
+[[nodiscard]] static bool parseMprisOutput(const char* text, MprisNowPlaying& out) noexcept
+    {
+        if (!text)
+            return false;
+        bool found = false;
+        for (const char* line = text; *line;) {
+            MprisNowPlaying candidate{};
+            if (parseMprisLine(line, candidate)) {
+                if (!candidate.paused) {
+                    out = candidate;
+                    return true;
+                }
+                if (!found) {
+                    out = candidate;
+                    found = true;
+                }
+            }
+            while (*line && *line != '\n')
+                ++line;
+            if (*line)
+                ++line;
+        }
+        return found;
     }
 
 private:

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <cerrno>
+#include <ctime>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -30,7 +32,6 @@
 #include <Utils/CrashLogger.h>
 #include <Utils/StringBuilder.h>
 #include <Utils/VerifyConsole.h>
-
 
 // Web radio backed by the RadioTime / TuneIn OPML API - the same endpoints the reference implementation
 // uses (Browse.ashx?c=local for the region's local stations, Search.ashx for queries, Tune.ashx to turn
@@ -164,14 +165,21 @@ public:
             volPid = spawnHostShell(builder.cstring());
         }
 
-        if (++nowPlayingCounter < 128) // ~2s at 60fps
+        // Poll by elapsed time so the widget still works with low FPS or a closed menu.
+        timespec timestamp{};
+        if (::clock_gettime(CLOCK_MONOTONIC, &timestamp) != 0)
             return;
-        nowPlayingCounter = 0;
+        const double now = static_cast<double>(timestamp.tv_sec) + timestamp.tv_nsec / 1.0e9;
+        if (now < nextNowPlayingPoll)
+            return;
+        nextNowPlayingPoll = now + 0.5;
         resolveRadioPaths();
 
-        // reap finished background helpers (one in flight each)
-        if (mprisPid > 0 && ::waitpid(mprisPid, nullptr, WNOHANG) == mprisPid)
-            mprisPid = 0;
+        if (mprisPid > 0) {
+            const auto reaped = ::waitpid(mprisPid, nullptr, WNOHANG);
+            if (reaped == mprisPid || (reaped < 0 && errno == ECHILD))
+                mprisPid = 0;
+        }
         if (volPid > 0 && ::waitpid(volPid, nullptr, WNOHANG) == volPid)
             volPid = 0;
 
@@ -180,31 +188,40 @@ public:
             return;
         }
 
-        // MPRIS fallback: mirror the host desktop's media player while no station plays.
         if (!GET_CONFIG_VAR(radio_vars::ShowMediaPlayers)) {
             clearMpris();
             return;
         }
         if (mprisPid == 0) {
-            StringBuilderStorage<512> storage;
+            StringBuilderStorage<2048> storage;
             auto builder = storage.builder();
-            builder.put("playerctl metadata --format '{{playerName}}", '\x1f', "{{title}}", '\x1f',
-                        "{{artist}}", '\x1f', "{{status}}", "' > ", mprisPartPath,
-                        " 2>/dev/null && mv -f ", mprisPartPath, ' ', mprisFilePath,
-                        " || rm -f ", mprisFilePath);
+            builder.put("export PATH=\"$HOME/.nix-profile/bin:/etc/profiles/per-user/$(id -un)/bin:/run/current-system/sw/bin:/usr/bin:/bin:$PATH\"; ",
+                        "export XDG_RUNTIME_DIR=\"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}\"; ",
+                        "export DBUS_SESSION_BUS_ADDRESS=\"${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}\"; ",
+                        "timeout 2s playerctl --all-players metadata --format '{{playerName}}", '\x1f', "{{title}}", '\x1f',
+                        "{{artist}}", '\x1f', "{{status}}", "' > ");
+            appendShellPath(builder, mprisPartPath);
+            builder.put(" 2>/dev/null && mv -f ");
+            appendShellPath(builder, mprisPartPath);
+            builder.put(' ');
+            appendShellPath(builder, mprisFilePath);
+            builder.put(" || rm -f ");
+            appendShellPath(builder, mprisFilePath);
             mprisPid = spawnHostShell(builder.cstring());
         }
-        char fileBuffer[512];
+        char fileBuffer[8192];
         if (!readFileInto(fileBuffer, sizeof(fileBuffer), mprisFilePath)) {
             clearMpris();
             return;
         }
         MprisNowPlaying playing{};
-        if (RadioNowPlayingParser::parseMprisLine(fileBuffer, playing)) {
+        if (RadioNowPlayingParser::parseMprisOutput(fileBuffer, playing)) {
             copyText(mprisPlayerBuf, playing.player, static_cast<int>(sizeof(mprisPlayerBuf)));
             copyText(mprisTitleBuf, playing.title, static_cast<int>(sizeof(mprisTitleBuf)));
             copyText(mprisArtistBuf, playing.artist, static_cast<int>(sizeof(mprisArtistBuf)));
             mprisPaused = playing.paused;
+        } else {
+            clearMpris();
         }
     }
 
@@ -446,7 +463,6 @@ public:
         releaseAutoVoiceBindIfIdle();
     }
 
-
         // FrameStageNotify-6 consumer: the ONLY place this feature touches the engine console.
     // Called from the FSN hook (game thread, ticks in menus too). Drains the bind/unbind and
     // voice-enable requests queued by the present-thread updates. Single-slot last-wins is
@@ -593,7 +609,6 @@ private:
     {
         synthVoiceKey(false);
     }
-
 
     // The switch script must live on disk (too long for the spawnHostShell command buffer and
     // easier to keep idempotent as a standalone file). Written once per process into the
@@ -948,7 +963,25 @@ private:
         pid_t pid{};
         if (::posix_spawn(&pid, kLaunchClientPath, nullptr, nullptr, argv, environ) == 0)
             return pid;
+        // Native launches do not always include the Steam pressure-vessel helper.
+        if (::access(kLaunchClientPath, X_OK) != 0) {
+            char* const nativeArgv[] = {const_cast<char*>("sh"), const_cast<char*>("-c"), const_cast<char*>(script), nullptr};
+            if (::posix_spawnp(&pid, "sh", nullptr, nullptr, nativeArgv, environ) == 0)
+                return pid;
+        }
         return 0;
+    }
+
+    static void appendShellPath(auto& builder, const char* path) noexcept
+    {
+        builder.put('\'');
+        for (; *path; ++path) {
+            if (*path == '\'')
+                builder.put("'\\''");
+            else
+                builder.put(*path);
+        }
+        builder.put('\'');
     }
 
     static void copyId(char* dst, const char* src) noexcept
@@ -1149,7 +1182,7 @@ private:
     inline static char mprisTitleBuf[128]{};
     inline static char mprisArtistBuf[128]{};
     inline static bool mprisPaused{false};
-    inline static int nowPlayingCounter{0};
+    inline static double nextNowPlayingPoll{0.0};
     inline static int volumeApplyCounter{0};
     inline static int appliedVolume{-1};
     inline static bool metaScriptWritten{false};
