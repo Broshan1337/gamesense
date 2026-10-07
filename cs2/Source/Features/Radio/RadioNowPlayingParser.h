@@ -19,6 +19,7 @@ struct MprisNowPlaying {
     char title[128];
     char artist[128];
     bool paused;
+    char artwork[512];
 };
 
 class RadioNowPlayingParser {
@@ -69,11 +70,11 @@ public:
         if (!line)
             return false;
 
-        char fields[4][sizeof(MprisNowPlaying::title)];
+        char fields[5][sizeof(MprisNowPlaying::artwork)]{};
         int fieldIndex = 0;
         int fi = 0;
         for (const char* p = line;; ++p) {
-            if (*p == '\x1f' && fieldIndex < 3) {
+            if (*p == '\x1f' && fieldIndex < 4) {
                 fields[fieldIndex][fi] = '\0';
                 ++fieldIndex;
                 fi = 0;
@@ -97,6 +98,7 @@ public:
         copy(out.title, fields[1], sizeof(out.title));
         copy(out.artist, fields[2], sizeof(out.artist));
         out.paused = !equals(fields[3], "Playing");
+        copy(out.artwork, fields[4], sizeof(out.artwork));
         return true;
     }
 

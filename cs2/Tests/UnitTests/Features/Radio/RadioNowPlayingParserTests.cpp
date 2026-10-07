@@ -156,5 +156,23 @@ TEST_F(RadioNowPlayingParserTest, ReplacingLongStreamTitleWithShortTitleTerminat
     ASSERT_TRUE(RadioNowPlayingParser::extractStreamTitle("StreamTitle='Short';", buffer, sizeof(buffer)));
     EXPECT_STREQ(buffer, "Short");
 }
+TEST_F(RadioNowPlayingParserTest, ReadsArtworkForTheSelectedPlayingTrack)
+{
+    const auto paused = mprisLine("chromium", "Old video", "", "Paused") + kSep + "file:///old.jpg";
+    const auto music = mprisLine("spotify", "Current song", "Artist", "Playing") + kSep + "https://example.com/cover.jpg";
+    MprisNowPlaying result{};
+    ASSERT_TRUE(RadioNowPlayingParser::parseMprisOutput((paused + "\n" + music).c_str(), result));
+    EXPECT_STREQ(result.title, "Current song");
+    EXPECT_STREQ(result.artwork, "https://example.com/cover.jpg");
+}
+
+TEST_F(RadioNowPlayingParserTest, MissingArtworkClearsPreviousCover)
+{
+    MprisNowPlaying result{};
+    const auto withArt = mprisLine("mpv", "Song", "Artist", "Playing") + kSep + "file:///cover.png";
+    ASSERT_TRUE(RadioNowPlayingParser::parseMprisLine(withArt.c_str(), result));
+    ASSERT_TRUE(RadioNowPlayingParser::parseMprisLine(mprisLine("mpv", "Radio", "", "Playing").c_str(), result));
+    EXPECT_STREQ(result.artwork, "");
+}
 
 }

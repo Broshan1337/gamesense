@@ -179,6 +179,8 @@ struct AvatarUploadState {
     bool uploadRecorded = false;
 };
 
+AvatarUploadState music;
+std::atomic<bool> musicRequestPending{false};
 AvatarUploadState avatar;
 std::atomic<bool> avatarRequestPending{false};
 // Menu logo (the swirl cutout): same machinery, second state. The UI stages decoded PNG bytes
@@ -1477,6 +1479,7 @@ void cleanupRenderTargets(VkDevice device) noexcept
         // Texture uploads record into this frame's command buffer BEFORE the render pass
         // (transfers are illegal inside a render pass); readiness rides this frame's fence.
         if (willRender && rendererInitialized) {
+            processTextureUpload(device, fd->CommandBuffer, slotFence, music, musicRequestPending);
             processTextureUpload(device, fd->CommandBuffer, slotFence, avatar, avatarRequestPending);
             CrashLogger::trace(kTraceAvatar);
             processTextureUpload(device, fd->CommandBuffer, slotFence, logo, logoRequestPending);
@@ -1579,6 +1582,42 @@ void VulkanHook::logo_texture::request(const void* pixelsRgba, int width, int he
 void* VulkanHook::logo_texture::query() noexcept
 {
     return logo.descriptor != VK_NULL_HANDLE ? logo.descriptor : nullptr;
+}
+
+void VulkanHook::music_texture::request(const void* pixelsRgba, int width, int height) noexcept
+{
+    if (music.descriptor != VK_NULL_HANDLE || music.uploadRecorded || width <= 0 || height <= 0) {
+        std::free(const_cast<void*>(pixelsRgba));
+        return;
+    }
+    music.pixels = static_cast<const unsigned char*>(pixelsRgba);
+    music.width = width;
+    music.height = height;
+    musicRequestPending.store(true, std::memory_order_release);
+}
+
+void* VulkanHook::music_texture::query() noexcept
+{
+    return music.descriptor;
+}
+
+void VulkanHook::music_texture::release() noexcept
+{
+    if (music.descriptor == VK_NULL_HANDLE && !music.uploadRecorded && music.pixels == nullptr)
+        return;
+    // Retire covers until their frame fences finish, just like other dynamic textures.
+    for (auto& retired : retiredLuaTextures) {
+        if (!retired.used) {
+            retired.used = true;
+            retired.state = music;
+            music = AvatarUploadState{};
+            musicRequestPending.store(false, std::memory_order_release);
+            return;
+        }
+    }
+    // Rapid track changes must not overwrite a resource still used by the GPU.
+    waitUntilDeviceIdle();
+    destroyTextureState(gameDevice.load(std::memory_order_acquire), music, musicRequestPending);
 }
 
 void VulkanHook::avatar_texture::request(const void* pixelsRgba, int width, int height) noexcept
@@ -1769,6 +1808,7 @@ void VulkanHook::destroyResources() noexcept
 {
     // Texture teardowns first: RemoveTexture writes into our descriptor pool, and the backend
     // shutdown below expects its own sets to still be registered while it runs.
+    destroyTextureState(gameDevice.load(std::memory_order_acquire), music, musicRequestPending);
     destroyTextureState(gameDevice.load(std::memory_order_acquire), avatar, avatarRequestPending);
     destroyTextureState(gameDevice.load(std::memory_order_acquire), logo, logoRequestPending);
     for (int i = 0; i < kMaxLuaTextures; ++i)

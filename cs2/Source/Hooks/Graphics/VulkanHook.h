@@ -67,6 +67,13 @@ void waitUntilDeviceIdle() noexcept;
 // menu frame's command buffer (before the render pass), submitted with that frame's regular
 // slot fence, and query() starts returning the descriptor set once a fence poll proves the
 // upload completed. Present-thread only, like everything else in the menu.
+namespace music_texture
+{
+void request(const void* pixelsRgba, int width, int height) noexcept;
+[[nodiscard]] void* query() noexcept;
+void release() noexcept;
+}
+
 namespace avatar_texture
 {
 

@@ -1843,7 +1843,6 @@ void spreadCircleColorVar(const char* label, int id) noexcept
     colorVar<spread_circle_vars::SpreadCircleColor>(label, id);
 }
 
-
 // Discord-style picker: saturation/value square + hue bar + alpha bar + hex readout.
 void colorPickerPopover(ImDrawList* d) noexcept
 {
@@ -3434,7 +3433,6 @@ void soundboardClipApply(int index) noexcept
     ui_config::set<soundboard_vars::ClipIndex>(typename soundboard_vars::ClipIndex::ValueType{static_cast<std::uint8_t>(index)});
 }
 
-
 void pageSound() noexcept
 {
     addCard("SOUNDS", 2, [] {
@@ -3954,7 +3952,6 @@ void chatActionRow(const char* label, const char* buttonText, int id, int action
 constexpr const char* const kAnimatorModeNames[] = {"Typewriter", "Glitch", "Marquee", "Scramble", "Binary", "Flicker", "Backwards", "Mocking", "Pulse", "Strobe", "Wave", "Crawler", "Storm", "Nystagmus", "Emoji Strobe", "Flashbang", "Twitch", "Face Storm", "Super Wave", "RLO Flip", "Vaporwave", "Invisible Chaos", "Zalgo"};
 // Clan tag animator modes (order = chat_vars::ClanTagAnimateMode values; tuned for short tags).
 constexpr const char* const kClanTagModeNames[] = {"Typewriter", "Glitch", "Marquee", "Wave", "Strobe", "Pulse"};
-
 
 // Persona preset dropdown: commits the chosen recipe into the name buffer, stages it for the
 // game thread and fires the apply in one click. Session-static selection index.
@@ -5679,7 +5676,6 @@ void pageScripts() noexcept
     // Row 2: hint.
     beginRow(d, "Scripts");
 
-
     // Rows 3+: one row per .lua file in the scripts folder.
     for (int i = 0; i < fileCount; ++i) {
         const float rowY = card.origin.y + (3 + i) * kRowHeight;
@@ -5944,8 +5940,6 @@ void searchOverlay(ImDrawList* d, ImVec2 b) noexcept
     if (searchIndexCount >= kSearchIndexCap && matchCount < 9)
         textY(d, contentMin.x + s(16), contentMax.y - s(20), rowHeight, C(90, 94, 104), "(index full)", kTextCaption, nullptr);
 }
-
-
 
 float y_nav = 64.0f; // sidebar layout cursor, advanced while drawing the rail
 
@@ -8144,93 +8138,98 @@ void truncateToWidth(char* buf, std::size_t cap, const char* text, float maxWidt
     }
 }
 
+[[nodiscard]] bool stageTextureFromFile(const char* path, bool music) noexcept;
+
 void drawNowPlayingWindow(float combatListHeight) noexcept
 {
+    static_cast<void>(combatListHeight);
     if (!ui_config::get<radio_vars::ShowNowPlaying>())
         return;
 
-    bool playing = false;
-    bool paused = false;
-    const char* stationName = nullptr;
-    const char* track = nullptr;
-    const char* playerName = nullptr;
-    const char* playerTitle = nullptr;
-    const char* playerArtist = nullptr;
+    bool playing = false, paused = false;
+    const char *stationName = nullptr, *track = nullptr, *playerTitle = nullptr, *playerArtist = nullptr;
+    const char *artworkUrl = nullptr, *artworkFile = nullptr;
     withRadio([&](auto&& radio) {
         playing = radio.isPlaying();
         stationName = radio.lastPlayedName();
         track = radio.nowPlayingTrack();
-        playerName = radio.mprisPlayerName();
         playerTitle = radio.mprisTrack();
         playerArtist = radio.mprisArtist();
         paused = radio.mprisIsPaused();
+        artworkUrl = radio.mprisArtwork();
+        artworkFile = radio.mprisArtworkFile();
     });
 
-    char line1[160];
-    char line2[224];
-    line1[0] = '\0';
-    line2[0] = '\0';
-    // Active MPRIS metadata includes music played through our own radio process.
-    if (playerName && playerName[0] != '\0' && playerTitle && playerTitle[0] != '\0' && (!playing || !paused)) {
-        copyCapped(line1, playerName, sizeof(line1));
-        StringBuilderStorage<256> storage;
-        auto builder = storage.builder();
-        builder.put(playerTitle);
-        if (playerArtist && playerArtist[0] != '\0')
-            builder.put(" - ", playerArtist);
-        if (paused)
-            builder.put("  (paused)");
-        copyCapped(line2, builder.cstring(), sizeof(line2));
+    char title[160]{}, artist[160]{};
+    const bool useMpris = playerTitle && playerTitle[0] && (!playing || !paused);
+    if (useMpris) {
+        copyCapped(title, playerTitle, sizeof(title));
+        if (playerArtist)
+            copyCapped(artist, playerArtist, sizeof(artist));
     } else if (playing) {
         paused = false;
-        copyCapped(line1, stationName && stationName[0] != '\0' ? stationName : "radio", sizeof(line1));
-        if (track && track[0] != '\0')
-            copyCapped(line2, track, sizeof(line2));
+        copyCapped(title, track && track[0] ? track : (stationName && stationName[0] ? stationName : "Live radio"), sizeof(title));
+        if (track && track[0] && stationName)
+            copyCapped(artist, stationName, sizeof(artist));
     } else {
         return;
     }
 
-    const float displayHeight = ImGui::GetIO().DisplaySize.y;
-    const float windowWidth = s(232.0f);
-    const float headerHeight = s(38.0f);
-    const float rowHeight = s(30.0f);
-    const int rowCount = line2[0] != '\0' ? 2 : 1;
-    const float listHeight = headerHeight + static_cast<float>(rowCount) * rowHeight + s(12.0f);
+    static char previousArtwork[512]{};
+    static bool artworkStaged = false;
+    const char* artwork = useMpris && artworkUrl ? artworkUrl : "";
+    if (std::strcmp(previousArtwork, artwork) != 0) {
+        VulkanHook::music_texture::release();
+        copyCapped(previousArtwork, artwork, sizeof(previousArtwork));
+        artworkStaged = false;
+    }
+    if (!artworkStaged && artwork[0] && artworkFile) {
+        static_cast<void>(stageTextureFromFile(artworkFile, true));
+        artworkStaged = true; // Unsupported artwork is attempted once, not every frame.
+    }
 
+    const auto display = ImGui::GetIO().DisplaySize;
+    const float width = s(280.0f), height = s(56.0f), tile = s(36.0f);
     static HudWindowDragState dragState;
     const float offX = static_cast<float>(ui_config::get<radio_vars::NowPlayingOffsetX>());
     const float offY = static_cast<float>(ui_config::get<radio_vars::NowPlayingOffsetY>());
-
-    const float baseOffset = 422.0f + (combatListHeight > 0.0f ? combatListHeight + 6.0f : 0.0f);
-    ImGui::SetNextWindowPos(ImVec2(s(10.0f) + offX, displayHeight - s(baseOffset) - offY - listHeight), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(windowWidth, listHeight), ImGuiCond_Always);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(10.0f));
+    ImGui::SetNextWindowPos(ImVec2(ImClamp(s(16) + offX, 0.0f, ImMax(0.0f, display.x - width)),
+        ImClamp(display.y - s(16) - offY - height, 0.0f, ImMax(0.0f, display.y - height))), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(width, height), ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(8));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, kSidebarBg);
-    ImGui::PushStyleColor(ImGuiCol_Border, C(52, 52, 58, 220));
-
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, C(18, 19, 24, 220));
+    ImGui::PushStyleColor(ImGuiCol_Border, C(255, 255, 255, 20));
     if (ImGui::Begin("Now playing", nullptr, GUI::isMenuOpen() ? kHudBoxMenuOpenFlags : kHudBoxMenuClosedFlags)) {
-        ImDrawList* d = ImGui::GetWindowDrawList();
-        const ImVec2 winPos = ImGui::GetWindowPos();
-        const float winWidth = ImGui::GetWindowWidth();
-
-        drawHudBoxHeader(d, winPos, winWidth, headerHeight, "NOW PLAYING");
-
-        const ImU32 primary = paused ? hudWithAlpha(g_accent, 0.55f) : g_accent;
-        const ImU32 secondary = paused ? C(96, 100, 108) : C(150, 154, 165);
-
-        truncateToWidth(line1, sizeof(line1), line1, winWidth - s(44));
-        d->AddCircleFilled(winPos + ImVec2(s(18), headerHeight + rowHeight * 0.5f), s(3), primary);
-        textY(d, winPos.x + s(30), winPos.y + headerHeight + s(5), rowHeight, primary, line1, kTextControl, nullptr);
-
-        if (line2[0] != '\0') {
-            char line2Fit[sizeof(line2)];
-            truncateToWidth(line2Fit, sizeof(line2Fit), line2, winWidth - s(26));
-            textY(d, winPos.x + s(13), winPos.y + headerHeight + rowHeight + s(5), rowHeight, secondary, line2Fit, kTextControl, nullptr);
+        auto* d = ImGui::GetWindowDrawList();
+        const auto pos = ImGui::GetWindowPos();
+        const auto icon = pos + ImVec2(s(10), s(10));
+        const auto texture = useMpris ? reinterpret_cast<ImTextureID>(VulkanHook::music_texture::query()) : ImTextureID{};
+        if (texture) {
+            d->AddImageRounded(texture, icon, icon + ImVec2(tile, tile), ImVec2(0, 0), ImVec2(1, 1), C(255, 255, 255), s(5));
+        } else {
+            d->AddRectFilled(icon, icon + ImVec2(tile, tile), C(255, 255, 255, 8), s(5));
+            // Draw the music note directly so it never depends on an icon font.
+            const auto ink = paused ? C(125, 128, 140) : g_accent;
+            d->AddLine(icon + ImVec2(s(15), s(24)), icon + ImVec2(s(15), s(11)), ink, s(2));
+            d->AddLine(icon + ImVec2(s(15), s(11)), icon + ImVec2(s(25), s(9)), ink, s(2));
+            d->AddLine(icon + ImVec2(s(25), s(9)), icon + ImVec2(s(25), s(22)), ink, s(2));
+            d->AddEllipseFilled(icon + ImVec2(s(12), s(25)), ImVec2(s(4), s(3)), ink);
+            d->AddEllipseFilled(icon + ImVec2(s(22), s(23)), ImVec2(s(4), s(3)), ink);
         }
-
-        dragHudWindow<radio_vars::NowPlayingOffsetX, radio_vars::NowPlayingOffsetY, true>(dragState, offX, offY, d, winPos, winWidth, listHeight);
+        const float x = pos.x + s(56), textWidth = width - s(paused ? 82 : 68);
+        truncateToWidth(title, sizeof(title), title, textWidth);
+        truncateToWidth(artist, sizeof(artist), artist, textWidth);
+        textY(d, x, pos.y + s(artist[0] ? 8 : 18), s(20), C(235, 237, 242), title, kTextControl, nullptr);
+        if (artist[0])
+            textY(d, x, pos.y + s(29), s(16), C(145, 148, 160), artist, kTextSmall, nullptr);
+        if (paused) {
+            const auto p = pos + ImVec2(width - s(20), s(23));
+            d->AddRectFilled(p, p + ImVec2(s(2), s(10)), C(145, 148, 160), s(1));
+            d->AddRectFilled(p + ImVec2(s(5), 0), p + ImVec2(s(7), s(10)), C(145, 148, 160), s(1));
+        }
+        dragHudWindow<radio_vars::NowPlayingOffsetX, radio_vars::NowPlayingOffsetY, true>(dragState, offX, offY, d, pos, width, height);
     }
     ImGui::End();
     ImGui::PopStyleColor(2);
@@ -8535,7 +8534,6 @@ float drawHitFeedWindow() noexcept
     return listHeight;
 }
 
-
 // --- player list (FrameworkCS2 port) -----------------------------------------------------
 // Present-thread ImGui table fed by PlayerList's game-thread snapshot. Interactive only while
 // the menu is open; otherwise a click-through always-on-back display.
@@ -8690,7 +8688,7 @@ bool avatarLoadAttempted = false;
 
 // Reads an image file, decodes it and stages it as the account-bar avatar texture.
 // Returns true when a texture was staged (stop retrying then).
-[[nodiscard]] bool stageAvatarFromFile(const char* path) noexcept
+[[nodiscard]] bool stageTextureFromFile(const char* path, bool music) noexcept
 {
     const int fd = LinuxPlatformApi::open(path, O_RDONLY);
     if (fd < 0)
@@ -8720,14 +8718,27 @@ bool avatarLoadAttempted = false;
     }
 
     int width = 0, height = 0;
+    if (!stbi_info_from_memory(fileData, static_cast<int>(totalRead), &width, &height, nullptr)
+        || width <= 0 || height <= 0 || (music && (width > 2048 || height > 2048))) {
+        std::free(fileData);
+        return false;
+    }
     unsigned char* pixels = stbi_load_from_memory(fileData, static_cast<int>(totalRead), &width, &height, nullptr, 4);
     std::free(fileData);
     if (!pixels)
         return false;
 
     gui_log::write("avatar staged: %s (%dx%d)", path, width, height);
-    VulkanHook::avatar_texture::request(pixels, width, height); // takes ownership
+    if (music)
+        VulkanHook::music_texture::request(pixels, width, height);
+    else
+        VulkanHook::avatar_texture::request(pixels, width, height);
     return true;
+}
+
+[[nodiscard]] bool stageAvatarFromFile(const char* path) noexcept
+{
+    return stageTextureFromFile(path, false);
 }
 
 // Priority: user avatar in the config dir, then the steam persona fetch in the exchange root

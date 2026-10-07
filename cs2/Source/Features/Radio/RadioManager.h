@@ -175,7 +175,6 @@ public:
         nextNowPlayingPoll = now + 0.5;
         resolveRadioPaths();
 
-
         if (mprisPid > 0) {
             const auto reaped = ::waitpid(mprisPid, nullptr, WNOHANG);
             if (reaped == mprisPid || (reaped < 0 && errno == ECHILD))
@@ -189,7 +188,6 @@ public:
             // The radio itself can be the active MPRIS player. Keep probing metadata.
         }
 
-
         if (!GET_CONFIG_VAR(radio_vars::ShowMediaPlayers)) {
             clearMpris();
             return;
@@ -201,7 +199,7 @@ public:
                         "export XDG_RUNTIME_DIR=\"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}\"; ",
                         "export DBUS_SESSION_BUS_ADDRESS=\"${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}\"; ",
                         "timeout 2s playerctl --all-players metadata --format '{{playerName}}", '\x1f', "{{title}}", '\x1f',
-                        "{{artist}}", '\x1f', "{{status}}", "' > ");
+                        "{{artist}}", '\x1f', "{{status}}", '\x1f', "{{mpris:artUrl}}", "' > ");
             appendShellPath(builder, mprisPartPath);
             builder.put(" 2>/dev/null && mv -f ");
             appendShellPath(builder, mprisPartPath);
@@ -222,6 +220,8 @@ public:
             copyText(mprisTitleBuf, playing.title, static_cast<int>(sizeof(mprisTitleBuf)));
             copyText(mprisArtistBuf, playing.artist, static_cast<int>(sizeof(mprisArtistBuf)));
             mprisPaused = playing.paused;
+            copyText(mprisArtworkBuf, playing.artwork, sizeof(mprisArtworkBuf));
+            updateArtwork();
         } else {
             clearMpris();
         }
@@ -231,6 +231,11 @@ public:
     [[nodiscard]] const char* mprisPlayerName() const noexcept { return mprisPlayerBuf; }
     [[nodiscard]] const char* mprisTrack() const noexcept { return mprisTitleBuf; }
     [[nodiscard]] const char* mprisArtist() const noexcept { return mprisArtistBuf; }
+    [[nodiscard]] const char* mprisArtwork() const noexcept { return mprisArtworkBuf; }
+    [[nodiscard]] const char* mprisArtworkFile() const noexcept
+    {
+        return mprisArtworkBuf[0] && std::strcmp(mprisArtworkBuf, readyArtworkUrl) == 0 ? artworkFilePath : nullptr;
+    }
     [[nodiscard]] bool mprisIsPaused() const noexcept { return mprisPaused; }
 
     // Returns true (once) after new results have been parsed, so the UI only repaints when something
@@ -928,6 +933,7 @@ private:
         mprisPlayerBuf[0] = '\0';
         mprisTitleBuf[0] = '\0';
         mprisArtistBuf[0] = '\0';
+        mprisArtworkBuf[0] = '\0';
         mprisPaused = false;
     }
 
@@ -972,6 +978,36 @@ private:
                 return pid;
         }
         return 0;
+    }
+
+    static void updateArtwork() noexcept
+    {
+        if (artworkPid > 0) {
+            int status{};
+            const auto reaped = ::waitpid(artworkPid, &status, WNOHANG);
+            if (reaped == artworkPid) {
+                artworkPid = 0;
+                if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+                    copyText(readyArtworkUrl, requestedArtworkUrl, sizeof(readyArtworkUrl));
+            } else if (reaped < 0 && errno == ECHILD) {
+                artworkPid = 0;
+            }
+        }
+        if (artworkPid > 0 || !mprisArtworkBuf[0] || std::strcmp(mprisArtworkBuf, requestedArtworkUrl) == 0)
+            return;
+        readyArtworkUrl[0] = '\0';
+        copyText(requestedArtworkUrl, mprisArtworkBuf, sizeof(requestedArtworkUrl));
+        StringBuilderStorage<2048> storage;
+        auto builder = storage.builder();
+        builder.put("curl -fsSL --max-time 3 --max-filesize 2097152 --proto '=http,https,file' --proto-redir '=http,https' --url ");
+        appendShellPath(builder, requestedArtworkUrl);
+        builder.put(" -o ");
+        appendShellPath(builder, artworkPartPath);
+        builder.put(" && mv -f ");
+        appendShellPath(builder, artworkPartPath);
+        builder.put(' ');
+        appendShellPath(builder, artworkFilePath);
+        artworkPid = spawnHostShell(builder.cstring());
     }
 
     static void appendShellPath(auto& builder, const char* path) noexcept
@@ -1143,6 +1179,10 @@ private:
     inline static char metaScriptPath[192];
     inline static char metaFilePath[192];
     inline static char volScriptPath[192];
+    inline static char artworkFilePath[192], artworkPartPath[192];
+    inline static pid_t artworkPid{};
+    inline static char requestedArtworkUrl[512]{}, readyArtworkUrl[512]{};
+    inline static char mprisArtworkBuf[512]{};
     inline static char mprisFilePath[192];
     inline static char mprisPartPath[192];
     inline static char radioSocketPath[192];
@@ -1159,6 +1199,8 @@ private:
         static_cast<void>(ns_paths::join(metaScriptPath, sizeof(metaScriptPath), "ns_radio_meta.py"));
         static_cast<void>(ns_paths::join(metaFilePath, sizeof(metaFilePath), "osiris-radio-meta.txt"));
         static_cast<void>(ns_paths::join(volScriptPath, sizeof(volScriptPath), "ns_radio_vol.py"));
+        static_cast<void>(ns_paths::join(artworkFilePath, sizeof(artworkFilePath), "osiris-mpris-art"));
+        static_cast<void>(ns_paths::join(artworkPartPath, sizeof(artworkPartPath), "osiris-mpris-art.part"));
         static_cast<void>(ns_paths::join(mprisFilePath, sizeof(mprisFilePath), "osiris-mpris.txt"));
         static_cast<void>(ns_paths::join(mprisPartPath, sizeof(mprisPartPath), "osiris-mpris.txt.part"));
         static_cast<void>(ns_paths::join(radioSocketPath, sizeof(radioSocketPath), "osiris-radio.sock"));
