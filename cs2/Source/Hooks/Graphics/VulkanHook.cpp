@@ -1605,17 +1605,8 @@ void VulkanHook::music_texture::release() noexcept
 {
     if (music.descriptor == VK_NULL_HANDLE && !music.uploadRecorded && music.pixels == nullptr)
         return;
-    // Retire covers until their frame fences finish, just like other dynamic textures.
-    for (auto& retired : retiredLuaTextures) {
-        if (!retired.used) {
-            retired.used = true;
-            retired.state = music;
-            music = AvatarUploadState{};
-            musicRequestPending.store(false, std::memory_order_release);
-            return;
-        }
-    }
-    // Rapid track changes must not overwrite a resource still used by the GPU.
+    // Covers change infrequently. Wait for previous draws before freeing the old image,
+    // rather than retaining every past album until the overlay shuts down.
     waitUntilDeviceIdle();
     destroyTextureState(gameDevice.load(std::memory_order_acquire), music, musicRequestPending);
 }
