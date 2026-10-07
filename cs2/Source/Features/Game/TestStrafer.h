@@ -59,6 +59,7 @@ public:
     void onCreateMove(cs2::CUserCmd* cmd) noexcept
     {
         handledThisTick = false;
+        captureValid = false;
 
         const UserCmd userCmd{cmd};
         if (!userCmd)
@@ -104,7 +105,7 @@ public:
         if (reason == SkipReason::none) {
             if (const auto dx = userCmd.mouseDx(); dx.hasValue() && dx.value() != 0) {
                 const float gainAngle = idealAngle(diagSpeed, capturedTickInterval,
-                    capturedMaxSpeed, capturedAirAccelerate, capturedAirMaxWishSpeed);
+                    capturedMaxSpeed, capturedAirAccelerate, capturedAirMaxWishSpeed, capturedFriction);
                 analogAssist = hookContext.template make<Bunnyhop>().engageClassicStrafeAngle(
                     userCmd, gainAngle, dx.value() < 0);
             }
@@ -177,7 +178,7 @@ public:
             // oscillates wherever it was".)
             const float simSpeed = trig::squareRoot(simVx * simVx + simVy * simVy);
             const float theta = idealAngle(simSpeed, subFrame, capturedMaxSpeed,
-                capturedAirAccelerate, capturedAirMaxWishSpeed);
+                capturedAirAccelerate, capturedAirMaxWishSpeed, capturedFriction);
             const float wishdirYaw = trig::normalizeDegrees(capturedTargetYaw + (entrySide ? theta : -theta));
 
             // Translate the ideal wish yaw back into a view yaw the command can carry.
@@ -354,32 +355,19 @@ private:
 
         const float speed = trig::squareRoot(velocity.value().x * velocity.value().x + velocity.value().y * velocity.value().y);
         const float friction = surfaceFriction().valueOr(1.0f);
-        const float halfAccel = 0.5f * airAccelerate.value() * maxSpeed.value() * tickInterval.value() * friction;
-        const float optimalFloor = std::max(halfAccel, airMaxWishSpeed.value() - halfAccel);
-        const float angle = std::clamp(trig::arcTangent2(optimalFloor, std::max(speed, 1.0f)) * trig::kRadiansToDegrees, 0.0f, 45.0f);
-
+        const float angle = idealAngle(speed, tickInterval.value(), effectiveMaxSpeed(maxSpeed.value(), userCmd.isButtonDown(kAttackButton)),
+            airAccelerate.value(), airMaxWishSpeed.value(), friction);
         strafeSide = !strafeSide;
         return angle;
     }
 
     // The gain angle for the CURRENT simulated speed: how far off the velocity the wish direction
-    // must sit for air acceleration to add speed without being clamped away. Below 1 u/s the
-    // direction is meaningless; the reference answers 15 degrees there and so does this.
-    [[nodiscard]] static float idealAngle(float speed, float dt, float wishspeed, float airAccelerate, float airMaxWishSpeed) noexcept
+    // must sit to maximize speed gain under capped air acceleration, including friction.
+    // The shared helper uses radians; this path passes degrees to the subtick yaw writer.
+    [[nodiscard]] static float idealAngle(float speed, float dt, float wishspeed, float airAccelerate,
+        float airMaxWishSpeed, float friction) noexcept
     {
-        if (speed < 1.0f)
-            return 15.0f;
-
-        const float accelSpeed = wishspeed * airAccelerate * dt;
-        float cosTheta{};
-        if (accelSpeed >= airMaxWishSpeed)
-            cosTheta = airMaxWishSpeed / (2.0f * speed);
-        else
-            cosTheta = (airMaxWishSpeed - accelSpeed) / speed;
-
-        cosTheta = std::clamp(cosTheta, -1.0f, 1.0f);
-        const float angleDegrees = trig::arcCosine(cosTheta) * trig::kRadiansToDegrees;
-        return angleDegrees < 1.0f ? 1.0f : angleDegrees;
+        return air_strafe::idealAngle(speed, {wishspeed, airAccelerate, airMaxWishSpeed, dt, friction}) * trig::kRadiansToDegrees;
     }
 
     // One slice of Source's AirAccelerate, run forward on the SIMULATED velocity so the next

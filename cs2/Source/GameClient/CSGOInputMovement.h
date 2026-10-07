@@ -67,8 +67,8 @@ public:
     // and queued samples. Ideal-angle strafing needs the fully rotated pair - forward AND side -
     // and with the player holding W the zero-guard in setMove would leave their forward at 1.0,
     // capping the wish direction at 45 degrees, never reaching the ideal angle. The player's raw
-    // keys still reach the command through the button words; what is overridden is the analog
-    // value the movement math consumes. Airborne-only callers.
+    // movement buttons are replaced to match the analog direction; unrelated buttons remain
+    // held. The same replacement applies to every queued sample.
     void forceMove(float forwardMove, float leftMove) const noexcept
     {
         if (!input)
@@ -78,12 +78,12 @@ public:
 
         writeFloat(input, cs2::CCSGOInput::kForwardMoveOffset, forwardMove);
         writeFloat(input, cs2::CCSGOInput::kLeftMoveOffset, leftMove);
-        orButtons(input, cs2::CCSGOInput::kButtonStateOffset, buttons);
+        replaceMoveButtons(input, cs2::CCSGOInput::kButtonStateOffset, buttons);
 
         forEachQueuedSample([&](std::byte* sample) {
             writeFloat(sample, cs2::CCSGOInput::InputSampleQueue::kForwardMoveOffset, forwardMove);
             writeFloat(sample, cs2::CCSGOInput::InputSampleQueue::kLeftMoveOffset, leftMove);
-            orButtons(sample, cs2::CCSGOInput::InputSampleQueue::kButtonStateOffset, buttons);
+            replaceMoveButtons(sample, cs2::CCSGOInput::InputSampleQueue::kButtonStateOffset, buttons);
         });
     }
 
@@ -138,6 +138,16 @@ private:
         std::uint64_t current{};
         std::memcpy(&current, object + offset, sizeof(current));
         current |= buttons;
+        std::memcpy(object + offset, &current, sizeof(current));
+    }
+
+    static void replaceMoveButtons(std::byte* object, int offset, std::uint64_t buttons) noexcept
+    {
+        using Buttons = cs2::CCSGOInput::Buttons;
+        constexpr auto moveMask = Buttons::kForward | Buttons::kBack | Buttons::kMoveLeft | Buttons::kMoveRight;
+        std::uint64_t current{};
+        std::memcpy(&current, object + offset, sizeof(current));
+        current = (current & ~moveMask) | buttons;
         std::memcpy(object + offset, &current, sizeof(current));
     }
 
