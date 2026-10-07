@@ -23,6 +23,12 @@ public:
 
     void drawPlayerInformation(auto&& playerPawn) noexcept
     {
+        // Deathmatch leaves old pawns behind during respawns. Only render the
+        // controller's current, confirmed living pawn.
+        if (!playerPawn.isAlive().value_or(false) || !playerPawn.health().greaterThan(0).valueOr(false))
+            return;
+        if (static_cast<cs2::C_BaseEntity*>(playerPawn.playerController().pawn()) != playerPawn.rawPawn())
+            return;
         const bool infoRun = shouldRun();
         const bool analyzerTag = shouldDrawAnalyzerTag(playerPawn);
         if (!infoRun && !analyzerTag)

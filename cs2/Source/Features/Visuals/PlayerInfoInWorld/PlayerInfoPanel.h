@@ -75,7 +75,12 @@ private:
         if constexpr (std::is_same_v<PanelType, PlayerAnalyzerTagPanel<HookContext>>) {
             hookContext.template make<PanelType>(panel, cache).update(playerPawn);
         } else if (!analyzerOnly) {
+            // Restore a child hidden when this pooled panel was analyzer-only.
+            // Its update can then hide it again according to its own setting.
+            panel.setVisible(true);
             hookContext.template make<PanelType>(panel, cache).update(playerPawn);
+        } else {
+            panel.setVisible(false);
         }
     }
 

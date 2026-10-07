@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #include <CS2/Classes/CCSPlayer_WeaponServices.h>
 #include <CS2/Classes/Entities/C_CSWeaponBase.h>
 #include <CS2/Classes/EntitySystem/CEntityHandle.h>
@@ -20,7 +22,13 @@ public:
 
     [[nodiscard]] decltype(auto) weapons() const noexcept
     {
-        return hookContext.template make<PlayerWeapons>(hookContext.patternSearchResults().template get<OffsetToWeapons>().of(weaponServices).get());
+        cs2::CUtlVector<cs2::CEntityHandle>* handles = nullptr;
+        if (weaponServices) {
+            const auto offset = hookContext.schemaSystem().getFieldOffset("CPlayer_WeaponServices", "m_hMyWeapons");
+            if (offset.has_value() && *offset > 0)
+                handles = reinterpret_cast<cs2::CUtlVector<cs2::CEntityHandle>*>(reinterpret_cast<std::byte*>(weaponServices) + *offset);
+        }
+        return hookContext.template make<PlayerWeapons>(handles);
     }
 
     [[nodiscard]] auto getActiveWeapon() const noexcept

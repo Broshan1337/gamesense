@@ -80,10 +80,18 @@ public:
 
     void setVisible(bool visible) const noexcept
     {
+        if (!panel)
+            return;
+#if IS_LINUX()
+        // The client virtual-call anchor matched an unrelated pointer getter.
+        if (const auto fn = hookContext.patternSearchResults().template get<SetPanelVisibleFunctionPointer>())
+            fn(panel, visible);
+#else
         if (isVisible() != visible) {
             if (auto&& setVisibleFn = setVisible())
                 setVisibleFn(visible);
         }
+#endif
     }
 
     [[nodiscard]] decltype(auto) findChildInLayoutFile(const char* childId) const noexcept
@@ -135,17 +143,16 @@ public:
 
     [[nodiscard]] decltype(auto) children() const noexcept
     {
-        // 2026-09-26 5GB update: the children = two separate fields - the count at
-        // ChildPanelsCountOffset and the array at ChildPanelsArrayOffset = countOffset + 8.
-        // 2026-09-27: !panel guard - the HUD-root walk (and findChildInLayoutFile recursion
-        // during map teardown) legitimately produce a null panel; the 02:06 crash was this
-        // deref at [nullptr + countOffset] via Hud::getHudReticle -> findChildInLayoutFile.
+        // Read CUIPanel's own checked-child-accessor fields (+0x28/+0x30 in this build).
+        // A null panel is expected during HUD-root lookup and map teardown.
         const auto countOffset = hookContext.patternSearchResults().template get<ChildPanelsCountOffset>();
         const auto arrayOffset = hookContext.patternSearchResults().template get<ChildPanelsArrayOffset>();
         if (!panel || !countOffset || !arrayOffset)
             return PanoramaUiPanelChildPanels{hookContext, nullptr, 0};
         const auto childCount = *reinterpret_cast<const std::uint32_t*>(reinterpret_cast<std::uintptr_t>(panel) + countOffset.rawOffset());
         const auto childArray = *reinterpret_cast<cs2::CUIPanel***>(reinterpret_cast<std::uintptr_t>(panel) + arrayOffset.rawOffset());
+        if (childCount > 4096 || (childCount != 0 && !childArray))
+            return PanoramaUiPanelChildPanels{hookContext, nullptr, 0};
         return PanoramaUiPanelChildPanels{hookContext, childArray, childCount};
     }
 
@@ -369,7 +376,7 @@ private:
     // libclient+0x1cff6cc UI crash, 8 dumps on file). Every accessor here gates on this.
     [[nodiscard]] bool offsetsUsable() const noexcept
     {
-        return hookContext.patternSearchResults().template get<PanelStyleOffset>()
+        return panel && hookContext.patternSearchResults().template get<PanelStyleOffset>()
             && hookContext.patternSearchResults().template get<ParentWindowOffset>()
             && hookContext.patternSearchResults().template get<OffsetToPanelId>()
             && hookContext.patternSearchResults().template get<OffsetToPanelFlags>()

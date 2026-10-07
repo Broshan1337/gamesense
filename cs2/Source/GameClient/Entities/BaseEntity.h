@@ -58,7 +58,7 @@ public:
     template <template <typename...> typename EntityType>
     [[nodiscard]] bool is() const noexcept
     {
-        return entity && hookContext.entityClassifier().template entityIs<typename EntityType<HookContext>::RawType>(entity->identity->entityClass);
+        return entity && entity->identity && hookContext.entityClassifier().template entityIs<typename EntityType<HookContext>::RawType>(entity->identity->entityClass);
     }
 
     template <template <typename...> typename EntityType>

@@ -67,7 +67,13 @@ public:
 
     [[nodiscard]] decltype(auto) weaponServices() const noexcept
     {
-        return hookContext.template make<WeaponServices>(hookContext.patternSearchResults().template get<OffsetToWeaponServices>().of(playerPawn).valueOr(nullptr));
+        cs2::CCSPlayer_WeaponServices* services = nullptr;
+        if (playerPawn) {
+            const auto offset = hookContext.schemaSystem().getFieldOffset("C_BasePlayerPawn", "m_pWeaponServices");
+            if (offset.has_value() && *offset > 0)
+                std::memcpy(&services, reinterpret_cast<const std::byte*>(playerPawn) + *offset, sizeof(services));
+        }
+        return hookContext.template make<WeaponServices>(services);
     }
 
     // The player's current aim punch (recoil kick) as {pitch, yaw, roll} degrees. CS2 fires the bullet
