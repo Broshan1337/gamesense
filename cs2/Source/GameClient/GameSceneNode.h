@@ -123,6 +123,7 @@ public:
     struct BoneTransform {
         cs2::Vector position;
         float rotation[4];
+        float scale{1.0f};
     };
 
     [[nodiscard]] Optional<BoneTransform> boneTransform(int boneIndex) const noexcept
@@ -151,6 +152,7 @@ public:
         
         
         std::memcpy(&transform.rotation, bones + static_cast<std::ptrdiff_t>(boneIndex) * kBoneStride + 16, sizeof(transform.rotation));
+        std::memcpy(&transform.scale, bones + static_cast<std::ptrdiff_t>(boneIndex) * kBoneStride + 12, sizeof(transform.scale));
         return transform;
     }
 

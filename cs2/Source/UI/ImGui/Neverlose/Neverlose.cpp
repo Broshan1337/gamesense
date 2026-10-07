@@ -2994,7 +2994,7 @@ void pageRageAimbot() noexcept
     addCard("TIMING", 3, [] {
         sliderVar<BacktrackTicks>("Backtrack Ticks", ++controlId);
         sliderVar<ExtrapolateTicks>("Lead Ticks", ++controlId);
-        sliderVar<ForceShotWaitTicks>("Auto Shoot Wait", ++controlId);
+        sliderVar<ForceShotWaitTicks>("Accuracy Wait Ticks", ++controlId);
     });
     addCard("TARGETS", 4, [] {
         static constexpr const char* const modes[]{"Closest To Crosshair", "Nearest Distance", "Lowest Health"};
@@ -3014,19 +3014,19 @@ void pageRageAccuracy() noexcept
 {
     using namespace aimbot_vars;
     addCard("ACCURACY", 4, [] {
-        toggleVar<SpreadCompensation>("Compensate Spread", ++controlId);
+        toggleVar<SpreadCompensation>("Exact Spread (Unavailable)", ++controlId);
         toggleVar<SpreadGate>("Hold Fire Until Exact", ++controlId);
-        toggleVar<SeedFallback>("Fire Lucky Seeds", ++controlId);
+        toggleVar<SeedFallback>("Lucky Seeds (Unavailable)", ++controlId);
         toggleVar<RecoilCompensation>("Compensate Recoil", ++controlId);
     });
     addCard("AUTO SHOOT", 7, [] {
         toggleVar<ForceShot>("Auto Shoot Ground", ++controlId);
         toggleVar<ForceShotAir>("Auto Shoot Air", ++controlId);
         toggleVar<ForceShotWait>("Wait For Accuracy", ++controlId);
-        sliderVar<Hitchance>("Min Hitchance", ++controlId, "%");
+        sliderVar<Hitchance>("Min Estimated Hitchance", ++controlId, "%");
         sliderVar<MinDamage>("Min Damage", ++controlId);
         toggleVar<WallCheck>("Shoot Visible", ++controlId);
-        toggleVar<Autowall>("Shoot Walls", ++controlId);
+        toggleVar<Autowall>("Shoot Walls (Estimated)", ++controlId);
     });
     addCard("EXTRAS", 2, [] {
         toggleVar<Extrapolate>("Lead Targets", ++controlId);
@@ -3111,7 +3111,7 @@ void pageLegitTriggerbot() noexcept
     });
     addCard("TRIGGERBOT VISIBILITY", 4, [] {
         toggleVar<triggerbot_vars::WallCheck>("Shoot Visible", ++controlId);
-        toggleVar<triggerbot_vars::Autowall>("Shoot Walls", ++controlId);
+        toggleVar<triggerbot_vars::Autowall>("Shoot Walls (Estimated)", ++controlId);
         sliderVar<triggerbot_vars::AutowallMaxThickness>("Max Wall Thickness", ++controlId, " u");
         toggleVar<triggerbot_vars::SeededFire>("Seeded Fire", ++controlId);
     });
@@ -7349,7 +7349,7 @@ void registerFeatureBinds() noexcept
     feature_binds::registerToggle<aimbot_vars::DynamicPointscale>("Dynamic Point Scale");
     feature_binds::registerToggle<aimbot_vars::Backtrack>("Backtrack");
     feature_binds::registerToggle<aimbot_vars::AutoStop>("Auto Stop");
-    feature_binds::registerToggle<aimbot_vars::SpreadCompensation>("Compensate Spread");
+    feature_binds::registerToggle<aimbot_vars::SpreadCompensation>("Exact Spread (Unavailable)");
     feature_binds::registerToggle<aimbot_vars::SpreadGate>("Hold Fire Until Exact");
     feature_binds::registerToggle<aimbot_vars::RecoilCompensation>("Compensate Recoil");
     feature_binds::registerToggle<aimbot_vars::ForceShot>("Auto Shoot Ground");

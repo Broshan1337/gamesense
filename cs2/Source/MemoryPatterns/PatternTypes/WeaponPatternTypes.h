@@ -67,6 +67,8 @@ STRONG_TYPE_ALIAS(PointerToSpreadSeedFunction, SpreadSeedFn*);
 
 
 
+// Legacy ABI retained for pattern identification only. Do not invoke: the
+// engine replaced it with a shot-context API on 2026-09-27. See SpreadSolver.
 using CalculateSpreadFn = void(std::int16_t itemDefinitionIndex, int numBullets, int mode, std::uint32_t seed, float inaccuracy, float spread, float recoilIndex, float* outX, float* outY);
 STRONG_TYPE_ALIAS(PointerToCalculateSpreadFunction, CalculateSpreadFn*);
 

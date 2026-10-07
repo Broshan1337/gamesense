@@ -1,4 +1,5 @@
 #include <array>
+#include <limits>
 #include <type_traits>
 #include <vector>
 
@@ -11,6 +12,7 @@ struct Enemy {
     bool enemy{true};
     bool alive{true};
     bool local{false};
+    Optional<bool> immunity{false};
     int health{100};
     std::array<Optional<cs2::Vector>, 26> bones;
 };
@@ -29,6 +31,7 @@ struct Pawn {
     Optional<bool> isEnemy() const { return enemy->enemy; }
     Optional<bool> isAlive() const { return enemy->alive; }
     Optional<int> health() const { return enemy->health; }
+    Optional<bool> hasImmunity() const { return enemy->immunity; }
     PawnBase baseEntity() const { return {enemy}; }
 };
 struct Classification {
@@ -207,4 +210,25 @@ TEST(AimTargetTest, RejectsNonFiniteAndCoincidentPoints) {
     context.enemies[0].bones[6] = cs2::Vector{std::numeric_limits<float>::infinity(), 0, 0};
     context.enemies[1].bones[6] = eye;
     EXPECT_FALSE(Targets{context}.acquire(eye, 0, 0, 30, headOnly, acceptAll).hasValue());
+}
+
+TEST(AimTargetTest, RejectsImmuneAndUnknownImmunityTargets) {
+    Context context;
+    context.enemies.resize(3);
+    for (auto& enemy : context.enemies) enemy.bones[6] = cs2::Vector{100,0,0};
+    context.enemies[0].immunity=true;
+    context.enemies[1].immunity={};
+    const auto result=Targets{context}.acquire(eye,0,0,30,headOnly,acceptAll);
+    ASSERT_TRUE(result.hasValue());
+    EXPECT_EQ(result.value().entity,&context.enemies[2].entity);
+}
+
+TEST(AimTargetTest, RejectsNonFiniteViewAndEyeCoordinates) {
+    Context context;
+    context.enemies.resize(1);
+    context.enemies[0].bones[6] = cs2::Vector{100,0,0};
+    const float invalid=std::numeric_limits<float>::infinity();
+    EXPECT_FALSE(Targets{context}.acquire(eye,invalid,0,30,headOnly,acceptAll).hasValue());
+    EXPECT_FALSE(Targets{context}.acquire({invalid,0,0},0,0,30,headOnly,acceptAll).hasValue());
+    EXPECT_FALSE(Targets{context}.acquire(eye,0,0,invalid,headOnly,acceptAll).hasValue());
 }

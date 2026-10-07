@@ -347,15 +347,16 @@ private:
         if (!seed.hasValue())
             return true;
         const auto offset = solver.spreadOffset(seed.value(), params.value());
+        if (!offset.hasValue()) return false;
 
         
         
         
         const auto basis = shot_geometry::angleVectors(writtenPitch, writtenYaw);
         const cs2::Vector direction = shot_geometry::normalized(cs2::Vector{
-            basis.forward.x + basis.left.x * offset.x + basis.up.x * offset.y,
-            basis.forward.y + basis.left.y * offset.x + basis.up.y * offset.y,
-            basis.forward.z + basis.left.z * offset.x + basis.up.z * offset.y,
+            basis.forward.x + basis.left.x * offset.value().x + basis.up.x * offset.value().y,
+            basis.forward.y + basis.left.y * offset.value().x + basis.up.y * offset.value().y,
+            basis.forward.z + basis.left.z * offset.value().x + basis.up.z * offset.value().y,
         });
 
         
@@ -463,23 +464,24 @@ private:
         auto solver = hookContext.template make<SpreadSolver>();
         const auto params = solver.weaponParams(localPawn.getActiveWeapon());
         if (!params.hasValue())
-            return true;
+            return false;
 
         auto&& node = target.baseEntity().gameSceneNode();
         const auto bone = headOnly ? node.bonePosition(kHeadBone) : node.bonePosition(kChestBone);
         if (!bone.hasValue())
-            return true;
+            return false;
         const auto radius = headOnly ? kHeadRadius : kBodyRadius;
 
         const auto basis = shot_geometry::angleVectors(pitch, yaw);
 
         int hits = 0;
         for (int sample = 0; sample < kHitchanceSamples; ++sample) {
-            const auto spread = solver.spreadOffset(static_cast<std::uint32_t>(sample), params.value());
+            const auto spread = solver.estimatedSpreadOffset(static_cast<std::uint32_t>(sample), params.value());
+            if (!spread.hasValue()) return false;
             const cs2::Vector direction = shot_geometry::normalized(cs2::Vector{
-                basis.forward.x + basis.left.x * spread.x + basis.up.x * spread.y,
-                basis.forward.y + basis.left.y * spread.x + basis.up.y * spread.y,
-                basis.forward.z + basis.left.z * spread.x + basis.up.z * spread.y,
+                basis.forward.x + basis.left.x * spread.value().x + basis.up.x * spread.value().y,
+                basis.forward.y + basis.left.y * spread.value().x + basis.up.y * spread.value().y,
+                basis.forward.z + basis.left.z * spread.value().x + basis.up.z * spread.value().y,
             });
             if (shot_geometry::rayReachesSphere(eye, direction, bone.value(), radius))
                 ++hits;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 
@@ -9,38 +10,12 @@
 #include <Features/Combat/MovementFix.h>
 #include <GameClient/SpreadPrediction/SpreadSolver.h>
 #include <GameClient/UserCmd.h>
+#include <GameClient/InputHistory.h>
 #include <HookContext/HookContextMacros.h>
 #include <Utils/Optional.h>
 #include <Utils/VerifyConsole.h>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-template <typename HookContext>
+template <typename HookContext, typename Diagnostics = VerifyConsole>
 class SubtickShotWriter {
 public:
     explicit SubtickShotWriter(HookContext& hookContext) noexcept
@@ -48,37 +23,25 @@ public:
     {
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     [[nodiscard]] bool run(cs2::CUserCmd* cmd, auto&& localPawn,
               float aimPitch, float aimYaw,
               float punchPitch, float punchYaw,
               float backtrackSimTime,
               bool compensateSpread,
               int* redirectedEntry = nullptr,
-              const typename SpreadSolver<HookContext>::Angles* precomputedCorrection = nullptr) const noexcept
+              const typename SpreadSolver<HookContext>::Angles* precomputedCorrection = nullptr,
+              bool* wrote = nullptr) const noexcept
     {
-        if (redirectedEntry)
-            *redirectedEntry = -1;
+        if (wrote) *wrote = false;
+        if (redirectedEntry) *redirectedEntry = -1;
+        const UserCmd command{cmd};
+        if (!command || !command.viewPitch().hasValue() || !command.viewYaw().hasValue()
+            || !std::isfinite(aimPitch) || !std::isfinite(aimYaw) || !std::isfinite(punchPitch)
+            || !std::isfinite(punchYaw) || !std::isfinite(backtrackSimTime) || backtrackSimTime < 0 || backtrackSimTime > 1.0e7f
+            || trig::absolute(aimYaw)>36000 || trig::absolute(punchYaw)>36000
+            || trig::absolute(aimPitch)>36000 || trig::absolute(punchPitch)>36000
+            || !InputHistory{cmd}.looksValid())
+            return false;
 
         const bool backtracking = backtrackSimTime > 0.0f;
 
@@ -95,16 +58,10 @@ public:
                                              precomputedCorrection)) {
                 if (redirectedEntry)
                     *redirectedEntry = claimedEntry;
+                if (wrote) *wrote = true;
                 return claimedLands;
             }
 
-            
-            
-            
-            
-            
-            
-            
             std::byte* probeRep = nullptr;
             std::memcpy(&probeRep, cmdBytes + kInputHistoryRepOffset, sizeof(probeRep));
             int totalSize{};
@@ -112,19 +69,17 @@ public:
             int allocatedSize = -1;
             if (probeRep)
                 std::memcpy(&allocatedSize, probeRep, sizeof(allocatedSize));
-            VerifyConsole::write(1.0f, "hist", "empty path (base-angle fallback): current=%d total=%d rep=%p allocated=%d", size, totalSize, static_cast<void*>(probeRep), allocatedSize);
+            Diagnostics::write(1.0f, "hist", "empty path (base-angle fallback): current=%d total=%d rep=%p allocated=%d", size, totalSize, static_cast<void*>(probeRep), allocatedSize);
 
+            if (backtracking) return false; // A base-angle fallback cannot stamp a historical shot.
+            if (wrote) *wrote = true;
             return writeIntoBaseViewangles(localPawn, cmd, aimPitch, aimYaw, punchPitch, punchYaw, compensateSpread, precomputedCorrection);
         }
 
         std::byte* rep = nullptr;
         std::memcpy(&rep, cmdBytes + kInputHistoryRepOffset, sizeof(rep));
-        if (!rep)
-            return writeIntoBaseViewangles(localPawn, cmd, aimPitch, aimYaw, punchPitch, punchYaw, compensateSpread, precomputedCorrection);
+        if (!rep) return false;
 
-        
-        
-        
         int attackIndex{};
         std::memcpy(&attackIndex, cmdBytes + cs2::CUserCmd::kAttack1StartHistoryIndexOffset, sizeof(attackIndex));
         const int index = (attackIndex >= 0 && attackIndex < size) ? attackIndex : size - 1;
@@ -132,47 +87,26 @@ public:
         std::byte* entry = nullptr;
         std::memcpy(&entry, rep + kRepElementsOffset + static_cast<std::ptrdiff_t>(index) * static_cast<std::ptrdiff_t>(sizeof(entry)), sizeof(entry));
         if (!entry)
-            return !compensateSpread;
+            return false;
 
         std::byte* viewAngles = nullptr;
         std::memcpy(&viewAngles, entry + kHistoryViewAnglesOffset, sizeof(viewAngles));
         if (!viewAngles)
-            return !compensateSpread;
+            return false;
 
-        
-        
-        
-        
-        VerifyConsole::write(1.0f, "hist", "entry path: redirecting entry %d of %d (silent shot)", index, size);
+        Diagnostics::write(1.0f, "hist", "entry path: redirecting entry %d of %d (silent shot)", index, size);
 
         if (redirectedEntry)
             *redirectedEntry = index;
 
+        if (wrote) *wrote = true;
         return writeShotIntoEntry(entry, viewAngles, localPawn, aimPitch, aimYaw, punchPitch, punchYaw,
                                   backtrackSimTime, compensateSpread, backtracking, false,
                                   precomputedCorrection);
     }
 
 private:
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
     [[nodiscard]] bool claimRecycledHistoryEntry(std::byte* cmdBytes, auto&& localPawn,
                                                  float aimPitch, float aimYaw,
                                                  float punchPitch, float punchYaw,
@@ -187,7 +121,7 @@ private:
 
         int allocatedSize{};
         std::memcpy(&allocatedSize, rep, sizeof(allocatedSize));
-        if (allocatedSize <= 0)
+        if (allocatedSize <= 0 || InputHistory{reinterpret_cast<cs2::CUserCmd*>(cmdBytes)}.spareSlots() <= 0)
             return false;
 
         std::byte* entry = nullptr;
@@ -200,8 +134,6 @@ private:
         if (!viewAngles)
             return false;
 
-        
-        
         const int newSize = 1;
         std::memcpy(cmdBytes + cs2::CUserCmd::kInputHistorySizeOffset, &newSize, sizeof(newSize));
 
@@ -215,7 +147,7 @@ private:
         vaHasBits |= kViewAnglesSubMessageHasBits;
         std::memcpy(viewAngles + kSubMessageHasBitsOffset, &vaHasBits, sizeof(vaHasBits));
 
-        VerifyConsole::write(1.0f, "hist", "fast path: recycled entry 0 (fully silent shot)");
+        Diagnostics::write(1.0f, "hist", "fast path: recycled entry 0 (fully silent shot)");
 
         entryIndex = 0;
         lands = writeShotIntoEntry(entry, viewAngles, localPawn, aimPitch, aimYaw, punchPitch, punchYaw,
@@ -224,19 +156,13 @@ private:
         return true;
     }
 
-    
-    
-    
-    
     [[nodiscard]] bool writeShotIntoEntry(std::byte* entry, std::byte* viewAngles, auto&& localPawn,
                             float aimPitch, float aimYaw, float punchPitch, float punchYaw,
                             float backtrackSimTime, bool compensateSpread, bool backtracking,
                             bool recycledEntry,
                             const typename SpreadSolver<HookContext>::Angles* precomputedCorrection = nullptr) const noexcept
     {
-        
-        
-        
+
         int tickBase{};
         if (const auto baseTick = hookContext.localPlayerController().tickBase(); baseTick.hasValue())
             tickBase = baseTick.value();
@@ -244,8 +170,6 @@ private:
             ? static_cast<int>(backtrackSimTime / kTickInterval) + 1
             : tickBase;
 
-        
-        
         Optional<typename SpreadSolver<HookContext>::Angles> corrected;
         if (compensateSpread && stampTick > 0) {
             if (precomputedCorrection && !backtracking) {
@@ -256,31 +180,24 @@ private:
                     corrected = solver.findSpreadCorrection(typename SpreadSolver<HookContext>::Angles{aimPitch, aimYaw, 0.0f}, stampTick, params.value());
             }
         }
-        const bool lands = !compensateSpread || corrected.hasValue();
+        const auto spreadParams = hookContext.template make<SpreadSolver>().weaponParams(localPawn.getActiveWeapon());
+        const bool lands = spreadParams.hasValue()
+            && spreadParams.value().inaccuracy + spreadParams.value().spread == 0.0f
+            && trig::absolute(aimPitch - punchPitch) <= 89.0f;
 
-        
-        
-        
-        
-        const float pitch = (corrected.hasValue() ? corrected.value().pitch : aimPitch) - punchPitch;
-        const float yaw = (corrected.hasValue() ? corrected.value().yaw : aimYaw) - punchYaw;
+        const float pitch = std::clamp((corrected.hasValue() ? corrected.value().pitch : aimPitch) - punchPitch, -89.0f, 89.0f);
+        const float yaw = trig::normalizeDegrees((corrected.hasValue() ? corrected.value().yaw : aimYaw) - punchYaw);
 
+        orSubMessageHasBits(entry, kViewAnglesEntryHasBit);
+        orSubMessageHasBits(viewAngles, kViewAnglesSubMessageHasBits);
         std::memcpy(viewAngles + cs2::CUserCmd::BaseMessage::ViewAngles::kPitchOffset, &pitch, sizeof(pitch));
         std::memcpy(viewAngles + cs2::CUserCmd::BaseMessage::ViewAngles::kYawOffset, &yaw, sizeof(yaw));
 
-        
-        
-        
-        
-        
         if (corrected.hasValue() || recycledEntry) {
             const float roll = corrected.hasValue() ? corrected.value().roll : 0.0f;
             std::memcpy(viewAngles + cs2::CUserCmd::BaseMessage::ViewAngles::kRollOffset, &roll, sizeof(roll));
         }
 
-        
-        
-        
         if (backtracking) {
             stampBacktrackTick(entry, backtrackSimTime);
         } else if (stampTick > 0) {
@@ -291,26 +208,6 @@ private:
         return lands;
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     [[nodiscard]] bool writeIntoBaseViewangles(auto&& localPawn, cs2::CUserCmd* cmd, float aimPitch, float aimYaw,
                                                float punchPitch, float punchYaw, bool compensateSpread,
                                                const typename SpreadSolver<HookContext>::Angles* precomputedCorrection = nullptr) const noexcept
@@ -329,36 +226,27 @@ private:
                     corrected = solver.findSpreadCorrection(typename SpreadSolver<HookContext>::Angles{aimPitch, aimYaw, 0.0f}, tickBase, params.value());
             }
         }
-        const bool lands = !compensateSpread || corrected.hasValue();
-        const float pitch = (corrected.hasValue() ? corrected.value().pitch : aimPitch) - punchPitch;
-        const float yaw = (corrected.hasValue() ? corrected.value().yaw : aimYaw) - punchYaw;
+        const auto spreadParams = hookContext.template make<SpreadSolver>().weaponParams(localPawn.getActiveWeapon());
+        const bool lands = spreadParams.hasValue()
+            && spreadParams.value().inaccuracy + spreadParams.value().spread == 0.0f
+            && trig::absolute(aimPitch - punchPitch) <= 89.0f;
+        const float pitch = std::clamp((corrected.hasValue() ? corrected.value().pitch : aimPitch) - punchPitch, -89.0f, 89.0f);
+        const float yaw = trig::normalizeDegrees((corrected.hasValue() ? corrected.value().yaw : aimYaw) - punchYaw);
 
         const UserCmd userCmd{cmd};
         if (!userCmd)
-            return lands;
+            return false;
 
-        
-        
         movement_fix::setViewAngles(userCmd, pitch, yaw);
 
-        
-        
-        
-        
-        
         return lands;
     }
 
-    
-    
-    
     static void stampLiveTick(std::byte* entry, int tick) noexcept
     {
         setTickFields(entry, tick + 1, 0.0f, tick, 0.0f);
     }
 
-    
-    
     static void stampBacktrackTick(std::byte* entry, float simulationTime) noexcept
     {
         const float t = simulationTime / kTickInterval;
@@ -382,9 +270,6 @@ private:
         std::memcpy(entry + kPlayerTickFractionOffset, &playerFrac, sizeof(playerFrac));
     }
 
-    
-    
-    
     static void zeroInterpolationInfo(std::byte* entry) noexcept
     {
         std::uint32_t hasBits{};
@@ -398,7 +283,6 @@ private:
             zeroSvInterp(entry + kSvInterp1PtrOffset);
     }
 
-    
     static void zeroClInterp(std::byte* ptrField) noexcept
     {
         std::byte* interp = loadPointer(ptrField);
@@ -407,9 +291,6 @@ private:
         setSubMessageFloat(interp, kInterpFracOffset, kInterpFracHasBit, 0.0f);
     }
 
-    
-    
-    
     static void zeroSvInterp(std::byte* ptrField) noexcept
     {
         std::byte* interp = loadPointer(ptrField);
@@ -427,8 +308,6 @@ private:
         return pointer;
     }
 
-    
-    
     static void setSubMessageFloat(std::byte* msg, int offset, std::uint32_t hasBit, float value) noexcept
     {
         std::memcpy(msg + offset, &value, sizeof(value));
@@ -449,29 +328,10 @@ private:
         std::memcpy(msg + kSubMessageHasBitsOffset, &hasBits, sizeof(hasBits));
     }
 
-    
-    
-    
-    
     static constexpr std::ptrdiff_t kInputHistoryRepOffset = 56;
-    static constexpr std::ptrdiff_t kInputHistoryTotalSizeOffset = 52; 
+    static constexpr std::ptrdiff_t kInputHistoryTotalSizeOffset = 52;
     static constexpr std::ptrdiff_t kRepElementsOffset = 8;
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     static constexpr std::ptrdiff_t kHistoryViewAnglesOffset = 0x18;
     static constexpr std::ptrdiff_t kClInterpPtrOffset = 0x20;
     static constexpr std::ptrdiff_t kSvInterp0PtrOffset = 0x28;
@@ -495,7 +355,6 @@ private:
     static constexpr std::ptrdiff_t kPlayerTickCountOffset = 104;
     static constexpr std::ptrdiff_t kPlayerTickFractionOffset = 108;
 
-    
     static constexpr std::ptrdiff_t kSubMessageHasBitsOffset = 0x10;
     static constexpr std::ptrdiff_t kInterpFracOffset = 0x18;
     static constexpr std::ptrdiff_t kInterpSrcTickOffset = 0x1c;
@@ -504,11 +363,9 @@ private:
     static constexpr std::uint32_t kInterpSrcTickHasBit = 0x2;
     static constexpr std::uint32_t kInterpDstTickHasBit = 0x4;
 
-    
-    
     static constexpr std::uint32_t kViewAnglesSubMessageHasBits = 0x1 | 0x2 | 0x4;
 
-    static constexpr float kTickInterval = 0.015625f; 
+    static constexpr float kTickInterval = 0.015625f;
 
     HookContext& hookContext;
 };

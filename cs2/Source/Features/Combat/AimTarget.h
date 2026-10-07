@@ -10,21 +10,12 @@
 #include <CS2/Classes/Vector.h>
 #include <Features/Combat/TargetExtrapolator.h>
 #include <Features/Combat/TargetSelection.h>
+#include <Features/Combat/HitboxGeometry.h>
 #include <GameClient/Entities/BaseEntity.h>
 #include <GameClient/Entities/PlayerPawn.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
 #include <Utils/Optional.h>
 #include <Utils/Trig.h>
-
-
-
-
-
-
-
-
-
-
 
 template <typename HookContext>
 class AimTarget {
@@ -39,17 +30,14 @@ public:
         float yaw;
     };
 
-    
-    
-    
     struct Target {
         Angles angles;
         cs2::Vector aimPoint;
         cs2::C_BaseEntity* entity;
-        int hitgroup; 
+        int hitgroup;
+        hitbox_geometry::Shape shape{};
     };
 
-    
     struct HitboxFlags {
         bool head;
         bool chest;
@@ -58,16 +46,6 @@ public:
         bool legs;
     };
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     [[nodiscard]] Optional<Target> best(const cs2::Vector& eye, float currentPitch, float currentYaw, float maxFov, const HitboxFlags& hitboxes, int extrapolateTicks = 0, const cs2::C_BaseEntity* excludedEntity = nullptr, const cs2::C_BaseEntity* preferredEntity = nullptr) const noexcept
     {
         return bestPassing(eye, currentPitch, currentYaw, maxFov, hitboxes,
@@ -97,6 +75,10 @@ public:
                                                target_selection::Mode mode = target_selection::Mode::Crosshair) const noexcept
     {
         Optional<Target> bestTarget;
+        if (!hitbox_geometry::finite(eye) || !std::isfinite(currentPitch) || !std::isfinite(currentYaw)
+            || !std::isfinite(maxFov) || maxFov <= 0
+            || trig::absolute(currentPitch)>36000 || trig::absolute(currentYaw)>36000)
+            return bestTarget;
         float bestFov = maxFov;
         float bestScore = std::numeric_limits<float>::infinity();
         hookContext.template make<EntitySystem>().forEachNetworkableEntityIdentity([&](const auto& identity) {
@@ -109,6 +91,9 @@ public:
             auto&& target = baseEntity.template as<PlayerPawn>();
             if (!target || target.isControlledByLocalPlayer() || target.isEnemy() != true || target.isAlive() != true)
                 return;
+            if constexpr (requires { target.hasImmunity(); }) {
+                if (target.hasImmunity() != false) return;
+            }
             const auto health = target.health();
             if (!health.hasValue() || health.value() <= 0)
                 return;
@@ -120,33 +105,54 @@ public:
             const bool enabled[]{hitboxes.head, hitboxes.chest, hitboxes.stomach, hitboxes.arms, hitboxes.legs};
             constexpr int bones[]{kHeadBone, kChestBone, kStomachBone, kArmsBone, kLegsBone};
             constexpr int groups[]{kHitgroupHead, kHitgroupChest, kHitgroupStomach, kHitgroupArm, kHitgroupLeg};
-            // Preserve hitbox priority, falling back when a point is blocked or outside the FOV.
+            Hitboxes::Set set{};
+            if constexpr (requires { node.raw(); node.boneTransform(0); })
+                set = Hitboxes::query(node.raw());
+            // Rank real hitbox centres within each enabled group. Both arms and
+            // legs participate; bone-only fallback is for unavailable model data.
             for (std::size_t i = 0; i < 5; ++i) {
-                if (!enabled[i])
-                    continue;
-                const auto bone = node.bonePosition(bones[i]);
-                if (!bone.hasValue())
-                    continue;
-                const cs2::Vector point{bone.value().x + delta.x, bone.value().y + delta.y, bone.value().z + delta.z};
-                const float dx = point.x - eye.x;
-                const float dy = point.y - eye.y;
-                const float dz = point.z - eye.z;
-                const float distanceSquared = dx * dx + dy * dy + dz * dz;
-                if (!std::isfinite(distanceSquared) || distanceSquared <= 0.0f)
-                    continue;
-                const auto needed = anglesTo(eye, point);
-                const float fov = fovBetween(currentPitch, currentYaw, needed.pitch, needed.yaw);
-                if (!(fov < maxFov))
-                    continue;
-                const Target candidate{needed, point, entity, groups[i]};
-                if (!accept(candidate))
-                    continue;
-                const float score = mode == target_selection::Mode::Distance ? distanceSquared
-                    : mode == target_selection::Mode::Health ? static_cast<float>(health.value()) : fov;
-                if (score < bestScore || (score == bestScore && fov < bestFov)) {
-                    bestScore = score;
-                    bestFov = fov;
-                    bestTarget = candidate;
+                if (!enabled[i]) continue;
+                Optional<Target> groupBest;
+                float groupFov = maxFov;
+                const auto consider = [&](const cs2::Vector& point, const hitbox_geometry::Shape& shape) {
+                    const auto offset = hitbox_geometry::subtract(point,eye);
+                    const float distanceSquared = hitbox_geometry::dot(offset,offset);
+                    if (!std::isfinite(distanceSquared) || distanceSquared <= 0) return;
+                    const auto angles = anglesTo(eye,point);
+                    const float fov = fovBetween(currentPitch,currentYaw,angles.pitch,angles.yaw);
+                    if (!(fov < groupFov)) return;
+                    const Target candidate{angles,point,entity,groups[i],shape};
+                    if (!accept(candidate)) return;
+                    groupFov=fov;
+                    groupBest=candidate;
+                };
+                if constexpr (requires { node.raw(); node.boneTransform(0); }) {
+                    for (int h=0;h<set.count;++h) {
+                        const auto& entry=set.entries[h];
+                        int group=Hitboxes::hitgroupFromHitbox(entry.index);
+                        if (group==8) group=2;
+                        if (group==5) group=4;
+                        if (group==7) group=6;
+                        if (group!=groups[i]) continue;
+                        const auto transform=node.boneTransform(entry.bone);
+                        if (!transform.hasValue()) continue;
+                        auto shape=hitbox_geometry::from(entry,transform.value().position,
+                                                         transform.value().rotation,transform.value().scale);
+                        if (!shape.valid) continue;
+                        shape.origin=hitbox_geometry::add(shape.origin,delta);
+                        consider(shape.center(),shape);
+                    }
+                }
+                if (set.count==0) {
+                    const auto bone=node.bonePosition(bones[i]);
+                    if (bone.hasValue()) consider(hitbox_geometry::add(bone.value(),delta),{});
+                }
+                if (!groupBest.hasValue()) continue;
+                const auto offset=hitbox_geometry::subtract(groupBest.value().aimPoint,eye);
+                const float score = mode == target_selection::Mode::Distance ? hitbox_geometry::dot(offset,offset)
+                    : mode == target_selection::Mode::Health ? static_cast<float>(health.value()) : groupFov;
+                if (score<bestScore || (score==bestScore && groupFov<bestFov)) {
+                    bestScore=score; bestFov=groupFov; bestTarget=groupBest;
                 }
                 break;
             }
@@ -154,19 +160,13 @@ public:
         return bestTarget;
     }
 
-    
-    
-    
     [[nodiscard]] Optional<cs2::Vector> eyePosition(auto&& pawn) const noexcept
     {
         return pawn.eyePosition();
     }
 
 private:
-    
-    
-    
-    
+
     [[nodiscard]] static Angles anglesTo(const cs2::Vector& from, const cs2::Vector& to) noexcept
     {
         const auto dx = to.x - from.x;
@@ -179,8 +179,6 @@ private:
         return Angles{pitch, yaw};
     }
 
-    
-    
     [[nodiscard]] static float fovBetween(float pitch0, float yaw0, float pitch1, float yaw1) noexcept
     {
         const auto dPitch = pitch1 - pitch0;
@@ -194,7 +192,6 @@ private:
     static constexpr int kArmsBone = 9;
     static constexpr int kLegsBone = 25;
 
-    
     static constexpr int kHitgroupHead = 1;
     static constexpr int kHitgroupChest = 2;
     static constexpr int kHitgroupStomach = 3;

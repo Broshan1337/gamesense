@@ -20,8 +20,10 @@ struct Entry {
 
 struct FakeCmd {
     alignas(8) std::byte bytes[256]{};
-    alignas(8) std::byte rep[128]{};
-    std::array<Entry, 16> entries{};
+    // Include a deliberately over-capacity slot for malformed-history tests.
+    static constexpr int kSlots = cs2::CUserCmd::kMaxInputHistoryEntries + 1;
+    alignas(8) std::byte rep[8 + kSlots * sizeof(void*)]{};
+    std::array<Entry, kSlots> entries{};
 
     [[nodiscard]] Entry* entry(std::size_t index) noexcept { return &entries[index]; }
     [[nodiscard]] void** slot(std::size_t index) noexcept

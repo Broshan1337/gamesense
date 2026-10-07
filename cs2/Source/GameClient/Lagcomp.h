@@ -1,12 +1,15 @@
 #pragma once
 
 #include <cstddef>
+#include <cmath>
+#include <algorithm>
 #include <cstring>
 
 #include <CS2/Classes/Entities/C_BaseEntity.h>
 #include <CS2/Classes/GlobalVars.h>
 #include <CS2/Classes/Vector.h>
 #include <Features/Combat/ShotGeometry.h>
+#include <Features/Combat/HitboxGeometry.h>
 #include <GameClient/ConVars/CvarSystem.h>
 #include <GameClient/Entities/BaseEntity.h>
 #include <GameClient/Entities/PlayerPawn.h>
@@ -77,6 +80,7 @@ public:
         cs2::Vector aimPoint;
         int hitgroup;
         float simulationTime;
+        hitbox_geometry::Shape shape{};
     };
 
     explicit Lagcomp(HookContext& hookContext) noexcept
@@ -121,6 +125,7 @@ public:
 
             float simTime{};
             std::memcpy(&simTime, reinterpret_cast<const std::byte*>(entity) + *simOffset, sizeof(simTime));
+            if (!std::isfinite(simTime) || simTime <= 0.0f || simTime > 1.0e7f) return;
             const auto simTick = static_cast<int>(simTime / kTickInterval);
 
             if (slot.count > 0 && slot.records[slot.head].tick >= simTick)
@@ -270,14 +275,14 @@ public:
     [[nodiscard]] int validRecords(cs2::C_BaseEntity* entity, int maxTicks, const Record** out, int outCapacity) const noexcept
     {
         const auto* slot = findSlot(entity);
-        if (!slot || slot->count == 0 || maxTicks <= 0)
+        if (!out || outCapacity <= 0 || !slot || slot->count == 0 || maxTicks <= 0)
             return 0;
 
         const auto curtime = hookContext.globalVars().curtime().valueOr(0.0f);
         const auto budget = unlagBudgetSeconds();
-        if (budget <= 0.0f)
+        if (!std::isfinite(curtime) || !std::isfinite(budget) || curtime <= 0 || budget <= 0.0f)
             return 0; 
-        const float oldestAllowedTime = curtime - budget;
+        const float oldestAllowedTime = curtime - std::min(budget, static_cast<float>(maxTicks) * kTickInterval);
         const int newestTick = slot->records[slot->head].tick;
 
         int picked = 0;

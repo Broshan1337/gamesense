@@ -257,6 +257,35 @@ public:
     
     
     
+    // Replace movement intent in native and serialized banks, preserving all
+    // unrelated buttons. Used by counter-strafing rather than OR-ing opposites.
+    void replaceButtons(std::uint64_t mask, std::uint64_t buttons) const noexcept
+    {
+        if (!cmd || !mask) return;
+        const auto replace = [&](std::byte* at) {
+            std::uint64_t value{};
+            std::memcpy(&value, at, sizeof(value));
+            value = (value & ~mask) | (buttons & mask);
+            std::memcpy(at, &value, sizeof(value));
+        };
+        replace(reinterpret_cast<std::byte*>(cmd) + cs2::CUserCmd::kButtonState1Offset);
+        replace(reinterpret_cast<std::byte*>(cmd) + cs2::CUserCmd::kButtonState2Offset);
+        andNotInto(reinterpret_cast<std::byte*>(cmd) + cs2::CUserCmd::kButtonState3Offset, mask);
+        auto* base = baseMessage();
+        if (!base) return;
+        std::byte* pb{};
+        std::memcpy(&pb, base + cs2::CUserCmd::BaseMessage::kButtonsPbOffset, sizeof(pb));
+        if (pb) {
+            using B = cs2::CUserCmd::BaseMessage::ButtonsPb;
+            replace(pb + B::kButtonState1Offset);
+            replace(pb + B::kButtonState2Offset);
+            andNotInto(pb + B::kButtonState3Offset, mask);
+            orHasBit(pb + B::kHasBitsOffset, B::kButtonState1HasBit | B::kButtonState2HasBit | B::kButtonState3HasBit);
+            orHasBit(base + cs2::CUserCmd::BaseMessage::kHasBitsOffset, cs2::CUserCmd::BaseMessage::kButtonsPbHasBit);
+        }
+        setOuterHasBit(cs2::CUserCmd::kBaseMessageHasBit);
+    }
+
     void suppressAttack(std::uint64_t buttons) const noexcept
     {
         if (!cmd || !buttons)

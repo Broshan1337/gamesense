@@ -30,7 +30,7 @@ CONFIG_VARIABLE(HitLegs, bool, false);
 
 
 
-CONFIG_VARIABLE(SpreadCompensation, bool, true);
+CONFIG_VARIABLE(SpreadCompensation, bool, false);
 
 
 
@@ -80,7 +80,7 @@ CONFIG_VARIABLE(DynamicPointscale, bool, true);
 
 
 
-CONFIG_VARIABLE(WallCheck, bool, false);
+CONFIG_VARIABLE(WallCheck, bool, true);
 CONFIG_VARIABLE(Autowall, bool, false);
 
 
