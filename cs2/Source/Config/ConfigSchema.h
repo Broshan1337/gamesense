@@ -192,6 +192,8 @@ private:
 
         configConversion.beginObject(u8"Aimbot");
         configConversion.boolean(u8"Enabled", loadVariable<aimbot_vars::Enabled>(), saveVariable<aimbot_vars::Enabled>());
+        configConversion.uint(u8"TargetSelection", loadVariable<aimbot_vars::TargetSelection>(), saveVariable<aimbot_vars::TargetSelection>());
+        configConversion.boolean(u8"TargetLock", loadVariable<aimbot_vars::TargetLock>(), saveVariable<aimbot_vars::TargetLock>());
         // Removed settings (the old user-settable FOV slider and rage fov circle - the rage aimbot now
         // uses velocity's fixed max_fov gate). They are still PARSED AND DISCARDED in their original
         // positions because the config loader is an order-sensitive streaming parser: dropping the keys
@@ -237,6 +239,9 @@ private:
 
         configConversion.beginObject(u8"LegitAimbot");
         configConversion.boolean(u8"Enabled", loadVariable<legit_aimbot_vars::Enabled>(), saveVariable<legit_aimbot_vars::Enabled>());
+        configConversion.uint(u8"TargetSelection", loadVariable<legit_aimbot_vars::TargetSelection>(), saveVariable<legit_aimbot_vars::TargetSelection>());
+        configConversion.boolean(u8"TargetLock", loadVariable<legit_aimbot_vars::TargetLock>(), saveVariable<legit_aimbot_vars::TargetLock>());
+        configConversion.boolean(u8"WallCheck", loadVariable<legit_aimbot_vars::WallCheck>(), saveVariable<legit_aimbot_vars::WallCheck>());
         configConversion.uint(u8"Fov", loadVariable<legit_aimbot_vars::Fov>(), saveVariable<legit_aimbot_vars::Fov>());
         configConversion.uint(u8"Smooth", loadVariable<legit_aimbot_vars::Smooth>(), saveVariable<legit_aimbot_vars::Smooth>());
         configConversion.boolean(u8"HitHead", loadVariable<legit_aimbot_vars::HitHead>(), saveVariable<legit_aimbot_vars::HitHead>());

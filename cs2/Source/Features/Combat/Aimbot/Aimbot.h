@@ -40,7 +40,7 @@
 // crosshair) are left untouched. Not moving the camera is what makes it SILENT: we only change the
 // angle the server shoots along, never where the player is looking.
 //
-// 
+//
 //
 // Offsets found by in-game measurement (a temporary diagnostic that matched each candidate pointer's
 // pitch/yaw against the real view): the input_history is the repeated field at cmd+48 (size) / cmd+56
@@ -60,8 +60,10 @@ public:
         // A fresh decision every tick; consumed by this tick's onWriteMoveCrc.
         forceShotThisTick = false;
 
-        if (!GET_CONFIG_VAR(aimbot_vars::Enabled))
+        if (!GET_CONFIG_VAR(aimbot_vars::Enabled)) {
+            lastTargetHandleValue = 0;
             return;
+        }
 
         // Steer the shot when the player is firing OR force-shot may auto-fire this tick. Force-shot
         // (velocity's force_shot/force_shot_air) splices an attack into the outgoing command itself
@@ -79,23 +81,31 @@ public:
 
         const bool forceShotEnabled = GET_CONFIG_VAR(aimbot_vars::ForceShot) || GET_CONFIG_VAR(aimbot_vars::ForceShotAir);
         const bool userFiring = MouseState::isButtonDown(sdl3::mousebutton::kLeft);
-        if (!userFiring && !forceShotEnabled)
+        if (!userFiring && !forceShotEnabled) {
+            lastTargetHandleValue = 0;
             return;
+        }
 
         UserCmd userCmd{cmd};
-        if (!userCmd)
+        if (!userCmd) {
+            lastTargetHandleValue = 0;
             return;
+        }
 
         auto&& localPawn = hookContext.activeLocalPlayerPawn();
-        if (!localPawn || localPawn.isAlive() != true)
+        if (!localPawn || localPawn.isAlive() != true) {
+            lastTargetHandleValue = 0;
             return;
+        }
 
         auto aimTarget = hookContext.template make<AimTarget>();
         const auto eye = aimTarget.eyePosition(localPawn);
         const auto currentPitch = userCmd.viewPitch();
         const auto currentYaw = userCmd.viewYaw();
-        if (!eye.hasValue() || !currentPitch.hasValue() || !currentYaw.hasValue())
+        if (!eye.hasValue() || !currentPitch.hasValue() || !currentYaw.hasValue()) {
+            lastTargetHandleValue = 0;
             return;
+        }
 
         // Target acceptance region: velocity's fixed max_fov by default; with SpreadCircleFov on, the
         // weapon's CURRENT spread circle instead - the GetInaccuracy+GetSpread cone slope converted to
@@ -113,31 +123,19 @@ public:
         // The handle (index+serial) survives entity recycling; if the held target died or left FOV,
         // best() returns {} and we fall back to a fresh selection.
         cs2::C_BaseEntity* preferredTarget = nullptr;
-        if (lastTargetHandleValue != 0) {
+        if (GET_CONFIG_VAR(aimbot_vars::TargetLock) && lastTargetHandleValue != 0) {
             if (auto* const instance = hookContext.template make<EntitySystem>().getEntityFromHandle(cs2::CEntityHandle{lastTargetHandleValue}))
                 preferredTarget = static_cast<cs2::C_BaseEntity*>(instance);
         }
 
-        auto aim = aimTarget.best(eye.value(), currentPitch.value(), currentYaw.value(), maxFov, hitboxFlags(), 0, nullptr, preferredTarget);
-        if (!aim.hasValue() && preferredTarget) {
-            lastTargetHandleValue = 0;   // held target gone - select fresh
-            aim = aimTarget.best(eye.value(), currentPitch.value(), currentYaw.value(), maxFov, hitboxFlags());
+        const auto aim = aimTarget.acquire(eye.value(), currentPitch.value(), currentYaw.value(), maxFov,
+            hitboxFlags(), [&](const auto& candidate) { return passesVisibility(localPawn, eye.value(), candidate); },
+            preferredTarget, static_cast<target_selection::Mode>(static_cast<std::uint8_t>(GET_CONFIG_VAR(aimbot_vars::TargetSelection))));
+        if (!aim.hasValue()) {
+            lastTargetHandleValue = 0;
+            return;
         }
-
-        // VISIBILITY-AWARE SELECTION (velocity's rage parity): with WallCheck/Autowall on, a blocked
-        // FOV-best candidate must not blind the whole aimbot for the tick. Fall through to the
-        // next-best candidate that CAN be hit - through a wall the simulated shot can penetrate for
-        // MinDamage when Autowall is on (passesVisibility encodes that rule) - instead of firing at
-        // nothing. Bounded retries: each pass excludes exactly the rejected entity.
-        {
-            int rejected = 0;
-            while (aim.hasValue() && !passesVisibility(localPawn, eye.value(), aim.value()) && rejected < 4) {
-                ++rejected;
-                aim = aimTarget.best(eye.value(), currentPitch.value(), currentYaw.value(), maxFov, hitboxFlags(), 0, aim.value().entity);
-            }
-        }
-        if (!aim.hasValue())
-            return; // No shootable target in FOV - never auto-fire (forceShotThisTick is already false).
+        lastTargetHandleValue = hookContext.template make<BaseEntity>(aim.value().entity).handle().value;
 
         // The raw hitbox angle is what we write if compensation is off or cannot be computed; roll
         // stays 0 in that case. When compensation succeeds it replaces all three with an angle that

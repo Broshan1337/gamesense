@@ -8,6 +8,7 @@
 #include <Features/Combat/LegitAimbot/LegitAimbotConfigVariables.h>
 #include <Features/Combat/MovementFix.h>
 #include <GameClient/Bind.h>
+#include <GameClient/Tracing/Tracing.h>
 #include <GameClient/UserCmd.h>
 #include <HookContext/HookContextMacros.h>
 #include <SDL/SdlFunctions.h>
@@ -31,43 +32,65 @@ public:
 
     void onCreateMove(cs2::CUserCmd* cmd) const noexcept
     {
-        if (!GET_CONFIG_VAR(legit_aimbot_vars::Enabled))
+        if (!GET_CONFIG_VAR(legit_aimbot_vars::Enabled)) {
+            lastTargetHandleValue = 0;
             return;
+        }
 
-        // Hold-to-aim: only assist while the aim key (configurable, legit_aimbot_vars::AimKey) is down.
-        if (!Bind::isDown(GET_CONFIG_VAR(legit_aimbot_vars::AimKey)))
+
+        if (!Bind::isDown(GET_CONFIG_VAR(legit_aimbot_vars::AimKey))) {
+            lastTargetHandleValue = 0;
             return;
+        }
 
         UserCmd userCmd{cmd};
-        if (!userCmd)
+        if (!userCmd) {
+            lastTargetHandleValue = 0;
             return;
+        }
 
         auto&& localPawn = hookContext.activeLocalPlayerPawn();
-        if (!localPawn || localPawn.isAlive() != true)
+        if (!localPawn || localPawn.isAlive() != true) {
+            lastTargetHandleValue = 0;
             return;
+        }
 
         auto aimTarget = hookContext.template make<AimTarget>();
         const auto eye = aimTarget.eyePosition(localPawn);
         const auto currentPitch = userCmd.viewPitch();
         const auto currentYaw = userCmd.viewYaw();
-        if (!eye.hasValue() || !currentPitch.hasValue() || !currentYaw.hasValue())
+        if (!eye.hasValue() || !currentPitch.hasValue() || !currentYaw.hasValue()) {
+            lastTargetHandleValue = 0;
             return;
+        }
 
-        // Target acceptance region: the Fov slider by default; with SpreadCircleFov on, the weapon's
-        // CURRENT spread circle instead - GetInaccuracy+GetSpread as a half-angle in degrees. The
-        // assist then only engages while the cone is tight enough to actually reach the target.
+
+
+
         float maxFov = static_cast<float>(GET_CONFIG_VAR(legit_aimbot_vars::Fov));
         if (GET_CONFIG_VAR(legit_aimbot_vars::SpreadCircleFov)) {
             if (const auto cone = hookContext.localPlayerBulletInaccuracy(); cone.hasValue() && cone.value() > 0.0f)
                 maxFov = trig::arcTangent2(cone.value(), 1.0f) * trig::kRadiansToDegrees;
         }
-        const auto aim = aimTarget.best(eye.value(), currentPitch.value(), currentYaw.value(), maxFov, hitboxFlags());
-        if (!aim.hasValue())
+        cs2::C_BaseEntity* preferredTarget = nullptr;
+        if (GET_CONFIG_VAR(legit_aimbot_vars::TargetLock) && lastTargetHandleValue != 0) {
+            if (auto* const instance = hookContext.template make<EntitySystem>().getEntityFromHandle(cs2::CEntityHandle{lastTargetHandleValue}))
+                preferredTarget = static_cast<cs2::C_BaseEntity*>(instance);
+        }
+        const auto aim = aimTarget.acquire(eye.value(), currentPitch.value(), currentYaw.value(), maxFov, hitboxFlags(),
+            [&](const auto& candidate) {
+                return !GET_CONFIG_VAR(legit_aimbot_vars::WallCheck)
+                    || Tracing::isVisible(eye.value(), candidate.aimPoint, localPawn.baseEntity(), candidate.entity);
+            }, preferredTarget, static_cast<target_selection::Mode>(static_cast<std::uint8_t>(GET_CONFIG_VAR(legit_aimbot_vars::TargetSelection))));
+        if (!aim.hasValue()) {
+            lastTargetHandleValue = 0;
             return;
+        }
+        lastTargetHandleValue = hookContext.template make<BaseEntity>(aim.value().entity).handle().value;
 
         const auto step = humanizedStep(aim.value().angles.pitch - currentPitch.value(), trig::normalizeDegrees(aim.value().angles.yaw - currentYaw.value()));
-        // The smoothing steps rotate the view the player's analog input was sampled against -
-        // with the movement fix on, each step re-projects the pair so movement stays put.
+
+
         movement_fix::setViewAngles(userCmd, currentPitch.value() + step.pitch, currentYaw.value() + step.yaw);
     }
 
@@ -136,5 +159,6 @@ private:
     // features to different keys in the menu if independent control is wanted. The silent aimbot
     // stays on left-click.
 
+    inline static std::uint32_t lastTargetHandleValue{0};
     HookContext& hookContext;
 };

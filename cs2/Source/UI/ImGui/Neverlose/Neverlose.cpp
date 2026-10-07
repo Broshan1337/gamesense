@@ -2995,7 +2995,10 @@ void pageRageAimbot() noexcept
         sliderVar<ExtrapolateTicks>("Lead Ticks", ++controlId);
         sliderVar<ForceShotWaitTicks>("Auto Shoot Wait", ++controlId);
     });
-    addCard("TARGETS", 2, [] {
+    addCard("TARGETS", 4, [] {
+        static constexpr const char* const modes[]{"Closest To Crosshair", "Nearest Distance", "Lowest Health"};
+        selectVar<TargetSelection>("Target Selection", modes, 3, ++controlId);
+        toggleVar<TargetLock>("Lock Target", ++controlId);
         toggleVar<SpreadCircleFov>("Spread FOV", ++controlId);
         // The names array MUST have static lifetime: multiSelectVar stores the pointer for the
         // popover to read on LATER frames, and a braced temporary bound to the reference parameter
@@ -3060,14 +3063,20 @@ void pageRage() noexcept
 void pageLegitAim() noexcept
 {
     using namespace legit_aimbot_vars;
-    addCard("AIM ASSIST", 7, [] {
+    addCard("AIM ASSIST", 8, [] {
         toggleVar<Enabled>("Smooth Aim", ++controlId);
+        toggleVar<WallCheck>("Aim Visible", ++controlId);
         keybindVar<AimKey>("Hold Key", ++controlId);
         sliderVar<Fov>("Field Of View", ++controlId, " deg");
         sliderVar<Smooth>("Smoothing", ++controlId);
         toggleVar<DrawFov>("Draw FOV Circle", ++controlId);
         colorVar<FovCircleColor>("FOV Circle Color", ++controlId);
         toggleVar<SpreadCircleFov>("Spread Circle FOV", ++controlId);
+    });
+    addCard("TARGETS", 2, [] {
+        static constexpr const char* const modes[]{"Closest To Crosshair", "Nearest Distance", "Lowest Health"};
+        selectVar<TargetSelection>("Target Selection", modes, 3, ++controlId);
+        toggleVar<TargetLock>("Lock Target", ++controlId);
     });
     addCard("HITBOXES", 5, [] {
         toggleVar<HitHead>("Target Head", ++controlId);
@@ -7310,6 +7319,7 @@ void registerFeatureBinds() noexcept
 
     // --- rage ---
     feature_binds::registerToggle<aimbot_vars::Enabled>("Silent Aim");
+    feature_binds::registerToggle<aimbot_vars::TargetLock>("Rage Target Lock");
     feature_binds::registerToggle<aimbot_vars::BodyAim>("Force Body Aim");
     feature_binds::registerToggle<aimbot_vars::Multipoint>("Multipoint");
     feature_binds::registerToggle<aimbot_vars::DynamicPointscale>("Dynamic Point Scale");
@@ -7327,6 +7337,7 @@ void registerFeatureBinds() noexcept
 
     // --- legit / triggerbot ---
     feature_binds::registerToggle<legit_aimbot_vars::Enabled>("Smooth Aim");
+    feature_binds::registerToggle<legit_aimbot_vars::TargetLock>("Legit Target Lock");
     feature_binds::registerToggle<legit_aimbot_vars::DrawFov>("Draw FOV Circle");
     feature_binds::registerToggle<legit_aimbot_vars::SpreadCircleFov>("Legit Spread Circle FOV");
     feature_binds::registerToggle<aimbot_vars::HitHead>("Target Head");

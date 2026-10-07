@@ -1,12 +1,15 @@
 #pragma once
 
 #include <Config/ConfigVariable.h>
+#include <Features/Combat/TargetSelection.h>
 #include "AimbotParams.h"
 
 namespace aimbot_vars
 {
 
 CONFIG_VARIABLE(Enabled, bool, false);
+CONFIG_VARIABLE_RANGE(TargetSelection, target_selection::kMode);
+CONFIG_VARIABLE(TargetLock, bool, true);
 
 // NOTE: no user FOV. The rage aimbot gates targets with velocity's fixed per-point max_fov (180 deg,
 // see aimbot_params::kMaxFov) - matching velocity exactly, where max_fov is a non-UI group setting.

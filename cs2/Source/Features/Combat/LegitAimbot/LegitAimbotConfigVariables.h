@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Config/ConfigVariable.h>
+#include <Features/Combat/TargetSelection.h>
 #include "LegitAimbotParams.h"
 
 namespace legit_aimbot_vars
@@ -10,6 +11,9 @@ namespace legit_aimbot_vars
 // nearest enemy hitbox within FOV. Distinct from the Rage-tab silent aimbot (which redirects the shot
 // without moving the view) - this moves the actual camera, so it reads as if the player aimed.
 CONFIG_VARIABLE(Enabled, bool, false);
+CONFIG_VARIABLE_RANGE(TargetSelection, target_selection::kMode);
+CONFIG_VARIABLE(TargetLock, bool, true);
+CONFIG_VARIABLE(WallCheck, bool, true);
 // Which bind activates the aim assist while held (GameClient/Bind.h list; 0 = Off). Default MOUSE5.
 CONFIG_VARIABLE_RANGE(AimKey, legit_aimbot_params::kAimKey);
 CONFIG_VARIABLE_RANGE(Fov, legit_aimbot_params::kFov);
