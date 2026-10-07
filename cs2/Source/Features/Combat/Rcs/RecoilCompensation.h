@@ -10,6 +10,32 @@
 
 namespace recoil_compensation
 {
+struct Kick { float pitch{}, yaw{}; };
+
+class CommandState {
+public:
+    void reset() noexcept { *this = {}; }
+    [[nodiscard]] bool active() const noexcept { return haveCommand; }
+    [[nodiscard]] Kick correction(int sequence, float pitchKick, float yawKick) noexcept
+    {
+        if (!haveCommand || sequence < lastSequence)
+            reset();
+        if (!haveCommand || sequence != lastSequence) {
+            previous = current;
+            lastSequence = sequence;
+            haveCommand = true;
+        }
+        // A repeated CreateMove rebuilds this command's base angles. Reuse its
+        // previous-command baseline instead of consuming the correction twice.
+        current = {pitchKick, yawKick};
+        return {current.pitch - previous.pitch, current.yaw - previous.yaw};
+    }
+private:
+    bool haveCommand{};
+    int lastSequence{};
+    Kick previous{}, current{};
+};
+
 inline void apply(cs2::CUserCmd* cmd, float pitchKick, float yawKick) noexcept
 {
     const UserCmd userCmd{cmd};

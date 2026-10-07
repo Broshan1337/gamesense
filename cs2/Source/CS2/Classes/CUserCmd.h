@@ -54,6 +54,9 @@ struct CSubtickMoveStep {
 // Protobuf semantics that matter: a field is only sent if its HAS-BIT is set. Writing the value
 // alone is not enough; the corresponding bit in the message's has-bits word must be set too.
 struct CUserCmd {
+    // Native command sequence (legacy_command_number in the protobuf stays zero).
+    static constexpr int kCommandNumberOffset = 8;
+
     // Pointer to the CBaseUserCmdPB. Lazily created by the game, but anything running AFTER the
     // original CreateMove will always find it already allocated - so the correct handling of a null
     // here is to do nothing, not to reimplement the game's allocation path.

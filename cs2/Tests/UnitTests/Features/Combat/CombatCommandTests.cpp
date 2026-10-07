@@ -102,3 +102,37 @@ TEST(AttackCommandTest, WritesNativeBanksBeforeButtonProtobufIsAllocated)
     EXPECT_EQ(CommandFixture::read<std::uint64_t>(command.cmd, 96) & 1, 1u);
     EXPECT_EQ(CommandFixture::read<std::uint64_t>(command.cmd, 104) & 1, 1u);
 }
+
+TEST(RecoilCommandStateTest, ConstantKickDoesNotAccumulateAcrossCommands)
+{
+    recoil_compensation::CommandState state;
+    CommandFixture command;
+    UserCmd{command.handle()}.setViewAngles(3.0f, 0.0f);
+    for (int sequence = 1; sequence <= 100; ++sequence) {
+        const auto delta = state.correction(sequence, -2.0f, 0.5f);
+        recoil_compensation::apply(command.handle(), delta.pitch, delta.yaw);
+    }
+    EXPECT_FLOAT_EQ(UserCmd{command.handle()}.viewPitch().value(), 5.0f);
+    EXPECT_NEAR(UserCmd{command.handle()}.viewYaw().value(), -0.5f, 0.00001f);
+}
+
+TEST(RecoilCommandStateTest, RebuiltCommandUsesTheSamePreviousCommandBaseline)
+{
+    recoil_compensation::CommandState state;
+    EXPECT_FLOAT_EQ(state.correction(10, -2, 1).pitch, -2);
+    EXPECT_FLOAT_EQ(state.correction(10, -2, 1).pitch, -2);
+    EXPECT_FLOAT_EQ(state.correction(11, -3, 1).pitch, -1);
+    EXPECT_FLOAT_EQ(state.correction(11, -4, 1).pitch, -2);
+    EXPECT_FLOAT_EQ(state.correction(12, -4, 1).pitch, 0);
+}
+
+TEST(RecoilCommandStateTest, RecoveryUnwindsCorrectionAndResetStartsANewPawn)
+{
+    recoil_compensation::CommandState state;
+    EXPECT_FLOAT_EQ(state.correction(1, -2, 0).pitch, -2);
+    EXPECT_FLOAT_EQ(state.correction(2, 0, 0).pitch, 2);
+    state.reset();
+    EXPECT_FALSE(state.active());
+    EXPECT_FLOAT_EQ(state.correction(100, -1, 0).pitch, -1);
+    EXPECT_FLOAT_EQ(state.correction(1, -1, 0).pitch, -1);
+}

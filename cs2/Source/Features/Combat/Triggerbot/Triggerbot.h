@@ -243,15 +243,7 @@ private:
         const bool headOnly = GET_CONFIG_VAR(triggerbot_vars::HeadOnly);
         int hitchanceThreshold = GET_CONFIG_VAR(triggerbot_vars::Hitchance);
 
-        // Head-only MEANS "only fire when the shot will actually hit the head", so it must predict the
-        // spread, not just check the crosshair ray. While moving, the crosshair can sit on the head yet
-        // the cone sprays off - the "fires but misses while moving" case. Enforcing a head-hitchance
-        // floor here makes head-only hold until enough of the predicted cone lands on the head (i.e. once
-        // you counter-strafe / slow enough for the head to be hittable). The user's Hitchance slider only
-        // raises the bar; it never drops below this floor while head-only is on.
-        if (headOnly && hitchanceThreshold < kHeadOnlyMinHitchance)
-            hitchanceThreshold = kHeadOnlyMinHitchance;
-
+        // HeadOnly selects the hitbox; Hitchance keeps the user's chosen threshold.
         if (!headOnly && hitchanceThreshold == 0)
             return true;
 
@@ -522,11 +514,6 @@ private:
     static constexpr float kHeadRadius = 6.0f;
     static constexpr float kBodyRadius = 16.0f;
     static constexpr int kHitchanceSamples = 256;
-
-    // Minimum fraction (percent) of the predicted spread cone that must land on the head before head-only
-    // will fire. This is what stops head-only from spraying while moving: it holds until the movement
-    // inaccuracy has decayed enough (counter-strafe / slow down) that the head is genuinely hittable.
-    static constexpr int kHeadOnlyMinHitchance = 40;
 
     // Seed mode: how close (units) the predicted deflected shot must land to the crosshair impact
     // point for the tick to fire - a head-sized sphere, so a "lucky" tick is one whose bullet
