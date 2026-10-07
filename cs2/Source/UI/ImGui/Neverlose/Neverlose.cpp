@@ -8170,11 +8170,8 @@ void drawNowPlayingWindow(float combatListHeight) noexcept
     char line2[224];
     line1[0] = '\0';
     line2[0] = '\0';
-    if (playing) {
-        copyCapped(line1, stationName && stationName[0] != '\0' ? stationName : "radio", sizeof(line1));
-        if (track && track[0] != '\0')
-            copyCapped(line2, track, sizeof(line2));
-    } else if (playerName && playerName[0] != '\0' && playerTitle && playerTitle[0] != '\0') {
+    // Active MPRIS metadata includes music played through our own radio process.
+    if (playerName && playerName[0] != '\0' && playerTitle && playerTitle[0] != '\0' && (!playing || !paused)) {
         copyCapped(line1, playerName, sizeof(line1));
         StringBuilderStorage<256> storage;
         auto builder = storage.builder();
@@ -8184,8 +8181,13 @@ void drawNowPlayingWindow(float combatListHeight) noexcept
         if (paused)
             builder.put("  (paused)");
         copyCapped(line2, builder.cstring(), sizeof(line2));
+    } else if (playing) {
+        paused = false;
+        copyCapped(line1, stationName && stationName[0] != '\0' ? stationName : "radio", sizeof(line1));
+        if (track && track[0] != '\0')
+            copyCapped(line2, track, sizeof(line2));
     } else {
-        return; // nothing playing anywhere - no window at all
+        return;
     }
 
     const float displayHeight = ImGui::GetIO().DisplaySize.y;
@@ -8198,7 +8200,7 @@ void drawNowPlayingWindow(float combatListHeight) noexcept
     static HudWindowDragState dragState;
     const float offX = static_cast<float>(ui_config::get<radio_vars::NowPlayingOffsetX>());
     const float offY = static_cast<float>(ui_config::get<radio_vars::NowPlayingOffsetY>());
-    // bottom-left anchor above the COMBAT box (422); when combat isn't drawn take its slot
+
     const float baseOffset = 422.0f + (combatListHeight > 0.0f ? combatListHeight + 6.0f : 0.0f);
     ImGui::SetNextWindowPos(ImVec2(s(10.0f) + offX, displayHeight - s(baseOffset) - offY - listHeight), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(windowWidth, listHeight), ImGuiCond_Always);

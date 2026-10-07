@@ -175,6 +175,7 @@ public:
         nextNowPlayingPoll = now + 0.5;
         resolveRadioPaths();
 
+
         if (mprisPid > 0) {
             const auto reaped = ::waitpid(mprisPid, nullptr, WNOHANG);
             if (reaped == mprisPid || (reaped < 0 && errno == ECHILD))
@@ -184,9 +185,10 @@ public:
             volPid = 0;
 
         if (isPlaying()) {
-            readFileInto(nowPlayingTrackBuf, sizeof(nowPlayingTrackBuf), metaFilePath);
-            return;
+            static_cast<void>(readFileInto(nowPlayingTrackBuf, sizeof(nowPlayingTrackBuf), metaFilePath));
+            // The radio itself can be the active MPRIS player. Keep probing metadata.
         }
+
 
         if (!GET_CONFIG_VAR(radio_vars::ShowMediaPlayers)) {
             clearMpris();

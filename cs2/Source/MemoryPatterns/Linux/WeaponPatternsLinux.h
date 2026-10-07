@@ -17,7 +17,9 @@ struct WeaponPatterns {
             // recompiled from the prologue+movsxd shape into a weapon-id dispatch
             // (movzx eax,[rdi+0x2838]; cmp 0x321 first). A byte-identical twin exists in the
             // same dispatch family, so the first cmp is load-bearing. Verified exactly-once.
-            .template addPattern<PointerToGetSpreadFunction, CodePattern{"55 48 89 E5 53 48 89 FB 48 83 EC 08 0F B7 87 38 28 00 00 66 3D 21 03"}>()
+            // GetSpread reads m_flSpread[weaponMode] from weapon VData. The former
+            // item-definition switch was a void weapon action, not a float getter.
+            .template addPattern<PointerToGetSpreadFunction, CodePattern{"48 63 87 90 28 00 00 48 8B 97 F8 04 00 00 83 F8 01 76 0D F3 0F 10 82 50 07 00 00"}>()
             // sub_1ADCAA0 - the per-shot spread SEED generator (see WeaponPatternTypes.h for the C
             // signature and RE trail). Anchors on the distinctive prologue
             // (push rbp / mov eax,edx / mov rbp,rsp / push rbx / sub rsp,0xD8) followed by
