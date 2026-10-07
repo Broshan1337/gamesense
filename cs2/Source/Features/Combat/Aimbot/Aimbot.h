@@ -678,28 +678,23 @@ private:
         if (!std::isfinite(distance) || !std::isfinite(maxRange.value()) || maxRange.value() <= 0.0f
             || distance > maxRange.value()) return kUnknownDamage;
         float damage = penetration::decay(base.value(), distance, range.value());
+        int actualHitgroup = target.hitgroup;
         const bool wallCheck = GET_CONFIG_VAR(aimbot_vars::WallCheck);
         const bool autowall = GET_CONFIG_VAR(aimbot_vars::Autowall);
         if (autowall) {
             const auto impact = Autowall::evaluate(eye, target.aimPoint, localPawn.baseEntity(), target.entity,
                 {base.value(), weapon.penetrationPower().valueOr(0.0f), range.value(), maxRange.value()}, {},
-                wallTraceBudget, [&](void* entity) {
-                    auto* raw = static_cast<cs2::C_BaseEntity*>(entity);
-                    return raw && raw->identity && raw->identity->entityClass
-                        && hookContext.entityClassifier().initialized()
-                        && !hookContext.template make<BaseEntity>(raw).template is<PlayerPawn>();
-                });
+                wallTraceBudget, hookContext);
             if (!impact.hasValue()) return kUnknownDamage;
             damage = impact.value().damage;
+            actualHitgroup = impact.value().hitgroup;
         } else if (wallCheck) {
             if (!wallTraceBudget.take()) return kUnknownDamage;
             const auto trace = Tracing::traceLine(eye, target.aimPoint, localPawn.baseEntity(), Autowall::kBulletMask);
             if (!trace.reaches(target.entity)) return kUnknownDamage;
         }
-        int armor=0; bool helmet=false;
-        if (!readTargetArmor(target.entity,armor,helmet)) return kUnknownDamage;
-        scaleDamage(damage,target.hitgroup,armor,helmet,armorRatio.value(),headMultiplier.value());
-        return std::isfinite(damage) ? damage : kUnknownDamage;
+        return Autowall::healthDamage(hookContext, target.entity, damage, actualHitgroup,
+            armorRatio.value(), headMultiplier.value()).valueOr(kUnknownDamage);
     }
 
     [[nodiscard]] bool passesVisibility(auto&& localPawn, const cs2::Vector& eye,
@@ -708,64 +703,6 @@ private:
         const float damage = estimatedDamage(localPawn,eye,target);
         const int minimum = GET_CONFIG_VAR(aimbot_vars::MinDamage);
         return damage >= static_cast<float>(minimum>0 ? minimum : 1);
-    }
-
-    static void scaleDamage(float& damage, int hitgroup, int armor, bool hasHelmet, float armorRatio, float headshotMultiplier) noexcept
-    {
-        switch (hitgroup) {
-        case 1: damage *= headshotMultiplier; break;
-        case 3: damage *= 1.25f; break;
-        case 6: case 7: damage *= 0.75f; break;
-        default: break;
-        }
-
-        const bool isHead = hitgroup == 1;
-        const bool isArmored = (hitgroup >= 1 && hitgroup <= 5) || hitgroup == 8;
-        if (armor <= 0 || !isArmored || (isHead && !hasHelmet)) {
-            damage = floorNonNegative(damage);
-            return;
-        }
-
-        constexpr float armorBonus = 0.5f;
-        const float armorRatioScaled = std::clamp(armorRatio * 0.5f, 0.0f, 1.0f);
-        float damageToHealth = damage * armorRatioScaled;
-        const float damageToArmor = (damage - damageToHealth) * armorBonus;
-        if (damageToArmor > static_cast<float>(armor))
-            damageToHealth = damage - (static_cast<float>(armor) / armorBonus);
-        damage = floorNonNegative(damageToHealth);
-    }
-
-    [[nodiscard]] static float floorNonNegative(float value) noexcept
-    {
-        return std::isfinite(value) ? std::floor(std::max(0.0f, value)) : 0.0f;
-    }
-
-    bool readTargetArmor(cs2::C_BaseEntity* entity, int& armorOut, bool& hasHelmetOut) const noexcept
-    {
-        if (!entity)
-            return false;
-        auto&& schema = hookContext.schemaSystem();
-
-        const auto armorOffset = schema.getFieldOffset("C_CSPlayerPawn", "m_ArmorValue");
-        if (!armorOffset.has_value() || *armorOffset <= 0) return false;
-        if (armorOffset.has_value() && *armorOffset > 0)
-            std::memcpy(&armorOut, reinterpret_cast<const std::byte*>(entity) + *armorOffset, sizeof(armorOut));
-
-        if (armorOut < 0) return false;
-        if (armorOut == 0) return true;
-
-        const auto servicesOffset = schema.getFieldOffset("C_BasePlayerPawn", "m_pItemServices");
-        if (!servicesOffset.has_value() || *servicesOffset <= 0)
-            return false;
-        void* services{};
-        std::memcpy(&services, reinterpret_cast<const std::byte*>(entity) + *servicesOffset, sizeof(services));
-        if (!services)
-            return false;
-        const auto helmetOffset = schema.getFieldOffset("CCSPlayer_ItemServices", "m_bHasHelmet");
-        if (!helmetOffset.has_value() || *helmetOffset <= 0)
-            return false;
-        std::memcpy(&hasHelmetOut, reinterpret_cast<const std::byte*>(services) + *helmetOffset, sizeof(hasHelmetOut));
-        return true;
     }
 
     [[nodiscard]] typename AimTarget<HookContext>::HitboxFlags hitboxFlags() const noexcept

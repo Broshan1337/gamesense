@@ -49,6 +49,7 @@ struct Impact {
     float distance;
     float thickness;
     int penetrations;
+    int hitgroup{-1};
 };
 
 // Neutral material estimate: entry/exit surface modifiers are not exposed by

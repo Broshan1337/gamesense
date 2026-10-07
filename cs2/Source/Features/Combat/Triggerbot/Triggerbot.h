@@ -126,7 +126,7 @@ public:
             return;
         if (!passesMaxAccuracyGate())
             return;
-        if (!passesVisibility(target))
+        if (!passesVisibility(target, cmd))
             return;
         if (!passesAimGates(target, cmd))
             return;
@@ -393,7 +393,7 @@ private:
     
     
     
-    [[nodiscard]] bool passesVisibility(auto&& target) const noexcept
+    [[nodiscard]] bool passesVisibility(auto&& target, cs2::CUserCmd* cmd) const noexcept
     {
         const bool wallCheck = GET_CONFIG_VAR(triggerbot_vars::WallCheck);
         const int autowallThickness = GET_CONFIG_VAR(triggerbot_vars::Autowall) ? static_cast<int>(GET_CONFIG_VAR(triggerbot_vars::AutowallMaxThickness)) : 0;
@@ -405,18 +405,21 @@ private:
         if (!eye.hasValue())
             return false;
 
-        auto&& node = target.baseEntity().gameSceneNode();
-        auto bone = node.bonePosition(kHeadBone);
-        if (!bone.hasValue())
-            bone = node.bonePosition(kChestBone);
-        if (!bone.hasValue())
-            return false;
+        const UserCmd command{cmd};
+        const auto pitch = command.viewPitch();
+        const auto yaw = command.viewYaw();
+        if (!pitch.hasValue() || !yaw.hasValue()) return false;
+        // Match the recoil correction performed by the later shot writer.
+        const auto punch = localPawn.aimPunchAngle();
+        if (!punch.hasValue()) return false;
+        const auto shots = localPawn.shotsFired();
+        const bool rcsApplied = GET_CONFIG_VAR(rcs_vars::Enabled) && shots.hasValue() && shots.value() >= 1;
+        const bool writerCorrectsPunch = GET_CONFIG_VAR(triggerbot_vars::SpreadCompensation) && !rcsApplied;
+        const auto direction = shot_geometry::angleVectors(pitch.value() + (writerCorrectsPunch ? 0.0f : punch.value().x),
+            yaw.value() + (writerCorrectsPunch ? 0.0f : punch.value().y)).forward;
 
         void* const skip = static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity());
         void* const targetEntity = static_cast<cs2::C_BaseEntity*>(target.baseEntity());
-
-        if (autowallThickness <= 0)
-            return Tracing::traceLine(eye.value(), bone.value(), skip, Autowall::kBulletMask).reaches(targetEntity);
 
         auto&& weapon = localPawn.getActiveWeapon();
         const auto damage = weapon.baseDamage();
@@ -424,17 +427,24 @@ private:
         const auto maxRange = weapon.maxRange();
         if (!damage.hasValue() || !rangeModifier.hasValue() || !maxRange.hasValue())
             return false;
+        if (!std::isfinite(maxRange.value()) || maxRange.value() <= 0) return false;
+        const cs2::Vector end{eye.value().x + direction.x * maxRange.value(),
+            eye.value().y + direction.y * maxRange.value(), eye.value().z + direction.z * maxRange.value()};
+        if (autowallThickness <= 0) {
+            const auto trace = Tracing::traceLine(eye.value(), end, skip, Autowall::kBulletMask);
+            return trace.valid && trace.didHit && trace.hitEntity == targetEntity;
+        }
         penetration::TraceBudget budget;
         const penetration::Limits limits{90.0f, float(autowallThickness), 4};
-        const auto impact = Autowall::evaluate(eye.value(), bone.value(), skip, targetEntity,
+        const auto impact = Autowall::evaluate(eye.value(), end, skip, targetEntity,
             {damage.value(), weapon.penetrationPower().valueOr(0.0f), rangeModifier.value(), maxRange.value()},
-            limits, budget, [&](void* entity) {
-                auto* raw = static_cast<cs2::C_BaseEntity*>(entity);
-                return raw && raw->identity && raw->identity->entityClass
-                    && hookContext.entityClassifier().initialized()
-                    && !hookContext.template make<BaseEntity>(raw).template is<PlayerPawn>();
-            });
-        return impact.hasValue() && impact.value().damage >= 1.0f;
+            limits, budget, hookContext);
+        if (!impact.hasValue() || (GET_CONFIG_VAR(triggerbot_vars::HeadOnly) && impact.value().hitgroup != 1)) return false;
+        const auto armorRatio = weapon.armorRatio();
+        const auto headMultiplier = weapon.headshotMultiplier();
+        if (!armorRatio.hasValue() || !headMultiplier.hasValue()) return false;
+        return Autowall::healthDamage(hookContext, targetEntity, impact.value().damage, impact.value().hitgroup,
+            armorRatio.value(), headMultiplier.value()).valueOr(0.0f) >= 1.0f;
     }
 
 

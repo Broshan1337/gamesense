@@ -35,6 +35,7 @@
 #include <Utils/ColorUtils.h>
 #include <Utils/NsStr.h>
 #include <Utils/StatusReport.h>
+#include <GameClient/Tracing/BulletSimulation.h>
 
 #include <Hooks/Graphics/VulkanHook.h>
 #include <Platform/Linux/LinuxPlatformApi.h>
@@ -3026,7 +3027,7 @@ void pageRageAccuracy() noexcept
         sliderVar<Hitchance>("Min Estimated Hitchance", ++controlId, "%");
         sliderVar<MinDamage>("Min Damage", ++controlId);
         toggleVar<WallCheck>("Shoot Visible", ++controlId);
-        toggleVar<Autowall>("Shoot Walls (Estimated)", ++controlId);
+        toggleVar<Autowall>(bullet_simulation::binding() ? "Shoot Walls (Engine)" : "Shoot Walls (Unavailable)", ++controlId);
     });
     addCard("EXTRAS", 2, [] {
         toggleVar<Extrapolate>("Lead Targets", ++controlId);
@@ -3111,7 +3112,7 @@ void pageLegitTriggerbot() noexcept
     });
     addCard("TRIGGERBOT VISIBILITY", 4, [] {
         toggleVar<triggerbot_vars::WallCheck>("Shoot Visible", ++controlId);
-        toggleVar<triggerbot_vars::Autowall>("Shoot Walls (Estimated)", ++controlId);
+        toggleVar<triggerbot_vars::Autowall>(bullet_simulation::binding() ? "Shoot Walls (Engine)" : "Shoot Walls (Unavailable)", ++controlId);
         sliderVar<triggerbot_vars::AutowallMaxThickness>("Max Total Wall Thickness", ++controlId, " u");
         toggleVar<triggerbot_vars::SeededFire>("Seeded Fire", ++controlId);
     });
