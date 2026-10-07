@@ -1,20 +1,17 @@
-/*
-** Target architecture selection.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #ifndef _LJ_ARCH_H
 #define _LJ_ARCH_H
 
 #include "lua.h"
 
-/* -- Target definitions -------------------------------------------------- */
 
-/* Target endianess. */
+
+
 #define LUAJIT_LE	0
 #define LUAJIT_BE	1
 
-/* Target architectures. */
+
 #define LUAJIT_ARCH_X86		1
 #define LUAJIT_ARCH_x86		1
 #define LUAJIT_ARCH_X64		2
@@ -32,7 +29,7 @@
 #define LUAJIT_ARCH_MIPS64	7
 #define LUAJIT_ARCH_mips64	7
 
-/* Target OS. */
+
 #define LUAJIT_OS_OTHER		0
 #define LUAJIT_OS_WINDOWS	1
 #define LUAJIT_OS_LINUX		2
@@ -40,15 +37,15 @@
 #define LUAJIT_OS_BSD		4
 #define LUAJIT_OS_POSIX		5
 
-/* Number mode. */
-#define LJ_NUMMODE_SINGLE	0	/* Single-number mode only. */
-#define LJ_NUMMODE_SINGLE_DUAL	1	/* Default to single-number mode. */
-#define LJ_NUMMODE_DUAL		2	/* Dual-number mode only. */
-#define LJ_NUMMODE_DUAL_SINGLE	3	/* Default to dual-number mode. */
 
-/* -- Target detection ---------------------------------------------------- */
+#define LJ_NUMMODE_SINGLE	0	
+#define LJ_NUMMODE_SINGLE_DUAL	1	
+#define LJ_NUMMODE_DUAL		2	
+#define LJ_NUMMODE_DUAL_SINGLE	3	
 
-/* Select native target if no target defined. */
+
+
+
 #ifndef LUAJIT_TARGET
 
 #if defined(__i386) || defined(__i386__) || defined(_M_IX86)
@@ -71,7 +68,7 @@
 
 #endif
 
-/* Select native OS if no target OS defined. */
+
 #ifndef LUAJIT_OS
 
 #if defined(_WIN32) && !defined(_XBOX_VER)
@@ -105,7 +102,7 @@
 
 #endif
 
-/* Set target OS properties. */
+
 #if LUAJIT_OS == LUAJIT_OS_WINDOWS
 #define LJ_OS_NAME	"Windows"
 #elif LUAJIT_OS == LUAJIT_OS_LINUX
@@ -182,9 +179,9 @@
 #endif
 #endif
 
-/* -- Arch-specific settings ---------------------------------------------- */
 
-/* Set target architecture properties. */
+
+
 #if LUAJIT_TARGET == LUAJIT_ARCH_X86
 
 #define LJ_ARCH_NAME		"x86"
@@ -208,7 +205,7 @@
 #define LJ_TARGET_X86ORX64	1
 #define LJ_TARGET_EHRETREG	0
 #define LJ_TARGET_EHRAREG	16
-#define LJ_TARGET_JUMPRANGE	31	/* +-2^31 = +-2GB */
+#define LJ_TARGET_JUMPRANGE	31	
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNALIGNED	1
@@ -221,24 +218,12 @@
 
 #if !defined(LJ_ABI_BRANCH_TRACK) && (__CET__ & 1) && \
     LJ_TARGET_GC64 && defined(LUAJIT_ENABLE_CET_BR)
-/*
-** Control-Flow Enforcement Technique (CET) indirect branch tracking (IBT).
-** This is not enabled by default because it causes a notable slowdown of
-** the interpreter on all x64 CPUs, whether they have CET enabled or not.
-** If your toolchain enables -fcf-protection=branch by default, you need
-** to build with: make amalg XCFLAGS=-DLUAJIT_ENABLE_CET_BR
-*/
+
 #define LJ_ABI_BRANCH_TRACK	1
 #endif
 
 #if !defined(LJ_ABI_SHADOW_STACK) && (__CET__ & 2)
-/*
-** Control-Flow Enforcement Technique (CET) shadow stack (CET-SS).
-** It has no code overhead and doesn't cause any slowdowns when unused.
-** It can also be unconditionally enabled since all code already follows
-** a strict CALL to RET correspondence for performance reasons (all modern
-** CPUs use a (non-enforcing) shadow stack for return branch prediction).
-*/
+
 #define LJ_ABI_SHADOW_STACK	1
 #endif
 
@@ -257,10 +242,10 @@
 #define LJ_TARGET_ARM		1
 #define LJ_TARGET_EHRETREG	0
 #define LJ_TARGET_EHRAREG	14
-#define LJ_TARGET_JUMPRANGE	25	/* +-2^25 = +-32MB */
+#define LJ_TARGET_JUMPRANGE	25	
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
-#define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
+#define LJ_TARGET_UNIFYROT	2	
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
 
 #if __ARM_ARCH >= 8 || __ARM_ARCH_8__ || __ARM_ARCH_8A__
@@ -290,16 +275,16 @@
 #endif
 #if !defined(LJ_ABI_BRANCH_TRACK) && (__ARM_FEATURE_BTI_DEFAULT & 1) && \
     defined(LUAJIT_ENABLE_CET_BR)
-/* See comments about LUAJIT_ENABLE_CET_BR above. */
+
 #define LJ_ABI_BRANCH_TRACK	1
 #endif
 #define LJ_TARGET_ARM64		1
 #define LJ_TARGET_EHRETREG	0
 #define LJ_TARGET_EHRAREG	30
-#define LJ_TARGET_JUMPRANGE	27	/* +-2^27 = +-128MB */
+#define LJ_TARGET_JUMPRANGE	27	
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
-#define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
+#define LJ_TARGET_UNIFYROT	2	
 #define LJ_TARGET_GC64		1
 #define LJ_PAGESIZE		16384
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
@@ -357,10 +342,10 @@
 #define LJ_TARGET_PPC		1
 #define LJ_TARGET_EHRETREG	3
 #define LJ_TARGET_EHRAREG	65
-#define LJ_TARGET_JUMPRANGE	25	/* +-2^25 = +-32MB */
+#define LJ_TARGET_JUMPRANGE	25	
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
-#define LJ_TARGET_UNIFYROT	1	/* Want only IR_BROL. */
+#define LJ_TARGET_UNIFYROT	1	
 
 #if LJ_TARGET_CONSOLE
 #define LJ_ARCH_PPC32ON64	1
@@ -461,10 +446,10 @@
 #define LJ_TARGET_MIPS		1
 #define LJ_TARGET_EHRETREG	4
 #define LJ_TARGET_EHRAREG	31
-#define LJ_TARGET_JUMPRANGE	28	/* 2^28 = 256MB-aligned region */
+#define LJ_TARGET_JUMPRANGE	28	
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
-#define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
+#define LJ_TARGET_UNIFYROT	2	
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
 
 #if LJ_TARGET_MIPSR6
@@ -479,9 +464,9 @@
 #error "No target architecture defined"
 #endif
 
-/* -- Checks for requirements --------------------------------------------- */
 
-/* Check for minimum required compiler versions. */
+
+
 #if defined(__GNUC__)
 #if LJ_TARGET_X86
 #if (__GNUC__ < 3) || ((__GNUC__ == 3) && __GNUC_MINOR__ < 4)
@@ -518,7 +503,7 @@
 #endif
 #endif
 
-/* Check target-specific constraints. */
+
 #ifndef _BUILDVM_H
 #if LJ_TARGET_X64
 #if __USING_SJLJ_EXCEPTIONS__
@@ -557,22 +542,22 @@
 #undef LJ_TARGET_MIPS
 #endif
 #if LJ_TARGET_MIPSR6
-/* Not that useful, since most available r6 CPUs are 64 bit. */
+
 #error "No support for MIPS32R6"
 #undef LJ_TARGET_MIPS
 #endif
 #elif LJ_TARGET_MIPS64
 #if !((defined(_MIPS_SIM_ABI64) && _MIPS_SIM == _MIPS_SIM_ABI64) || (defined(_ABI64) && _MIPS_SIM == _ABI64))
-/* MIPS32ON64 aka n32 ABI support might be desirable, but difficult. */
+
 #error "Only n64 ABI supported for MIPS64"
 #undef LJ_TARGET_MIPS
 #endif
 #endif
 #endif
 
-/* -- Derived defines ----------------------------------------------------- */
 
-/* Enable or disable the dual-number mode for the VM. */
+
+
 #if (LJ_ARCH_NUMMODE == LJ_NUMMODE_SINGLE && LUAJIT_NUMMODE == 2) || \
     (LJ_ARCH_NUMMODE == LJ_NUMMODE_DUAL && LUAJIT_NUMMODE == 1)
 #error "No support for this number mode on this architecture"
@@ -586,42 +571,42 @@
 #endif
 
 #if LJ_TARGET_IOS || LJ_TARGET_CONSOLE
-/* Runtime code generation is restricted on iOS. Complain to Apple, not me. */
-/* Ditto for the consoles. Complain to Sony or MS, not me. */
+
+
 #ifndef LUAJIT_ENABLE_JIT
 #define LJ_OS_NOJIT		1
 #endif
 #endif
 
-/* 64 bit GC references. */
+
 #if LJ_TARGET_GC64
 #define LJ_GC64			1
 #else
 #define LJ_GC64			0
 #endif
 
-/* 2-slot frame info. */
+
 #if LJ_GC64
 #define LJ_FR2			1
 #else
 #define LJ_FR2			0
 #endif
 
-/* Disable or enable the JIT compiler. */
+
 #if defined(LUAJIT_DISABLE_JIT) || defined(LJ_ARCH_NOJIT) || defined(LJ_OS_NOJIT)
 #define LJ_HASJIT		0
 #else
 #define LJ_HASJIT		1
 #endif
 
-/* Disable or enable the FFI extension. */
+
 #if defined(LUAJIT_DISABLE_FFI) || defined(LJ_ARCH_NOFFI)
 #define LJ_HASFFI		0
 #else
 #define LJ_HASFFI		1
 #endif
 
-/* Disable or enable the string buffer extension. */
+
 #if defined(LUAJIT_DISABLE_BUFFER)
 #define LJ_HASBUFFER		0
 #else
@@ -684,7 +669,7 @@
 #define LJ_PAGESIZE		4096
 #endif
 
-/* Various workarounds for embedded operating systems or weak C runtimes. */
+
 #if defined(__ANDROID__) || defined(__symbian__) || LJ_TARGET_XBOX360 || LJ_TARGET_WINDOWS
 #define LUAJIT_NO_LOG2
 #endif
@@ -726,42 +711,35 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #define LJ_UNWIND_JIT		0
 #endif
 
-/* Compatibility with Lua 5.1 vs. 5.2. */
+
 #ifdef LUAJIT_ENABLE_LUA52COMPAT
 #define LJ_52			1
 #else
 #define LJ_52			0
 #endif
 
-/* -- VM security --------------------------------------------------------- */
 
-/* Don't make any changes here. Instead build with:
-**   make "XCFLAGS=-DLUAJIT_SECURITY_flag=value"
-**
-** Important note to distro maintainers: DO NOT change the defaults for a
-** regular distro build -- neither upwards, nor downwards!
-** These build-time configurable security flags are intended for embedders
-** who may have specific needs wrt. security vs. performance.
-*/
 
-/* Security defaults. */
+
+
+
 #ifndef LUAJIT_SECURITY_PRNG
-/* PRNG init: 0 = fixed/insecure, 1 = secure from OS. */
+
 #define LUAJIT_SECURITY_PRNG	1
 #endif
 
 #ifndef LUAJIT_SECURITY_STRHASH
-/* String hash: 0 = sparse only, 1 = sparse + dense. */
+
 #define LUAJIT_SECURITY_STRHASH	1
 #endif
 
 #ifndef LUAJIT_SECURITY_STRID
-/* String IDs: 0 = linear, 1 = reseed < 255, 2 = reseed < 15, 3 = random. */
+
 #define LUAJIT_SECURITY_STRID	1
 #endif
 
 #ifndef LUAJIT_SECURITY_MCODE
-/* Machine code page protection: 0 = insecure RWX, 1 = secure RW^X. */
+
 #define LUAJIT_SECURITY_MCODE	1
 #endif
 

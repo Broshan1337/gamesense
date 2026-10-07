@@ -1,7 +1,7 @@
-// ============================================================================
-// Hook D body — animationsystem.dll ShouldUpdateSequences.
-// See header for FVA cross-reference.
-// ============================================================================
+
+
+
+
 #include "animation_hook.h"
 #include "../core/signature_scanner.h"
 #include "../version_manifest.h"
@@ -21,30 +21,30 @@ using ShouldUpdateSequencesFn =
 ShouldUpdateSequencesFn g_original = nullptr;
 void* s_installed_target = nullptr;
 
-// Anchor for ShouldUpdateSequences (from UnknownCheats research + verified
-// via mydisasm on legacy CS2 animationsystem.dll RVA 0x14EFF0):
-//   48 89 5C 24 08         mov [rsp+8], rbx
-//   48 89 74 24 18         mov [rsp+18h], rsi
-//   57                     push rdi
-//   48 83 EC 20            sub rsp, 20h
-//   49 8B 40 48            mov rax, [r8+48h]
+
+
+
+
+
+
+
 constexpr std::string_view k_target_anchor =
     "48 89 5C 24 08 48 89 74 24 18 57 48 83 EC 20 49 8B 40 48";
 
 bool __fastcall detour(void* self, void* networked_vars,
                         void* anim_graph_ctx) noexcept
 {
-    // FVA H4 mutation: clear networkedVars+0x30 to force anim graph to
-    // rebuild sequence state.  See UnknownCheats forum research on knife
-    // animation sequences.
-    //
-    // Guard against null networked_vars so we don't crash on early ticks.
+    
+    
+    
+    
+    
     if (networked_vars) {
         *reinterpret_cast<void**>(
             static_cast<std::uint8_t*>(networked_vars) + 0x30) = nullptr;
     }
 
-    if (!g_original) return true;   // fail-open: default to "yes update"
+    if (!g_original) return true;   
     return g_original(self, networked_vars, anim_graph_ctx);
 }
 
@@ -59,7 +59,7 @@ void* resolve_target()
            fva::version::known_rva::hook_d_target;
 }
 
-} // namespace
+} 
 
 bool install_animation_hook()
 {
@@ -93,4 +93,4 @@ void uninstall_animation_hook()
     g_original = nullptr;
 }
 
-} // namespace fva::hooks
+} 

@@ -48,19 +48,19 @@ public:
         decreaseNestingLevel();
     }
 
-    void boolean(const char8_t* key, auto&& valueSetter, auto&& /* valueGetter */)
+    void boolean(const char8_t* key, auto&& valueSetter, auto&& )
     {
         if (bool value; parseBool(key, value))
             valueSetter(value);
     }
 
-    void uint(const char8_t* key, auto&& valueSetter, auto&& /* valueGetter */)
+    void uint(const char8_t* key, auto&& valueSetter, auto&& )
     {
         if (std::uint64_t value; parseUint(key, value))
             valueSetter(value);
     }
 
-    void floating(const char8_t* key, auto&& valueSetter, auto&& /* valueGetter */)
+    void floating(const char8_t* key, auto&& valueSetter, auto&& )
     {
         if (float value; parseFloat(key, value))
             valueSetter(value);
@@ -208,8 +208,8 @@ private:
         return false;
     }
 
-    // Decimal float as written by ConfigToString ("0.85", "-1.25", "42"). Exact for <= 9
-    // fractional digits; good enough for UI range floats which are written with 2 decimals.
+    
+    
     [[nodiscard]] bool parseFloatValue(float& result) noexcept
     {
         bool negative = false;

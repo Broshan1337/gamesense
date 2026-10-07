@@ -13,13 +13,13 @@
 
 namespace ns_tf2 {
 
-// ---- session binding (see cs2/Source/Utils/SessionBind.h for the full rationale) ----
-//
-// The loader stamps every module it injects with a 64-byte trailer after the ELF image:
-// "NSHB02" | pad[2] | u64 loaderPid | loaderComm[16] | proof[32] = loaderComm XOR key.
-// A module re-injected standalone from a dump has no trailer -> fails closed (inert).
-// TF2 keeps the module mapped but installs NO hooks (no self-unload machinery here; the
-// loader can still dlclose it normally).
+
+
+
+
+
+
+
 constexpr unsigned kTrailerSize = 64;
 
 bool verifyInjectionTrailer(long long* loaderPidOut)
@@ -68,7 +68,7 @@ bool verifyInjectionTrailer(long long* loaderPidOut)
     }
     close(fd);
 
-    // "NSHB02" XOR-obfuscated (see cs2/Source/Utils/SessionBind.h)
+    
     static const unsigned char kMagicObf[6] = {0x14, 0x09, 0x12, 0x18, 0x6A, 0x68};
     unsigned char magic[6];
     for (int i = 0; i < 6; ++i)
@@ -78,9 +78,9 @@ bool verifyInjectionTrailer(long long* loaderPidOut)
     long long pid = 0;
     for (int i = 7; i >= 0; --i)
         pid = (pid << 8) | trailer[8 + i];
-    // The proof mixes the TARGET pid the loader stamped (2026-09-24): a copied memfd file
-    // re-injected elsewhere carries the old pid - proof mismatch -> bricked. The loader
-    // stamps proof = comm ^ key ^ targetPid; recompute with our own getpid().
+    
+    
+    
     const auto ownPid = static_cast<unsigned long long>(getpid());
     for (int i = 0; i < 32; ++i) {
         const auto targetByte = static_cast<unsigned char>((ownPid >> ((i % 8) * 8)) & 0xff);
@@ -93,10 +93,10 @@ bool verifyInjectionTrailer(long long* loaderPidOut)
 }
 
 
-// The install phase probes/patches live game state from a constructor running inside
-// dlopen. Two live SIGSEGVs (2026-09-14) killed the game because a faulting constructor
-// fails the dlopen AND the injector's fallback dlopen crashes the same way. The guard
-// turns any install-phase fault into "module inert" instead of a dead game.
+
+
+
+
 sigjmp_buf g_installJmp;
 void installFaultHandler(int, siginfo_t *, void *)
 {
@@ -128,8 +128,8 @@ bool runGuarded(void (*fn)(), const char *name)
 
 void installSteps()
 {
-    installVkPresentHook();     // iteration 1: public export inline hook (observer)
-    installVkPresentSlotHook(); // iteration 2: queue-wrapper dispatch-slot patch
+    installVkPresentHook();     
+    installVkPresentSlotHook(); 
 }
 
 void initModule()
@@ -138,8 +138,8 @@ void initModule()
     log("init: begin (render-hook iteration 2b: guarded pread slot scan)");
     long long loaderPid = 0;
     if (!verifyInjectionTrailer(&loaderPid)) {
-        // Fail-closed: no valid injection trailer = not injected by our loader (a dumped
-        // module re-injected standalone). Stay mapped but inert.
+        
+        
         log("init: no valid session trailer - module stays INERT");
         return;
     }
@@ -156,10 +156,10 @@ void shutdownModule()
     logShutdown();
 }
 
-} // namespace ns_tf2
+} 
 
-// The loader's gdb fallback dlcloses the module; keeping the constructor/destructor pair
-// symmetric means even an early unload session stays clean.
+
+
 __attribute__((constructor)) void ns_tf2_module_entry()
 {
     ns_tf2::initModule();

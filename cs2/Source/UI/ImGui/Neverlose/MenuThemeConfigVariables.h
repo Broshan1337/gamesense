@@ -6,15 +6,15 @@
 #include <Config/RangeConstrainedVariableParams.h>
 #include <Features/Hud/Watermark/WatermarkPanelParams.h>
 
-// Menu theme colors, editable in the profile popover with the RGBA channel picker. Defaults all
-// derive from the HUD watermark's text color (the user's picked green), readability-clamped the
-// same way the old compile-time accent was; changing the picker writes config, so the theme
-// persists.
+
+
+
+
 namespace menu_theme_vars
 {
 
-// Rec. 709 luminance, 0..1, plus the readable-on-dark clamp: too dark for the dark shell ->
-// lift toward white; near-white -> pulled back toward the shell so it stops glaring.
+
+
 constexpr float kMinReadableLuma = 0.42f;
 
 constexpr std::uint8_t lerpChannel(std::uint8_t c, std::uint8_t target, float t) noexcept
@@ -33,20 +33,20 @@ constexpr color::Rgba readableOnDark(color::Rgba color) noexcept
     return color;
 }
 
-// "Default v2": the Neversnooze logo's light purple, sampled from the swirl's highlight band.
-// Everything accent-tinted (nav, controls, glow defaults, HUD counters) keys off these.
+
+
 inline constexpr color::Rgba kDefaultAccent{150, 127, 238, 255};
 inline constexpr auto kDefaultButtonColor = color::Rgba{150, 127, 238, 255};
 inline constexpr auto kDefaultSliderColor = color::Rgba{150, 127, 238, 255};
 
-// Outer menu glow: MenuGlowColor tints the gaussian stamp around the shell (its alpha channel is
-// the glow strength); MenuGlowRainbow ignores the RGB channels and cycles hue over time at
-// MenuGlowSpeed (full rainbow cycle = 10 / speed seconds); alpha still applies in rainbow mode.
+
+
+
 inline constexpr auto kDefaultGlowColor = color::Rgba{150, 127, 235, 220};
 inline constexpr auto kGlowSpeed = RangeConstrainedVariableParams<float>{.min = 0.2f, .max = 10.0f, .def = 2.0f};
-// 15 keeps the stamp's corner curve at the shell's own s(17) rounding (the stamp maps its
-// 24px margin band 1:1 at s(12); curve radius on screen = 1.1667 x margin). Bigger sizes stretch
-// the corner radius proportionally - inherent to the 9-slice.
+
+
+
 inline constexpr auto kGlowSize = RangeConstrainedVariableParams<float>{.min = 6.0f, .max = 60.0f, .def = 15.0f};
 
 }
@@ -61,11 +61,11 @@ CONFIG_VARIABLE_RANGE(MenuGlowSpeed, menu_theme_vars::kGlowSpeed);
 CONFIG_VARIABLE_RANGE(MenuGlowSize, menu_theme_vars::kGlowSize);
 CONFIG_VARIABLE(MenuGlowDebug, bool, false);
 
-// Fading-RGB menu style: cycles the accent/button/slider colors' hue at MenuGlowSpeed (same
-// clock as the glow rainbow, so both fade in sync when both are on). Alpha channels of the
-// configured colors are kept.
+
+
+
 CONFIG_VARIABLE(MenuStyleRainbow, bool, false);
 
-// Accessibility: snaps every menu animation (motion(), page transitions, popovers) straight to
-// its target instead of easing - no slides, glows or stagger.
+
+
 CONFIG_VARIABLE(MenuReduceMotion, bool, false);

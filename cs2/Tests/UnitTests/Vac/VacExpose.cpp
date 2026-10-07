@@ -1,6 +1,6 @@
-// See VacExpose.h. Pure analysis tool: only reads /proc, ELF files and
-// target memory. No hooks, no patching, no writes except the test-only
-// synthetic patch the harness applies to itself.
+
+
+
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -30,9 +30,9 @@ namespace
 bool read_mem(pid_t pid, uintptr_t addr, void* out, size_t n, bool& ok)
 {
     if (is_self(pid)) {
-        // Fault-tolerant: a scanner routinely probes addresses that turn
-        // out unmapped (stale bias, vsyscall-style gaps). process_vm_readv
-        // against our own pid returns short instead of SIGSEGV.
+        
+        
+        
         struct iovec local{out, n};
         struct iovec remote{reinterpret_cast<void*>(addr), n};
         const ssize_t r = ::process_vm_readv(::getpid(), &local, 1, &remote, 1, 0);
@@ -68,13 +68,13 @@ std::string basename_of(const std::string& p)
     return (i == std::string::npos) ? p : p.substr(i + 1);
 }
 
-// Modules JMP_SLOTs may legitimately point into without suspicion: the
-// platform loader set, plus the module itself (handled by the caller via
-// exact path compare). Version suffixes vary by distro (libgcc_s.so.1 vs
-// libgcc_s-16-....so.1), so match on the soname stem, not equality.
-// Anything else hosting executable imports is worth a look;
-// anonymous/deleted/unmapped targets are critical. Heuristic, by design -
-// same caveat as the Windows helper's trusted list.
+
+
+
+
+
+
+
 bool host_is_usual(const std::string& base)
 {
     if (base == "[vdso]" || base == "[vvar]")
@@ -119,7 +119,7 @@ FileImage read_file(const std::string& path)
     return img;
 }
 
-} // namespace
+} 
 
 bool is_self(pid_t pid) noexcept
 {
@@ -150,7 +150,7 @@ std::vector<MapEntry> parse_maps(pid_t pid)
         e.perms = perms;
         e.offset = off;
         if (n >= 4) {
-            // Strip leading spaces from the path field.
+            
             const char* p = pbuf;
             while (*p == ' ' || *p == '\t')
                 ++p;
@@ -173,9 +173,9 @@ std::vector<ExecRegion> scan_exec_regions(pid_t pid)
                           m.path.find("(deleted)") != std::string::npos;
         if (!anon)
             continue;
-        // Kernel/loader artifacts ([vdso]/[vsyscall]/[vvar]/[stack]/...) can
-        // never be cheat mappings; the interesting anon set is empty-path
-        // (JITs, manual maps) and memfd/deleted file mappings.
+        
+        
+        
         if (!m.path.empty() && m.path[0] == '[')
             continue;
         ExecRegion r;
@@ -236,7 +236,7 @@ bool module_bias(pid_t pid, const char* substr, uintptr_t& bias, std::string& pa
             }
         }
     }
-    // Fallback: lowest mapping with that path when no offset-0 line exists.
+    
     if (bias == 0) {
         for (const auto& m : parse_maps(pid)) {
             if (m.path.find(substr) != std::string::npos) {
@@ -265,13 +265,13 @@ GotReport audit_got(pid_t pid, const char* modsubstr)
     const Elf64_Ehdr* eh = reinterpret_cast<const Elf64_Ehdr*>(img.bytes.data());
     if (memcmp(eh->e_ident, "\x7F" "ELF", 4) != 0)
         return rep;
-    // Non-PIE executables link at absolute addresses: adding the maps base
-    // would double-count (observed: every slot unreadable). DSOs/PIE need it.
+    
+    
     const uintptr_t bias = (eh->e_type == ET_DYN) ? map_base : 0;
     const Elf64_Phdr* ph =
         reinterpret_cast<const Elf64_Phdr*>(img.bytes.data() + eh->e_phoff);
 
-    // Locate PT_DYNAMIC in FILE offsets, then table pointers.
+    
     const Elf64_Dyn* dyn = nullptr;
     size_t dyn_count = 0;
     for (int i = 0; i < eh->e_phnum; ++i) {
@@ -284,7 +284,7 @@ GotReport audit_got(pid_t pid, const char* modsubstr)
     if (!dyn)
         return rep;
 
-    // Translate image vaddrs to file offsets via PT_LOAD.
+    
     auto to_off = [&](uint64_t v, uint64_t& off) {
         for (int i = 0; i < eh->e_phnum; ++i) {
             if (ph[i].p_type != PT_LOAD)
@@ -325,7 +325,7 @@ GotReport audit_got(pid_t pid, const char* modsubstr)
     if (!sym_v || !str_v || !jmp_v || !pltsz)
         return rep;
 
-    // String table size: cap the read (names are short; 1MB is plenty).
+    
     uint64_t sym_off = 0, str_off = 0, jmp_off = 0;
     if (!to_off(sym_v, sym_off) || !to_off(str_v, str_off) || !to_off(jmp_v, jmp_off))
         return rep;
@@ -349,7 +349,7 @@ GotReport audit_got(pid_t pid, const char* modsubstr)
         if (sym_fo + sizeof(Elf64_Sym) > img.bytes.size())
             continue;
         const Elf64_Sym* s = reinterpret_cast<const Elf64_Sym*>(img.bytes.data() + sym_fo);
-        // Bounded name read: never run past the image on a truncated file.
+        
         char namebuf[128];
         const uint64_t name_at = str_off + s->st_name;
         if (name_at >= img.bytes.size()) {
@@ -369,15 +369,15 @@ GotReport audit_got(pid_t pid, const char* modsubstr)
         bool ok = true;
         read_mem(pid, slot, &target, sizeof(target), ok);
         if (!ok) {
-            // Unreadable slot (unmapped bias edge, vsyscall-style gap):
-            // note it and continue with the rest, don't abort the module.
+            
+            
             rep.mem_ok = false;
             continue;
         }
         ++rep.slots_checked;
 
-        // Unresolved lazy/weak slots read as 0: nothing is hosted anywhere
-        // (common for transactional-memory/libstdc++ extras). Not a finding.
+        
+        
         if (target == 0)
             continue;
 
@@ -421,14 +421,14 @@ TextReport audit_text(pid_t pid, const char* modsubstr, size_t maxfindings)
     const Elf64_Ehdr* eh = reinterpret_cast<const Elf64_Ehdr*>(img.bytes.data());
     if (memcmp(eh->e_ident, "\x7F" "ELF", 4) != 0)
         return rep;
-    // Same ET_EXEC-vs-ET_DYN bias rule as audit_got.
+    
     const uintptr_t bias = (eh->e_type == ET_DYN) ? map_base : 0;
     const Elf64_Phdr* ph =
         reinterpret_cast<const Elf64_Phdr*>(img.bytes.data() + eh->e_phoff);
 
-    // RELA allowlist: bytes the loader legitimately rewrote (relocated
-    // pointers differ file-vs-memory by design). Built from section headers
-    // when present; otherwise we compare raw and say so.
+    
+    
+    
     struct Span {
         uint64_t lo, hi;
     };
@@ -440,7 +440,7 @@ TextReport audit_text(pid_t pid, const char* modsubstr, size_t maxfindings)
             if (sh[i].sh_type != SHT_RELA && sh[i].sh_type != SHT_REL)
                 continue;
             if (sh[i].sh_offset + sh[i].sh_size > img.bytes.size())
-                continue; // corrupt/truncated headers: skip, don't read OOB
+                continue; 
             const size_t n =
                 sh[i].sh_size / (sh[i].sh_type == SHT_RELA ? sizeof(Elf64_Rela) : sizeof(Elf64_Rel));
             for (size_t k = 0; k < n; ++k) {
@@ -502,7 +502,7 @@ TextReport audit_text(pid_t pid, const char* modsubstr, size_t maxfindings)
         return false;
     };
 
-    // Compare every RX (no-W) LOAD segment, chunked (no giant buffers).
+    
     for (int i = 0; i < eh->e_phnum; ++i) {
         if (ph[i].p_type != PT_LOAD)
             continue;
@@ -517,8 +517,8 @@ TextReport audit_text(pid_t pid, const char* modsubstr, size_t maxfindings)
             bool ok = true;
             read_mem(pid, bias + ph[i].p_vaddr + voff, mbuf, n, ok);
             if (!ok) {
-                // Mapping changed mid-scan (or unreadable hole): flag and
-                // continue with the next chunk instead of aborting.
+                
+                
                 rep.mem_ok = false;
                 voff += n;
                 left -= n;
@@ -547,4 +547,4 @@ TextReport audit_text(pid_t pid, const char* modsubstr, size_t maxfindings)
     return rep;
 }
 
-} // namespace expose
+} 

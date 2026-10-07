@@ -20,14 +20,14 @@ struct ConfigState {
     UniquePtr<platform::PathCharType[]> pathToConfigTempFile{};
     ConfigVariables configVariables{};
 
-    // The ACTIVE config = what autosave writes and what the navbar dropdown shows. Switching
-    // configs rebuilds the file paths; values in memory stay until the load replaces them.
-    static constexpr std::size_t kMaxConfigNameLength = 40;   // file name without the ".cfg"
-    char8_t activeConfigName[kMaxConfigNameLength + 5]{};     // + ".cfg" + NUL
+    
+    
+    static constexpr std::size_t kMaxConfigNameLength = 40;   
+    char8_t activeConfigName[kMaxConfigNameLength + 5]{};     
 
-    // Snapshot of "<configDir>/*.cfg" for the navbar dropdown, published to JS as attributes.
+    
     static constexpr std::uint8_t kMaxListedConfigs = 16;
-    static constexpr std::size_t kMaxListedNameLength = kMaxConfigNameLength + 4; // with ".cfg"
+    static constexpr std::size_t kMaxListedNameLength = kMaxConfigNameLength + 4; 
     std::uint8_t listedConfigCount{0};
     char8_t listedConfigs[kMaxListedConfigs][kMaxListedNameLength + 1]{};
     bool configListDirty{true};

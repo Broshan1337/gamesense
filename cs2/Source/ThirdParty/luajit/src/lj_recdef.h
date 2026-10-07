@@ -1,4 +1,4 @@
-/* This is a generated file. DO NOT EDIT! */
+
 
 static const uint16_t recff_idmap[] = {
 0,

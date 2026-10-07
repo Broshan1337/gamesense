@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstdint>
+#include <cstddef>
 
 struct PlayerInfoPanelCachePerHookState {
-    std::uint8_t nextEntryIndex{};
+    std::size_t nextEntryIndex{};
 };

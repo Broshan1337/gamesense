@@ -1,7 +1,4 @@
-/*
-** Object de/serialization.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #ifndef _LJ_SERIALIZE_H
 #define _LJ_SERIALIZE_H
@@ -11,7 +8,7 @@
 
 #if LJ_HASBUFFER
 
-#define LJ_SERIALIZE_DEPTH	100	/* Default depth. */
+#define LJ_SERIALIZE_DEPTH	100	
 
 LJ_FUNC void LJ_FASTCALL lj_serialize_dict_prep_str(lua_State *L, GCtab *dict);
 LJ_FUNC void LJ_FASTCALL lj_serialize_dict_prep_mt(lua_State *L, GCtab *dict);

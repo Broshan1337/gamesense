@@ -65,17 +65,22 @@ private:
         (updateOnePanel<PanelTypes>(childPanels[utils::typeIndex<PanelTypes, std::tuple<PanelTypes...>>()], playerPawn, analyzerOnly), ...);
     }
 
-    // analyzerOnly = the info-container is being driven ONLY by the CHEAT O METER tag (the
-    // Player Info visual itself is off, or this pawn is filtered out by its OnlyEnemies rule):
-    // every regular child stays untouched (its own config var keeps it hidden), only the tag
-    // panel updates.
+    
+    
+    
+    
     template <typename PanelType>
     void updateOnePanel(auto&& panel, auto&& playerPawn, bool analyzerOnly) const noexcept
     {
         if constexpr (std::is_same_v<PanelType, PlayerAnalyzerTagPanel<HookContext>>) {
             hookContext.template make<PanelType>(panel, cache).update(playerPawn);
         } else if (!analyzerOnly) {
+            // Restore a child hidden when this pooled panel was analyzer-only.
+            // Its update can then hide it again according to its own setting.
+            panel.setVisible(true);
             hookContext.template make<PanelType>(panel, cache).update(playerPawn);
+        } else {
+            panel.setVisible(false);
         }
     }
 

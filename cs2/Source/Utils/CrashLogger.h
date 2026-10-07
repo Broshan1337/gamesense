@@ -12,41 +12,41 @@
 #include <Utils/NsPaths.h>
 #include <Utils/NsStr.h>
 
-// Crash diagnostic logger (Linux). A SIGSEGV/SIGBUS inside a hook callback otherwise just kills
-// the game with a coredump that then needs a gdb session to decode. The handler writes the
-// faulting PC and fault address resolved to module+offset (any mapped module, not just ours -
-// the crash that motivated the module table sat in the Vulkan ICD), plus the breadcrumb trace
-// ring, to <exchangeRoot>/logs/gamesense_crash_<pid>_<tid>.txt (exchange root = $HOME/OsirisCS2,
-// see NsPaths.h; /tmp fallback when home is unusable). Feeding the two numbers into
-// scratchpad/crash_diag.py re-derives the crash site offline.
-//
-// Covered signals: SEGV/BUS/ILL (memory faults) plus ABRT/FPE/TRAP/SYS. The
-// abort family matters because abort-path deaths (heap corruption aborts,
-// terminate() under -fno-exceptions, seccomp traps) otherwise bypass this
-// logger entirely: Breakpad still owns those signals and its minidump goes
-// wherever Steam points it, leaving no local trace. Taking them over means
-// aborts now die with our log + a core dump instead of a minidump -
-// deliberate tradeoff, local diagnostics win for this project.
-//
-// Deliberately minimal inside the handler: open/write/close through the raw
-// platform API, no allocations, no symbol lookups, no printf-family calls -
-// signal-safety rules forbid everything else. The handler ends by restoring
-// the default disposition and re-raising so the normal crash path still runs;
-// it never returns through the interrupted frame.
-//
-// Known gap (not fixed here): SA_ONSTACK is set but no alt stack is
-// registered (sigaltstack is per-thread; registering only the installing
-// thread's would give a false sense of coverage), so a genuine stack
-// overflow still kills the handler with the stack.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 namespace CrashLogger
 {
     struct ModuleInfo {
         std::uintptr_t base{0};
-        std::uintptr_t extent{0};   // conservative: base of last mapping until end of its range
+        std::uintptr_t extent{0};   
         const char* name{"?"};
     };
 
-    // Filled once by scanMappedModules() during install (NOT in signal context).
+    
     inline ModuleInfo clientModule{0, 0, "libclient"};
     inline ModuleInfo ourModule{0, 0, "libMangoHud"};
 
@@ -58,15 +58,15 @@ namespace CrashLogger
         return n;
     }
 
-    // Every mapped file, recorded at install time so the handler can resolve ANY pc/fault
-    // address to "basename+offset" (driver ICDs, libc, the game's own modules - the crash that
-    // motivated this printed a raw pc because it sat in the Vulkan ICD, a module the two
-    // hardcoded entries below never knew about). Merged per basename across the many mapping
-    // lines one file produces.
-    // 4096: a Steam-runtime CS2 maps several hundred files, and the old 160 overflowed - the
-    // 2026-08-29 device-lost crash then dumped a raw pc because its module (high address,
-    // recorded late) never made the table. 512 overflowed AGAIN with the 2026-09-06 inject
-    // crash (pc in our own late-mapped memfd DSO printed raw). 4096 x 96B = ~393KB of BSS.
+    
+    
+    
+    
+    
+    
+    
+    
+    
     inline constexpr std::size_t kMaxModules = 4096;
     struct MappedModule {
         std::uintptr_t base{0};
@@ -76,11 +76,11 @@ namespace CrashLogger
     inline MappedModule modules[kMaxModules];
     inline std::size_t moduleCount{0};
 
-    // Diagnostic breadcrumbs. Features record small event codes at each step of risky paths
-    // (single 64-bit stores on the game thread); the signal handler dumps the tail of the ring
-    // with everything else, so a crash reports the exact last step instead of a PC to guess at.
-    // Deliberately plain (non-atomic) stores: writer and reader are the same thread, and torn
-    // reads are acceptable for diagnostics.
+    
+    
+    
+    
+    
     inline constexpr std::size_t kTraceCapacity = 64;
     inline volatile std::uint64_t traceRing[kTraceCapacity]{};
     inline std::uint32_t traceWriteIndex{0};
@@ -91,9 +91,9 @@ namespace CrashLogger
         ++traceWriteIndex;
     }
 
-    // Resolved once by install() into the writable exchange root (NsPaths.h - see its
-    // header comment for why this left /tmp). The handler only appends "<pid>_<tid>.txt",
-    // so it stays signal-safe: no getenv, no mkdir, no allocation here.
+    
+    
+    
     inline char crashFilePrefix[160] = "/tmp/gamesense_crash_";
     inline std::size_t crashFilePrefixLength = 21;
 
@@ -131,7 +131,7 @@ namespace CrashLogger
         writeAll(fd, buffer, static_cast<std::size_t>(i));
     }
 
-    // Prints an address as "module+offset" when it falls inside any recorded module, else raw hex.
+    
     inline void describeAddress(int fd, std::uintptr_t address) noexcept
     {
         for (std::size_t i = 0; i < moduleCount; ++i) {
@@ -174,8 +174,8 @@ namespace CrashLogger
     {
         if (low == 0 || high == 0 || low >= high)
             return;
-        // Memfd-loaded modules end in " (deleted)" (e.g. "/memfd:libMangoHud.so (deleted)"),
-        // so the suffix match below misses our own DSO - match it by prefix instead.
+        
+        
         if (lineMatches(pathStart, pathLength, "/libclient.so"))
             updateSpecialModule(clientModule, low, high);
         else if (pathLength >= 21 && std::memcmp(pathStart, "/memfd:libMangoHud.so", 21) == 0)
@@ -183,7 +183,7 @@ namespace CrashLogger
         else if (lineMatches(pathStart, pathLength, "libMangoHud.so"))
             updateSpecialModule(ourModule, low, high);
 
-        // Generic table: basename = text after the last '/'.
+        
         std::size_t nameStart = 0;
         for (std::size_t i = pathLength; i-- > 0;) {
             if (pathStart[i] == '/') {
@@ -199,7 +199,7 @@ namespace CrashLogger
         for (std::size_t i = 0; i < moduleCount; ++i) {
             auto& module = modules[i];
             if (module.end == low && std::memcmp(module.name, name, nameLength) == 0 && module.name[nameLength] == 0) {
-                module.end = high; // continuation of a file already recorded
+                module.end = high; 
                 return;
             }
         }
@@ -231,7 +231,7 @@ namespace CrashLogger
 
     inline void processMapLine(const char* lineStart, std::size_t lineLength) noexcept
     {
-        // Format: low-high perms offset dev inode path
+        
         std::size_t dash = 0;
         while (dash < lineLength && lineStart[dash] != '-')
             ++dash;
@@ -245,7 +245,7 @@ namespace CrashLogger
             return;
         const auto high = parseHex(lineStart + dash + 1, spaceAfterHigh - dash - 1);
 
-        // Path starts after the LAST space (perms/offset/dev/inode contain none).
+        
         std::size_t pathStart = 0;
         for (std::size_t i = lineLength; i-- > 0;) {
             if (lineStart[i] == ' ') {
@@ -254,15 +254,15 @@ namespace CrashLogger
             }
         }
         if (pathStart >= lineLength)
-            return;   // anonymous mapping
+            return;   
         noteMapping(low, high, lineStart + pathStart, lineLength - pathStart);
     }
 
-    // One-time pass over /proc/self/maps recording the lowest base and highest end per module of
-    // interest. Runs at injection time only, never inside the signal handler.
+    
+    
     inline void scanMappedModules() noexcept
     {
-        const int fd = LinuxPlatformApi::open("/proc/self/maps", 0 /* O_RDONLY */);
+        const int fd = LinuxPlatformApi::open("/proc/self/maps", 0 );
         if (fd < 0)
             return;
 
@@ -283,7 +283,7 @@ namespace CrashLogger
                 if (chunk[i] != '\n')
                     continue;
                 if (carryLength > 0) {
-                    // Line continued across chunk boundaries: finish it in the carry buffer.
+                    
                     const auto room = kMaxCarry - carryLength;
                     const auto part = (i - lineBegin) < room ? (i - lineBegin) : room;
                     std::memcpy(carry + carryLength, chunk + lineBegin, part);
@@ -305,7 +305,7 @@ namespace CrashLogger
         LinuxPlatformApi::close(fd);
     }
 
-    // Appends a decimal integer (signal-safety: no printf).
+    
     [[nodiscard]] inline char* appendDecimal(char* out, int value) noexcept
     {
         if (value < 0) {
@@ -336,19 +336,19 @@ namespace CrashLogger
     }
 
     extern "C" {
-    // inline: multiple TUs include this header now (GUI.cpp, VulkanHook.cpp breadcrumb their
-    // present-path stages); inline keeps the definition merged instead of multiply defined.
+    
+    
     inline void handleSignal(int signalNumber, siginfo_t* info, void* ucontextVoid) noexcept
     {
-        // guarded-call bounce BEFORE any report work: a thread that armed a CrashGuard
-        // expected a possible fault (network-transition windows) and handles the bounce itself
+        
+        
         crash_guard::bounceIfArmed();
 
         const std::uintptr_t pc = contextInstructionPointer(ucontextVoid);
 
-        // Per-THREAD file: two threads can fault near-simultaneously (seen 2026-09-06: two
-        // physics-event spew threads) and a shared path interleaved their writes line-by-line,
-        // producing a self-contradictory report (crash A's pc + crash B's registers).
+        
+        
+        
         char path[192];
         {
             char* w = path;
@@ -359,7 +359,7 @@ namespace CrashLogger
             w = appendDecimal(w, LinuxPlatformApi::threadId());
             std::memcpy(w, ".txt", 5);
         }
-        const int fd = LinuxPlatformApi::open(path, /* O_WRONLY|O_CREAT|O_TRUNC */ 0x41 | 01000);
+        const int fd = LinuxPlatformApi::open(path,  0x41 | 01000);
         if (fd >= 0) {
             NS_STR(brandCrash, "Neversnooze crash: signal ");
             appendString(fd, brandCrash);
@@ -371,9 +371,9 @@ namespace CrashLogger
             describeAddress(fd, pc);
             appendString(fd, "\nfault address = ");
             describeAddress(fd, info ? reinterpret_cast<std::uintptr_t>(info->si_addr) : 0);
-            // raw values + the two module bases that matter most: the table can still miss a
-            // module (mapped after the install scan, or the table overflowed) and these make
-            // the crash site computable by hand either way.
+            
+            
+            
             appendString(fd, "\npc raw = ");
             appendHex(fd, pc);
             appendString(fd, "\nfault raw = ");
@@ -385,8 +385,8 @@ namespace CrashLogger
             appendString(fd, "\nmodules recorded = ");
             appendHex(fd, moduleCount);
 
-            // General-purpose registers (resolved like pc) - with the disassembly of the faulting
-            // site this names exactly WHICH pointer was null and where it came from.
+            
+            
             if (auto* ucontext = static_cast<ucontext_t*>(ucontextVoid)) {
                 static constexpr const char* kRegNames[] = {"r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "rdi", "rsi", "rbp", "rbx", "rdx", "rax", "rcx", "rsp"};
                 for (int reg = 0; reg <= REG_RSP; ++reg) {
@@ -398,12 +398,12 @@ namespace CrashLogger
                 appendString(fd, "\nrip = ");
                 describeAddress(fd, static_cast<std::uintptr_t>(ucontext->uc_mcontext.gregs[REG_RIP]));
 
-                // The faulting instruction BYTES (up to 16, clamped inside the containing
-                // module). Decisive for in-module faults: symbol names can be ICF-folded or
-                // stale (the 2026-09-19 map-change SI_KERNEL crash burned a session on a
-                // folded "loadVariable" name), and for #GP/SI_KERNEL faults the reported RIP
-                // is a RETURN address, not the faulting instruction - the bytes are the only
-                // ground truth. Reading is safe: pc was attributed into a mapped module range.
+                
+                
+                
+                
+                
+                
                 {
                     std::uintptr_t codeEnd = 0;
                     for (std::size_t i = 0; i < moduleCount; ++i) {
@@ -430,9 +430,9 @@ namespace CrashLogger
                     }
                 }
 
-                // Poor-man's stack walk: the return-address chain lives on the stack; dumping the
-                // top of it resolved to module+offset usually shows who called into the faulting
-                // code (our hook frames would show as libMangoHud+... entries between game frames).
+                
+                
+                
                 appendString(fd, "\nstack:");
                 const auto* sp = reinterpret_cast<std::uintptr_t*>(ucontext->uc_mcontext.gregs[REG_RSP]);
                 for (int word = 0; word < 96; ++word) {
@@ -458,29 +458,29 @@ namespace CrashLogger
             LinuxPlatformApi::close(fd);
         }
 
-        // Default disposition + re-raise: chain into the normal crash path instead of returning.
+        
         struct sigaction sa{};
         sa.sa_handler = SIG_DFL;
         sigemptyset(&sa.sa_mask);
         sigaction(signalNumber, &sa, nullptr);
         raise(signalNumber);
-        _exit(128 + signalNumber);   // effectively unreachable; keeps the flow self-evident
+        _exit(128 + signalNumber);   
     }
     }
 
     inline void install() noexcept
     {
-        // Resolve the diagnostics root FIRST (NsPaths.h) so a crash in the earliest init
-        // stages already lands in a writable, host-visible directory.
+        
+        
         ns_paths::init();
         if (ns_paths::joinLog(crashFilePrefix, sizeof(crashFilePrefix), "gamesense_crash_"))
             crashFilePrefixLength = ns_paths::length(crashFilePrefix);
 
         scanMappedModules();
-        // Name-agnostic self-resolution: the generic table merged by basename can miss the
-        // memfd-loaded DSO (its maps line ends in " (deleted)", and OTHER deleted files merge
-        // into the same basename entry). Find whichever recorded module contains one of our
-        // own function addresses - that IS our module, whatever it is called in maps.
+        
+        
+        
+        
         const auto selfAddress = reinterpret_cast<std::uintptr_t>(&install);
         for (std::size_t i = 0; i < moduleCount; ++i) {
             if (modules[i].base <= selfAddress && selfAddress < modules[i].end) {
@@ -493,20 +493,20 @@ namespace CrashLogger
         sa.sa_sigaction = &handleSignal;
         sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
         sigemptyset(&sa.sa_mask);
-        // SEGV/BUS/ILL: memory faults. ABRT: abort()/terminate()/asserts (ours
-        // or the engine's - previously Breakpad-only, locally silent). FPE:
-        // arithmetic faults. TRAP: stray breakpoints. SYS: seccomp denials.
-        // SIGPIPE/XCPU/XFSZ deliberately excluded (semantically noisy, and the
-        // game may rely on default/ignored dispositions for them).
+        
+        
+        
+        
+        
         for (const int signalNumber : {SIGSEGV, SIGBUS, SIGILL, SIGABRT, SIGFPE, SIGTRAP, SIGSYS})
             sigaction(signalNumber, &sa, nullptr);
     }
 
-    // Re-asserts our handlers for signals the game has since replaced with its own. The
-    // engine/breakpad installs crash handlers lazily per subsystem - the 2026-09-13 airhorn
-    // crashes died with NO gamesense_crash report because our SIGABRT handler (installed at
-    // init) had been overwritten by the time the abort fired. Call this periodically (present
-    // thread); a sigaction query is a cheap syscall and this only rewrites drifted slots.
+    
+    
+    
+    
+    
     inline void reassert() noexcept
     {
         struct sigaction current{};

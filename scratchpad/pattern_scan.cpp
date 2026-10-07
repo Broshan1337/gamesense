@@ -1,18 +1,17 @@
-// Offline pattern uniqueness scanner (no game needed).
-//
-// Recreated 2026-09-23 for the 1.41.8.2 update (the original cs2/build/pattern_scan.cpp
-// did not survive the repo restructure). Same contract as the 2026-08-24 tool:
-//   * extract each module's .text with objcopy (driver script does this)
-//   * re-include the project's own MemoryPatterns.h pools (pattern vault included -
-//     getView() decrypts in place, exactly like the live module does)
-//   * count occurrences of EVERY pool pattern against its OWN module's .text
-//     (module scoping per AllMemoryPatternSearchResults.h - the #1 porting trap)
-//   * print pool + index + count + .text-relative match offsets for anything != 1
-// Identify a failing pattern by grepping its hex in cs2/Source/MemoryPatterns/Linux/*.h.
-//
-// Build: g++ -std=c++20 -O2 -I cs2/Source -o pattern_scan scratchpad/pattern_scan.cpp \
-//          -fconstexpr-depth=4096 -fbracket-depth=1024 -ftemplate-depth=2048
-// Run:   ./pattern_scan <dir-with-<module>.text-files>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -47,7 +46,7 @@ struct ModuleText {
     return size > 0 && got == out.bytes.size();
 }
 
-// Count + locate occurrences via the SAME finder the live module uses.
+
 [[nodiscard]] std::vector<std::size_t> occurrences(const ModuleText& module, BytePattern pattern)
 {
     std::vector<std::size_t> offsets;
@@ -58,14 +57,14 @@ struct ModuleText {
             break;
         offsets.push_back(static_cast<std::size_t>(hit - module.bytes.data()));
         if (offsets.size() >= 3)
-            break; // report at most 3 matches; >= 2 already means broken
+            break; 
     }
     return offsets;
 }
 
 
-// Pool-order -> pattern-name mapping straight from the pool's TypeList
-// (no source parsing - the earlier python mapper misordered multi-method headers).
+
+
 template <typename T>
 const char* typeName() noexcept { return __PRETTY_FUNCTION__; }
 
@@ -113,7 +112,7 @@ void scanPool(const char* poolName, Pool& pool, const ModuleText& module)
     std::printf("## %s: %d pattern(s) scanned, %d broken\n", poolName, index, bad);
 }
 
-} // namespace
+} 
 
 int main(int argc, char** argv)
 {

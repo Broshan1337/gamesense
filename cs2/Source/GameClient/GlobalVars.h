@@ -25,13 +25,13 @@ struct GlobalVars {
         return {};
     }
 
-    // The true tick duration (interval_per_tick), read straight out of the struct rather than from
-    // the ambiguous frametime pattern, and sanity-bounded to the range a real CS2 tickrate can
-    // produce (CS2 is 64-tick; 1/128..1/32 covers any conceivable server). The window matters:
-    // when the Aug-29 build moved interval_per_tick from 0x40 to 0x1C, the dead field at 0x40 fed
-    // denormal junk through the old 0..0.1 window and froze every sim dividing the tick by it -
-    // a value outside the real range means the offset is wrong, and 1/64 (velocity-cs2's own
-    // hardcoded constant) is the correct degradation on any current server.
+    
+    
+    
+    
+    
+    
+    
     [[nodiscard]] Optional<float> tickInterval() const noexcept
     {
         if (!globalVars)

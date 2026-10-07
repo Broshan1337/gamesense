@@ -19,21 +19,21 @@
 #include <Utils/Optional.h>
 #include <Utils/Trig.h>
 
-// The movement suite: edgejump, edgestop, slowwalk, fastladder, jumpbug - a faithful port of
-// velocity-cs2's features/movement/impl/{edgejump,edgestop,slowwalk,fastladder,jumpbug}.cpp with
-// the deviations this tree already uses everywhere:
-//
-//   * LIVE pawn state instead of the prediction pre-state (networked velocity/origin/flags read
-//     off the entity, the same documented substitution Lagcomp/extrapolation make),
-//   * ground/edge sweeps through Tracing::traceHull with the local pawn skipped (velocity uses a
-//     movement-services trace function whose signatures are Windows-only here - the bunnyhop's
-//     landing predictor already proved the hull-sweep route),
-//   * surface friction approximated as 1.0 (the reference reads it from prediction state).
-//
-// WRITE PATH (identical to Bunnyhop's, the reasons are measured there): decisions at CreateMove;
-// analog components forced at BuildUserCmd (slot 6 pre-original, feeding the command builder);
-// button words + view angles + subtick steps at WriteMoveCrc (slot 7 pre-original - the original
-// then copies the raw words into buttons_pb and checksums move_crc, so both reach the server).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 template <typename HookContext>
 class Movement {
 public:
@@ -65,7 +65,7 @@ public:
         if (!health.hasValue() || health.value() <= 0)
             return;
 
-        // ---- slowwalk: scale the analog movement down while ground-walking ------------------
+        
         if (GET_CONFIG_VAR(movement_vars::SlowWalk)) {
             const auto flags = entityFlags(localPawn);
             const auto moveType = moveTypeOf(localPawn);
@@ -86,7 +86,7 @@ public:
             }
         }
 
-        // ---- fastladder: re-aim + rewrite the movement for the ladder-optimal climb ----------
+        
         if (GET_CONFIG_VAR(movement_vars::FastLadder)) {
             const auto moveType = moveTypeOf(localPawn);
             if (moveType.hasValue() && moveType.value() == kMoveTypeLadder) {
@@ -97,18 +97,18 @@ public:
                 if (forward.hasValue() && left.hasValue() && (forward.value() != 0.0f || left.value() != 0.0f)
                     && viewYaw.hasValue() && viewPitch.hasValue()) {
 
-                    // Which way the player wants to go on the ladder: forward input climbs in the
-                    // view direction; with no forward input, looking up/down decides.
+                    
+                    
                     bool goingUp = false;
                     if (forward.value() > 0.01f || forward.value() < -0.01f)
                         goingUp = forward.value() > 0.0f;
                     else
                         goingUp = viewPitch.value() < 0.0f;
 
-                    // The re-aim: look straight down, yaw swung 90 degrees to the climb side, and
-                    // the analog pair swapped to the components that move fastest up the ladder
-                    // under the game's ladder-movement rules. The visible camera snap is what
-                    // fastladder IS (the reference does exactly this on the base message).
+                    
+                    
+                    
+                    
                     float modifiedYaw = viewYaw.value() + (goingUp ? -90.0f : 90.0f);
                     while (modifiedYaw > 180.0f)
                         modifiedYaw -= 360.0f;
@@ -129,7 +129,7 @@ public:
             }
         }
 
-        // ---- edgejump / edgestop: the edge machinery (mutually exclusive, like the reference) --
+        
         const bool edgeJump = GET_CONFIG_VAR(movement_vars::EdgeJump);
         const bool edgeStop = GET_CONFIG_VAR(movement_vars::EdgeStop) && !edgeJump;
         if (edgeJump || edgeStop) {
@@ -145,9 +145,9 @@ public:
 
                 if (edgeJump && speed2d >= 1.0f) {
                     if (const auto origin = localPawn.baseEntity().absOrigin(); origin.hasValue()) {
-                        // Jump when THIS tick is still grounded but the NEXT tick's predicted
-                        // position is already off the edge - the last grounded tick, which keeps
-                        // the full run speed into the jump.
+                        
+                        
+                        
                         const bool currentOnEdge = checkEdge(localPawn, origin.value(), velocity.value(), 1);
                         const bool nextOnEdge = checkEdge(localPawn, origin.value(), velocity.value(), 2);
                         if (nextOnEdge && !currentOnEdge
@@ -162,9 +162,9 @@ public:
                         const bool atEdge = checkEdge(localPawn, origin.value(), velocity.value(), 1);
                         bool approachingEdge = false;
                         if (!atEdge && speed2d > 1.0f) {
-                            // Sweep forward over the ticks friction needs to stop us: if the
-                            // player cannot stop before the floor ends, start counter-strafing
-                            // NOW (reference's approaching-edge prediction, surface friction 1.0).
+                            
+                            
+                            
                             const auto friction = conVarFloat<cs2::sv_friction>();
                             const auto stopSpeed = conVarFloat<cs2::sv_stopspeed>();
                             const auto tickInterval = hookContext.globalVars().tickInterval();
@@ -183,8 +183,8 @@ public:
                         if (atEdge || approachingEdge) {
                             const auto viewYaw = userCmd.viewYaw();
                             if (viewYaw.hasValue()) {
-                                // Counter-strafe along -velocity sized by the acceleration budget
-                                // (the reference's stop move), against the weapon's max speed.
+                                
+                                
                                 float weaponMaxSpeed = 250.0f;
                                 if (const auto maxSpeed = localPawn.getActiveWeapon().maxSpeed(); maxSpeed.hasValue() && maxSpeed.value() > 0.0f)
                                     weaponMaxSpeed = maxSpeed.value();
@@ -202,11 +202,11 @@ public:
                                 pendingForward = std::clamp(trig::cosine(rotation) * moveRatio, -1.0f, 1.0f);
                                 pendingLeft = std::clamp(trig::sine(rotation) * moveRatio * -1.0f, -1.0f, 1.0f);
 
-                                // The friend-source refinement while standing AT the edge: the
-                                // player's own wish direction (view + analog pair) decides whether
-                                // we intervene at all. Input aimed OFF the edge -> a gentle 0.3
-                                // push-back along -wish, and below 5 u/s we stop fighting their
-                                // input entirely. Input aimed ALONG the edge keeps the full brake.
+                                
+                                
+                                
+                                
+                                
                                 if (atEdge) {
                                     const auto forward = userCmd.forwardMove();
                                     const auto left = userCmd.leftMove();
@@ -237,7 +237,7 @@ public:
                                     if (pushBack) {
                                         pendingForward = std::clamp(trig::cosine(pushbackRotation) * 0.3f, -1.0f, 1.0f);
                                         pendingLeft = std::clamp(trig::sine(pushbackRotation) * -0.3f, -1.0f, 1.0f);
-                                        // the analog pair and the button words must agree (the blockbot lesson)
+                                        
                                         pendingBackButton = pendingForward < 0.0f;
                                         pendingForwardButton = pendingForward > 0.0f;
                                         pendingLeftButton = pendingLeft > 0.0f;
@@ -262,7 +262,7 @@ public:
             }
         }
 
-        // ---- jumpbug: bracket the predicted landing with duck + jump sub-tick transitions -------
+        
         if (GET_CONFIG_VAR(movement_vars::JumpBug)) {
             const auto flags = entityFlags(localPawn);
             const auto moveType = moveTypeOf(localPawn);
@@ -275,11 +275,11 @@ public:
                     if (const auto landing = predictLanding(localPawn, userCmd, velocity.value()); landing.hasValue()) {
                         pendingJumpBugWhen = landing.value();
                         pendingJumpBug = true;
-                        // The friend-source coordination: while the jumpbug bracket owns this
-                        // tick's landing, the bunnyhop's own landing predictor and the strafers
-                        // stand down (their steps would interleave with the bracket). Cleared
-                        // at the top of onCreateMove every tick; Bunnyhop reads it AFTER this
-                        // feature in the CreateMove hook order.
+                        
+                        
+                        
+                        
+                        
                         jumpBugActive = true;
                     }
                 }
@@ -307,14 +307,14 @@ public:
 
         const UserCmd userCmd{cmd};
 
-        // Edgejump: press the jump button on the last grounded tick (slot 7 copy reaches
-        // buttons_pb; the original then checksums the words into move_crc).
+        
+        
         if (pendingEdgeJump)
             userCmd.setButtonState(cs2::CCSGOInput::Buttons::kJump, true);
 
-        // Rewritten move buttons (fastladder / edgestop): clear all four, then set whichever the
-        // staged analog pair needs - the button words and the analog components have to agree
-        // (the blockbot lesson).
+        
+        
+        
         if (pendingClearMoveButtons) {
             constexpr auto kMoveMask = cs2::CCSGOInput::Buttons::kForward | cs2::CCSGOInput::Buttons::kBack
                 | cs2::CCSGOInput::Buttons::kMoveLeft | cs2::CCSGOInput::Buttons::kMoveRight;
@@ -329,14 +329,14 @@ public:
                 userCmd.setButtonState(cs2::CCSGOInput::Buttons::kMoveRight, true);
         }
 
-        // Fastladder's re-aim on the base message (move_crc covers view angles).
+        
         if (pendingViewAngles)
             userCmd.setViewAngles(pendingViewPitch, pendingViewYaw);
 
-        // Jumpbug: duck press at tick start, then duck release + jump release + jump press at the
-        // predicted touchdown fraction - the engine walks the steps in order, so the final
-        // transition at `when` is the jump press (CS2 jumps on the press edge) happening while the
-        // duck release has already lifted the hull off the ground contact.
+        
+        
+        
+        
         if (pendingJumpBug) {
             auto&& subtickMoves = hookContext.template make<SubtickMoves>();
             auto* const base = userCmd.baseMessage();
@@ -364,9 +364,9 @@ public:
         reset();
     }
 
-    // Shared per-tick coordination flag (see the jumpbug block): set while the jumpbug bracket
-    // owns the predicted landing, cleared at the top of every onCreateMove. Public so Bunnyhop
-    // (landing predictor) and TestStrafer (strafe injection) can stand down for that tick.
+    
+    
+    
     inline static bool jumpBugActive{false};
 
 private:
@@ -390,9 +390,9 @@ private:
         jumpBugActive = false;
     }
 
-    // ---- edge detection (velocity's check_edge): is there NO standable floor under the pawn's
-    // predicted position `ticksAhead` ticks from now? Sweeps the collision hull down a short
-    // stride; clear air or a too-shallow normal = no floor. -----------------------------------
+    
+    
+    
     [[nodiscard]] bool checkEdge(auto&& localPawn, const cs2::Vector& origin, const cs2::Vector& velocity, int ticksAhead) const noexcept
     {
         const auto tickInterval = hookContext.globalVars().tickInterval();
@@ -417,8 +417,8 @@ private:
         return result.fraction >= 1.0f || result.normal.z < standableNormal.value();
     }
 
-    // The friend-source SafeWalk variant of the same question, asked at an explicit position
-    // (no velocity extrapolation): is there no standable floor under this exact spot?
+    
+    
     [[nodiscard]] bool checkEdgeAt(auto&& localPawn, const cs2::Vector& position) const noexcept
     {
         const auto standableNormal = conVarFloat<cs2::sv_standable_normal>();
@@ -437,9 +437,9 @@ private:
         return result.fraction >= 1.0f || result.normal.z < standableNormal.value();
     }
 
-    // The reference's stair guard: a "no floor ahead" on a staircase is a STEP DOWN, not an edge.
-    // Scans laterally around the predicted position for ground within one step height (0.12..48
-    // units down); finding any suppresses the edge reaction for that tick.
+    
+    
+    
     [[nodiscard]] bool groundAheadHasStairStep(auto&& localPawn, const cs2::Vector& origin, const cs2::Vector& velocity, int ticksAhead) const noexcept
     {
         const auto tickInterval = hookContext.globalVars().tickInterval();
@@ -484,8 +484,8 @@ private:
         return false;
     }
 
-    // The bunnyhop's landing predictor, reused: gravity-integrated hull sweep for this tick, the
-    // touchdown fraction snapped to the 1/64 grid. jumpbug brackets exactly that moment.
+    
+    
     [[nodiscard]] Optional<float> predictLanding(auto&& localPawn, const UserCmd& userCmd, const cs2::Vector& velocity) const noexcept
     {
         auto* const pawnEntity = static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity());
@@ -518,9 +518,9 @@ private:
         if (result.fraction <= 0.0f || result.fraction >= 1.0f || result.normal.z < standableNormal.value())
             return {};
 
-        // The friend-source flat-surface gate: on a ramp or sloped ledge the duck/jump bracket
-        // fires at the wrong moment (the hull keeps sliding after the "touchdown") - the
-        // bracket is only worth writing on effectively flat ground.
+        
+        
+        
         if (result.normal.z < 0.985f)
             return {};
 
@@ -591,8 +591,8 @@ private:
         return *value;
     }
 
-    // MOVETYPE walk/ladder, from the game's own MOVETYPE name table (Bunnyhop's measurement:
-    // the "MOVETYPE_WALK" entry carries 2; MOVETYPE_LADDER is 9 in the same table).
+    
+    
     static constexpr std::uint8_t kMoveTypeWalk = 2;
     static constexpr std::uint8_t kMoveTypeLadder = 9;
     static constexpr std::uint32_t kOnGroundFlag = 0x1;

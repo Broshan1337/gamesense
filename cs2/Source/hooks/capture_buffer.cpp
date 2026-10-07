@@ -28,4 +28,4 @@ void cache_vtable_from(void* src) noexcept
     g_scratch.vtable = *reinterpret_cast<void**>(src);
 }
 
-} // namespace fva::capture_buffer
+} 

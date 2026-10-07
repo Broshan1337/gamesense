@@ -22,53 +22,53 @@
 #include <Utils/NsPaths.h>
 #include <Utils/VerifyConsole.h>
 
-// SOUND BOARD - in-process voice injection (replaces the host-script airhorn pipeline; the
-// ns_mic_board.sh pactl/ffmpeg/fifo pipeline is GONE - see project_soundboard_voice_injection).
-//
-// Design: a wav clip is decoded to 48kHz s16le mono PCM, encoded to opus with the GAME'S OWN
-// libopus (dlsym'd from libsoundsystem.so - exported), and sent as paced CCLCMsg_VoiceData
-// messages through the game's net channel via GameClient/NetMessageFactory.h - the exact
-// pipeline the Server Lagger uses for its voice flood, at normal voice cadence (~50 20ms
-// chunks/s). The server relays the frames to every listener like real voice; the voice gate
-// (+voicerecord) is irrelevant - injected messages transmit on their own.
-//
-// What this deletes vs the old pipeline: host spawns (present-thread freeze hiccups), the
-// PulseWire virtual-source + capture device switching (the _dl_close_worker crash class), the
-// fifo EOF spin hazard, the silence keeper, the scripts. Zero host traffic while idle.
-//
-// Thread rules: run() = CreateMove (game thread) - pacing, encoding, sending, keybind, wav load,
-// clip scan. onGameEvent = game thread (event triggers). The menu reads the clip-list statics.
-//
-// Opus frames: 20ms = 960 samples. Pacing: CreateMove ticks at 64/s add 15.625ms each; a chunk
-// leaves when the accumulator reaches 20ms -> exactly realtime (1.28 ticks/chunk).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 namespace soundboard
 {
 
-// 30s of 48kHz s16le mono PCM.
+
 inline constexpr std::size_t kMaxClipSamples = 48000 * 30;
 inline constexpr std::size_t kMaxClips = 64;
-inline constexpr int kSamplesPerFrame = 960; // 20ms @ 48kHz
+inline constexpr int kSamplesPerFrame = 960; 
 inline constexpr std::size_t kMaxClipName = 96;
 inline constexpr std::size_t kMaxPayload = 1024;
 inline constexpr std::size_t kFramedMax = kMaxPayload + 12;
 inline std::uint8_t framed[kFramedMax]{};
 
-// --- decoded clip + playback state (namespace statics: hookContext.make builds temporaries) --
+
 inline std::int16_t clipPcm[kMaxClipSamples]{};
-inline std::size_t clipSamples = 0;      // decoded length in samples
+inline std::size_t clipSamples = 0;      
 inline bool playing = false;
-inline std::size_t playPos = 0;          // sample offset of the next chunk
-inline float pacingAcc = 0.0f;           // ms accumulated vs 20ms frames
+inline std::size_t playPos = 0;          
+inline float pacingAcc = 0.0f;           
 inline char currentClip[kMaxClipName]{};
 
 inline pthread_mutex_t namesMutex = PTHREAD_MUTEX_INITIALIZER;
 inline char clipNames[kMaxClips][kMaxClipName]{};
 inline const char* clipNamePtrs[kMaxClips]{};
 inline int clipCount = 0;
-inline float clipScanAcc = 0.0f;         // seconds since the last scan
-inline bool firstBloodUsed = false;      // per-round first-blood trigger latch
+inline float clipScanAcc = 0.0f;         
+inline bool firstBloodUsed = false;      
 
-// opus (dlsym'd once per session; null = unavailable -> fail closed)
+
 inline void* opusEncoder = nullptr;
 inline bool opusFailed = false;
 
@@ -81,21 +81,21 @@ inline constexpr int kOpusSetBitrate = 4002;
 
 inline EncodeFn opusEncode = nullptr;
 
-// Debug dumps: the pre-encode PCM and the post-encode opus frames of every clip, so the actual
-// soundboard output can be played/decoded OFFLINE (paplay the raw; the frames decode with libopus).
-// Files: /tmp/ns_board_pcm_debug.raw (s16le 48k mono), /tmp/ns_board_opus_debug.frames
-// ([u16 len][frame] framing). Each chunk re-opens/appends/closes: the game's own fd management
-// closes arbitrary fd NUMBERS (one landed on our persistent dump fd mid-clip once - the dump
-// stayed 0 bytes with mode 000 from an omitted open() mode argument), so nothing long-lived.
-// Appends to a diagnostics file inside the exchange root (NsPaths.h); `name` is relative.
-// Reopened per call on purpose (comment below) - and callers pass plain file NAMES, so the
-// debug dumps follow the exchange root everywhere.
+
+
+
+
+
+
+
+
+
 inline void debugAppend(const char* name, const void* data, std::size_t length) noexcept
 {
     char path[ns_paths::kMaxPath];
     if (!ns_paths::join(path, sizeof(path), name))
         return;
-    const int fd = ::open(path, 0x401 /* O_WRONLY|O_APPEND */ | 0100 /* O_CREAT */, 0644);
+    const int fd = ::open(path, 0x401  | 0100 , 0644);
     if (fd < 0)
         return;
     static_cast<void>(::write(fd, data, length));
@@ -108,18 +108,18 @@ inline void debugAppend(const char* name, const void* data, std::size_t length) 
     return clientPointer ? net_messages::networkClientTick(clientPointer.get()) : 0;
 }
 
-// Builds the CMsgVoiceAudio/CCLCMsg_VoiceData envelope around one opus frame.
-// THE SCHEMA (decoded from the embedded netmessages.proto descriptor in libengine2 -
-// the friend-source payload had the audio in field 8 = packet_offsets and an EMPTY
-// voice_data, which is why it made lag but never played audio):
-//   CMsgVoiceAudio { optional enum format = 1; optional bytes voice_data = 2;
-//                   optional int32 sample_rate = 5; repeated int32 packet_offsets = 8; }
-//   CCLCMsg_VoiceData { optional CMsgVoiceAudio audio = 1; optional fixed64 xuid = 2; optional int32 tick = 3; }
+
+
+
+
+
+
+
 [[nodiscard]] inline std::size_t makeVoiceEnvelope(const std::uint8_t* frame, std::size_t frameLength,
                                                    std::uint32_t tick, std::uint64_t xuid, std::uint32_t voiceFormat,
                                                    std::uint8_t* out, std::size_t outCap) noexcept
 {
-    // CMsgVoiceAudio: format=2 (08 02) + voice_data=<opus> (12 <varint len>) + sample_rate=48000 (28 <varint>)
+    
     std::uint8_t audio[512];
     std::size_t audioLength = 0;
     audio[audioLength++] = 0x08;
@@ -128,34 +128,34 @@ inline void debugAppend(const char* name, const void* data, std::size_t length) 
     net_messages::appendVarint(audio, audioLength, static_cast<std::uint32_t>(frameLength));
     std::memcpy(audio + audioLength, frame, frameLength);
     audioLength += frameLength;
-    audio[audioLength++] = 0x28; // sample_rate = 48000
+    audio[audioLength++] = 0x28; 
     net_messages::appendVarint(audio, audioLength, 48000);
-    audio[audioLength++] = 0x38; // num_packets = 1
+    audio[audioLength++] = 0x38; 
     audio[audioLength++] = 0x01;
-    audio[audioLength++] = 0x40; // packet_offsets = [0]
+    audio[audioLength++] = 0x40; 
     audio[audioLength++] = 0x00;
 
     std::size_t offset = 0;
-    out[offset++] = 0x0A; // audio = 1, length-delimited
+    out[offset++] = 0x0A; 
     net_messages::appendVarint(out, offset, static_cast<std::uint32_t>(audioLength));
     std::memcpy(out + offset, audio, audioLength);
     offset += audioLength;
 
-    out[offset++] = 0x11; // xuid, fixed64: the LOCAL player's SteamID (the server may filter
-    // voice by sender identity - a zero xuid is the prime "nobody hears it" suspect)
+    out[offset++] = 0x11; 
+    
     for (int byte = 0; byte < 8; ++byte)
         out[offset++] = static_cast<std::uint8_t>(xuid >> (byte * 8u));
-    out[offset++] = 0x18; // tick
+    out[offset++] = 0x18; 
     net_messages::appendVarint(out, offset, tick);
     return offset <= outCap ? offset : 0;
 }
 
-// Loads a wav (16-bit PCM RIFF) and converts to 48kHz s16le mono into clipPcm. Stereo mixes
-// down; other sample rates get nearest-frame resampling. Returns false on any parse failure -
-// fail closed, never send garbage.
+
+
+
 [[nodiscard]] inline bool loadWav(const char* path) noexcept
 {
-    const int fd = ::open(path, 0 /* O_RDONLY */);
+    const int fd = ::open(path, 0 );
     if (fd < 0)
         return false;
 
@@ -193,13 +193,13 @@ inline void debugAppend(const char* name, const void* data, std::size_t length) 
             const std::size_t frameBytes = static_cast<std::size_t>(channels) * 2u;
             if (frameBytes == 0) { ::close(fd); return false; }
 
-            // read the data chunk into a scratch buffer (capped at 30s @ 48k stereo)
+            
             static std::uint8_t raw[48000 * 30 * 4];
             const std::size_t toRead = chunkSize < sizeof(raw) ? chunkSize : sizeof(raw);
             if (toRead < frameBytes || ::read(fd, raw, static_cast<ssize_t>(toRead)) != static_cast<ssize_t>(toRead)) { ::close(fd); return false; }
             const std::size_t sourceFrames = toRead / frameBytes;
 
-            // nearest-frame resample to 48kHz + stereo -> mono, into clipPcm
+            
             std::size_t out = 0;
             for (std::size_t outIndex = 0; out < kMaxClipSamples; ++outIndex) {
                 const std::size_t sourceIndex = static_cast<std::size_t>(static_cast<double>(outIndex) * static_cast<double>(sampleRate) / 48000.0);
@@ -225,8 +225,8 @@ inline void debugAppend(const char* name, const void* data, std::size_t length) 
     return false;
 }
 
-// Ensures the opus encoder exists (dlsym'd from the game's own libsoundsystem). Fail closed:
-// any unavailable symbol or ctl failure latches opusFailed for the session.
+
+
 inline void ensureOpus() noexcept
 {
     if (opusEncoder || opusFailed)
@@ -247,12 +247,12 @@ inline void ensureOpus() noexcept
         gui_log::write("radio: opus_encoder_create failed (%d) - soundboard disabled", error);
         return;
     }
-    ctl(encoder, kOpusSetBitrate, 64000); // normal voice bitrate; server relays frames as-is
+    ctl(encoder, kOpusSetBitrate, 64000); 
     opusEncoder = encoder;
 }
 
-// Scans <configDir>/sounds/*.wav into the clip list (game thread, 1s throttle - readdir is
-// cheap; the menu reads the resulting statics on the present thread).
+
+
 template <typename HookContext>
 inline void scanClips(HookContext& hookContext) noexcept
 {
@@ -292,9 +292,9 @@ inline void scanClips(HookContext& hookContext) noexcept
     pthread_mutex_unlock(&namesMutex);
 }
 
-} // namespace soundboard
+} 
 
-// The feature class itself (hookContext.make<soundboard::SoundBoard>()).
+
 namespace soundboard
 {
 
@@ -306,7 +306,7 @@ public:
     {
     }
 
-    // Game thread, CreateMove. Keybind edge detection, clip scan, pacing, sending.
+    
     void run() noexcept
     {
         if (!GET_CONFIG_VAR(radio_vars::AirhornEnabled)) {
@@ -319,13 +319,13 @@ public:
         if (opusFailed)
             return;
 
-        clipScanAcc += 15.625f; // ms per 64tps tick
+        clipScanAcc += 15.625f; 
         if (clipScanAcc >= 1000.0f) {
             clipScanAcc = 0.0f;
             scanClips(hookContext);
         }
 
-        // Sound Key: edge-triggered, plays the selected clip
+        
         const int key = GET_CONFIG_VAR(soundboard_vars::SoundKeyBind);
         const bool down = Bind::isDown(key);
         if (down && !keyWasDown && key != Bind::kOff)
@@ -335,7 +335,7 @@ public:
         if (!playing)
             return;
 
-        // pacing: 15.625ms per 64tps tick, chunk per 20ms
+        
         pacingAcc += 15.625f;
         if (pacingAcc < 20.0f)
             return;
@@ -344,14 +344,14 @@ public:
         sendChunk();
     }
 
-    // Game-event triggers - same rules the old airhorn honored (radio_vars toggles).
+    
     void onGameEvent(cs2::IGameEvent* event) noexcept
     {
         if (!event || !GET_CONFIG_VAR(radio_vars::AirhornEnabled))
             return;
 
         if (game_events::is(event, "round_end")) {
-            firstBloodUsed = false; // a new round means a new first blood
+            firstBloodUsed = false; 
             const int winner = game_events::intForKey(event, "winner", -1);
             if (!GET_CONFIG_VAR(radio_vars::AirhornRoundWin))
                 return;
@@ -383,8 +383,8 @@ public:
     }
 
 private:
-    // Resolves the selected clip from the scanned list and arms playback. Called on the game
-    // thread only.
+    
+    
     void startPlayback() noexcept
     {
         if (opusFailed)
@@ -413,16 +413,16 @@ private:
             return;
         }
         if (!opusEncoder) {
-            // ensureOpus ran on the last run(); a failed create latches opusFailed - silent here
+            
             return;
         }
         playing = true;
         playPos = 0;
-        pacingAcc = 20.0f; // send the first chunk on the next tick
+        pacingAcc = 20.0f; 
         chunksSent = 0;
     }
 
-    // Sends ONE 20ms chunk of the clip as a paced CCLCMsg_VoiceData.
+    
     void sendChunk() noexcept
     {
         const NetworkGameClientPointer clientPointer{};
@@ -432,7 +432,7 @@ private:
         }
         void* const channel = net_messages::getClientChannel(clientPointer.get());
         if (!channel || !net_messages::channelReady(channel))
-            return; // not connected: hold the position, resume when the channel returns
+            return; 
 
         if (!opusEncoder) {
             playing = false;
@@ -447,7 +447,7 @@ private:
             VerifyConsole::write(2.0f, "board", "clip finished (%u chunks sent)", chunksSent);
             return;
         }
-        std::memcpy(frame, clipPcm + playPos, take * sizeof(std::int16_t)); // tail stays zero-padded
+        std::memcpy(frame, clipPcm + playPos, take * sizeof(std::int16_t)); 
         playPos += take;
         debugAppend("ns_board_pcm_debug.raw", frame, take * sizeof(std::int16_t));
 
@@ -479,7 +479,7 @@ private:
         const bool accepted = net_messages::sendNetMessage(channel, message);
         net_messages::destroyMessage(message);
         if (!accepted)
-            return; // buffer full: drop the chunk, keep playing (realtime pacing continues)
+            return; 
         ++chunksSent;
         if (chunksSent == 1)
             VerifyConsole::write(2.0f, "board", "streaming clip (%d-byte opus chunks)", (int)payloadSize);
@@ -487,9 +487,9 @@ private:
         net_messages::transmitChannel(channel, "Sound Board");
     }
 
-    // The local player's SteamID64 for the voice xuid field, resolved once per session through
-    // the schema (CCSPlayerController.m_steamID). A zero xuid is the prime "server drops our
-    // voice" suspect - the server may filter relayed voice by sender identity.
+    
+    
+    
     void resolveLocalXuid() noexcept
     {
         if (xuidResolved)
@@ -517,4 +517,4 @@ private:
     std::uint32_t chunksSent = 0;
 };
 
-} // namespace soundboard
+} 

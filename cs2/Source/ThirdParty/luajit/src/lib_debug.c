@@ -1,10 +1,4 @@
-/*
-** Debug library.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-**
-** Major portions taken verbatim or adapted from the Lua interpreter.
-** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
-*/
+
 
 #define lib_debug_c
 #define LUA_LIB
@@ -19,7 +13,7 @@
 #include "lj_debug.h"
 #include "lj_lib.h"
 
-/* ------------------------------------------------------------------------ */
+
 
 #define LJLIB_MODULE_debug
 
@@ -65,7 +59,7 @@ LJLIB_CF(debug_setfenv)
   return 1;
 }
 
-/* ------------------------------------------------------------------------ */
+
 
 static void settabss(lua_State *L, const char *i, const char *v)
 {
@@ -126,7 +120,7 @@ LJLIB_CF(debug_getinfo)
   }
   if (!lj_debug_getinfo(L1, options, &ar, 1))
     lj_err_arg(L, arg+2, LJ_ERR_INVOPT);
-  lua_createtable(L, 0, 16);  /* Create result table. */
+  lua_createtable(L, 0, 16);  
   for (; *options; options++) {
     switch (*options) {
     case 'S':
@@ -155,7 +149,7 @@ LJLIB_CF(debug_getinfo)
   }
   if (opt_L) treatstackoption(L, L1, "activelines");
   if (opt_f) treatstackoption(L, L1, "func");
-  return 1;  /* Return result table. */
+  return 1;  
 }
 
 LJLIB_CF(debug_getlocal)
@@ -281,7 +275,7 @@ LJLIB_CF(debug_setuservalue)
 }
 #endif
 
-/* ------------------------------------------------------------------------ */
+
 
 #define KEY_HOOK	(U64x(81000000,00000000)|'h')
 
@@ -327,7 +321,7 @@ LJLIB_CF(debug_sethook)
   (void)getthread(L, &arg);
   if (lua_isnoneornil(L, arg+1)) {
     lua_settop(L, arg+1);
-    func = NULL; mask = 0; count = 0;  /* turn off hooks */
+    func = NULL; mask = 0; count = 0;  
   } else {
     const char *smask = luaL_checkstring(L, arg+2);
     luaL_checktype(L, arg+1, LUA_TFUNCTION);
@@ -346,18 +340,18 @@ LJLIB_CF(debug_gethook)
   char buff[5];
   int mask = lua_gethookmask(L);
   lua_Hook hook = lua_gethook(L);
-  if (hook != NULL && hook != hookf) {  /* external hook? */
+  if (hook != NULL && hook != hookf) {  
     lua_pushliteral(L, "external hook");
   } else {
     (L->top++)->u64 = KEY_HOOK;
-    lua_rawget(L, LUA_REGISTRYINDEX);   /* get hook */
+    lua_rawget(L, LUA_REGISTRYINDEX);   
   }
   lua_pushstring(L, unmakemask(mask, buff));
   lua_pushinteger(L, lua_gethookcount(L));
   return 3;
 }
 
-/* ------------------------------------------------------------------------ */
+
 
 LJLIB_CF(debug_debug)
 {
@@ -373,14 +367,14 @@ LJLIB_CF(debug_debug)
       fputs(s ? s : "(error object is not a string)", stderr);
       fputs("\n", stderr);
     }
-    lua_settop(L, 0);  /* remove eventual returns */
+    lua_settop(L, 0);  
   }
 }
 
-/* ------------------------------------------------------------------------ */
 
-#define LEVELS1	12	/* size of the first part of the stack */
-#define LEVELS2	10	/* size of the second part of the stack */
+
+#define LEVELS1	12	
+#define LEVELS2	10	
 
 LJLIB_CF(debug_traceback)
 {
@@ -394,7 +388,7 @@ LJLIB_CF(debug_traceback)
   return 1;
 }
 
-/* ------------------------------------------------------------------------ */
+
 
 #include "lj_libdef.h"
 

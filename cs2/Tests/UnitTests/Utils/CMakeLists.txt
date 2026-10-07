@@ -1,4 +1,6 @@
 target_sources(UnitTests PRIVATE
+  AimTargetTests.cpp
+  VisibilityCheckTests.cpp
   BitsTests.cpp
   EnumFlagsTests.cpp
   FlagsBuilderTests.cpp

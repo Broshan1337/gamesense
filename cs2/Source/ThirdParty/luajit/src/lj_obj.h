@@ -1,10 +1,4 @@
-/*
-** LuaJIT VM tags, values and objects.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-**
-** Portions taken verbatim or adapted from the Lua interpreter.
-** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
-*/
+
 
 #ifndef _LJ_OBJ_H
 #define _LJ_OBJ_H
@@ -13,9 +7,9 @@
 #include "lj_def.h"
 #include "lj_arch.h"
 
-/* -- Memory references --------------------------------------------------- */
 
-/* Memory and GC object sizes. */
+
+
 typedef uint32_t MSize;
 #if LJ_GC64
 typedef uint64_t GCSize;
@@ -23,12 +17,12 @@ typedef uint64_t GCSize;
 typedef uint32_t GCSize;
 #endif
 
-/* Memory reference */
+
 typedef struct MRef {
 #if LJ_GC64
-  uint64_t ptr64;	/* True 64 bit pointer. */
+  uint64_t ptr64;	
 #else
-  uint32_t ptr32;	/* Pseudo 32 bit pointer. */
+  uint32_t ptr32;	
 #endif
 } MRef;
 
@@ -48,20 +42,20 @@ typedef struct MRef {
 #define setmrefr(r, v)	((r).ptr32 = (v).ptr32)
 #endif
 
-/* -- GC object references ------------------------------------------------ */
 
-/* GCobj reference */
+
+
 typedef struct GCRef {
 #if LJ_GC64
-  uint64_t gcptr64;	/* True 64 bit pointer. */
+  uint64_t gcptr64;	
 #else
-  uint32_t gcptr32;	/* Pseudo 32 bit pointer. */
+  uint32_t gcptr32;	
 #endif
 } GCRef;
 
-/* Common GC header for all collectable objects. */
+
 #define GCHeader	GCRef nextgc; uint8_t marked; uint8_t gct
-/* This occupies 6 bytes, so use the next 2 bytes for non-32 bit fields. */
+
 
 #if LJ_GC64
 #define gcref(r)	((GCobj *)(r).gcptr64)
@@ -89,125 +83,71 @@ typedef struct GCRef {
 
 #define gcnext(gc)	(gcref((gc)->gch.nextgc))
 
-/* IMPORTANT NOTE:
-**
-** All uses of the setgcref* macros MUST be accompanied with a write barrier.
-**
-** This is to ensure the integrity of the incremental GC. The invariant
-** to preserve is that a black object never points to a white object.
-** I.e. never store a white object into a field of a black object.
-**
-** It's ok to LEAVE OUT the write barrier ONLY in the following cases:
-** - The source is not a GC object (NULL).
-** - The target is a GC root. I.e. everything in global_State.
-** - The target is a lua_State field (threads are never black).
-** - The target is a stack slot, see setgcV et al.
-** - The target is an open upvalue, i.e. pointing to a stack slot.
-** - The target is a newly created object (i.e. marked white). But make
-**   sure nothing invokes the GC inbetween.
-** - The target and the source are the same object (self-reference).
-** - The target already contains the object (e.g. moving elements around).
-**
-** The most common case is a store to a stack slot. All other cases where
-** a barrier has been omitted are annotated with a NOBARRIER comment.
-**
-** The same logic applies for stores to table slots (array part or hash
-** part). ALL uses of lj_tab_set* require a barrier for the stored value
-** *and* the stored key, based on the above rules. In practice this means
-** a barrier is needed if *either* of the key or value are a GC object.
-**
-** It's ok to LEAVE OUT the write barrier in the following special cases:
-** - The stored value is nil. The key doesn't matter because it's either
-**   not resurrected or lj_tab_newkey() will take care of the key barrier.
-** - The key doesn't matter if the *previously* stored value is guaranteed
-**   to be non-nil (because the key is kept alive in the table).
-** - The key doesn't matter if it's guaranteed not to be part of the table,
-**   since lj_tab_newkey() takes care of the key barrier. This applies
-**   trivially to new tables, but watch out for resurrected keys. Storing
-**   a nil value leaves the key in the table!
-**
-** In case of doubt use lj_gc_anybarriert() as it's rather cheap. It's used
-** by the interpreter for all table stores.
-**
-** Note: In contrast to Lua's GC, LuaJIT's GC does *not* specially mark
-** dead keys in tables. The reference is left in, but it's guaranteed to
-** be never dereferenced as long as the value is nil. It's ok if the key is
-** freed or if any object subsequently gets the same address.
-**
-** Not destroying dead keys helps to keep key hash slots stable. This avoids
-** specialization back-off for HREFK when a value flips between nil and
-** non-nil and the GC gets in the way. It also allows safely hoisting
-** HREF/HREFK across GC steps. Dead keys are only removed if a table is
-** resized (i.e. by NEWREF) and xREF must not be CSEd across a resize.
-**
-** The trade-off is that a write barrier for tables must take the key into
-** account, too. Implicitly resurrecting the key by storing a non-nil value
-** may invalidate the incremental GC invariant.
-*/
 
-/* -- Common type definitions --------------------------------------------- */
 
-/* Types for handling bytecodes. Need this here, details in lj_bc.h. */
-typedef uint32_t BCIns;  /* Bytecode instruction. */
-typedef uint32_t BCPos;  /* Bytecode position. */
-typedef uint32_t BCReg;  /* Bytecode register. */
-typedef int32_t BCLine;  /* Bytecode line number. */
 
-/* Internal assembler functions. Never call these directly from C. */
+
+
+typedef uint32_t BCIns;  
+typedef uint32_t BCPos;  
+typedef uint32_t BCReg;  
+typedef int32_t BCLine;  
+
+
 typedef void (*ASMFunction)(void);
 
-/* Resizable string buffer. Need this here, details in lj_buf.h. */
+
 #define SBufHeader	char *w, *e, *b; MRef L
 typedef struct SBuf {
   SBufHeader;
 } SBuf;
 
-/* -- Tags and values ----------------------------------------------------- */
 
-/* Frame link. */
+
+
 typedef union {
-  int32_t ftsz;		/* Frame type and size of previous frame. */
-  MRef pcr;		/* Or PC for Lua frames. */
+  int32_t ftsz;		
+  MRef pcr;		
 } FrameLink;
 
-/* Tagged value. */
+
 typedef LJ_ALIGN(8) union TValue {
-  uint64_t u64;		/* 64 bit pattern overlaps number. */
-  lua_Number n;		/* Number object overlaps split tag/value object. */
+  uint64_t u64;		
+  lua_Number n;		
 #if LJ_GC64
-  GCRef gcr;		/* GCobj reference with tag. */
+  GCRef gcr;		
   int64_t it64;
   struct {
     LJ_ENDIAN_LOHI(
-      int32_t i;	/* Integer value. */
-    , uint32_t it;	/* Internal object tag. Must overlap MSW of number. */
+      int32_t i;	
+    , uint32_t it;	
     )
   };
 #else
   struct {
     LJ_ENDIAN_LOHI(
       union {
-	GCRef gcr;	/* GCobj reference (if any). */
-	int32_t i;	/* Integer value. */
+	GCRef gcr;	
+	int32_t i;	
       };
-    , uint32_t it;	/* Internal object tag. Must overlap MSW of number. */
+    , uint32_t it;	
     )
   };
 #endif
 #if LJ_FR2
-  int64_t ftsz;		/* Frame type and size of previous frame, or PC. */
+  int64_t ftsz;		
 #else
   struct {
     LJ_ENDIAN_LOHI(
-      GCRef func;	/* Function for next frame (or dummy L). */
-    , FrameLink tp;	/* Link to previous frame. */
+      GCRef func;	
+    , FrameLink tp;	
     )
   } fr;
 #endif
   struct {
     LJ_ENDIAN_LOHI(
-      uint32_t lo;	/* Lower 32 bits of number. */
-    , uint32_t hi;	/* Upper 32 bits of number. */
+      uint32_t lo;	
+    , uint32_t hi;	
     )
   } u32;
 } TValue;
@@ -216,47 +156,12 @@ typedef const TValue cTValue;
 
 #define tvref(r)	(mref(r, TValue))
 
-/* More external and GCobj tags for internal objects. */
+
 #define LAST_TT		LUA_TTHREAD
 #define LUA_TPROTO	(LAST_TT+1)
 #define LUA_TCDATA	(LAST_TT+2)
 
-/* Internal object tags.
-**
-** Format for 32 bit GC references (!LJ_GC64):
-**
-** Internal tags overlap the MSW of a number object (must be a double).
-** Interpreted as a double these are special NaNs. The FPU only generates
-** one type of NaN (0xfff8_0000_0000_0000). So MSWs > 0xfff80000 are available
-** for use as internal tags. Small negative numbers are used to shorten the
-** encoding of type comparisons (reg/mem against sign-ext. 8 bit immediate).
-**
-**                  ---MSW---.---LSW---
-** primitive types |  itype  |         |
-** lightuserdata   |  itype  |  void * |  (32 bit platforms)
-** lightuserdata   |ffff|seg|    ofs   |  (64 bit platforms)
-** GC objects      |  itype  |  GCRef  |
-** int (LJ_DUALNUM)|  itype  |   int   |
-** number           -------double------
-**
-** Format for 64 bit GC references (LJ_GC64):
-**
-** The upper 13 bits must be 1 (0xfff8...) for a special NaN. The next
-** 4 bits hold the internal tag. The lowest 47 bits either hold a pointer,
-** a zero-extended 32 bit integer or all bits set to 1 for primitive types.
-**
-**                     ------MSW------.------LSW------
-** primitive types    |1..1|itype|1..................1|
-** GC objects         |1..1|itype|-------GCRef--------|
-** lightuserdata      |1..1|itype|seg|------ofs-------|
-** int (LJ_DUALNUM)   |1..1|itype|0..0|-----int-------|
-** number              ------------double-------------
-**
-** ORDER LJ_T
-** Primitive types nil/false/true must be first, lightuserdata next.
-** GC objects are at the end, table/userdata must be lowest.
-** Also check lj_ir.h for similar ordering constraints.
-*/
+
 #define LJ_TNIL			(~0u)
 #define LJ_TFALSE		(~1u)
 #define LJ_TTRUE		(~2u)
@@ -270,10 +175,10 @@ typedef const TValue cTValue;
 #define LJ_TCDATA		(~10u)
 #define LJ_TTAB			(~11u)
 #define LJ_TUDATA		(~12u)
-/* This is just the canonical number type used in some places. */
+
 #define LJ_TNUMX		(~13u)
 
-/* Integers have itype == LJ_TISNUM doubles have itype < LJ_TISNUM */
+
 #if LJ_64 && !LJ_GC64
 #define LJ_TISNUM		0xfffeffffu
 #else
@@ -284,7 +189,7 @@ typedef const TValue cTValue;
 #define LJ_TISGCV		(LJ_TSTR+1)
 #define LJ_TISTABUD		LJ_TTAB
 
-/* Type marker for slot holding a traversal index. Must be lightuserdata. */
+
 #define LJ_KEYINDEX		0xfffe7fffu
 
 #if LJ_GC64
@@ -292,24 +197,24 @@ typedef const TValue cTValue;
 #endif
 
 #if LJ_64
-/* To stay within 47 bits, lightuserdata is segmented. */
+
 #define LJ_LIGHTUD_BITS_SEG	8
 #define LJ_LIGHTUD_BITS_LO	(47 - LJ_LIGHTUD_BITS_SEG)
 #endif
 
-/* -- String object ------------------------------------------------------- */
 
-typedef uint32_t StrHash;	/* String hash value. */
-typedef uint32_t StrID;		/* String ID. */
 
-/* String object header. String payload follows. */
+typedef uint32_t StrHash;	
+typedef uint32_t StrID;		
+
+
 typedef struct GCstr {
   GCHeader;
-  uint8_t reserved;	/* Used by lexer for fast lookup of reserved words. */
-  uint8_t hashalg;	/* Hash algorithm. */
-  StrID sid;		/* Interned string ID. */
-  StrHash hash;		/* Hash of string. */
-  MSize len;		/* Size of string. */
+  uint8_t reserved;	
+  uint8_t hashalg;	
+  StrID sid;		
+  StrHash hash;		
+  MSize len;		
 } GCstr;
 
 #define strref(r)	(&gcref((r))->str)
@@ -317,44 +222,44 @@ typedef struct GCstr {
 #define strdatawr(s)	((char *)((s)+1))
 #define strVdata(o)	strdata(strV(o))
 
-/* -- Userdata object ----------------------------------------------------- */
 
-/* Userdata object. Payload follows. */
+
+
 typedef struct GCudata {
   GCHeader;
-  uint8_t udtype;	/* Userdata type. */
+  uint8_t udtype;	
   uint8_t unused2;
-  GCRef env;		/* Should be at same offset in GCfunc. */
-  MSize len;		/* Size of payload. */
-  GCRef metatable;	/* Must be at same offset in GCtab. */
-  uint32_t align1;	/* To force 8 byte alignment of the payload. */
+  GCRef env;		
+  MSize len;		
+  GCRef metatable;	
+  uint32_t align1;	
 } GCudata;
 
-/* Userdata types. */
+
 enum {
-  UDTYPE_USERDATA,	/* Regular userdata. */
-  UDTYPE_IO_FILE,	/* I/O library FILE. */
-  UDTYPE_FFI_CLIB,	/* FFI C library namespace. */
-  UDTYPE_BUFFER,	/* String buffer. */
+  UDTYPE_USERDATA,	
+  UDTYPE_IO_FILE,	
+  UDTYPE_FFI_CLIB,	
+  UDTYPE_BUFFER,	
   UDTYPE__MAX
 };
 
 #define uddata(u)	((void *)((u)+1))
 #define sizeudata(u)	(sizeof(struct GCudata)+(u)->len)
 
-/* -- C data object ------------------------------------------------------- */
 
-/* C data object. Payload follows. */
+
+
 typedef struct GCcdata {
   GCHeader;
-  uint16_t ctypeid;	/* C type ID. */
+  uint16_t ctypeid;	
 } GCcdata;
 
-/* Prepended to variable-sized or realigned C data objects. */
+
 typedef struct GCcdataVar {
-  uint16_t offset;	/* Offset to allocated memory (relative to GCcdata). */
-  uint16_t extra;	/* Extra space allocated (incl. GCcdata + GCcdatav). */
-  MSize len;		/* Size of payload. */
+  uint16_t offset;	
+  uint16_t extra;	
+  MSize len;		
 } GCcdataVar;
 
 #define cdataptr(cd)	((void *)((cd)+1))
@@ -364,54 +269,54 @@ typedef struct GCcdataVar {
 #define sizecdatav(cd)	(cdatavlen(cd) + cdatav(cd)->extra)
 #define memcdatav(cd)	((void *)((char *)(cd) - cdatav(cd)->offset))
 
-/* -- Prototype object ---------------------------------------------------- */
+
 
 #define SCALE_NUM_GCO	((int32_t)sizeof(lua_Number)/sizeof(GCRef))
 #define round_nkgc(n)	(((n) + SCALE_NUM_GCO-1) & ~(SCALE_NUM_GCO-1))
 
 typedef struct GCproto {
   GCHeader;
-  uint8_t numparams;	/* Number of parameters. */
-  uint8_t framesize;	/* Fixed frame size. */
-  MSize sizebc;		/* Number of bytecode instructions. */
+  uint8_t numparams;	
+  uint8_t framesize;	
+  MSize sizebc;		
 #if LJ_GC64
   uint32_t unused_gc64;
 #endif
   GCRef gclist;
-  MRef k;		/* Split constant array (points to the middle). */
-  MRef uv;		/* Upvalue list. local slot|0x8000 or parent uv idx. */
-  MSize sizekgc;	/* Number of collectable constants. */
-  MSize sizekn;		/* Number of lua_Number constants. */
-  MSize sizept;		/* Total size including colocated arrays. */
-  uint8_t sizeuv;	/* Number of upvalues. */
-  uint8_t flags;	/* Miscellaneous flags (see below). */
-  uint16_t trace;	/* Anchor for chain of root traces. */
-  /* ------ The following fields are for debugging/tracebacks only ------ */
-  GCRef chunkname;	/* Name of the chunk this function was defined in. */
-  BCLine firstline;	/* First line of the function definition. */
-  BCLine numline;	/* Number of lines for the function definition. */
-  MRef lineinfo;	/* Compressed map from bytecode ins. to source line. */
-  MRef uvinfo;		/* Upvalue names. */
-  MRef varinfo;		/* Names and compressed extents of local variables. */
+  MRef k;		
+  MRef uv;		
+  MSize sizekgc;	
+  MSize sizekn;		
+  MSize sizept;		
+  uint8_t sizeuv;	
+  uint8_t flags;	
+  uint16_t trace;	
+  
+  GCRef chunkname;	
+  BCLine firstline;	
+  BCLine numline;	
+  MRef lineinfo;	
+  MRef uvinfo;		
+  MRef varinfo;		
 } GCproto;
 
-/* Flags for prototype. */
-#define PROTO_CHILD		0x01	/* Has child prototypes. */
-#define PROTO_VARARG		0x02	/* Vararg function. */
-#define PROTO_FFI		0x04	/* Uses BC_KCDATA for FFI datatypes. */
-#define PROTO_NOJIT		0x08	/* JIT disabled for this function. */
-#define PROTO_ILOOP		0x10	/* Patched bytecode with ILOOP etc. */
-#define PROTO_BITOP		0x80	/* Uses bit operator bytecodes. */
-/* Only used during parsing. */
-#define PROTO_HAS_RETURN	0x20	/* Already emitted a return. */
-#define PROTO_FIXUP_RETURN	0x40	/* Need to fixup emitted returns. */
-/* Top bits used for counting created closures. */
-#define PROTO_CLCOUNT		0x20	/* Base of saturating 3 bit counter. */
-#define PROTO_CLC_BITS		3
-#define PROTO_CLC_POLY		(3*PROTO_CLCOUNT)  /* Polymorphic threshold. */
 
-#define PROTO_UV_LOCAL		0x8000	/* Upvalue for local slot. */
-#define PROTO_UV_IMMUTABLE	0x4000	/* Immutable upvalue. */
+#define PROTO_CHILD		0x01	
+#define PROTO_VARARG		0x02	
+#define PROTO_FFI		0x04	
+#define PROTO_NOJIT		0x08	
+#define PROTO_ILOOP		0x10	
+#define PROTO_BITOP		0x80	
+
+#define PROTO_HAS_RETURN	0x20	
+#define PROTO_FIXUP_RETURN	0x40	
+
+#define PROTO_CLCOUNT		0x20	
+#define PROTO_CLC_BITS		3
+#define PROTO_CLC_POLY		(3*PROTO_CLCOUNT)  
+
+#define PROTO_UV_LOCAL		0x8000	
+#define PROTO_UV_IMMUTABLE	0x4000	
 
 #define proto_kgc(pt, idx) \
   check_exp((uintptr_t)(intptr_t)(idx) >= ~(uintptr_t)(pt)->sizekgc+1u, \
@@ -428,43 +333,43 @@ typedef struct GCproto {
 #define proto_uvinfo(pt)	(mref((pt)->uvinfo, const uint8_t))
 #define proto_varinfo(pt)	(mref((pt)->varinfo, const uint8_t))
 
-/* -- Upvalue object ------------------------------------------------------ */
+
 
 typedef struct GCupval {
   GCHeader;
-  uint8_t closed;	/* Set if closed (i.e. uv->v == &uv->u.value). */
-  uint8_t immutable;	/* Immutable value. */
+  uint8_t closed;	
+  uint8_t immutable;	
   union {
-    TValue tv;		/* If closed: the value itself. */
-    struct {		/* If open: double linked list, anchored at thread. */
+    TValue tv;		
+    struct {		
       GCRef prev;
       GCRef next;
     };
   };
-  MRef v;		/* Points to stack slot (open) or above (closed). */
-  uint32_t dhash;	/* Disambiguation hash: dh1 != dh2 => cannot alias. */
+  MRef v;		
+  uint32_t dhash;	
 } GCupval;
 
 #define uvprev(uv_)	(&gcref((uv_)->prev)->uv)
 #define uvnext(uv_)	(&gcref((uv_)->next)->uv)
 #define uvval(uv_)	(mref((uv_)->v, TValue))
 
-/* -- Function object (closures) ------------------------------------------ */
 
-/* Common header for functions. env should be at same offset in GCudata. */
+
+
 #define GCfuncHeader \
   GCHeader; uint8_t ffid; uint8_t nupvalues; \
   GCRef env; GCRef gclist; MRef pc
 
 typedef struct GCfuncC {
   GCfuncHeader;
-  lua_CFunction f;	/* C function to be called. */
-  TValue upvalue[1];	/* Array of upvalues (TValue). */
+  lua_CFunction f;	
+  TValue upvalue[1];	
 } GCfuncC;
 
 typedef struct GCfuncL {
   GCfuncHeader;
-  GCRef uvptr[1];	/* Array of _pointers_ to upvalue objects (GCupval). */
+  GCRef uvptr[1];	
 } GCfuncL;
 
 typedef union GCfunc {
@@ -482,15 +387,15 @@ typedef union GCfunc {
 #define sizeCfunc(n)	(sizeof(GCfuncC)-sizeof(TValue)+sizeof(TValue)*(n))
 #define sizeLfunc(n)	(sizeof(GCfuncL)-sizeof(GCRef)+sizeof(GCRef)*(n))
 
-/* -- Table object -------------------------------------------------------- */
 
-/* Hash node. */
+
+
 typedef struct Node {
-  TValue val;		/* Value object. Must be first field. */
-  TValue key;		/* Key object. */
-  MRef next;		/* Hash chain. */
+  TValue val;		
+  TValue key;		
+  MRef next;		
 #if !LJ_GC64
-  MRef freetop;		/* Top of free elements (stored in t->node[0]). */
+  MRef freetop;		
 #endif
 } Node;
 
@@ -498,16 +403,16 @@ LJ_STATIC_ASSERT(offsetof(Node, val) == 0);
 
 typedef struct GCtab {
   GCHeader;
-  uint8_t nomm;		/* Negative cache for fast metamethods. */
-  int8_t colo;		/* Array colocation. */
-  MRef array;		/* Array part. */
+  uint8_t nomm;		
+  int8_t colo;		
+  MRef array;		
   GCRef gclist;
-  GCRef metatable;	/* Must be at same offset in GCudata. */
-  MRef node;		/* Hash part. */
-  uint32_t asize;	/* Size of array part (keys [0, asize-1]). */
-  uint32_t hmask;	/* Hash part mask (size of hash part - 1). */
+  GCRef metatable;	
+  MRef node;		
+  uint32_t asize;	
+  uint32_t hmask;	
 #if LJ_GC64
-  MRef freetop;		/* Top of free elements. */
+  MRef freetop;		
 #endif
 } GCtab;
 
@@ -523,23 +428,23 @@ typedef struct GCtab {
 #define setfreetop(t, n, v)	(setmref((n)->freetop, (v)))
 #endif
 
-/* -- State objects ------------------------------------------------------- */
 
-/* VM states. */
+
+
 enum {
-  LJ_VMST_INTERP,	/* Interpreter. */
-  LJ_VMST_C,		/* C function. */
-  LJ_VMST_GC,		/* Garbage collector. */
-  LJ_VMST_EXIT,		/* Trace exit handler. */
-  LJ_VMST_RECORD,	/* Trace recorder. */
-  LJ_VMST_OPT,		/* Optimizer. */
-  LJ_VMST_ASM,		/* Assembler. */
+  LJ_VMST_INTERP,	
+  LJ_VMST_C,		
+  LJ_VMST_GC,		
+  LJ_VMST_EXIT,		
+  LJ_VMST_RECORD,	
+  LJ_VMST_OPT,		
+  LJ_VMST_ASM,		
   LJ_VMST__MAX
 };
 
 #define setvmstate(g, st)	((g)->vmstate = ~LJ_VMST_##st)
 
-/* Metamethods. ORDER MM */
+
 #ifdef LJ_HASFFI
 #define MMDEF_FFI(_) _(new)
 #else
@@ -556,11 +461,11 @@ enum {
 
 #define MMDEF(_) \
   _(index) _(newindex) _(gc) _(mode) _(eq) _(len) \
-  /* Only the above (fast) metamethods are negative cached (max. 8). */ \
+   \
   _(lt) _(le) _(concat) _(call) \
-  /* The following must be in ORDER ARITH. */ \
+   \
   _(add) _(sub) _(mul) _(div) _(mod) _(pow) _(unm) \
-  /* The following are used in the standard libraries. */ \
+   \
   _(metatable) _(tostring) MMDEF_FFI(_) MMDEF_PAIRS(_)
 
 typedef enum {
@@ -572,16 +477,16 @@ MMDEF(MMENUM)
   MM_FAST = MM_len
 } MMS;
 
-/* GC root IDs. */
+
 typedef enum {
-  GCROOT_MMNAME,	/* Metamethod names. */
+  GCROOT_MMNAME,	
   GCROOT_MMNAME_LAST = GCROOT_MMNAME + MM__MAX-1,
-  GCROOT_BASEMT,	/* Metatables for base types. */
+  GCROOT_BASEMT,	
   GCROOT_BASEMT_NUM = GCROOT_BASEMT + ~LJ_TNUMX,
-  GCROOT_IO_INPUT,	/* Userdata for default I/O input file. */
-  GCROOT_IO_OUTPUT,	/* Userdata for default I/O output file. */
+  GCROOT_IO_INPUT,	
+  GCROOT_IO_OUTPUT,	
 #if LJ_HASFFI
-  GCROOT_FFI_FIN,	/* FFI finalizer table. */
+  GCROOT_FFI_FIN,	
 #endif
   GCROOT_MAX
 } GCRootID;
@@ -590,78 +495,78 @@ typedef enum {
 #define basemt_obj(g, o)	((g)->gcroot[GCROOT_BASEMT+itypemap(o)])
 #define mmname_str(g, mm)	(strref((g)->gcroot[GCROOT_MMNAME+(mm)]))
 
-/* Garbage collector state. */
+
 typedef struct GCState {
-  GCSize total;		/* Memory currently allocated. */
-  GCSize threshold;	/* Memory threshold. */
-  uint8_t currentwhite;	/* Current white color. */
-  uint8_t state;	/* GC state. */
+  GCSize total;		
+  GCSize threshold;	
+  uint8_t currentwhite;	
+  uint8_t state;	
   uint8_t unused0;
 #if LJ_64
-  uint8_t lightudnum;	/* Number of lightuserdata segments - 1. */
+  uint8_t lightudnum;	
 #else
   uint8_t unused1;
 #endif
-  MSize sweepstr;	/* Sweep position in string table. */
-  GCRef root;		/* List of all collectable objects. */
-  MRef sweep;		/* Sweep position in root list. */
-  GCRef gray;		/* List of gray objects. */
-  GCRef grayagain;	/* List of objects for atomic traversal. */
-  GCRef weak;		/* List of weak tables (to be cleared). */
-  GCRef mmudata;	/* List of userdata (to be finalized). */
-  GCSize debt;		/* Debt (how much GC is behind schedule). */
-  GCSize estimate;	/* Estimate of memory actually in use. */
-  MSize stepmul;	/* Incremental GC step granularity. */
-  MSize pause;		/* Pause between successive GC cycles. */
+  MSize sweepstr;	
+  GCRef root;		
+  MRef sweep;		
+  GCRef gray;		
+  GCRef grayagain;	
+  GCRef weak;		
+  GCRef mmudata;	
+  GCSize debt;		
+  GCSize estimate;	
+  MSize stepmul;	
+  MSize pause;		
 #if LJ_64
-  MRef lightudseg;	/* Upper bits of lightuserdata segments. */
+  MRef lightudseg;	
 #endif
 } GCState;
 
-/* String interning state. */
+
 typedef struct StrInternState {
-  GCRef *tab;		/* String hash table anchors. */
-  MSize mask;		/* String hash mask (size of hash table - 1). */
-  MSize num;		/* Number of strings in hash table. */
-  StrID id;		/* Next string ID. */
-  uint8_t idreseed;	/* String ID reseed counter. */
-  uint8_t second;	/* String interning table uses secondary hashing. */
+  GCRef *tab;		
+  MSize mask;		
+  MSize num;		
+  StrID id;		
+  uint8_t idreseed;	
+  uint8_t second;	
   uint8_t unused1;
   uint8_t unused2;
-  LJ_ALIGN(8) uint64_t seed;	/* Random string seed. */
+  LJ_ALIGN(8) uint64_t seed;	
 } StrInternState;
 
-/* Global state, shared by all threads of a Lua universe. */
+
 typedef struct global_State {
-  lua_Alloc allocf;	/* Memory allocator. */
-  void *allocd;		/* Memory allocator data. */
-  GCState gc;		/* Garbage collector. */
-  GCstr strempty;	/* Empty string. */
-  uint8_t stremptyz;	/* Zero terminator of empty string. */
-  uint8_t hookmask;	/* Hook mask. */
-  uint8_t dispatchmode;	/* Dispatch mode. */
-  uint8_t vmevmask;	/* VM event mask. */
-  StrInternState str;	/* String interning. */
-  volatile int32_t vmstate;  /* VM state or current JIT code trace number. */
-  GCRef mainthref;	/* Link to main thread. */
-  SBuf tmpbuf;		/* Temporary string buffer. */
-  TValue tmptv, tmptv2;	/* Temporary TValues. */
-  Node nilnode;		/* Fallback 1-element hash part (nil key and value). */
-  TValue registrytv;	/* Anchor for registry. */
-  GCRef vmthref;	/* Link to VM thread. */
-  GCupval uvhead;	/* Head of double-linked list of all open upvalues. */
-  int32_t hookcount;	/* Instruction hook countdown. */
-  int32_t hookcstart;	/* Start count for instruction hook counter. */
-  lua_Hook hookf;	/* Hook function. */
-  lua_CFunction wrapf;	/* Wrapper for C function calls. */
-  lua_CFunction panic;	/* Called as a last resort for errors. */
-  BCIns bc_cfunc_int;	/* Bytecode for internal C function calls. */
-  BCIns bc_cfunc_ext;	/* Bytecode for external C function calls. */
-  GCRef cur_L;		/* Currently executing lua_State. */
-  MRef jit_base;	/* Current JIT code L->base or NULL. */
-  MRef ctype_state;	/* Pointer to C type state. */
-  PRNGState prng;	/* Global PRNG state. */
-  GCRef gcroot[GCROOT_MAX];  /* GC roots. */
+  lua_Alloc allocf;	
+  void *allocd;		
+  GCState gc;		
+  GCstr strempty;	
+  uint8_t stremptyz;	
+  uint8_t hookmask;	
+  uint8_t dispatchmode;	
+  uint8_t vmevmask;	
+  StrInternState str;	
+  volatile int32_t vmstate;  
+  GCRef mainthref;	
+  SBuf tmpbuf;		
+  TValue tmptv, tmptv2;	
+  Node nilnode;		
+  TValue registrytv;	
+  GCRef vmthref;	
+  GCupval uvhead;	
+  int32_t hookcount;	
+  int32_t hookcstart;	
+  lua_Hook hookf;	
+  lua_CFunction wrapf;	
+  lua_CFunction panic;	
+  BCIns bc_cfunc_int;	
+  BCIns bc_cfunc_ext;	
+  GCRef cur_L;		
+  MRef jit_base;	
+  MRef ctype_state;	
+  PRNGState prng;	
+  GCRef gcroot[GCROOT_MAX];  
 } global_State;
 
 #define mainthread(g)	(&gcref(g->mainthref)->th)
@@ -671,7 +576,7 @@ typedef struct global_State {
 #define niltvg(g) \
   check_exp(tvisnil(&(g)->nilnode.val), &(g)->nilnode.val)
 
-/* Hook management. Hook event masks are defined in lua.h. */
+
 #define HOOK_EVENTMASK		0x0f
 #define HOOK_ACTIVE		0x10
 #define HOOK_ACTIVE_SHIFT	4
@@ -688,27 +593,27 @@ typedef struct global_State {
 #define hook_restore(g, h) \
   ((g)->hookmask = ((g)->hookmask & HOOK_EVENTMASK) | (h))
 
-/* Per-thread state object. */
+
 struct lua_State {
   GCHeader;
-  uint8_t dummy_ffid;	/* Fake FF_C for curr_funcisL() on dummy frames. */
-  uint8_t status;	/* Thread status. */
-  MRef glref;		/* Link to global state. */
-  GCRef gclist;		/* GC chain. */
-  TValue *base;		/* Base of currently executing function. */
-  TValue *top;		/* First free slot in the stack. */
-  MRef maxstack;	/* Last free slot in the stack. */
-  MRef stack;		/* Stack base. */
-  GCRef openupval;	/* List of open upvalues in the stack. */
-  GCRef env;		/* Thread environment (table of globals). */
-  void *cframe;		/* End of C stack frame chain. */
-  MSize stacksize;	/* True stack size (incl. LJ_STACK_EXTRA). */
+  uint8_t dummy_ffid;	
+  uint8_t status;	
+  MRef glref;		
+  GCRef gclist;		
+  TValue *base;		
+  TValue *top;		
+  MRef maxstack;	
+  MRef stack;		
+  GCRef openupval;	
+  GCRef env;		
+  void *cframe;		
+  MSize stacksize;	
 };
 
 #define G(L)			(mref(L->glref, global_State))
 #define registry(L)		(&G(L)->registrytv)
 
-/* Macros to access the currently executing (Lua) function. */
+
 #if LJ_GC64
 #define curr_func(L)		(&gcval(L->base-2)->fn)
 #elif LJ_FR2
@@ -726,9 +631,9 @@ LJ_FUNC_NORET void lj_assert_fail(global_State *g, const char *file, int line,
 				  const char *func, const char *fmt, ...);
 #endif
 
-/* -- GC object definition and conversions -------------------------------- */
 
-/* GC header for generic access to common fields of GC objects. */
+
+
 typedef struct GChead {
   GCHeader;
   uint8_t unused1;
@@ -738,15 +643,15 @@ typedef struct GChead {
   GCRef metatable;
 } GChead;
 
-/* The env field SHOULD be at the same offset for all GC objects. */
+
 LJ_STATIC_ASSERT(offsetof(GChead, env) == offsetof(GCfuncL, env));
 LJ_STATIC_ASSERT(offsetof(GChead, env) == offsetof(GCudata, env));
 
-/* The metatable field MUST be at the same offset for all GC objects. */
+
 LJ_STATIC_ASSERT(offsetof(GChead, metatable) == offsetof(GCtab, metatable));
 LJ_STATIC_ASSERT(offsetof(GChead, metatable) == offsetof(GCudata, metatable));
 
-/* The gclist field MUST be at the same offset for all GC objects. */
+
 LJ_STATIC_ASSERT(offsetof(GChead, gclist) == offsetof(lua_State, gclist));
 LJ_STATIC_ASSERT(offsetof(GChead, gclist) == offsetof(GCproto, gclist));
 LJ_STATIC_ASSERT(offsetof(GChead, gclist) == offsetof(GCfuncL, gclist));
@@ -764,7 +669,7 @@ typedef union GCobj {
   GCudata ud;
 } GCobj;
 
-/* Macros to convert a GCobj pointer into a specific value. */
+
 #define gco2str(o)	check_exp((o)->gch.gct == ~LJ_TSTR, &(o)->str)
 #define gco2uv(o)	check_exp((o)->gch.gct == ~LJ_TUPVAL, &(o)->uv)
 #define gco2th(o)	check_exp((o)->gch.gct == ~LJ_TTHREAD, &(o)->th)
@@ -774,12 +679,12 @@ typedef union GCobj {
 #define gco2tab(o)	check_exp((o)->gch.gct == ~LJ_TTAB, &(o)->tab)
 #define gco2ud(o)	check_exp((o)->gch.gct == ~LJ_TUDATA, &(o)->ud)
 
-/* Macro to convert any collectable object into a GCobj pointer. */
+
 #define obj2gco(v)	((GCobj *)(v))
 
-/* -- TValue getters/setters ---------------------------------------------- */
 
-/* Macros to test types. */
+
+
 #if LJ_GC64
 #define itype(o)	((uint32_t)((o)->it64 >> 47))
 #define tvisnil(o)	((o)->it64 == -1)
@@ -808,10 +713,10 @@ typedef union GCobj {
 
 #define tvistruecond(o)	(itype(o) < LJ_TISTRUECOND)
 #define tvispri(o)	(itype(o) >= LJ_TISPRI)
-#define tvistabud(o)	(itype(o) <= LJ_TISTABUD)  /* && !tvisnum() */
+#define tvistabud(o)	(itype(o) <= LJ_TISTABUD)  
 #define tvisgcv(o)	((itype(o) - LJ_TISGCV) > (LJ_TNUMX - LJ_TISGCV))
 
-/* Special macros to test numbers for NaN, +0, -0, +1 and raw equality. */
+
 #define tvisnan(o)	((o)->n != (o)->n)
 #if LJ_64
 #define tviszero(o)	(((o)->u64 << 1) == 0)
@@ -823,7 +728,7 @@ typedef union GCobj {
 #define tvispone(o)	((o)->u64 == U64x(3ff00000,00000000))
 #define rawnumequal(o1, o2)	((o1)->u64 == (o2)->u64)
 
-/* Macros to convert type ids. */
+
 #if LJ_64 && !LJ_GC64
 #define itypemap(o) \
   (tvisnumber(o) ? ~LJ_TNUMX : tvislightud(o) ? ~LJ_TLIGHTUD : ~itype(o))
@@ -831,7 +736,7 @@ typedef union GCobj {
 #define itypemap(o)	(tvisnumber(o) ? ~LJ_TNUMX : ~itype(o))
 #endif
 
-/* Macros to get tagged values. */
+
 #if LJ_GC64
 #define gcval(o)	((GCobj *)(gcrefu((o)->gcr) & LJ_GCVMASK))
 #else
@@ -869,7 +774,7 @@ static LJ_AINLINE void *lightudV(global_State *g, cTValue *o)
 #define numV(o)		check_exp(tvisnum(o), (o)->n)
 #define intV(o)		check_exp(tvisint(o), (int32_t)(o)->i)
 
-/* Macros to set tagged values. */
+
 #if LJ_GC64
 #define setitype(o, i)		((o)->it = ((i) << 15))
 #define setnilV(o)		((o)->it64 = -1)
@@ -911,7 +816,7 @@ static LJ_AINLINE void checklivetv(lua_State *L, TValue *o, const char *msg)
     lj_assertL(~itype(o) == gcval(o)->gch.gct,
 	       "mismatch of TValue type %d vs GC type %d",
 	       ~itype(o), gcval(o)->gch.gct);
-    /* Copy of isdead check from lj_gc.h to avoid circular include. */
+    
     lj_assertL(!(gcval(o)->gch.marked & (G(L)->gc.currentwhite ^ 3) & 3), msg);
   }
 #endif
@@ -973,67 +878,38 @@ static LJ_AINLINE void setint64V(TValue *o, int64_t i)
 #define setintptrV(o, i)	setintV((o), (i))
 #endif
 
-/* Copy tagged values. */
+
 static LJ_AINLINE void copyTV(lua_State *L, TValue *o1, const TValue *o2)
 {
   *o1 = *o2;
   checklivetv(L, o1, "copy of dead GC object");
 }
 
-/* -- Number to integer conversion ---------------------------------------- */
 
-/*
-** The C standard leaves many aspects of FP to integer conversions as
-** undefined behavior. Portability is a mess, hardware support varies,
-** and modern C compilers are like a box of chocolates -- you never know
-** what you're gonna get.
-**
-** However, we need 100% matching behavior between the interpreter (asm + C),
-** optimizations (C) and the code generated by the JIT compiler (asm).
-** Mixing Lua numbers with FFI numbers creates some extra requirements.
-**
-** These conversions have been moved to assembler code, even if they seem
-** trivial, to foil unanticipated C compiler 'optimizations' with the
-** surrounding code. Only the unchecked double to int32_t conversion
-** is still in C, because it ought to be pretty safe -- we'll see.
-**
-** These macros also serve to document all places where FP to integer
-** conversions happen.
-*/
 
-/* Unchecked double to int32_t conversion. */
+
+
+
 #define lj_num2int(n)		((int32_t)(n))
 
-/* Unchecked double to arch/os-dependent signed integer type conversion.
-** This assumes the 32/64-bit signed conversions are NOT range-extended.
-*/
+
 #define lj_num2int_type(n, tp)	((tp)(n))
 
-/* Convert a double to int32_t and check for exact conversion.
-** Returns the zero-extended int32_t on success. -0 is OK, too.
-** Returns 0x8000000080000000LL on failure (simplifies range checks).
-*/
+
 LJ_ASMF LJ_CONSTF int64_t lj_vm_num2int_check(double x);
 
-/* Check for exact conversion only, without storing the result. */
+
 #define lj_num2int_ok(x)	(lj_vm_num2int_check((x)) >= 0)
 
-/* Check for exact conversion and conditionally store result.
-** Note: conditions that fail for 0x80000000 may check only the lower
-** 32 bits. This generates good code for both 32 and 64 bit archs.
-*/
+
 #define lj_num2int_cond(x, i64, i, cond) \
   (i64 = lj_vm_num2int_check((x)), cond ? (i = (int32_t)i64, 1) : 0)
 
-/* This is the generic check for a full-range int32_t result. */
+
 #define lj_num2int_check(x, i64, i) \
   lj_num2int_cond((x), i64, i, i64 >= 0)
 
-/* Predictable conversion from double to int64_t or uint64_t.
-** Truncates towards zero. Out-of-range values, NaN and +-Inf return
-** an arch-dependent result, but do not cause C undefined behavior.
-** The uint64_t conversion accepts the union of the unsigned + signed range.
-*/
+
 LJ_ASMF LJ_CONSTF int64_t lj_vm_num2i64(double x);
 LJ_ASMF LJ_CONSTF uint64_t lj_vm_num2u64(double x);
 
@@ -1059,7 +935,7 @@ static LJ_AINLINE uint64_t lj_num2u64(double x)
 
 #endif
 
-/* Lua BitOp conversion semantics use the 2^52 + 2^51 trick. */
+
 LJ_ASMF LJ_CONSTF int32_t lj_vm_tobit(double x);
 
 #define lj_num2bit(x)	lj_vm_tobit((x))
@@ -1080,15 +956,15 @@ static LJ_AINLINE lua_Number numberVnum(cTValue *o)
     return numV(o);
 }
 
-/* -- Miscellaneous object handling --------------------------------------- */
 
-/* Names and maps for internal and external object tags. */
+
+
 LJ_DATA const char *const lj_obj_typename[1+LUA_TCDATA+1];
 LJ_DATA const char *const lj_obj_itypename[~LJ_TNUMX+1];
 
 #define lj_typename(o)	(lj_obj_itypename[itypemap(o)])
 
-/* Compare two objects without calling metamethods. */
+
 LJ_FUNC int LJ_FASTCALL lj_obj_equal(cTValue *o1, cTValue *o2);
 LJ_FUNC const void * LJ_FASTCALL lj_obj_ptr(global_State *g, cTValue *o);
 

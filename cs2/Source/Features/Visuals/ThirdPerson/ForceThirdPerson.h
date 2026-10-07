@@ -6,13 +6,13 @@
 #include <HookContext/HookContextMacros.h>
 #include <Utils/Trig.h>
 
-// FrameworkCS2 port (Source/Features/Visuals/ForceThirdPerson): repositions the camera behind
-// the eye position along the inverse view direction by overriding the view setup from the
-// ClientModeCSNormal::OverrideView hook (called AFTER the original, which fills the setup).
-//
-// Differences from the reference: the eye position comes from the pawn's own eyePosition()
-// (absOrigin + m_vecViewOffset) instead of a hardcoded 64/46 eye-height lerp, and observer
-// follow-cam support is not ported (local-only scope; alive-only v1).
+
+
+
+
+
+
+
 template <typename HookContext>
 class ForceThirdPerson {
 public:
@@ -34,10 +34,10 @@ public:
         if (!eye.hasValue())
             return;
 
-        // The ORIGINAL OverrideView just filled the view setup from the live camera - its angles
-        // ARE the first-person view, so the third-person camera orbits exactly with it. (The
-        // CSGOInput +0x7C0 angles the FrameworkCS2 reference reads turned out to NOT track the
-        // live view on this build - the camera stayed put while the player turned.)
+        
+        
+        
+        
         const auto& angles = ViewSetup::viewAngles(viewSetup);
         if (!looksLikeAngles(angles))
             return;
@@ -60,7 +60,7 @@ public:
         cameraPosition.x = eyePosition.x - viewDirection.x * distance;
         cameraPosition.y = eyePosition.y - viewDirection.y * distance;
         cameraPosition.z = eyePosition.z - viewDirection.z * distance;
-        // angles stay as the original wrote them - the camera looks where the first-person view looks
+        
     }
 
 private:

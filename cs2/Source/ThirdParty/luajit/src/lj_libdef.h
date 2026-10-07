@@ -1,4 +1,4 @@
-/* This is a generated file. DO NOT EDIT! */
+
 
 #ifdef LJLIB_MODULE_base
 #undef LJLIB_MODULE_base

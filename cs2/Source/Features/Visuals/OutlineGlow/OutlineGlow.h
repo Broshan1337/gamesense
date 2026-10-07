@@ -79,8 +79,8 @@ private:
             return glow.hue();
     }
 
-    // Glows exposing a ready-made color() (the player glow, which mixes hue-based and full RGBA
-    // color modes) use it as-is; every other glow still derives its color from a hue.
+    
+    
     [[nodiscard]] static cs2::Color getGlowColor(auto&& glow, auto&& entity, EntityTypeInfo entityTypeInfo)
     {
         if constexpr (requires { { glow.color(entityTypeInfo, entity) }; })

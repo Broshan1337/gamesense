@@ -27,16 +27,16 @@
 #include <Utils/StringBuilder.h>
 #include <Utils/Trig.h>
 
-// The watermark: a row of rounded "pill" chips pinned top-right of the HUD ROOT, in the style of
-// the modern server-picker HUDs - the brand chip ("Neversnooze", menu accent color) followed by
-// one chip per datum (fps / speed / ping / team damage / clock, near-white text + accent-tinted
-// icon) and the three feature chips (BT / EXP / COMP - backtracking, extrapolation, triggerbot
-// spread compensation - bright when enabled, dim gray when not). Every segment chip is
-// individually toggleable (Hud > Watermark); a hidden chip vanishes from the row entirely.
-// Purely cosmetic; the data behind every chip is already read elsewhere in the codebase.
-//
-// The row is created lazily on the first rendered frame; text refreshes at ~7 Hz so the speed
-// readout feels alive, while the FPS number itself is measured over >= 0.5 s windows.
+
+
+
+
+
+
+
+
+
+
 template <typename HookContext>
 class Watermark {
 public:
@@ -55,8 +55,8 @@ public:
         ++frameCount;
         const double elapsed = now - windowStart;
         if (elapsed >= 0.5 && frameCount > 0) {
-            // Measure over the window, then exponential-smooth the displayed value so the
-            // readout glides instead of jumping between integer snapshots.
+            
+            
             const int measured = static_cast<int>(static_cast<double>(frameCount) / elapsed + 0.5);
             frameCount = 0;
             windowStart = now;
@@ -66,7 +66,7 @@ public:
         auto&& panel = uiEngine().getPanelFromHandle(state().boxPanelHandle);
         if (!panel) {
             if (now - lastCreateAttempt < 1.0)
-                return;   // throttle creation attempts (no HUD in the main menu etc.)
+                return;   
             lastCreateAttempt = now;
             createPanel();
             return;
@@ -79,8 +79,8 @@ public:
         updateSegments();
         updateChips();
         applyBoxOffset();
-        // keep the accent-tinted parts (brand text + icons) in sync with the menu theme without
-        // restyling Panorama every frame: only write the style when the color actually changed
+        
+        
         if (const auto accent = GET_CONFIG_VAR(MenuAccentColor); static_cast<std::uint32_t>(accent) != state().lastAccentColor) {
             state().lastAccentColor = accent;
             applyAccentColor();
@@ -89,8 +89,8 @@ public:
 
     void onUnload() const noexcept
     {
-        // Children die with the root, but deleting by handle first keeps stale handles from
-        // outliving the panels they name (same pattern as the previous single-box version).
+        
+        
         for (auto& segment : state().segments) {
             uiEngine().deletePanelByHandle(segment.labelHandle);
             uiEngine().deletePanelByHandle(segment.iconHandle);
@@ -106,7 +106,7 @@ public:
     }
 
 private:
-    // One chip per toggleable datum; the enum order is the left-to-right chip order.
+    
     enum Segment { SegFps, SegSpeed, SegPing, SegTeamDamage, SegClock, SegCount };
 
     [[nodiscard]] bool segmentEnabled(Segment segment) const noexcept
@@ -145,9 +145,9 @@ private:
                 }
             }
 
-            // The reliable hide: fill to alpha 0 + cleared label. setVisible() can silently
-            // no-op when the panel's visible-flag read misresolves - an invisible-but-rendered
-            // chip is exactly the bug this avoids.
+            
+            
+            
             if (!hasText) {
                 if (segmentShown[i]) {
                     box.setBackgroundColor(chip_panel::kFillColor.setAlpha(0));
@@ -158,7 +158,7 @@ private:
             }
 
             if (!segmentShown[i]) {
-                box.setBackgroundColor(chip_panel::kFillColor); // restore after a hide
+                box.setBackgroundColor(chip_panel::kFillColor); 
                 segmentShown[i] = true;
             }
             label.clientPanel().template as<PanoramaLabel>().setText(builder.cstring());
@@ -174,7 +174,7 @@ private:
         return true;
     }
 
-    // 2D magnitude of the local pawn's m_vecAbsVelocity (schema-resolved - no hardcoded offset).
+    
     [[nodiscard]] Optional<float> localSpeed() const noexcept
     {
         auto&& localPawn = hookContext.activeLocalPlayerPawn();
@@ -200,8 +200,8 @@ private:
         return true;
     }
 
-    // The local controller occupies entity index slot+1 (see PlayerSlotLookup) - its handle's
-    // index therefore IS our slot + 1.
+    
+    
     [[nodiscard]] int myTeamDamageDealt() const noexcept
     {
         const auto handle = hookContext.localPlayerController().baseEntity().handle();
@@ -223,7 +223,7 @@ private:
         return true;
     }
 
-    // The accent-tinted parts of the row: the brand chip's text and every segment icon.
+    
     void applyAccentColor() const noexcept
     {
         using namespace watermark_panel_params;
@@ -242,8 +242,8 @@ private:
         }
     }
 
-    // The watermark's accent-tinted parts follow the menu theme's accent color (Menu > Style /
-    // Accent), so switching the menu theme recolors the HUD watermark too.
+    
+    
     [[nodiscard]] cs2::Color accentColor() const noexcept
     {
         const auto accent = GET_CONFIG_VAR(MenuAccentColor);
@@ -273,8 +273,8 @@ private:
         }
     }
 
-    // The chip row hangs off the top-right corner; the offset is user-configurable
-    // (Hud > Watermark > X/Y Offset). Only written to Panorama when the value changes.
+    
+    
     void applyBoxOffset() const noexcept
     {
         const int offsetX = GET_CONFIG_VAR(watermark_vars::OffsetX);
@@ -297,7 +297,7 @@ private:
         if (!panel)
             return;
 
-        // Transparent flow container - the chips carry all the paint. Anchored top-right.
+        
         panel.setFlowChildren(cs2::k_EFlowRight);
         panel.setAlign(kAlignment);
         panel.setMargin(PanelMarginParams{
@@ -305,7 +305,7 @@ private:
             .marginRight = cs2::CUILength::pixels(GET_CONFIG_VAR(watermark_vars::OffsetX))});
         state().boxPanelHandle = panel.getHandle();
 
-        // Brand chip: "Neversnooze" in the accent color, leading the row.
+        
         auto&& brandBox = chip_panel::createChipPanel(hookContext, panel, kChipGap, 100.0f);
         if (brandBox) {
             state().brandBoxHandle = brandBox.getHandle();
@@ -354,8 +354,8 @@ private:
             }
         }
 
-        // Feature chips (BT / EXP / COMP): text-only chips, accent when the feature is live.
-        // Centered on the row's cross axis so the smaller label lines up with the data chips.
+        
+        
         for (std::size_t i = 0; i < 3; ++i) {
             auto&& box = chip_panel::createChipPanel(hookContext, panel, kChipGap, 100.0f);
             if (!box)
@@ -392,8 +392,8 @@ private:
         return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) * 1.0e-9;
     }
 
-    // Measurement accumulators. Static for the same reason the other per-frame feature counters
-    // are: feature objects are rebuilt per call, the stream of frames is not.
+    
+    
     inline static double windowStart{0.0};
     inline static std::uint64_t frameCount{0};
     inline static int fpsDisplay{0};

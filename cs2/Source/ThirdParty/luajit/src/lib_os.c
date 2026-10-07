@@ -1,10 +1,4 @@
-/*
-** OS library.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-**
-** Major portions taken verbatim or adapted from the Lua interpreter.
-** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
-*/
+
 
 #include <errno.h>
 #include <time.h>
@@ -33,7 +27,7 @@
 #include <locale.h>
 #endif
 
-/* ------------------------------------------------------------------------ */
+
 
 #define LJLIB_MODULE_os
 
@@ -104,7 +98,7 @@ LJLIB_CF(os_getenv)
 #if LJ_TARGET_CONSOLE
   lua_pushnil(L);
 #else
-  lua_pushstring(L, getenv(luaL_checkstring(L, 1)));  /* if NULL push nil */
+  lua_pushstring(L, getenv(luaL_checkstring(L, 1)));  
 #endif
   return 1;
 }
@@ -119,7 +113,7 @@ LJLIB_CF(os_exit)
   if (L->base+1 < L->top && tvistruecond(L->base+1))
     lua_close(L);
   exit(status);
-  return 0;  /* Unreachable. */
+  return 0;  
 }
 
 LJLIB_CF(os_clock)
@@ -128,7 +122,7 @@ LJLIB_CF(os_clock)
   return 1;
 }
 
-/* ------------------------------------------------------------------------ */
+
 
 static void setfield(lua_State *L, const char *key, int value)
 {
@@ -138,8 +132,8 @@ static void setfield(lua_State *L, const char *key, int value)
 
 static void setboolfield(lua_State *L, const char *key, int value)
 {
-  if (value < 0)  /* undefined? */
-    return;  /* does not set field */
+  if (value < 0)  
+    return;  
   lua_pushboolean(L, value);
   lua_setfield(L, -2, key);
 }
@@ -177,8 +171,8 @@ LJLIB_CF(os_date)
 #if LJ_TARGET_POSIX
   struct tm rtm;
 #endif
-  if (*s == '!') {  /* UTC? */
-    s++;  /* Skip '!' */
+  if (*s == '!') {  
+    s++;  
 #if LJ_TARGET_POSIX
     stm = gmtime_r(&t, &rtm);
 #else
@@ -191,10 +185,10 @@ LJLIB_CF(os_date)
     stm = localtime(&t);
 #endif
   }
-  if (stm == NULL) {  /* Invalid date? */
+  if (stm == NULL) {  
     setnilV(L->top++);
   } else if (strcmp(s, "*t") == 0) {
-    lua_createtable(L, 0, 9);  /* 9 = number of fields */
+    lua_createtable(L, 0, 9);  
     setfield(L, "sec", stm->tm_sec);
     setfield(L, "min", stm->tm_min);
     setfield(L, "hour", stm->tm_hour);
@@ -209,9 +203,9 @@ LJLIB_CF(os_date)
     MSize sz = 0, retry = 4;
     const char *q;
     for (q = s; *q; q++)
-      sz += (*q == '%') ? 30 : 1;  /* Overflow doesn't matter. */
+      sz += (*q == '%') ? 30 : 1;  
     setsbufL(sb, L);
-    while (retry--) {  /* Limit growth for invalid format or empty result. */
+    while (retry--) {  
       char *buf = lj_buf_need(sb, sz);
       size_t len = strftime(buf, sbufsz(sb), s, stm);
       if (len) {
@@ -231,12 +225,12 @@ LJLIB_CF(os_time)
 {
   time_t t;
   errno = 0;
-  if (lua_isnoneornil(L, 1)) {  /* called without args? */
-    t = time(NULL);  /* get current time */
+  if (lua_isnoneornil(L, 1)) {  
+    t = time(NULL);  
   } else {
     struct tm ts;
     luaL_checktype(L, 1, LUA_TTABLE);
-    lua_settop(L, 1);  /* make sure table is at the top */
+    lua_settop(L, 1);  
     ts.tm_sec = getfield(L, "sec", 0);
     ts.tm_min = getfield(L, "min", 0);
     ts.tm_hour = getfield(L, "hour", 12);
@@ -261,7 +255,7 @@ LJLIB_CF(os_difftime)
   return 1;
 }
 
-/* ------------------------------------------------------------------------ */
+
 
 LJLIB_CF(os_setlocale)
 {
@@ -283,7 +277,7 @@ LJLIB_CF(os_setlocale)
   return 1;
 }
 
-/* ------------------------------------------------------------------------ */
+
 
 #include "lj_libdef.h"
 

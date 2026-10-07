@@ -1,10 +1,4 @@
-/*
-** Public Lua/C API.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-**
-** Major portions taken verbatim or adapted from the Lua interpreter.
-** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
-*/
+
 
 #define lj_api_c
 #define LUA_CORE
@@ -26,7 +20,7 @@
 #include "lj_strscan.h"
 #include "lj_strfmt.h"
 
-/* -- Common helper functions --------------------------------------------- */
+
 
 #define lj_checkapi_slot(idx) \
   lj_checkapi((idx) <= (L->top - L->base), "stack slot %d out of range", (idx))
@@ -92,7 +86,7 @@ static GCtab *getcurrenv(lua_State *L)
   return fn->c.gct == ~LJ_TFUNC ? tabref(fn->c.env) : tabref(L->env);
 }
 
-/* -- Miscellaneous API functions ----------------------------------------- */
+
 
 LUA_API int lua_status(lua_State *L)
 {
@@ -102,13 +96,13 @@ LUA_API int lua_status(lua_State *L)
 LUA_API int lua_checkstack(lua_State *L, int size)
 {
   if (size > LUAI_MAXCSTACK || (L->top - L->base + size) > LUAI_MAXCSTACK) {
-    return 0;  /* Stack overflow. */
+    return 0;  
   } else if (size > 0) {
     int avail = (int)(mref(L->maxstack, TValue) - L->top);
     if (size > avail &&
 	lj_state_cpgrowstack(L, (MSize)(size - avail)) != LUA_OK) {
       L->top--;
-      return 0;  /* Out of memory. */
+      return 0;  
     }
   }
   return 1;
@@ -140,7 +134,7 @@ LUA_API const lua_Number *lua_version(lua_State *L)
   return &version;
 }
 
-/* -- Stack manipulation -------------------------------------------------- */
+
 
 LUA_API int lua_gettop(lua_State *L)
 {
@@ -160,7 +154,7 @@ LUA_API void lua_settop(lua_State *L, int idx)
     }
   } else {
     lj_checkapi(-(idx+1) <= (L->top - L->base), "bad stack slot %d", idx);
-    L->top += idx+1;  /* Shrinks top (idx < 0). */
+    L->top += idx+1;  
   }
 }
 
@@ -182,7 +176,7 @@ static void copy_slot(lua_State *L, TValue *f, int idx)
 {
   if (idx == LUA_GLOBALSINDEX) {
     lj_checkapi(tvistab(f), "stack slot %d is not a table", idx);
-    /* NOBARRIER: A thread (i.e. L) is never black. */
+    
     setgcref(L->env, obj2gco(tabV(f)));
   } else if (idx == LUA_ENVIRONINDEX) {
     GCfunc *fn = curr_func(L);
@@ -194,7 +188,7 @@ static void copy_slot(lua_State *L, TValue *f, int idx)
   } else {
     TValue *o = index2adr_check(L, idx);
     copyTV(L, o, f);
-    if (idx < LUA_GLOBALSINDEX)  /* Need a barrier for upvalues. */
+    if (idx < LUA_GLOBALSINDEX)  
       lj_gc_barrier(L, curr_func(L), f);
   }
 }
@@ -217,7 +211,7 @@ LUA_API void lua_pushvalue(lua_State *L, int idx)
   incr_top(L);
 }
 
-/* -- Stack getters ------------------------------------------------------- */
+
 
 LUA_API int lua_type(lua_State *L, int idx)
 {
@@ -230,7 +224,7 @@ LUA_API int lua_type(lua_State *L, int idx)
 #endif
   } else if (o == niltv(L)) {
     return LUA_TNONE;
-  } else {  /* Magic internal/external tag conversion. ORDER LJ_T */
+  } else {  
     uint32_t t = ~itype(o);
 #if LJ_64
     int tt = (int)((U64x(75a06,98042110) >> 4*t) & 15u);
@@ -498,7 +492,7 @@ LUA_API const char *lua_tolstring(lua_State *L, int idx, size_t *len)
     s = strV(o);
   } else if (tvisnumber(o)) {
     lj_gc_check(L);
-    o = index2adr(L, idx);  /* GC may move the stack. */
+    o = index2adr(L, idx);  
     s = lj_strfmt_number(L, o);
     setstrV(L, o, s);
   } else {
@@ -517,7 +511,7 @@ LUALIB_API const char *luaL_checklstring(lua_State *L, int idx, size_t *len)
     s = strV(o);
   } else if (tvisnumber(o)) {
     lj_gc_check(L);
-    o = index2adr(L, idx);  /* GC may move the stack. */
+    o = index2adr(L, idx);  
     s = lj_strfmt_number(L, o);
     setstrV(L, o, s);
   } else {
@@ -539,7 +533,7 @@ LUALIB_API const char *luaL_optlstring(lua_State *L, int idx,
     return def;
   } else if (tvisnumber(o)) {
     lj_gc_check(L);
-    o = index2adr(L, idx);  /* GC may move the stack. */
+    o = index2adr(L, idx);  
     s = lj_strfmt_number(L, o);
     setstrV(L, o, s);
   } else {
@@ -613,7 +607,7 @@ LUA_API const void *lua_topointer(lua_State *L, int idx)
   return lj_obj_ptr(G(L), index2adr(L, idx));
 }
 
-/* -- Stack setters (object creation) ------------------------------------- */
+
 
 LUA_API void lua_pushnil(lua_State *L)
 {
@@ -625,7 +619,7 @@ LUA_API void lua_pushnumber(lua_State *L, lua_Number n)
 {
   setnumV(L->top, n);
   if (LJ_UNLIKELY(tvisnan(L->top)))
-    setnanV(L->top);  /* Canonicalize injected NaNs. */
+    setnanV(L->top);  
   incr_top(L);
 }
 
@@ -774,14 +768,14 @@ LUA_API void lua_concat(lua_State *L, int n)
       L->top -= 1+LJ_FR2;
       copyTV(L, L->top-1, L->top+LJ_FR2);
     } while (--n > 0);
-  } else if (n == 0) {  /* Push empty string. */
+  } else if (n == 0) {  
     setstrV(L, L->top, &G(L)->strempty);
     incr_top(L);
   }
-  /* else n == 1: nothing to do. */
+  
 }
 
-/* -- Object getters ------------------------------------------------------ */
+
 
 LUA_API void lua_gettable(lua_State *L, int idx)
 {
@@ -884,9 +878,9 @@ LUA_API int lua_next(lua_State *L, int idx)
   lj_checkapi(tvistab(t), "stack slot %d is not a table", idx);
   more = lj_tab_next(tabV(t), L->top-1, L->top-1);
   if (more > 0) {
-    incr_top(L);  /* Return new key and value slot. */
-  } else if (!more) {  /* End of traversal. */
-    L->top--;  /* Remove key slot. */
+    incr_top(L);  
+  } else if (!more) {  
+    L->top--;  
   } else {
     lj_err_msg(L, LJ_ERR_NEXTIDX);
   }
@@ -936,7 +930,7 @@ LUALIB_API void *luaL_testudata(lua_State *L, int idx, const char *tname)
     if (tv && tvistab(tv) && tabV(tv) == tabref(ud->metatable))
       return uddata(ud);
   }
-  return NULL;  /* value is not a userdata with a metatable */
+  return NULL;  
 }
 
 LUALIB_API void *luaL_checkudata(lua_State *L, int idx, const char *tname)
@@ -946,7 +940,7 @@ LUALIB_API void *luaL_checkudata(lua_State *L, int idx, const char *tname)
   return p;
 }
 
-/* -- Object setters ------------------------------------------------------ */
+
 
 LUA_API void lua_settable(lua_State *L, int idx)
 {
@@ -955,7 +949,7 @@ LUA_API void lua_settable(lua_State *L, int idx)
   lj_checkapi_slot(2);
   o = lj_meta_tset(L, t, L->top-2);
   if (o) {
-    /* NOBARRIER: lj_meta_tset ensures the table is not black. */
+    
     L->top -= 2;
     copyTV(L, o, L->top+1);
   } else {
@@ -976,7 +970,7 @@ LUA_API void lua_setfield(lua_State *L, int idx, const char *k)
   setstrV(L, &key, lj_str_newz(L, k));
   o = lj_meta_tset(L, t, &key);
   if (o) {
-    /* NOBARRIER: lj_meta_tset ensures the table is not black. */
+    
     copyTV(L, o, --L->top);
   } else {
     TValue *base = L->top;
@@ -1033,16 +1027,16 @@ LUA_API int lua_setmetatable(lua_State *L, int idx)
     if (mt)
       lj_gc_objbarrier(L, udataV(o), mt);
   } else {
-    /* Flush cache, since traces specialize to basemt. But not during __gc. */
+    
     if (lj_trace_flushall(L))
       lj_err_caller(L, LJ_ERR_NOGCMM);
-    o = index2adr(L, idx);  /* Stack may have been reallocated. */
+    o = index2adr(L, idx);  
     if (tvisbool(o)) {
-      /* NOBARRIER: basemt is a GC root. */
+      
       setgcref(basemt_it(g, LJ_TTRUE), obj2gco(mt));
       setgcref(basemt_it(g, LJ_TFALSE), obj2gco(mt));
     } else {
-      /* NOBARRIER: basemt is a GC root. */
+      
       setgcref(basemt_obj(g, o), obj2gco(mt));
     }
   }
@@ -1094,7 +1088,7 @@ LUA_API const char *lua_setupvalue(lua_State *L, int idx, int n)
   return name;
 }
 
-/* -- Calls --------------------------------------------------------------- */
+
 
 #if LJ_FR2
 static TValue *api_call_base(lua_State *L, int nargs)
@@ -1148,9 +1142,9 @@ static TValue *cpcall(lua_State *L, lua_CFunction func, void *ud)
   ud = lj_lightud_intern(L, ud);
 #endif
   setrawlightudV(top++, ud);
-  cframe_nres(L->cframe) = 1+0;  /* Zero results. */
+  cframe_nres(L->cframe) = 1+0;  
   L->top = top;
-  return top-1;  /* Now call the newly allocated C function. */
+  return top-1;  
 }
 
 LUA_API int lua_cpcall(lua_State *L, lua_CFunction func, void *ud)
@@ -1178,7 +1172,7 @@ LUALIB_API int luaL_callmeta(lua_State *L, int idx, const char *field)
   return 0;
 }
 
-/* -- Coroutine yield and resume ------------------------------------------ */
+
 
 LUA_API int lua_isyieldable(lua_State *L)
 {
@@ -1191,7 +1185,7 @@ LUA_API int lua_yield(lua_State *L, int nresults)
   global_State *g = G(L);
   if (cframe_canyield(cf)) {
     cf = cframe_raw(cf);
-    if (!hook_active(g)) {  /* Regular yield: move results down if needed. */
+    if (!hook_active(g)) {  
       cTValue *f = L->top - nresults;
       if (f > L->base) {
 	TValue *t = L->base;
@@ -1201,7 +1195,7 @@ LUA_API int lua_yield(lua_State *L, int nresults)
       L->cframe = NULL;
       L->status = LUA_YIELD;
       return -1;
-    } else {  /* Yield from hook: add a pseudo-frame. */
+    } else {  
       TValue *top = L->top;
       hook_leave(g);
       (top++)->u64 = cframe_multres(cf);
@@ -1223,7 +1217,7 @@ LUA_API int lua_yield(lua_State *L, int nresults)
     }
   }
   lj_err_msg(L, LJ_ERR_CYIELD);
-  return 0;  /* unreachable */
+  return 0;  
 }
 
 LUA_API int lua_resume(lua_State *L, int nargs)
@@ -1238,7 +1232,7 @@ LUA_API int lua_resume(lua_State *L, int nargs)
   return LUA_ERRRUN;
 }
 
-/* -- GC and memory management -------------------------------------------- */
+
 
 LUA_API int lua_gc(lua_State *L, int what, int data)
 {
@@ -1282,7 +1276,7 @@ LUA_API int lua_gc(lua_State *L, int what, int data)
     res = (g->gc.threshold != LJ_MAX_MEM);
     break;
   default:
-    res = -1;  /* Invalid option. */
+    res = -1;  
   }
   return res;
 }

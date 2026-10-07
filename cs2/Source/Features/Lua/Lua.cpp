@@ -1,12 +1,12 @@
-// Lua scripting framework implementation - see LuaManager.h for the design contract.
-//
-// EVERYTHING script-facing lives in THIS translation unit because LuaJIT errors unwind as
-// foreign exceptions through the lua_CFunction frames (LUAJIT_UNWIND_EXTERNAL on x64 - the
-// x64 interpreter cannot use the internal unwinder). Those frames need .eh_frame entries, so
-// this file is compiled with -funwind-tables/-fasynchronous-unwind-tables (see
-// Source/CMakeLists.txt) even though the rest of the release target drops unwind tables.
-// The target-wide -fno-exceptions flag stays in effect: nothing here throws C++ exceptions -
-// luaL_error unwinds as a LuaJIT foreign exception, and our RAII is exception-free.
+
+
+
+
+
+
+
+
+
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -33,8 +33,8 @@ extern "C" {
 #include <lua.h>
 }
 
-// Internal LuaJIT headers (vendored): needed to verify the stack-base dummy frame that the
-// C API cannot see. See repairLuaStackBase below.
+
+
 #include <lj_def.h>
 #include <lj_obj.h>
 
@@ -87,21 +87,21 @@ void (*luaTextureRequest)(int, const void*, int, int) noexcept = nullptr;
 void* (*luaTextureQuery)(int) noexcept = nullptr;
 void (*luaTextureRelease)(int) noexcept = nullptr;
 std::atomic<int> dispatchThreadKind{0};
-// The cs2::CUserCmd* of the tick currently being dispatched (game thread, set by dispatchTick's
-// caller). Valid only for the duration of one dispatchTick call - the cmd.* bindings dereference
-// it under the framework mutex exactly then. Raw void* on purpose: Lua.cpp is the one TU that may
-// know the game command layout (through GameClient/UserCmd.h), LuaManager.h stays game-agnostic.
+
+
+
+
 static void* tickUserCmd = nullptr;
 
-// posix_spawn environment (unistd.h only declares it under feature macros - mirror RadioManager)
+
 extern "C" char** environ;
 
-// Defined in LuaApi.h (included below, inside namespace lua) - forward-declared for the toast
-// queue and the imgui.* window dispatch.
+
+
 double luaNow() noexcept;
 
-// Toast queue (client.notify). Written under the framework mutex from any dispatch, drawn at the
-// end of dispatchPaint on the present thread.
+
+
 inline constexpr int kMaxToasts = 6;
 inline constexpr std::size_t kMaxToastText = 160;
 inline constexpr double kToastLifeSeconds = 4.0;
@@ -114,8 +114,8 @@ struct Toast {
 static Toast toasts[kMaxToasts];
 static int toastCursor = 0;
 
-// Queues one toast (safe from any dispatch under the framework mutex). Oldest entry is reused
-// when the queue wraps - the same policy drawToasts already applies for expiry.
+
+
 static void queueToast(const char* text, std::uint32_t colorRgba) noexcept
 {
     if (!text || !text[0])
@@ -131,9 +131,9 @@ static void queueToast(const char* text, std::uint32_t colorRgba) noexcept
     toast.text[i] = '\0';
 }
 
-// Red "script errored" toast - the user-facing surface for a crashed callback. The full
-// traceback stays in Script::lastError (Scripts page); the toast just makes the failure
-// visible wherever the user is.
+
+
+
 static void queueScriptErrorToast(const Script& script, const char* message) noexcept
 {
     char toastText[kMaxToastText];
@@ -147,25 +147,25 @@ static void queueScriptErrorToast(const Script& script, const char* message) noe
     queueToast(toastText, IM_COL32(232, 96, 96, 255));
 }
 
-// The menu page gui.* items are being created on during the current script load
-// (gui.page(); -1 = the script's own Scripts-page sub-tab). Consumed by every gui item
-// creation and reset in load().
+
+
+
 static int pendingItemPage = static_cast<int>(ScriptPage::Subtab);
-// True only while dispatchMenuWindows runs "menu" callbacks (present thread, ImGui context
-// alive): the imgui.* bindings hard-error outside it, so they can never touch ImGui from a
-// game-thread dispatch or a unit test (the test binary has no ImGui context at all).
+
+
+
 static bool imguiMenuActive = false;
-// Begin/End stack safety net: a Lua error mid-window would otherwise leave ImGui's window
-// stack unbalanced (EndFrame asserts on that). dispatchMenuWindows force-closes the leftovers
-// after every script's callbacks.
+
+
+
 static int imguiWindowDepth = 0;
-// renderer.push_clip/pop_clip balance counter (paint callbacks only; dispatchPaint resets it
-// every frame so an errored callback cannot leave a dangling clip rect in the draw list).
+
+
 static int paintClipDepth = 0;
 
-// posix_spawn helper used by http.get: the game runs inside the Steam Linux Runtime container,
-// /tmp is shared with the host, and the host's curl resolves DNS + TLS (same launch path the
-// web radio uses). Overridable for unit tests (the test env cannot spawn launch-client).
+
+
+
 pid_t (*spawnHostShellQuery)(const char* script) noexcept = nullptr;
 
 [[nodiscard]] static pid_t spawnHostShell(const char* script) noexcept
@@ -189,22 +189,22 @@ pid_t (*spawnHostShellQuery)(const char* script) noexcept = nullptr;
 }
 
 static void pollHttp() noexcept;
-static void unloadScriptLocked(int index) noexcept; // mutex must already be held
+static void unloadScriptLocked(int index) noexcept; 
 
-// ---- gui.* state persistence (sidecar files next to the scripts) ----
-//
-// Values a script's menu items hold are persisted per script in <scriptsDir>/<name>.gui (a
-// tiny line format, NOT the order-sensitive config schema - same sidecar decision the radio
-// favorites and feature binds made). Loaded once per script load into `pendingGuiDefaults`;
-// each gui.checkbox/gui.slider creation then applies its saved value by label. Declared here,
-// ABOVE the LuaApi.h include, because the gui bindings consume these helpers.
+
+
+
+
+
+
+
 
 struct PendingGuiValue {
     char label[kMaxGuiLabel] = {};
-    // Item kind this default belongs to: 'c' checkbox, 's' slider, 'd' dropdown, 'k' color,
-    // 'b' keybind, 'f' float slider, 't' text input, 'i' imgui input_text, 'K' imgui color_edit.
-    // Lookups match label AND kind, so a gui.* item and an imgui widget sharing a label do
-    // not steal each other's saved values.
+    
+    
+    
+    
     char kind = 0;
     bool boolValue = false;
     int intValue = 0;
@@ -246,7 +246,7 @@ static void loadGuiDefaults(const char* name) noexcept
         return;
     const int fd = ::open(path, O_RDONLY);
     if (fd < 0)
-        return; // no saved state yet - items keep their script-provided defaults
+        return; 
 
     char buffer[4096];
     long total = 0;
@@ -261,15 +261,15 @@ static void loadGuiDefaults(const char* name) noexcept
     ::close(fd);
     buffer[total] = '\0';
 
-    // Lines: "c\t<label>\t<0|1>" (checkbox) / "s\t<label>\t<value>\t<min>\t<max>" (slider) /
-    // "d\t<label>\t<index>" (dropdown - options come from the script itself) /
-    // "k\t<label>\t<r>,<g>,<b>,<a>" (color picker, 0-255 channels) /
-    // "b\t<label>\t<int>" (keybind Bind value) /
-    // "f\t<label>\t<value>\t<min>\t<max>" (float slider) /
-    // "t\t<label>\t<text>" (text input) /
-    // "i\t<label>\t<text>" (imgui input_text, keyed by widget label) /
-    // "K\t<label>\t<r>,<g>,<b>,<a>" (imgui color_edit).
-    // Unknown line kinds are ignored so older builds skip newer state and vice versa.
+    
+    
+    
+    
+    
+    
+    
+    
+    
     for (char* line = buffer; line && pendingGuiDefaultCount < kMaxGuiItems;) {
         char* next = std::strchr(line, '\n');
         if (next)
@@ -299,7 +299,7 @@ static void loadGuiDefaults(const char* name) noexcept
                             pendingGuiDefaults[pendingGuiDefaultCount++] = parsed;
                         }
                     } else if (lineKind == 's') {
-                        // sliders: value, min, max (ints)
+                        
                         char* valueEnd = std::strchr(rest, '\t');
                         if (valueEnd) {
                             *valueEnd++ = '\0';
@@ -313,7 +313,7 @@ static void loadGuiDefaults(const char* name) noexcept
                             }
                         }
                     } else if (lineKind == 'f') {
-                        // float sliders: value, min, max
+                        
                         char* valueEnd = std::strchr(rest, '\t');
                         if (valueEnd) {
                             *valueEnd++ = '\0';
@@ -376,13 +376,13 @@ static void saveGuiState(const Script& script) noexcept
         else if (item.type == GuiItem::Type::Text || item.type == GuiItem::Type::Divider)
             length = item.type == GuiItem::Type::Text
                 ? std::snprintf(line, sizeof(line), "t\t%s\t%s\n", item.label, item.textValue)
-                : 0; // dividers carry no value
+                : 0; 
         else
             length = std::snprintf(line, sizeof(line), "s\t%s\t%d\t%d\t%d\n", item.label, item.intValue, item.minValue, item.maxValue);
         writeLine(line, length);
     }
-    // imgui.* per-frame widget state (input_text/color_edit keyed by widget label) persists in
-    // the same sidecar so script windows survive reloads like gui.* items do.
+    
+    
     for (int i = 0; i < kMaxImguiWidgets; ++i) {
         const ImguiWidgetState& widget = script.imguiWidgets[i];
         if (widget.label[0] == '\0' || (widget.kind != 'i' && widget.kind != 'K'))
@@ -408,8 +408,8 @@ static void saveGuiState(const Script& script) noexcept
     ::close(fd);
 }
 
-// Returns the saved value for `label`+`kind` from the currently-loading script's sidecar, if
-// any. Kind-qualified so a gui.* item and an imgui widget sharing a label stay independent.
+
+
 static const PendingGuiValue* findPendingGuiDefault(const char* scriptName, const char* label, char kind) noexcept
 {
     if (std::strcmp(pendingGuiOwner, scriptName) != 0)
@@ -421,7 +421,7 @@ static const PendingGuiValue* findPendingGuiDefault(const char* scriptName, cons
     return nullptr;
 }
 
-// ---- steamid64 helpers (steam.* bindings; see LuaManager.h) ----
+
 
 void formatSteamId64(std::uint64_t sid, char* out, std::size_t outSize) noexcept
 {
@@ -431,22 +431,22 @@ void formatSteamId64(std::uint64_t sid, char* out, std::size_t outSize) noexcept
 bool parseSteamId64(const char* text, std::uint64_t* out) noexcept
 {
     if (!text || !out || text[0] < '1' || text[0] > '9')
-        return false; // 0, signs, whitespace and empty strings are not valid ids
+        return false; 
     std::uint64_t value = 0;
     for (const char* p = text; *p != '\0'; ++p) {
         if (*p < '0' || *p > '9')
             return false;
         const std::uint64_t digit = static_cast<std::uint64_t>(*p - '0');
         if (value > (0xFFFFFFFFFFFFFFFFULL - digit) / 10ULL)
-            return false; // overflow
+            return false; 
         value = value * 10 + digit;
     }
     *out = value;
     return true;
 }
 
-// Releases ONE http slot (failed setup path) - unlike killPendingHttpFor, the script's other
-// in-flight requests stay untouched. Must be called with the slot's script mutex held.
+
+
 static void discardHttpSlot(lua_State* L, HttpSlot* slot) noexcept
 {
     if (slot->pid > 0) {
@@ -465,12 +465,12 @@ static void discardHttpSlot(lua_State* L, HttpSlot* slot) noexcept
     *slot = HttpSlot{};
 }
 
-// ---- map name (client.get_map_name; see LuaManager.h setCurrentMapName) ----
-//
-// Captured once per game_newmap on the game thread (EntryPoints), read from any dispatch
-// thread through the binding. Own dedicated mutex: the game thread writes it OUTSIDE the
-// framework mutex (immediately before dispatchEvent locks it), so reusing `mutex` would
-// create a lock/unlock/relock window for no benefit.
+
+
+
+
+
+
 inline constexpr std::size_t kMaxMapName = 64;
 static char mapNameBuffer[kMaxMapName] = {};
 static pthread_mutex_t mapNameMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -487,8 +487,8 @@ void setCurrentMapName(const char* name) noexcept
     pthread_mutex_unlock(&mapNameMutex);
 }
 
-// Copies the current map name for the binding (defined below in LuaApi.h, which is included
-// after this point). False = no map captured yet (never in a game since injection).
+
+
 static bool copyMapName(char* out, std::size_t cap) noexcept
 {
     pthread_mutex_lock(&mapNameMutex);
@@ -499,10 +499,10 @@ static bool copyMapName(char* out, std::size_t cap) noexcept
     return ok;
 }
 
-// ---- script-facing bindings (LuaApi.h is included INSIDE namespace lua on purpose) ----
+
 #include "LuaApi.h"
 
-// ---- core helpers ----
+
 
 static void copyError(Script& script, const char* message) noexcept
 {
@@ -514,13 +514,13 @@ static void copyError(Script& script, const char* message) noexcept
     script.lastError[i] = '\0';
 }
 
-// Foreign exceptions unwind through this frame - keep the FDE, never make it noexcept.
+
 static void budgetHook(lua_State* L, lua_Debug*)
 {
     luaL_error(L, "instruction budget exceeded");
 }
 
-// Error handler sitting under the called function: turns the error object into a traceback.
+
 static int errorHandler(lua_State* L)
 {
     const char* message = lua_tostring(L, 1);
@@ -528,29 +528,29 @@ static int errorHandler(lua_State* L)
     return 1;
 }
 
-// --- stack-base dummy frame guard ---
-//
-// stack_init() lays the very bottom of every Lua stack out as: stack[0] = the thread TValue
-// ("dummy frame function", read by curr_func() whenever no Lua frame is active - which is
-// exactly how our dispatch loops run), stack[1] = nil (the FR2 frame-link slot). LuaJIT never
-// writes either again. A C binding that pops BELOW the stack base (unbalanced
-// push/pop in some l_* helper) makes later pushes land in these slots; the next dispatch
-// then decodes the "current function" from the garbage (observed 4x on 2026-09-10: int64 -3
-// in the slot -> non-canonical pointer -> #GP inside lua_pushcclosure, si_code 0x80).
-//
-// Verify + restore at every dispatch entry, so whatever binding does this degrades to a
-// one-line anomaly in the gui log instead of taking the game down. The breadcrumb (0x360
-// corrupted / 0x361 repaired) attributes the frame to the crash dump if it still fires.
-// Forensics counter: incremented on every stack-base repair. Read by the unit-test
-// reproduction of the multi-death stack corruption and by triage.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 std::atomic<int> stackBaseRepairCountForTesting{0};
-// Test seam: return false to silence the repair log (the UnitTests environment cannot
-// exercise gui_log's LinuxPlatformApi mocks from this path). Production: null = always log.
+
+
 bool (*stackBaseRepairLogQuery)() noexcept = nullptr;
 
 static void repairLuaStackBase(lua_State* L) noexcept
 {
-    static int logBudget = 16; // a per-tick underflow would otherwise spam the anomaly log
+    static int logBudget = 16; 
     const TValue* stack = mref(L->stack, TValue);
     if (!stack)
         return;
@@ -560,10 +560,10 @@ static void repairLuaStackBase(lua_State* L) noexcept
         stackBaseRepairCountForTesting.fetch_add(1, std::memory_order_relaxed);
         if (logBudget > 0 && (!stackBaseRepairLogQuery || stackBaseRepairLogQuery())) {
             --logBudget;
-            // BOTH slots + geometry: the logged "thread slot" value keeps coming out VALID
-            // (3x now), so the failing check is actually stack[1] - the writer lands ONE value
-            // below the frame. Logging what that value IS (string TValue / int / raw garbage)
-            // plus the base/top offsets identifies the writer on the next occurrence.
+            
+            
+            
+            
             gui_log::write("[lua] stack-base dummy frame corrupted, repaired (slot0=0x%llx slot1=0x%llx base=+%d top=+%d maxstack=%p)",
                 static_cast<unsigned long long>(stack[0].gcr.gcptr64),
                 static_cast<unsigned long long>(stack[1].it64),
@@ -577,29 +577,29 @@ static void repairLuaStackBase(lua_State* L) noexcept
     }
 }
 
-// Calls the function (plus nargs arguments) currently on top of the stack of `script`.
-// On error: records the traceback in the script and marks it errored (auto-disabled).
-// The stack-balance guard lives HERE (not only in runCallbacks) so EVERY dispatch path is
-// covered: pollHttp's http-callback invocation, drainPendingCalls' timer callbacks and any
-// future caller. Live-verified 2026-09-11: a paint-thread callback (dead_comedian http body)
-// pushed string TValues BELOW the stack base repeatedly (17 repairs, dummy frame corrupted)
-// and then wedged the VM in an FF-fallback C cycle (hookcount consumed 6 of 50M - C cycles are
-// invisible to the count hook), freezing the game. Balance snapping here bounds the damage and
-// attributes the offender by script name.
+
+
+
+
+
+
+
+
+
 static bool protectedCall(Script& script, int nargs) noexcept
 {
     lua_State* L = script.L;
     const int before = lua_gettop(L);
     lua_pushcfunction(L, errorHandler);
-    lua_insert(L, -(nargs + 2)); // handler below function + args
+    lua_insert(L, -(nargs + 2)); 
     lua_sethook(L, budgetHook, LUA_MASKCOUNT, kInstructionBudget);
     const int status = lua_pcall(L, nargs, 0, -(nargs + 2));
     lua_sethook(L, nullptr, 0, 0);
-    const int after = lua_gettop(L); // post-pcall: handler on top (+ error object on failure)
+    const int after = lua_gettop(L); 
     const int expected = before - nargs + (status != 0 ? 1 : 0);
     if (after != expected) {
         lua_settop(L, expected);
-        static int logBudget = 16; // per-tick offenders would otherwise spam the anomaly log
+        static int logBudget = 16; 
         if (logBudget > 0) {
             --logBudget;
             gui_log::write("[lua] unbalanced protectedCall in %s (%s): stack level moved %d -> %d, reset",
@@ -607,18 +607,18 @@ static bool protectedCall(Script& script, int nargs) noexcept
         }
     }
     if (status == 0) {
-        lua_pop(L, 1); // the error handler
+        lua_pop(L, 1); 
         return true;
     }
     const char* errorObject = lua_tostring(L, -1);
     copyError(script, errorObject);
     script.errored = true;
-    queueScriptErrorToast(script, script.lastError); // visible failure, wherever the user is
-    lua_pop(L, 2); // error object + error handler
+    queueScriptErrorToast(script, script.lastError); 
+    lua_pop(L, 2); 
     return false;
 }
 
-// ---- sandbox ----
+
 
 static void preloadGlobal(lua_State* L, const char* name) noexcept
 {
@@ -629,12 +629,12 @@ static void preloadGlobal(lua_State* L, const char* name) noexcept
     }
     lua_pushstring(L, name);
     if (lua_pcall(L, 1, 1, 0) == 0)
-        lua_setglobal(L, name); // pops the module, sets the global
+        lua_setglobal(L, name); 
     else
-        lua_pop(L, 1); // error object
+        lua_pop(L, 1); 
 }
 
-// load/loadstring replacement: source chunks only (first byte ESC = precompiled bytecode).
+
 static int safeLoad(lua_State* L)
 {
     if (lua_type(L, 1) == LUA_TSTRING) {
@@ -656,23 +656,23 @@ static void openSandbox(lua_State* L) noexcept
 {
     luaL_openlibs(L);
 
-    // Interpreter-only mode, for two real reasons measured this session:
-    //  1. The instruction-budget hook NEVER fires in JIT-compiled code (count hooks are
-    //     interpreter-only, and LuaJIT happily compiles `while true do end` into an infinite
-    //     machine-code loop) - with the JIT on, a runaway script freezes the game.
-    //  2. The JIT's mcode allocator mmaps RWX pages - an unnecessary executable-memory artifact
-    //     inside a VAC-monitored process. Interpreter-only states create none.
-    // Script hot paths run at plain-Lua speed, which is plenty for paint/HUD work.
+    
+    
+    
+    
+    
+    
+    
     lua_getglobal(L, "jit");
     if (lua_istable(L, -1)) {
         lua_getfield(L, -1, "off");
         if (lua_isfunction(L, -1))
-            lua_call(L, 0, 0); // jit.off() - this state compiles nothing
+            lua_call(L, 0, 0); 
     }
     lua_pop(L, 1);
 
-    // Materialize the power-user libraries as plain globals, then strip require/package -
-    // scripts use `ffi`, `bit`, `jit` directly and have no business pulling in more modules.
+    
+    
     preloadGlobal(L, "ffi");
     preloadGlobal(L, "bit");
     preloadGlobal(L, "jit");
@@ -692,8 +692,8 @@ static void openSandbox(lua_State* L) noexcept
     lua_pushnil(L); lua_setglobal(L, "dofile");
     lua_pushnil(L); lua_setglobal(L, "loadfile");
 
-    // debug: keep only debug.traceback (used for error reporting); the rest is an
-    // introspection/upvalue-tampering surface with zero legitimate script use.
+    
+    
     lua_getglobal(L, "debug");
     if (lua_istable(L, -1)) {
         lua_newtable(L);
@@ -704,7 +704,7 @@ static void openSandbox(lua_State* L) noexcept
     lua_pop(L, 1);
 }
 
-// ---- name validation / path helpers ----
+
 
 bool validScriptName(const char* name) noexcept
 {
@@ -720,14 +720,14 @@ bool validScriptName(const char* name) noexcept
         if (c == '.' && name[i + 1] == '.')
             return false;
     }
-    // must end in ".lua"
+    
     return i > 4 && i <= kMaxScriptName - 1 && name[i - 4] == '.' && name[i - 3] == 'l' && name[i - 2] == 'u' && name[i - 1] == 'a';
 }
 
 static void buildScriptPath(char* out, std::size_t outSize, const char* name) noexcept
 {
-    // Manual assembly (not snprintf): callers pass raw buffers of assorted sizes, and
-    // -Wformat-truncation cannot be convinced otherwise.
+    
+    
     const std::size_t dirLength = std::strlen(scriptsDirPath);
     const std::size_t nameLength = std::strlen(name);
     if (dirLength + 1 + nameLength + 1 > outSize) {
@@ -748,7 +748,7 @@ int loadedIndex(const char* name) noexcept
     return -1;
 }
 
-// ---- http plumbing (used by the bindings and the paint dispatcher) ----
+
 
 static void killPendingHttpFor(int scriptIndex) noexcept
 {
@@ -766,7 +766,7 @@ static void killPendingHttpFor(int scriptIndex) noexcept
     }
 }
 
-// Present thread, called from dispatchPaint with the mutex held.
+
 static void pollHttp() noexcept
 {
     for (int i = 0; i < kMaxHttpSlots; ++i) {
@@ -778,7 +778,7 @@ static void pollHttp() noexcept
             int status;
             if (::waitpid(slot.pid, &status, WNOHANG) == slot.pid) {
                 slot.pid = 0;
-                slot.processDone = true; // the shell (curl && mv) finished; the file is final
+                slot.processDone = true; 
             } else {
                 continue;
             }
@@ -786,7 +786,7 @@ static void pollHttp() noexcept
         if (!slot.processDone)
             continue;
 
-        // The owning script must still be alive and healthy to receive the response.
+        
         Script& script = scripts[slot.scriptIndex];
         const bool deliverable = script.L && !script.errored;
 
@@ -814,19 +814,19 @@ static void pollHttp() noexcept
             lua_State* L = script.L;
             lua_rawgeti(L, LUA_REGISTRYINDEX, slot.callbackRef);
             if (lua_isfunction(L, -1)) {
-                // protectedCall consumes the callback + the body (pcall pops func+args,
-                // the error handler is popped inside) - NOTHING extra to pop after it.
-                // The old unconditional lua_pop(L, 1) here over-popped ONE value on this
-                // branch (only the dead-ref branch needs a pop) - that one-slot underflow
-                // per delivered response was the stack-base corruption writer (frozen
-                // re-dispatch + SIGSEGV while dying, 2026-09-11/12).
+                
+                
+                
+                
+                
+                
                 if (hasBody)
                     lua_pushlstring(L, httpBuffer, static_cast<std::size_t>(bodySize));
                 else
-                    lua_pushnil(L); // request failed (offline / timeout / response missing)
+                    lua_pushnil(L); 
                 protectedCall(script, 1);
             } else {
-                lua_pop(L, 1); // dead ref - the rawgeti pushed garbage
+                lua_pop(L, 1); 
             }
         }
         if (slot.callbackRef != -1 && script.L)
@@ -845,7 +845,7 @@ int parseIdaPattern(const char* pattern, PatternByte* out, int maxBytes) noexcep
         }
         if (byteCount >= maxBytes)
             return 0;
-        if (*p == '?') { // "??", "?" - any run of '?' acts as a wildcard byte
+        if (*p == '?') { 
             out[byteCount].wildcard = true;
             out[byteCount].value = 0;
             ++byteCount;
@@ -895,19 +895,19 @@ const unsigned char* scanMemoryPattern(const unsigned char* data, std::size_t si
     return nullptr;
 }
 
-// ---- dispatch (shared iteration body) ----
 
-// Runs every callback registered under the array on top of the script's stack. args/argCount
-// (optional) are pushed as a single `event` table before each callback. Pushes and pops its
-// own temporaries.
+
+
+
+
 static void runCallbacks(Script& script, int arrayIndex, const EventArg* args = nullptr, int argCount = 0) noexcept
 {
     const int count = static_cast<int>(lua_objlen(script.L, arrayIndex));
     for (int k = 1; k <= count; ++k) {
-        // Stack-balance guard: every callback must come back to the level the loop found it at
-        // (array + fn [+ event table] pushed, pcall pops everything again). A binding that pops
-        // more than it pushed leaves top BELOW base - the next push then stomps the stack-base
-        // dummy frame (see repairLuaStackBase). Snap back + attribute before that can happen.
+        
+        
+        
+        
         const int before = lua_gettop(script.L);
         lua_rawgeti(script.L, arrayIndex, k);
         if (argCount > 0) {
@@ -927,7 +927,7 @@ static void runCallbacks(Script& script, int arrayIndex, const EventArg* args = 
         const int after = lua_gettop(script.L);
         if (after != before) {
             lua_settop(script.L, before);
-            static int logBudget = 16; // per-tick offenders would otherwise spam the anomaly log
+            static int logBudget = 16; 
             if (logBudget > 0) {
                 --logBudget;
                 gui_log::write("[lua] unbalanced callback in %s (%s): stack level moved %d -> %d, reset",
@@ -935,12 +935,12 @@ static void runCallbacks(Script& script, int arrayIndex, const EventArg* args = 
             }
         }
         if (script.errored)
-            break; // auto-disabled mid-event; stop calling into it
+            break; 
     }
 }
 
-// Fetches callbacks[eventName]; leaves the stack as [callbacks table, array] with the array on
-// top. Returns false when absent.
+
+
 static bool fetchCallbackArray(Script& script, const char* eventName) noexcept
 {
     lua_State* L = script.L;
@@ -951,7 +951,7 @@ static bool fetchCallbackArray(Script& script, const char* eventName) noexcept
         return false;
     }
     lua_pushstring(L, eventName);
-    lua_rawget(L, -2); // callbacks[eventName]
+    lua_rawget(L, -2); 
     if (!lua_istable(L, -1)) {
         lua_pop(L, 2);
         return false;
@@ -959,7 +959,7 @@ static bool fetchCallbackArray(Script& script, const char* eventName) noexcept
     return true;
 }
 
-// ---- public API ----
+
 
 void init() noexcept
 {
@@ -968,20 +968,20 @@ void init() noexcept
         return;
     NS_STR(configDir, "OsirisCS2");
     std::snprintf(scriptsDirPath, sizeof(scriptsDirPath), "%s/%s/scripts", home, (const char*)configDir);
-    ::mkdir(scriptsDirPath, 0777); // exists -> EEXIST, harmless
+    ::mkdir(scriptsDirPath, 0777); 
 }
 
-// Executes <scriptsDir>/lib/*.lua into the state before the script body - the sandbox's require
-// replacement: shared helper libraries (json, base64, vec3, easing are vendored there) run once
-// per script load and expose their globals to the script. A lib error fails the script load with
-// the lib name in the error text.
+
+
+
+
 static bool preloadLibs(lua_State* L) noexcept
 {
     char libDir[600];
     std::snprintf(libDir, sizeof(libDir), "%s/lib", scriptsDirPath);
     DIR* dir = ::opendir(libDir);
     if (!dir)
-        return true; // no lib dir - nothing to preload
+        return true; 
     constexpr int kMaxLibs = 16;
     char paths[kMaxLibs][768];
     int count = 0;
@@ -996,8 +996,8 @@ static bool preloadLibs(lua_State* L) noexcept
         ++count;
     }
     ::closedir(dir);
-    // Lexicographic order (nested dirs not supported; a flat "00_json.lua" style prefix keeps
-    // ordering explicit if it ever matters).
+    
+    
     for (int i = 1; i < count; ++i) {
         for (int j = i; j > 0 && std::strcmp(paths[j - 1], paths[j]) > 0; --j) {
             char swap[768];
@@ -1015,10 +1015,10 @@ static bool preloadLibs(lua_State* L) noexcept
             lua_pushlstring(L, message, std::strlen(message));
             return false;
         }
-        // The lib's return value (a table) becomes a global named after the file stem
-        // ("<stem>.lua" -> `<stem>`), so `json.lua` exposes itself as `json`. A lib that wants
-        // several globals (vector.lua ships vec3 AND the standalone `angle` table) sets the
-        // extra ones itself as globals during its chunk.
+        
+        
+        
+        
         const char* fileName = std::strrchr(paths[i], '/');
         fileName = fileName ? fileName + 1 : paths[i];
         char globalName[64];
@@ -1029,9 +1029,9 @@ static bool preloadLibs(lua_State* L) noexcept
         }
         globalName[nameLength] = '\0';
         if (nameLength > 0)
-            lua_setglobal(L, globalName); // pops the lib's return value (a table or nothing)
+            lua_setglobal(L, globalName); 
         else
-            lua_pop(L, 1); // no meaningful name - drop the return value
+            lua_pop(L, 1); 
     }
     return true;
 }
@@ -1049,7 +1049,7 @@ bool load(const char* name) noexcept
 
     const int existing = loadedIndex(name);
     if (existing >= 0)
-        unloadScriptLocked(existing); // mutex already held here
+        unloadScriptLocked(existing); 
 
     int slot = -1;
     for (int i = 0; i < kMaxScripts; ++i) {
@@ -1074,7 +1074,7 @@ bool load(const char* name) noexcept
     script = Script{};
     std::strncpy(script.name, name, kMaxScriptName - 1);
     script.L = L;
-    loadGuiDefaults(name); // gui.* items created by the chunk below restore their saved values
+    loadGuiDefaults(name); 
 
     if (!preloadLibs(L)) {
         copyError(script, lua_tostring(L, -1));
@@ -1091,45 +1091,45 @@ bool load(const char* name) noexcept
         lua_pop(L, 1);
         return false;
     }
-    pendingItemPage = static_cast<int>(ScriptPage::Subtab); // gui.page() state is per-load
-    return protectedCall(script, 0); // runs the chunk (top-level), registering its callbacks
+    pendingItemPage = static_cast<int>(ScriptPage::Subtab); 
+    return protectedCall(script, 0); 
 }
 
-// State teardown, mutex HELD. Called from the menu (present thread) AND from load()'s
-// reload path (which already holds the lock), so the public wrappers below take the mutex
-// around this. Without the lock an UNLOAD click in the Scripts > MANAGE page lua_close()'d
-// the state on the present thread while dispatchTick ran that script's createmove callbacks
-// on the game thread under the mutex - the freed stack then fed garbage into the next tick's
-// curr_func() read (#GP in lua_pushcclosure).
+
+
+
+
+
+
 static void unloadScriptLocked(int index) noexcept
 {
     Script& script = scripts[index];
     if (script.L) {
-        // "unload" callbacks run first so the script can release what it owns (net block
-        // lists are cleared below regardless). Fired with no dispatch thread active, so the
-        // game-thread-only bindings correctly refuse - unload runs on the menu thread.
-        // Errors here only mark the (already closing) script; nothing else can run after.
+        
+        
+        
+        
         if (script.hasUnload && !script.errored) {
             dispatchThreadKind.store(0, std::memory_order_relaxed);
             if (fetchCallbackArray(script, "unload")) {
                 runCallbacks(script, -1);
-                lua_pop(script.L, 2); // array + callbacks table
+                lua_pop(script.L, 2); 
             }
         }
-        saveGuiState(script); // persist gui.* + imgui.* values across reloads/unloads
+        saveGuiState(script); 
         lua_close(script.L);
         script.L = nullptr;
     }
-    // Script-owned renderer textures go back to the pool (the GPU state itself is retired by
-    // VulkanHook on the present path; the slot is reusable immediately).
+    
+    
     releaseScriptTextures(index);
-    // A region-filter block list is script-owned state published into the datagram hook - a
-    // dead script can no longer manage it, so it must not survive the unload. (A reloading
-    // script re-applies its list on the next tick.)
+    
+    
+    
     net_region::clearBlockedIps();
     killPendingHttpFor(index);
     if (std::strcmp(pendingGuiOwner, script.name) == 0)
-        pendingGuiDefaultCount = 0; // no stale defaults for a different script
+        pendingGuiDefaultCount = 0; 
     script = Script{};
 }
 
@@ -1252,7 +1252,7 @@ bool createScript(const char* name) noexcept
     buildScriptPath(path, sizeof(path), name);
     const int fd = ::open(path, O_CREAT | O_EXCL | O_WRONLY, 0666);
     if (fd < 0)
-        return false; // already exists
+        return false; 
     const std::size_t length = sizeof(kTemplate) - 1;
     const ssize_t written = ::write(fd, kTemplate, length);
     ::close(fd);
@@ -1287,7 +1287,7 @@ void dispatchEvent(const char* eventName, const EventArg* args, int argCount) no
         if (scripts[i].L)
             repairLuaStackBase(scripts[i].L);
 
-    // Game events fire on the game thread - unlock client.exec while we are here.
+    
     dispatchThreadKind.store(1, std::memory_order_relaxed);
     for (int i = 0; i < kMaxScripts; ++i) {
         Script& script = scripts[i];
@@ -1295,15 +1295,15 @@ void dispatchEvent(const char* eventName, const EventArg* args, int argCount) no
             continue;
         if (fetchCallbackArray(script, eventName)) {
             runCallbacks(script, -1, args, argCount);
-            lua_pop(script.L, 2); // array + callbacks table
+            lua_pop(script.L, 2); 
         }
     }
     dispatchThreadKind.store(0, std::memory_order_relaxed);
 }
 
-// Fires every client.delay_call whose deadline passed. Mutex held; runs on whichever dispatch
-// (paint or tick) reaches the deadline first - a delay queued from paint fires on paint, one from
-// createmove on a later tick.
+
+
+
 static void drainPendingCalls() noexcept
 {
     const double now = luaNow();
@@ -1326,11 +1326,11 @@ static void drainPendingCalls() noexcept
             int nargs = 0;
             if (call.argsRef != -1 && call.argsRef != LUA_REFNIL) {
                 lua_rawgeti(L, LUA_REGISTRYINDEX, call.argsRef);
-                const int tableIndex = lua_gettop(L); // absolute index - negative indices shift as we push
+                const int tableIndex = lua_gettop(L); 
                 nargs = static_cast<int>(lua_objlen(L, tableIndex));
                 for (int a = 1; a <= nargs; ++a)
-                    lua_rawgeti(L, tableIndex, a); // push args in order above the table
-                lua_remove(L, tableIndex); // drop the table, args remain
+                    lua_rawgeti(L, tableIndex, a); 
+                lua_remove(L, tableIndex); 
             }
             luaL_unref(L, LUA_REGISTRYINDEX, call.functionRef);
             if (call.argsRef != -1 && call.argsRef != LUA_REFNIL)
@@ -1338,13 +1338,13 @@ static void drainPendingCalls() noexcept
             protectedCall(script, nargs);
             if (script.errored)
                 break;
-            // do not ++k: the last pending call was swapped into slot k
+            
         }
     }
 }
 
-// Draws the toast queue (top-center stack with fade-in/out) after the script callbacks. Mutex
-// held, present thread, paintDrawList valid.
+
+
 static void drawToasts(ImDrawList* drawList) noexcept
 {
     const double now = luaNow();
@@ -1400,7 +1400,7 @@ void dispatchPaint(ImDrawList* drawList) noexcept
             repairLuaStackBase(scripts[i].L);
 
     paintDrawList = drawList;
-    paintClipDepth = 0; // a callback that errored mid-clip must not poison the next frame
+    paintClipDepth = 0; 
     dispatchThreadKind.store(2, std::memory_order_relaxed);
     for (int i = 0; i < kMaxScripts; ++i) {
         Script& script = scripts[i];
@@ -1411,8 +1411,8 @@ void dispatchPaint(ImDrawList* drawList) noexcept
             lua_pop(script.L, 2);
         }
     }
-    // A callback that errored (or forgot) mid push_clip must not leave a dangling clip rect
-    // in this frame's draw list - unwind on the same list the clips were pushed to.
+    
+    
     if (drawList) {
         while (paintClipDepth > 0) {
             drawList->PopClipRect();
@@ -1426,17 +1426,17 @@ void dispatchPaint(ImDrawList* drawList) noexcept
     pollHttp();
 }
 
-// Present thread, called from the menu shell render while the menu is open (ImGui context
-// alive): fires every script's "menu" callback - the surface imgui.* bindings require. After
-// EACH script's callbacks the ImGui window/style stacks are force-balanced, because a Lua
-// error inside a window (protectedCall catches it, but the C++ Begin() would stay open) would
-// trip ImGui's stack assertions on the next EndFrame.
+
+
+
+
+
 void dispatchMenuWindows() noexcept
 {
     if (!scriptsDirPath[0])
         return;
-    // No live ImGui context (unit tests, shutdown): firing "menu" callbacks would let the
-    // imgui.* bindings call ImGui with no context - skip the dispatch entirely.
+    
+    
     if (!imguiContextQuery || !imguiContextQuery())
         return;
     pthread_mutex_lock(&mutex);
@@ -1455,13 +1455,13 @@ void dispatchMenuWindows() noexcept
         Script& script = scripts[i];
         if (!script.L || script.errored || !script.hasMenu)
             continue;
-        script.imguiWidgetCount = 0; // per-frame widget slots restart every dispatch
+        script.imguiWidgetCount = 0; 
         if (fetchCallbackArray(script, "menu")) {
             runCallbacks(script, -1);
             lua_pop(script.L, 2);
         }
-        // Safety net: the callback may have errored (or been sloppy) with windows open.
-        // imgui.begin pushes 2 style colors + 2 style vars per window BEFORE Begin().
+        
+        
         if (imguiWindowDepth > 0) {
             const int leaked = imguiWindowDepth;
             imguiWindowDepth = 0;
@@ -1493,7 +1493,7 @@ int scriptPageFromName(const char* name) noexcept
         if (kScriptPageNames[i][k] == '\0' && name[k] == '\0')
             return i;
     }
-    // common alias: the nav rail calls the Glow page "Visuals"
+    
     {
         std::size_t k = 0;
         for (; "visuals"[k] != '\0' && name[k] != '\0'; ++k) {
@@ -1508,9 +1508,9 @@ int scriptPageFromName(const char* name) noexcept
 }
 
 void dispatchTick(void* userCmd) noexcept
-{    // Per-tick path (game thread): identical to dispatchEvent("createmove"), gated on the
-    // cheap hasTick flag so scripts without a tick callback cost nothing. `userCmd` is the
-    // tick's cs2::CUserCmd* - valid only for the duration of this call.
+{    
+    
+    
     if (!scriptsDirPath[0])
         return;
     pthread_mutex_lock(&mutex);
@@ -1539,4 +1539,4 @@ void dispatchTick(void* userCmd) noexcept
     drainPendingCalls();
 }
 
-} // namespace lua
+} 

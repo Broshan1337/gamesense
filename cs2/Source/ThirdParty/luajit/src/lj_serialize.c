@@ -1,7 +1,4 @@
-/*
-** Object de/serialization.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #define lj_serialize_c
 #define LUA_CORE
@@ -23,9 +20,9 @@
 #endif
 #include "lj_serialize.h"
 
-/* Tags for internal serialization format. */
+
 enum {
-  SER_TAG_NIL,		/* 0x00 */
+  SER_TAG_NIL,		
   SER_TAG_FALSE,
   SER_TAG_TRUE,
   SER_TAG_NULL,
@@ -33,10 +30,10 @@ enum {
   SER_TAG_LIGHTUD64,
   SER_TAG_INT,
   SER_TAG_NUM,
-  SER_TAG_TAB,		/* 0x08 */
+  SER_TAG_TAB,		
   SER_TAG_DICT_MT = SER_TAG_TAB+6,
   SER_TAG_DICT_STR,
-  SER_TAG_INT64,	/* 0x10 */
+  SER_TAG_INT64,	
   SER_TAG_UINT64,
   SER_TAG_COMPLEX,
   SER_TAG_0x13,
@@ -44,7 +41,7 @@ enum {
   SER_TAG_0x15,
   SER_TAG_0x16,
   SER_TAG_0x17,
-  SER_TAG_0x18,		/* 0x18 */
+  SER_TAG_0x18,		
   SER_TAG_0x19,
   SER_TAG_0x1a,
   SER_TAG_0x1b,
@@ -52,11 +49,11 @@ enum {
   SER_TAG_0x1d,
   SER_TAG_0x1e,
   SER_TAG_0x1f,
-  SER_TAG_STR,		/* 0x20 + str->len */
+  SER_TAG_STR,		
 };
 LJ_STATIC_ASSERT((SER_TAG_TAB & 7) == 0);
 
-/* -- Helper functions ---------------------------------------------------- */
+
 
 static LJ_AINLINE char *serialize_more(char *w, SBufExt *sbx, MSize sz)
 {
@@ -67,7 +64,7 @@ static LJ_AINLINE char *serialize_more(char *w, SBufExt *sbx, MSize sz)
   return w;
 }
 
-/* Write U124 to buffer. */
+
 static LJ_NOINLINE char *serialize_wu124_(char *w, uint32_t v)
 {
   if (v < 0x1fe0) {
@@ -123,17 +120,17 @@ static LJ_AINLINE char *serialize_ru124(char *r, char *w, uint32_t *pv)
   return NULL;
 }
 
-/* Prepare string dictionary for use (once). */
+
 void LJ_FASTCALL lj_serialize_dict_prep_str(lua_State *L, GCtab *dict)
 {
-  if (!dict->hmask) {  /* No hash part means not prepared, yet. */
+  if (!dict->hmask) {  
     MSize i, len = lj_tab_len(dict);
     if (!len) return;
     lj_tab_resize(L, dict, dict->asize, hsize2hbits(len));
     for (i = 1; i <= len && i < dict->asize; i++) {
       cTValue *o = arrayslot(dict, i);
       if (tvisstr(o)) {
-	if (!lj_tab_getstr(dict, strV(o))) {  /* Ignore dups. */
+	if (!lj_tab_getstr(dict, strV(o))) {  
 	  lj_tab_newkey(L, dict, o)->u64 = (uint64_t)(i-1);
 	}
       } else if (!tvisfalse(o)) {
@@ -143,17 +140,17 @@ void LJ_FASTCALL lj_serialize_dict_prep_str(lua_State *L, GCtab *dict)
   }
 }
 
-/* Prepare metatable dictionary for use (once). */
+
 void LJ_FASTCALL lj_serialize_dict_prep_mt(lua_State *L, GCtab *dict)
 {
-  if (!dict->hmask) {  /* No hash part means not prepared, yet. */
+  if (!dict->hmask) {  
     MSize i, len = lj_tab_len(dict);
     if (!len) return;
     lj_tab_resize(L, dict, dict->asize, hsize2hbits(len));
     for (i = 1; i <= len && i < dict->asize; i++) {
       cTValue *o = arrayslot(dict, i);
       if (tvistab(o)) {
-	if (tvisnil(lj_tab_get(L, dict, o))) {  /* Ignore dups. */
+	if (tvisnil(lj_tab_get(L, dict, o))) {  
 	  lj_tab_newkey(L, dict, o)->u64 = (uint64_t)(i-1);
 	}
       } else if (!tvisfalse(o)) {
@@ -163,9 +160,9 @@ void LJ_FASTCALL lj_serialize_dict_prep_mt(lua_State *L, GCtab *dict)
   }
 }
 
-/* -- Internal serializer ------------------------------------------------- */
 
-/* Put serialized object into buffer. */
+
+
 static char *serialize_put(char *w, SBufExt *sbx, cTValue *o)
 {
   if (LJ_LIKELY(tvisstr(o))) {
@@ -190,7 +187,7 @@ static char *serialize_put(char *w, SBufExt *sbx, cTValue *o)
     uint32_t narray = 0, nhash = 0, one = 2;
     if (sbx->depth <= 0) lj_err_caller(sbufL(sbx), LJ_ERR_BUFFER_DEPTH);
     sbx->depth--;
-    if (t->asize > 0) {  /* Determine max. length of array part. */
+    if (t->asize > 0) {  
       ptrdiff_t i;
       TValue *array = tvref(t->array);
       for (i = (ptrdiff_t)t->asize-1; i >= 0; i--)
@@ -199,13 +196,13 @@ static char *serialize_put(char *w, SBufExt *sbx, cTValue *o)
       narray = (uint32_t)(i+1);
       if (narray && tvisnil(&array[0])) one = 4;
     }
-    if (t->hmask > 0) {  /* Count number of used hash slots. */
+    if (t->hmask > 0) {  
       uint32_t i, hmask = t->hmask;
       Node *node = noderef(t->node);
       for (i = 0; i <= hmask; i++)
 	nhash += !tvisnil(&node[i].val);
     }
-    /* Write metatable index. */
+    
     if (LJ_UNLIKELY(tabref(sbx->dict_mt)) && tabref(t->metatable)) {
       TValue mto;
       Node *n;
@@ -221,24 +218,24 @@ static char *serialize_put(char *w, SBufExt *sbx, cTValue *o)
 	}
       } while ((n = nextnode(n)));
     }
-    /* Write number of array slots and hash slots. */
+    
     w = serialize_more(w, sbx, 1+2*5);
     *w++ = (char)(SER_TAG_TAB + (nhash ? 1 : 0) + (narray ? one : 0));
     if (narray) w = serialize_wu124(w, narray);
     if (nhash) w = serialize_wu124(w, nhash);
-    if (narray) {  /* Write array entries. */
+    if (narray) {  
       cTValue *oa = tvref(t->array) + (one >> 2);
       cTValue *oe = tvref(t->array) + narray;
       while (oa < oe) w = serialize_put(w, sbx, oa++);
     }
-    if (nhash) {  /* Write hash entries. */
+    if (nhash) {  
       const Node *node = noderef(t->node) + t->hmask;
       GCtab *dict_str = tabref(sbx->dict_str);
       if (LJ_UNLIKELY(dict_str)) {
 	for (;; node--)
 	  if (!tvisnil(&node->val)) {
 	    if (LJ_LIKELY(tvisstr(&node->key))) {
-	      /* Inlined lj_tab_getstr is 30% faster. */
+	      
 	      const GCstr *str = strV(&node->key);
 	      Node *n = hashstr(dict_str, str);
 	      do {
@@ -292,7 +289,7 @@ static char *serialize_put(char *w, SBufExt *sbx, cTValue *o)
       w = serialize_more(w, sbx, 1+16);
       *w++ = SER_TAG_COMPLEX;
 #if LJ_BE
-      {  /* Only swap the doubles. The re/im order stays the same. */
+      {  
 	uint64_t u = lj_bswap64(((uint64_t *)sp)[0]); memcpy(w, &u, 8);
 	u = lj_bswap64(((uint64_t *)sp)[1]); memcpy(w+8, &u, 8);
       }
@@ -301,7 +298,7 @@ static char *serialize_put(char *w, SBufExt *sbx, cTValue *o)
 #endif
       w += 16;
     } else {
-      goto badenc;  /* NYI other cdata */
+      goto badenc;  
     }
 #endif
   } else if (tvislightud(o)) {
@@ -325,7 +322,7 @@ static char *serialize_put(char *w, SBufExt *sbx, cTValue *o)
 #endif
     }
   } else {
-    /* NYI userdata */
+    
 #if LJ_HASFFI
   badenc:
 #endif
@@ -334,7 +331,7 @@ static char *serialize_put(char *w, SBufExt *sbx, cTValue *o)
   return w;
 }
 
-/* Get serialized object from buffer. */
+
 static char *serialize_get(char *r, SBufExt *sbx, TValue *o)
 {
   char *w = sbx->w;
@@ -355,7 +352,7 @@ static char *serialize_get(char *r, SBufExt *sbx, TValue *o)
 #if LJ_BE
     o->u64 = lj_bswap64(o->u64);
 #endif
-    if (!tvisnum(o)) setnanV(o);  /* Fix non-canonical NaNs. */
+    if (!tvisnum(o)) setnanV(o);  
   } else if (tp <= SER_TAG_TRUE) {
     setpriV(o, ~tp);
   } else if (tp == SER_TAG_DICT_STR) {
@@ -393,7 +390,7 @@ static char *serialize_get(char *r, SBufExt *sbx, TValue *o)
       r = serialize_ru124(r, w, &nhash); if (LJ_UNLIKELY(!r)) goto eob;
     }
     t = lj_tab_new(sbufL(sbx), narray, hsize2hbits(nhash));
-    /* NOBARRIER: The table is new (marked white). */
+    
     setgcref(t->metatable, obj2gco(mt));
     settabV(sbufL(sbx), o, t);
     if (narray) {
@@ -428,7 +425,7 @@ static char *serialize_get(char *r, SBufExt *sbx, TValue *o)
     if (sz == 16)
       ((uint64_t *)cdataptr(cd))[1] = lj_bswap64(((uint64_t *)cdataptr(cd))[1]);
 #endif
-    if (sz == 16) {  /* Fix non-canonical NaNs. */
+    if (sz == 16) {  
       TValue *cdo = (TValue *)cdataptr(cd);
       if (!tvisnum(&cdo[0])) setnanV(&cdo[0]);
       if (!tvisnum(&cdo[1])) setnanV(&cdo[1]);
@@ -464,9 +461,9 @@ eob:
   return NULL;
 }
 
-/* -- External serialization API ------------------------------------------ */
 
-/* Encode to buffer. */
+
+
 SBufExt * LJ_FASTCALL lj_serialize_put(SBufExt *sbx, cTValue *o)
 {
   sbx->depth = LJ_SERIALIZE_DEPTH;
@@ -474,14 +471,14 @@ SBufExt * LJ_FASTCALL lj_serialize_put(SBufExt *sbx, cTValue *o)
   return sbx;
 }
 
-/* Decode from buffer. */
+
 char * LJ_FASTCALL lj_serialize_get(SBufExt *sbx, TValue *o)
 {
   sbx->depth = LJ_SERIALIZE_DEPTH;
   return serialize_get(sbx->r, sbx, o);
 }
 
-/* Stand-alone encoding, borrowing from global temporary buffer. */
+
 GCstr * LJ_FASTCALL lj_serialize_encode(lua_State *L, cTValue *o)
 {
   SBufExt sbx;
@@ -493,26 +490,26 @@ GCstr * LJ_FASTCALL lj_serialize_encode(lua_State *L, cTValue *o)
   return lj_str_new(L, sbx.b, (size_t)(w - sbx.b));
 }
 
-/* Stand-alone decoding, copy-on-write from string. */
+
 void lj_serialize_decode(lua_State *L, TValue *o, GCstr *str)
 {
   SBufExt sbx;
   char *r;
   memset(&sbx, 0, sizeof(SBufExt));
   lj_bufx_set_cow(L, &sbx, strdata(str), str->len);
-  /* No need to set sbx.cowref here. */
+  
   sbx.depth = LJ_SERIALIZE_DEPTH;
   r = serialize_get(sbx.r, &sbx, o);
   if (r != sbx.w) lj_err_caller(L, LJ_ERR_BUFFER_LEFTOV);
 }
 
 #if LJ_HASJIT
-/* Peek into buffer to find the result IRType for specialization purposes. */
+
 LJ_FUNC MSize LJ_FASTCALL lj_serialize_peektype(SBufExt *sbx)
 {
   uint32_t tp;
   if (serialize_ru124(sbx->r, sbx->w, &tp)) {
-    /* This must match the handling of all tags in the decoder above. */
+    
     switch (tp) {
     case SER_TAG_NIL: return IRT_NIL;
     case SER_TAG_FALSE: return IRT_FALSE;
@@ -532,7 +529,7 @@ LJ_FUNC MSize LJ_FASTCALL lj_serialize_peektype(SBufExt *sbx)
       return IRT_STR;
     }
   }
-  return IRT_NIL;  /* Will fail on actual decode. */
+  return IRT_NIL;  
 }
 #endif
 

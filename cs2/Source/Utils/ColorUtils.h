@@ -42,9 +42,9 @@ private:
 constexpr Hue kGreenHue{120.0f / 360.0f};
 constexpr Hue kRedHue{0.0f / 360.0f};
 
-// Packed 8-bit RGBA color config value (0xRRGGBBAA), stored in the 4-byte config bucket.
-// Implicitly convertible to/from std::uint32_t so the existing uint() config conversion
-// serializes it with no schema changes.
+
+
+
 struct Rgba {
     constexpr Rgba() noexcept = default;
 

@@ -13,39 +13,39 @@
 
 #include <Utils/NsPaths.h>
 
-// posix_spawn environment (unistd.h only declares it under feature macros - mirror RadioManager;
-// must stay at global scope).
+
+
 extern "C" char** environ;
 
-// Local Steam persona for the account bar (name + avatar.png for the existing avatar loader).
-//
-// All IO happens on the HOST (the Steam client's own data lives there; the game runs inside the
-// Steam container): a small shell script written once to <exchangeRoot>/ns_steam_persona.sh and
-// spawned through steam-runtime-launch-client reads
-//   ~/.local/share/Steam/config/loginusers.vdf   -> most recently used account (newest
-//                                                   timestamp - NOTE: a Steam client update
-//                                                   (~Sep 2026) changed the field casing from
-//                                                   "Timestamp" to "timestamp", which killed a
-//                                                   case-sensitive parser silently; match
-//                                                   case-insensitively) -> SteamID64 + PersonaName
-//   ~/.local/share/Steam/config/avatarcache/<sid>.png  (local copy of the profile avatar)
-// and falls back to the public profile XML (steamcommunity.com/profiles/<sid>?xml=1 -> avatarFull,
-// same host-curl pattern as the web radio) when the cache misses. Outputs land in /tmp
-// (guaranteed shared with the container): ns_steam_persona.txt (name) + ns_steam_avatar.png.
-// The name file is written BEFORE the avatar section so a slow/blocked steamcommunity fetch can
-// never delay the name.
-//
-// This file owns the fetch + the name cache; the avatar file is consumed by the menu's
-// loadAvatar() (which retries until the texture is staged).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 namespace steam_persona
 {
 
-// Paths are resolved once into the writable exchange root (NsPaths.h). The script runs on
-// the HOST side (steam-runtime-launch-client --host, or /bin/sh as the fallback) while the
-// module runs inside the Steam runtime container - since the 2026-10-04 Steam client update
-// the two sides no longer share /tmp, so the outputs live under $HOME/OsirisCS2, which both
-// sides see. The script takes the exchange root as $1 ("OUT") so the single constexpr script
-// text works for both spawn paths.
+
+
+
+
+
+
 inline char scriptPath[192];
 inline char namePath[192];
 inline char avatarPath[192];
@@ -61,7 +61,7 @@ inline void resolvePaths() noexcept
     static_cast<void>(ns_paths::join(avatarPath, sizeof(avatarPath), "ns_steam_avatar.png"));
 }
 
-// The menu's avatar staging consumes the fetched avatar (see Neverlose.cpp loadAvatar).
+
 [[nodiscard]] inline const char* avatarFile() noexcept
 {
     resolvePaths();
@@ -74,7 +74,7 @@ inline float nextFetchAttempt = 0.0f;
 inline char personaName[64] = {};
 inline float nextNameRead = 0.0f;
 
-inline constexpr int kMaxFetchAttempts = 40;     // ~10 min of retries, then give up for the session
+inline constexpr int kMaxFetchAttempts = 40;     
 inline constexpr float kFetchRetryDelay = 15.0f;
 
 inline constexpr char kScript[] = R"(#!/bin/sh
@@ -101,7 +101,7 @@ printf "%s" "$NAME" > "$OUT/ns_steam_persona.txt"
 if [ -f "$C/$SID.png" ]; then
   cp "$C/$SID.png" "$OUT/ns_steam_avatar.png"
 else
-  URL=$(curl -s --max-time 15 "https://steamcommunity.com/profiles/$SID/?xml=1" | grep -o '<avatarFull><!\[CDATA\[[^]]*\]\]></avatarFull>' | head -1 | sed 's/.*\[CDATA\[//; s/\]\].*//')
+  URL=$(curl -s --max-time 15 "https:
   if [ -n "$URL" ]; then
     curl -s --max-time 20 "$URL" -o "$OUT/ns_steam_avatar.png.part" && mv -f "$OUT/ns_steam_avatar.png.part" "$OUT/ns_steam_avatar.png"
   fi

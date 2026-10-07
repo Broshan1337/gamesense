@@ -1,7 +1,4 @@
-/*
-** Load and dump code.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #include <errno.h>
 #include <stdio.h>
@@ -23,7 +20,7 @@
 #include "lj_bcdump.h"
 #include "lj_parse.h"
 
-/* -- Load Lua source code and bytecode ----------------------------------- */
+
 
 static TValue *cpparser(lua_State *L, lua_CFunction dummy, void *ud)
 {
@@ -32,7 +29,7 @@ static TValue *cpparser(lua_State *L, lua_CFunction dummy, void *ud)
   GCfunc *fn;
   int bc;
   UNUSED(dummy);
-  cframe_errfunc(L->cframe) = -1;  /* Inherit error function. */
+  cframe_errfunc(L->cframe) = -1;  
   bc = lj_lex_setup(L, ls);
   if (ls->mode) {
     int xmode = 1;
@@ -50,10 +47,10 @@ static TValue *cpparser(lua_State *L, lua_CFunction dummy, void *ud)
   pt = bc ? lj_bcread(ls) : lj_parse(ls);
   if (ls->fr2 == LJ_FR2) {
     fn = lj_func_newL_empty(L, pt, tabref(L->env));
-    /* Don't combine above/below into one statement. */
+    
     setfuncV(L, L->top++, fn);
   } else {
-    /* Non-native generation returns a dumpable, but non-runnable prototype. */
+    
     setprotoV(L, L->top++, pt);
   }
   return NULL;
@@ -170,12 +167,12 @@ LUALIB_API int luaL_loadstring(lua_State *L, const char *s)
   return luaL_loadbuffer(L, s, strlen(s), s);
 }
 
-/* -- Dump bytecode ------------------------------------------------------- */
+
 
 LUA_API int lua_dump(lua_State *L, lua_Writer writer, void *data)
 {
   cTValue *o = L->top-1;
-  uint32_t flags = LJ_FR2*BCDUMP_F_FR2;  /* Default mode for legacy C API. */
+  uint32_t flags = LJ_FR2*BCDUMP_F_FR2;  
   lj_checkapi(L->top > L->base, "top slot empty");
   if (tvisfunc(o) && isluafunc(funcV(o)))
     return lj_bcwrite(L, funcproto(funcV(o)), writer, data, flags);

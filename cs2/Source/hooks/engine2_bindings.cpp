@@ -1,11 +1,11 @@
-// ============================================================================
-// engine2.dll bindings — implementation.
-//
-// One-shot sig-scan resolves 8 engine2 functions + 4 client.dll functions
-// listed by user 2026-07-11.  IsInGame / IsConnected are read-only calls
-// used as gameplay gate; LevelShutdown gets a MinHook trampoline so we
-// know when the world tears down.
-// ============================================================================
+
+
+
+
+
+
+
+
 #include "engine2_bindings.h"
 #include "../core/signature_scanner.h"
 #include "../schema/cs2_signature_atlas.h"
@@ -20,10 +20,10 @@ namespace fva::hooks::engine2
 
 namespace {
 
-// ---- Sig-scan patterns (from user's authoritative list 2026-07-11) --------
-// GameOverlayRenderer64.dll (present) omitted — not FVA-relevant.
 
-// engine2.dll
+
+
+
 constexpr const char* kGetAspectRatioSig =
     "48 89 5C 24 ? 57 48 83 EC ? 8B FA 48 8D 0D";
 constexpr const char* kIsInGameSig =
@@ -46,13 +46,13 @@ constexpr const char* kGetLevelNameShortSig =
 constexpr const char* kConnectSig =
     "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 48 83 EC ? 44 89 81";
 
-// client.dll — LevelShutdown pattern (user list)
+
 constexpr const char* kLevelShutdownSig =
     "48 83 EC ? 48 8B 0D ? ? ? ? 48 8D 15 ? ? ? ? 45 33 C9 45 33 C0 ? ? "
     "? FF 50 ? 48 85 C0 74 ? 48 8B 0D ? ? ? ? 48 8B D0 ? ? ? 41 FF 50 ? "
     "48 83 C4";
 
-// client.dll — Category 4-6 functions (call-only, not hooks)
+
 constexpr const char* kComputeRandomSeedSig =
     "48 89 5C 24 ? 57 48 81 EC ? ? ? ? ? ? ? ? 48 8D 8C 24";
 constexpr const char* kForceButtonsDownSig =
@@ -62,11 +62,11 @@ constexpr const char* kGetViewAnglesSig =
 constexpr const char* kSetViewAnglesSig =
     "85 D2 75 ? 48 63 81";
 
-// ---- Resolution state ------------------------------------------------------
+
 std::atomic<bool>  g_init_ran{false};
 ResolvedRVAs       g_rvas{};
 
-// Resolved function pointers.
+
 using IsInGameFn      = bool(__fastcall*)();
 using IsConnectedFn   = char(__fastcall*)();
 using LevelShutdownFn = void*(__fastcall*)();
@@ -78,22 +78,22 @@ ForceButtonsDownFn  g_force_buttons_down    = nullptr;
 GetViewAnglesFn     g_get_view_angles       = nullptr;
 SetViewAnglesFn     g_set_view_angles       = nullptr;
 
-// LevelShutdown hook state.
+
 LevelShutdownFn     g_level_shutdown_orig   = nullptr;
 void*               g_level_shutdown_target = nullptr;
 
-// Shutdown / init pairing flag.  True after LevelShutdown fires; cleared
-// on notify_level_init_complete().
+
+
 std::atomic<bool>   g_shutting_down{false};
 
-// Resolve one address by pattern in given module.  Returns nullptr on miss.
+
 void* find(HMODULE m, const char* sig) noexcept
 {
     if (!m || !sig) return nullptr;
     return fva::scanner::find_in_module(m, sig, 0);
 }
 
-// LevelShutdown detour — sets shutting_down flag, forwards to original.
+
 void* __fastcall level_shutdown_detour() noexcept
 {
     g_shutting_down.store(true, std::memory_order_release);
@@ -104,7 +104,7 @@ void* __fastcall level_shutdown_detour() noexcept
     return nullptr;
 }
 
-} // anonymous
+} 
 
 bool init() noexcept
 {
@@ -116,11 +116,11 @@ bool init() noexcept
         std::printf("[fva_recon][engine2] init: missing module(s) engine2=%p "
                     "client=%p — deferring\n",
                     (void*)engine2, (void*)client);
-        g_init_ran.store(false, std::memory_order_release);  // retry later
+        g_init_ran.store(false, std::memory_order_release);  
         return false;
     }
 
-    // ---- engine2.dll ------------------------------------------------------
+    
     void* p_get_ar   = find(engine2, kGetAspectRatioSig);
     void* p_isin     = find(engine2, kIsInGameSig);
     void* p_isconn   = find(engine2, kIsConnectedSig);
@@ -129,7 +129,7 @@ bool init() noexcept
     void* p_getlvls  = find(engine2, kGetLevelNameShortSig);
     void* p_connect  = find(engine2, kConnectSig);
 
-    // ---- client.dll -------------------------------------------------------
+    
     void* p_shutdown = find(client, kLevelShutdownSig);
     void* p_crs      = find(client, kComputeRandomSeedSig);
     void* p_fbd      = find(client, kForceButtonsDownSig);
@@ -202,7 +202,7 @@ bool is_connected() noexcept
     if (!g_is_connected_fn) return false;
     bool r = false;
     __try {
-        // IsConnected returns char (bool-like) — cast explicitly.
+        
         r = (g_is_connected_fn() != 0);
     }
     __except (EXCEPTION_EXECUTE_HANDLER) { r = false; }
@@ -230,7 +230,7 @@ bool install_level_shutdown_hook() noexcept
 {
     if (g_level_shutdown_orig) return true;
     if (!g_level_shutdown_target) {
-        // Try one more resolution in case client.dll wasn't loaded during init.
+        
         HMODULE client = ::GetModuleHandleW(L"client.dll");
         if (client) g_level_shutdown_target = find(client, kLevelShutdownSig);
     }
@@ -276,4 +276,4 @@ ForceButtonsDownFn  force_buttons_down()  noexcept { return g_force_buttons_down
 GetViewAnglesFn     get_view_angles()     noexcept { return g_get_view_angles;     }
 SetViewAnglesFn     set_view_angles()     noexcept { return g_set_view_angles;     }
 
-} // namespace fva::hooks::engine2
+} 

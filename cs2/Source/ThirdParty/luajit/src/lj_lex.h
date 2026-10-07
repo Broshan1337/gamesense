@@ -1,7 +1,4 @@
-/*
-** Lexical analyzer.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #ifndef _LJ_LEX_H
 #define _LJ_LEX_H
@@ -11,7 +8,7 @@
 #include "lj_obj.h"
 #include "lj_err.h"
 
-/* Lua lexer tokens. */
+
 #define TKDEF(_, __) \
   _(and) _(break) _(const) _(continue) _(do) _(else) _(elseif) _(end) _(false) \
   _(for) _(function) _(goto) _(if) _(in) _(local) _(nil) _(not) _(or) \
@@ -32,59 +29,59 @@ TKDEF(TKENUM1, TKENUM2)
   TK_RESERVED = TK_while - TK_OFS
 };
 
-typedef int LexChar;	/* Lexical character. Unsigned ext. from char. */
-typedef int LexToken;	/* Lexical token. */
+typedef int LexChar;	
+typedef int LexToken;	
 
-/* Combined bytecode ins/line. Only used during bytecode generation. */
+
 typedef struct BCInsLine {
-  BCIns ins;		/* Bytecode instruction. */
-  BCLine line;		/* Line number for this bytecode. */
+  BCIns ins;		
+  BCLine line;		
 } BCInsLine;
 
-/* Index into variable stack. */
+
 typedef uint16_t VarIndex;
 
-#define LJ_VINDEX_HSIZE	32	/* Hash table size. Must be a power of 2. */
+#define LJ_VINDEX_HSIZE	32	
 #define LJ_VINDEX_MASK	(LJ_VINDEX_HSIZE-1)
 
-/* Info for local variables. Only used during bytecode generation. */
+
 typedef struct VarInfo {
-  GCRef name;		/* Local variable name or goto/label name. */
-  BCPos startpc;	/* First point where the local variable is active. */
-  BCPos endpc;		/* First point where the local variable is dead. */
-  uint8_t slot;		/* Variable slot. */
-  uint8_t info;		/* Variable/goto/label info. */
-  VarIndex prev;	/* Previous entry in variable hash chain. */
+  GCRef name;		
+  BCPos startpc;	
+  BCPos endpc;		
+  uint8_t slot;		
+  uint8_t info;		
+  VarIndex prev;	
 } VarInfo;
 
-/* Lua lexer state. */
+
 typedef struct LexState {
-  struct FuncState *fs;	/* Current FuncState. Defined in lj_parse.c. */
-  struct lua_State *L;	/* Lua state. */
-  TValue tokval;	/* Current token value. */
-  TValue lookaheadval;	/* Lookahead token value. */
-  const char *p;	/* Current position in input buffer. */
-  const char *pe;	/* End of input buffer. */
-  LexChar c;		/* Current character. */
-  LexToken tok;		/* Current token. */
-  LexToken lookahead;	/* Lookahead token. */
-  SBuf sb;		/* String buffer for tokens. */
-  lua_Reader rfunc;	/* Reader callback. */
-  void *rdata;		/* Reader callback data. */
-  BCLine linenumber;	/* Input line counter. */
-  BCLine lastline;	/* Line of last token. */
-  GCstr *chunkname;	/* Current chunk name (interned string). */
-  const char *chunkarg;	/* Chunk name argument. */
-  const char *mode;	/* Allow loading bytecode (b) and/or source text (t). */
-  VarInfo *vstack;	/* Stack for names and extents of local variables. */
-  MSize sizevstack;	/* Size of variable stack. */
-  MSize vtop;		/* Top of variable stack. */
-  BCInsLine *bcstack;	/* Stack for bytecode instructions/line numbers. */
-  MSize sizebcstack;	/* Size of bytecode stack. */
-  uint32_t level;	/* Syntactical nesting level. */
-  int endmark;		/* Trust bytecode end marker, even if not at EOF. */
-  int fr2;		/* Generate bytecode for LJ_FR2 mode. */
-  VarIndex vhash[LJ_VINDEX_HSIZE];	/* Variable hash chain anchors. */
+  struct FuncState *fs;	
+  struct lua_State *L;	
+  TValue tokval;	
+  TValue lookaheadval;	
+  const char *p;	
+  const char *pe;	
+  LexChar c;		
+  LexToken tok;		
+  LexToken lookahead;	
+  SBuf sb;		
+  lua_Reader rfunc;	
+  void *rdata;		
+  BCLine linenumber;	
+  BCLine lastline;	
+  GCstr *chunkname;	
+  const char *chunkarg;	
+  const char *mode;	
+  VarInfo *vstack;	
+  MSize sizevstack;	
+  MSize vtop;		
+  BCInsLine *bcstack;	
+  MSize sizebcstack;	
+  uint32_t level;	
+  int endmark;		
+  int fr2;		
+  VarIndex vhash[LJ_VINDEX_HSIZE];	
 } LexState;
 
 LJ_FUNC int lj_lex_setup(lua_State *L, LexState *ls);

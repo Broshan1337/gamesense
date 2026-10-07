@@ -3,11 +3,11 @@
 #include <cstdint>
 #include <cstring>
 
-// Minimal, libm-free approximations of expf/logf/powf. There is no <cmath> pow under -nostdlib, and the
-// only place that needs one so far is the bullet damage-falloff estimate (base * rangeModifier^(dist/500)),
-// where ~1e-3 relative accuracy is far more than enough (the result is compared to an integer damage
-// threshold). These are the classic bit-trick "fastapprox" forms (Paul Mineiro), which use only float
-// bit-reinterpretation and arithmetic.
+
+
+
+
+
 namespace fastmath {
 
 [[nodiscard]] inline float log2f(float x) noexcept
@@ -33,7 +33,7 @@ namespace fastmath {
     return result;
 }
 
-// x^p for x > 0. (log2(x^p) = p*log2(x); x^p = 2^(p*log2(x)).)
+
 [[nodiscard]] inline float powf(float x, float p) noexcept
 {
     if (x <= 0.0f)
@@ -41,4 +41,4 @@ namespace fastmath {
     return exp2f(p * log2f(x));
 }
 
-} // namespace fastmath
+} 

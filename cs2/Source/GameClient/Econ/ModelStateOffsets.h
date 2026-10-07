@@ -6,19 +6,19 @@
 #include <CS2/Classes/Entities/C_BaseEntity.h>
 #include <Utils/FieldOffset.h>
 
-// Resolves the chain used to reach a weapon's live CModelState (for SetMeshGroupMask-style
-// legacy-paint-kit fixes): C_BaseEntity::m_CBodyComponent (schema-resolved) locates the
-// CBodyComponentSkeletonInstance; from there the FULLY SCHEMA-RESOLVED embedded chain
-// (m_skeletonInstance -> m_modelState) reaches the CModelState. 2026-09-27: this replaced a
-// virtual call through the component's vtable+112 ("slot 14, identified empirically") - the
-// 5GB update reshuffled that vtable (the fourth reshuffled vtable of the update), slot 14
-// became a static-pointer getter returning 0x46798A0, and writing m_MeshGroupMask (+0x248)
-// through it clobbered the CBaseAnimGraph_API registry (entry-3 fn slot -> qword 2 -> the
-// game's map-load walk called it -> the rip=2 crashes; caught with a gdb HW watchpoint).
-// Schema chain (fresh dumper): m_skeletonInstance @ +0x80, m_modelState @ +0x140,
-// m_MeshGroupMask @ +0x208 (520 decimal; an earlier revision of this comment said +0x248 - a
-// hex typo, the runtime value was always schema-resolved so behavior was never affected),
-// m_hModel @ +0xA0.
+
+
+
+
+
+
+
+
+
+
+
+
+
 struct ModelStateOffsets {
     explicit ModelStateOffsets(auto&& schemaSystem) noexcept
         : bodyComponent{resolve(schemaSystem, "C_BaseEntity", "m_CBodyComponent")}

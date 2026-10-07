@@ -7,9 +7,9 @@
 #include "PatternVault.h"
 #include <Utils/ObfAnnotations.h>
 
-// The static array below is the emitted-at-rest storage: it holds XOR ciphertext and is
-// decrypted in place on first use (PatternVault.h). The returned view points at the
-// persistent decrypted array, so storing the view (tests do) keeps working.
+
+
+
 template <BytePatternStorage Storage>
 __attribute__((annotate("+fla"))) auto operator ""_pat()
 {

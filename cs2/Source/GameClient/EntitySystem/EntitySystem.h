@@ -41,13 +41,13 @@ public:
         return hookContext.template make<BaseEntity>(static_cast<cs2::C_BaseEntity*>(getEntityFromHandle(handle)));
     }
     
-    // Looks an entity up by bare index, for the cases where the game hands us one instead of a
-    // handle - m_iIDEntIndex (the entity under the crosshair) being the reason this exists.
-    //
-    // Unlike the handle lookup there is no serial number to check against, so a stale index can
-    // only be caught by confirming the slot actually holds an entity whose own handle agrees with
-    // the index we asked for. That is what stops a recycled slot from being read as the entity that
-    // used to live in it.
+    
+    
+    
+    
+    
+    
+    
     [[nodiscard]] cs2::CEntityInstance* getEntityFromIndex(cs2::CEntityIndex entityIndex) const noexcept
     {
         if (!entityIndex.isValid())
@@ -57,8 +57,8 @@ public:
         if (!entityList)
             return nullptr;
 
-        // kMaxValidEntityIndex (0x7FFE) is one short of kNumberOfChunks * kNumberOfIdentitiesPerChunk
-        // (64 * 512), so isValid() above already bounds this to a real chunk.
+        
+        
         const auto chunkIndex = entityIndex.value / cs2::CConcreteEntityList::kNumberOfIdentitiesPerChunk;
         auto* const chunk = entityList->chunks[chunkIndex];
         if (!chunk)
@@ -77,10 +77,10 @@ public:
     {
         const auto entityList = getEntityList();
 
-        // CHAINDIAG: BEFORE the early return - what does getEntityList actually compute?
-        // (2026-10-04: identities=0 in-match with a live entity list. First probe sat after
-        // the null-return and could never fire in the failure case - its silence WAS the
-        // verdict: entityList == nullptr. This placement splits "es null" / "offset wrong".)
+        
+        
+        
+        
         {
             static std::int64_t lastDiagNs = 0;
             static std::uint32_t diagCount = 0;
@@ -89,7 +89,7 @@ public:
             clock_gettime(CLOCK_MONOTONIC, &ts);
             const std::int64_t nowNs = static_cast<std::int64_t>(ts.tv_sec) * 1'000'000'000LL + ts.tv_nsec;
             if (first || nowNs - lastDiagNs > 10'000'000'000LL) {
-                if (++diagCount <= 12) {   // cap: 2 minutes of diagnosis, then silent
+                if (++diagCount <= 12) {   
                     lastDiagNs = nowNs;
                     const auto offset = hookContext.patternSearchResults().template get<EntityListOffset>();
                     const auto es = entitySystem();
@@ -103,18 +103,18 @@ public:
         if (!entityList)
             return;
 
-        // ONE-SHOT identity-page stride probe (2026-10-06 audit): sizeof(CEntityIdentity) == 112
-        // is a hand-written static_assert, but the long-standing community stride was 120 (the
-        // schema cannot see internal tail members, so only the game's own data can arbitrate).
-        // A correct stride makes chunk[0][i].handle.index() == i for every populated slot (the
-        // game fills identity pages positionally). Probe the first four slots under both strides
-        // and log the verdict once - a wrong stride fails silently (the handle-vs-index guard
-        // turns everything into null lookups), which is exactly the 2026-10-04 "identities=0
-        // with a live entity list" symptom class. Only indices 0..3 are probed so every read
-        // stays inside the page even if the true stride is the larger one; the probe retries
-        // (cheap: a handful of loads) while inconclusive, e.g. before a live entity list exists.
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
         {
-            static int strideVerdict = 0;   // 0 = not yet determined; 112 / 120 = measured; -1 = gave up
+            static int strideVerdict = 0;   
             static bool inconclusiveLogged = false;
             if (strideVerdict == 0) {
                 if (const auto* const chunk0 = entityList->chunks[0]) {
@@ -164,10 +164,10 @@ public:
         if (!entityClasses)
             return nullptr;
 
-        // BOUNDED SCAN (the 2026-10-03 lesson): a stale map layout walked garbage
-        // numElements entries (33M iterations of strcmp) - it stalled the render thread
-        // for minutes AND matched nothing, silently killing every classifier-gated
-        // feature. Cap the scan: the real map holds a few hundred classes.
+        
+        
+        
+        
         const auto count = std::min<std::uint32_t>(entityClasses->numElements, kMaxEntityClassScan);
         for (std::uint32_t i = 0; i < count; ++i) {
             if (std::strcmp(entityClasses->memory[i].key, className) == 0)
@@ -176,11 +176,11 @@ public:
         return nullptr;
     }
 
-    // Most-derived schema class name for a bare entity index ("C_CSPlayerPawn" etc.): the
-    // identity's class pointer reverse-looked-up in the game's own entity-class map (the same
-    // map findEntityClass searches forward - no new RE, no baked-in hierarchy). Null when the
-    // index is stale/recycled or the map is unavailable. The returned pointer is game-owned
-    // map storage - copy it before the next frame.
+    
+    
+    
+    
+    
     [[nodiscard]] const char* entityClassNameForIndex(int entityIndex) const noexcept
     {
         const cs2::CEntityIndex index{entityIndex};
@@ -213,8 +213,8 @@ public:
         return nullptr;
     }
 
-    // The real map holds a few hundred classes; anything above this = a stale layout
-    // resolving garbage (see the 2026-10-03 note at findEntityClass).
+    
+    
     static constexpr std::uint32_t kMaxEntityClassScan = 4096;
 
 private:
@@ -246,13 +246,13 @@ private:
 
     [[nodiscard]] auto getEntityList() const noexcept
     {
-        // The 5GB 2026-09-25 update INLINED the chunk-pointer array into CGameEntitySystem
-        // (live-verified on dce58989: chunks[k] sits at entitySystem+0x10+k*8; chunk 0 =
-        // the identity page for indices 0..511, chunk 1 = 512..1023, ...). EntityListOffset
-        // resolves the member's POSITION (16), so the list = entitySystem+offset directly.
-        // The old pointer-dereference read chunk 0's page pointer as the array base and
-        // every identity walk returned garbage - the silent death of the pawn lookups, the
-        // weapon loops, ESP and glow.
+        
+        
+        
+        
+        
+        
+        
         const auto offset = hookContext.patternSearchResults().template get<EntityListOffset>();
         if (!offset || offset.rawOffset() <= 0 || !entitySystem())
             return static_cast<cs2::CConcreteEntityList*>(nullptr);

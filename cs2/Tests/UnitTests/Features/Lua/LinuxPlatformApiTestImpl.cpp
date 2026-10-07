@@ -1,6 +1,6 @@
-// Provides the LinuxPlatformApi methods the Lua framework's gui_log::write needs. The dlopen
-// family is intentionally absent - SharedObjectTests.cpp mocks it; the game build gets the
-// real definitions from dllmain.cpp including LinuxPlatformApiImpl.h.
+
+
+
 #include <Platform/Linux/LinuxPlatformApi.h>
 
 #include <cstdio>

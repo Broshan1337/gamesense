@@ -1,7 +1,4 @@
-/*
-** Userdata handling.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #define lj_udata_c
 #define LUA_CORE
@@ -15,14 +12,14 @@ GCudata *lj_udata_new(lua_State *L, MSize sz, GCtab *env)
 {
   GCudata *ud = lj_mem_newt(L, sizeof(GCudata) + sz, GCudata);
   global_State *g = G(L);
-  newwhite(g, ud);  /* Not finalized. */
+  newwhite(g, ud);  
   ud->gct = ~LJ_TUDATA;
   ud->udtype = UDTYPE_USERDATA;
   ud->len = sz;
-  /* NOBARRIER: The GCudata is new (marked white). */
+  
   setgcrefnull(ud->metatable);
   setgcref(ud->env, obj2gco(env));
-  /* Chain to userdata list (after main thread). */
+  
   setgcrefr(ud->nextgc, mainthread(g)->nextgc);
   setgcref(mainthread(g)->nextgc, obj2gco(ud));
   return ud;
@@ -44,10 +41,10 @@ void *lj_lightud_intern(lua_State *L, void *p)
   if (segmap) {
     MSize seg;
     for (seg = 0; seg <= segnum; seg++)
-      if (segmap[seg] == up)  /* Fast path. */
+      if (segmap[seg] == up)  
 	return (void *)(((uint64_t)seg << LJ_LIGHTUD_BITS_LO) | lightudlo(u));
     segnum++;
-    /* Leave last segment unused to avoid clash with ITERN key. */
+    
     if (segnum >= (1 << LJ_LIGHTUD_BITS_SEG)-1) lj_err_msg(L, LJ_ERR_BADLU);
   }
   if (!((segnum-1) & segnum) && segnum != 1) {

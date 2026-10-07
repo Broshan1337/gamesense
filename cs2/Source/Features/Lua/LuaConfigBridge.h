@@ -1,19 +1,19 @@
 #pragma once
 
-// Native-config bridge for the Lua config.* API.
-//
-// Included ONLY from EntryPoints.h (which owns the HookContext machinery) - never from
-// Lua.cpp, so the framework core stays unit-testable with all config queries null.
-//
-// The config schema is template-driven C++ with no runtime names, but the SAME schema walk
-// the .cfg save/load uses (ConfigSchema::performConversion) visits every var with its
-// dotted path. These walkers record/apply through that walk, so config.get/set/list address
-// vars by path ("Combat.Triggerbot.Enabled") with zero per-var glue and zero drift: a var
-// added to the schema is automatically addressable.
-//
-// config.set carries config-file-load semantics: range-clamped/saturated by the schema's own
-// setters, change handlers NOT invoked, autosave scheduled + changeEpoch bumped (the menu's
-// dirty dot tracks it like any menu click).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #include <cstdio>
 #include <cstring>
@@ -67,7 +67,7 @@ inline void appendKeyName(char* out, std::size_t outSize, const char8_t* key) no
     out[i] = '\0';
 }
 
-// ---- count + list ----
+
 
 struct CountWalk {
     PathStack stack;
@@ -142,7 +142,7 @@ struct ListWalk {
     }
 };
 
-// ---- get ----
+
 
 struct GetWalk {
     PathStack stack;
@@ -213,7 +213,7 @@ struct GetWalk {
     }
 };
 
-// ---- set ----
+
 
 struct SetWalk {
     PathStack stack;
@@ -341,9 +341,9 @@ bool configSet(HookContext& hookContext, const char* path, const lua::ConfigValu
     (void)schema.performConversion(walk);
     if (!walk.applied)
         return false;
-    hookContext.config().saveActive(); // schedule the autosave, like any menu edit
-    ui_config::changeEpoch.fetch_add(1, std::memory_order_relaxed); // menu dirty dot
+    hookContext.config().saveActive(); 
+    ui_config::changeEpoch.fetch_add(1, std::memory_order_relaxed); 
     return true;
 }
 
-} // namespace lua_config_bridge
+} 

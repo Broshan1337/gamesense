@@ -1,6 +1,6 @@
-// ============================================================================
-// scratch → wire-bytes serialiser — implementation.
-// ============================================================================
+
+
+
 #include "scratch_serialize.h"
 #include "capture_buffer.h"
 #include "../core/signature_scanner.h"
@@ -16,27 +16,27 @@ namespace fva::scratch_serialize
 
 namespace {
 
-// void __fastcall(void* this, uint8_t* buffer, unsigned int size)
+
 using SerializePartialFn = void(__fastcall*)(void*, std::uint8_t*, unsigned int);
 
-// size_t __fastcall(const void* this) — vtable slot at +0x38
+
 using ByteSizeLongFn = std::size_t(__fastcall*)(const void*);
 
 std::atomic<SerializePartialFn> g_serialize_partial{nullptr};
 
-// Anchor for CS2's MessageLite::SerializePartialToArray implementation.
-// Depot 24134959 prologue (new hotpatch-friendly entry):
-//   mov [rsp+18h], rbx               ; 48 89 5C 24 18
-//   push rbp, rsi, rdi               ; 55 56 57
-//   sub rsp, 90h                     ; 48 81 EC 90 00 00 00
-//   mov rax, [rip + __security_cookie] ; 48 8B 05 ? ? ? ?
-//   xor rax, rsp                     ; 48 33 C4
+
+
+
+
+
+
+
 constexpr std::string_view k_sig_serialize_partial =
     "48 89 5C 24 18 55 56 57 48 81 EC 90 00 00 00 48 8B 05 ? ? ? ? 48 33 C4";
 
-} // namespace
+} 
 
-// CS2 ArenaStringPtr::Set — see version_manifest.h for details.
+
 using ArenaStringSetFn = void(__fastcall*)(void*, const void*, void*);
 std::atomic<ArenaStringSetFn> g_arena_string_set{nullptr};
 
@@ -51,10 +51,10 @@ bool init()
     namespace bf = fva::version::build_fingerprint;
     auto* client_base = reinterpret_cast<std::uint8_t*>(client);
 
-    // Try sig-scan first, then fall back to manifest RVA.  Validate the
-    // fingerprint AFTER each attempt — if sig-scan returns a hit that fails
-    // the check (matched a different function with similar prologue on this
-    // depot), retry via known RVA rather than giving up.
+    
+    
+    
+    
     auto try_target = [&](std::uint8_t* p) -> bool {
         if (!p) return false;
         if (std::memcmp(p, bf::kSerializePartialPrologue.data(),
@@ -72,9 +72,9 @@ bool init()
                    fva::version::known_rva::serialize_partial_to_array);
     if (!serialize_ok) return false;
 
-    // Resolve ArenaStringPtr::Set (for FVA 1:1 move_crc write path).
-    // Prefer sig-scan; fall back to manifest RVA.  Both routes verified
-    // against the arena-tag-check prologue.
+    
+    
+    
     if (auto* p = fva::scanner::find_in_module(client, k_sig_arena_string_set)) {
         g_arena_string_set.store(reinterpret_cast<ArenaStringSetFn>(p),
                                     std::memory_order_release);
@@ -90,9 +90,9 @@ bool init()
     return true;
 }
 
-// Public accessor for the resolved ArenaStringPtr::Set — used by
-// create_move_hook to write into pb->move_crc the FVA way instead of
-// std::string::assign.
+
+
+
 void* get_arena_string_set() noexcept
 {
     return reinterpret_cast<void*>(
@@ -107,7 +107,7 @@ bool serialize(std::string& out)
     auto ser = g_serialize_partial.load(std::memory_order_acquire);
     if (!ser) return false;
 
-    // ByteSizeLong via vtable[+0x38] (index 7 for 8-byte slots).
+    
     auto vtbl = reinterpret_cast<void**>(scratch.vtable);
     auto bytesize_fn = reinterpret_cast<ByteSizeLongFn>(
         vtbl[fva::version::protobuf::vtbl_bytesize_long / sizeof(void*)]);
@@ -128,4 +128,4 @@ bool ready() noexcept
            fva::capture_buffer::g_scratch.vtable != nullptr;
 }
 
-} // namespace fva::scratch_serialize
+} 

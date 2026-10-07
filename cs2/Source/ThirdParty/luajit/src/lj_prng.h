@@ -1,7 +1,4 @@
-/*
-** Pseudo-random number generation.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #ifndef _LJ_PRNG_H
 #define _LJ_PRNG_H
@@ -12,7 +9,7 @@ LJ_FUNC int LJ_FASTCALL lj_prng_seed_secure(PRNGState *rs);
 LJ_FUNC uint64_t LJ_FASTCALL lj_prng_u64(PRNGState *rs);
 LJ_FUNC uint64_t LJ_FASTCALL lj_prng_u64d(PRNGState *rs);
 
-/* This is just the precomputed result of lib_math.c:random_seed(rs, 0.0). */
+
 static LJ_AINLINE void lj_prng_seed_fixed(PRNGState *rs)
 {
   rs->u[0] = U64x(a0d27757,0a345b8c);

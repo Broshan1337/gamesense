@@ -12,28 +12,28 @@
 #include <HookContext/HookContextMacros.h>
 #include <Utils/VerifyConsole.h>
 
-// Spectate enemies while dead (the neverlose-style "spectate enemies in comp" feature, driven by
-// the game's OWN spec_next/spec_prev keys):
-//
-//   * mechanic - while dead, the camera POV is CPlayer_ObserverServices::m_hObserverTarget on the
-//     local pawn (the exact handle SpectatorList reads). Nothing re-validates that handle per
-//     frame: whatever pawn it names, the camera rides. Writing an ALIVE ENEMY pawn's handle into
-//     it bypasses the client-side mp_forcecamera target filtering, which lives only in the
-//     spec_next/spec_prev candidate selection (that selection is what we watch instead).
-//   * trigger - no hooks, no spec machinery patched: while the toggle is on and we are dead, each
-//     tick we compare the field against what we last wrote. When the game writes something ELSE
-//     into it (its legal teammate cycle on spec_next/spec_prev, or the death cam), we read the
-//     cycle direction off the teammate list positions and advance to the next/prev ALIVE ENEMY.
-//     The first foreign write after death auto-rides enemies[0]; spec_next/prev then walk the
-//     list in the pressed direction.
-//   * game thread only (CreateMove) - the console commands we track and the entity iteration run
-//     on the same thread, so the cycle state is plain globals.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 namespace spectate_enemies
 {
 inline constexpr int kMaxListedPlayers = 64;
 
-// Which enemy we currently ride + the last externally written target handle (the direction
-// reference for the teammate cycle; never holds one of our own handles).
+
+
 struct CycleState {
     int enemyIndex = -1;
     std::uint32_t ourHandle = 0;
@@ -58,9 +58,9 @@ public:
             return;
         }
 
-        // NOTE the declaring classes: m_pObserverServices lives on C_BasePlayerPawn (the pawn's
-        // base - the schema iterator does not walk parents), the target handle on
-        // CPlayer_ObserverServices, health on C_BaseEntity. Same trio SpectatorList uses.
+        
+        
+        
         const auto servicesOffset = hookContext.schemaSystem().getFieldOffset("C_BasePlayerPawn", "m_pObserverServices");
         const auto targetOffset = hookContext.schemaSystem().getFieldOffset("CPlayer_ObserverServices", "m_hObserverTarget");
         const auto healthOffset = hookContext.schemaSystem().getFieldOffset("C_BaseEntity", "m_iHealth");
@@ -83,8 +83,8 @@ public:
             return;
         }
 
-        // Alive enemies to ride + alive teammates (the candidates the game's spec cycle is
-        // allowed to pick under mp_forcecamera - they carry the key-press direction).
+        
+        
         std::uint32_t enemies[spectate_enemies::kMaxListedPlayers]{};
         std::uint32_t teammates[spectate_enemies::kMaxListedPlayers]{};
         int enemyCount = 0;
@@ -120,7 +120,7 @@ public:
         void* services{};
         std::memcpy(&services, localEntity + *servicesOffset, sizeof(services));
         if (!services)
-            return;   // no observer component - nothing to build on
+            return;   
 
         auto* const servicesBytes = reinterpret_cast<std::byte*>(services);
         std::uint32_t currentTarget{};
@@ -128,15 +128,15 @@ public:
 
         auto& state = spectate_enemies::cycleState;
 
-        // Already riding a still-alive enemy of ours - leave the field alone.
+        
         if (currentTarget == state.ourHandle && state.enemyIndex >= 0 && state.enemyIndex < enemyCount
             && enemies[state.enemyIndex] == currentTarget)
             return;
 
         if (currentTarget != state.lastForeignHandle) {
-            // A genuine external write: spec_next/spec_prev cycling teammates, the death cam
-            // (target = the killer, an enemy), or a fresh target after death. Read the key
-            // direction from the teammate cycle and advance to the next/prev alive enemy.
+            
+            
+            
             const int direction = directionOf(state.lastForeignHandle, currentTarget, teammates, teammateCount);
             if (state.enemyIndex < 0)
                 state.enemyIndex = 0;
@@ -148,21 +148,21 @@ public:
             VerifyConsole::write(5.0f, "spec", "spectate enemies: riding enemy %d of %d alive (dir %d)",
                 state.enemyIndex + 1, enemyCount, direction);
         } else if (state.enemyIndex < 0) {
-            // Same (or zero) foreign target as the previous tick with no cycle started - the
-            // very first tick after death. Take over once at enemies[0] without advancing.
+            
+            
             state.enemyIndex = 0;
             state.ourHandle = enemies[0];
             std::memcpy(servicesBytes + *targetOffset, &state.ourHandle, sizeof(state.ourHandle));
             VerifyConsole::write(30.0f, "spec", "spectate enemies: takeover, %d alive enemies", enemyCount);
         }
-        // Same foreign target as last tick with a live cycle: our write was clobbered by the
-        // engine re-writing the same candidate - do not fight it every tick, wait for a change.
+        
+        
     }
 
 private:
-    // Direction of the game's spec cycle from the teammate it left to the one it picked: forward
-    // across the end of the list wraps to positive, backward across the start to negative.
-    // Unknown references (death-cam target etc.) default to forward.
+    
+    
+    
     [[nodiscard]] static int directionOf(std::uint32_t previousForeign, std::uint32_t current,
         const std::uint32_t* teammates, int teammateCount) noexcept
     {

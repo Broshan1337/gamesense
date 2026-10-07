@@ -7,16 +7,16 @@
 #include <CS2/Constants/DllNames.h>
 #include <Platform/DynamicLibrary.h>
 
-// Resolves the live CNetworkMessages singleton (the net-message factory) via the exported
-// CreateInterface entry point of libnetworksystem.so - the same mechanism as
-// EngineClientPointer.h, with both the CreateInterface symbol and the returned object's vtable
-// validated against NETWORKSYSTEM_DLL.
-//
-// This factory owns every registered net message type; the ServerLagger walks its registry
-// (find record by type id -> info -> protobuf binding) to create a genuine CCLCMsg_VoiceData
-// instance, which is why the resolved object's vtable must be validated before any vtable slot
-// is called through it. Failures are not cached: resolution can only fail while libnetworksystem
-// is not yet loaded, which is self-correcting.
+
+
+
+
+
+
+
+
+
+
 struct NetworkMessagesPointer {
     NetworkMessagesPointer() noexcept
         : pointer{cachedPointer ? cachedPointer : (cachedPointer = resolve())}
@@ -33,10 +33,10 @@ struct NetworkMessagesPointer {
         return pointer;
     }
 
-    // Whether an address sits inside libnetworksystem's vmt range - used to validate the net
-    // channel object's vtable before the lagger calls through it (CNetChan lives in the same
-    // module as this factory). The range is cached once: getVmtSection() open()s and mmap()s
-    // the module file, so it must never run per tick.
+    
+    
+    
+    
     [[nodiscard]] static bool vtableInNetworkSystemModule(std::uintptr_t vtable) noexcept
     {
         static std::uintptr_t cachedStart = 0;
@@ -66,8 +66,8 @@ private:
         if (!messages)
             return nullptr;
 
-        // A real CNetworkMessages' vtable is compiled into libnetworksystem itself - same
-        // fail-safe validation the other interface pointers in this project use.
+        
+        
         void* vtable = nullptr;
         std::memcpy(&vtable, messages, sizeof(vtable));
         if (!networkSystem.getVmtSection().contains(std::uintptr_t(vtable)))
@@ -76,8 +76,8 @@ private:
         return messages;
     }
 
-    // Constant-initialised, trivially destructible: no __cxa_guard / atexit registration, which
-    // matters because this project links -nostdlib.
+    
+    
     inline static void* cachedPointer{nullptr};
 
     void* pointer{nullptr};

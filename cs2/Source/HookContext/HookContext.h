@@ -147,8 +147,8 @@ struct HookContext {
         return std::optional{make<PlantedC4<HookContext>>(getPlantedC4())};
     }
 
-    // The raw planted-bomb pointer (the same one the game's own bomb HUD tracks) - for callers
-    // that need to test presence without going through the wrapper's soft-failing accessors.
+    
+    
     [[nodiscard]] cs2::CPlantedC4* plantedC4Raw() noexcept
     {
         return getPlantedC4();
@@ -300,13 +300,13 @@ struct HookContext {
 
     [[nodiscard]] decltype(auto) localPlayerBulletInaccuracy() noexcept
     {
-        // MAP-TRANSITION SESSION GATE (AGENTS.md rule 0; the 2026-09-27 map-load crash class):
-        // GetInaccuracy/GetSpread/UpdateAccuracyPenalty are direct game-function calls on the
-        // local pawn's ACTIVE WEAPON - on a freshly-spawned pawn (map join) the weapon entities
-        // are mid-build and the calls walk unconstructed state, the same class as the GetAimPunch
-        // crash. Same CLOCK_MONOTONIC pawn-settle gate as aimPunchAngle (curtime is blind during
-        // the join window). {} until the pawn has been stable for the settle window - callers
-        // (Triggerbot, Aimbot, SpreadCircleVis, NoScopeInaccuracyVis) all treat {} as "unknown".
+        
+        
+        
+        
+        
+        
+        
         auto&& pawn = activeLocalPlayerPawn();
         if (!pawn || !pawn_settle::ready(pawn.rawPawn()))
             return Optional<float>{};
@@ -321,21 +321,21 @@ struct HookContext {
     }
 
 private:
-    // Resolves a block of schema field offsets, RE-resolving while the answer is still incomplete
-    // rather than caching whatever the first touch happened to produce.
-    //
-    // That distinction is the whole reason the skin changer no longer has to wait 15 seconds. These
-    // blocks are resolved lazily on first use and kept for the lifetime of the process, so a single
-    // touch made before the schema system could answer used to cache every offset as 0 - permanently,
-    // for the rest of the session, not just until the schema came up. The old 15s gate existed to
-    // guarantee that first touch happened late enough to be correct. Making a failed attempt
-    // non-sticky removes the need for the guarantee: an early touch is now simply retried.
-    //
-    // Bounded at both ends so this cannot become a per-frame cost: it stops as soon as an attempt
-    // comes back complete (the normal case, within a frame or two), and stops unconditionally after
-    // kGiveUpMapTime, so a field genuinely removed by a game update settles for the best answer
-    // available instead of walking the schema forever. An offset left at 0 makes its own feature
-    // no-op, exactly as it did before.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     template <typename Offsets>
     [[nodiscard]] const Offsets& resolveOffsets(std::optional<Offsets>& cached) noexcept
     {
@@ -346,14 +346,14 @@ private:
 
     [[nodiscard]] bool pastOffsetResolveDeadline() noexcept
     {
-        // THE 2026-10-03 LESSON: this used to be curtime-based (30s of map time). Injecting
-        // into an ALREADY-RUNNING match means curtime is past 30 on the very first touch,
-        // so a single failed schema resolve was cached as zeros for the whole session and
-        // the schema-fed features (accuracy, mesh-group chain) silently died. The give-up
-        // is now a WALL-CLOCK window from module load (CLOCK_MONOTONIC): a mid-match inject
-        // still gets its full retry window, and a field genuinely removed by a game update
-        // still stops the per-frame walk. Function-local statics are off the table (the
-        // test harness links without __cxa_guard; the codebase idiom = inline statics).
+        
+        
+        
+        
+        
+        
+        
+        
         return nowMs() - resolveWindowStartMs > 60000;
     }
 
@@ -364,8 +364,8 @@ private:
         return static_cast<std::uint64_t>(ts.tv_sec) * 1000 + ts.tv_nsec / 1000000;
     }
 
-    // The retry window anchor (module load). Immaterial when exactly it starts - what
-    // matters is that the window does NOT depend on curtime.
+    
+    
     inline static std::uint64_t resolveWindowStartMs{nowMs()};
 
     [[nodiscard]] cs2::CPlantedC4* getPlantedC4() const noexcept

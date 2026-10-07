@@ -1,7 +1,4 @@
-/*
-** FFI C library loader.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #include "lj_obj.h"
 
@@ -18,7 +15,7 @@
 #include "lj_clib.h"
 #include "lj_strfmt.h"
 
-/* -- OS-specific functions ----------------------------------------------- */
+
 
 #if LJ_TARGET_DLOPEN
 
@@ -78,7 +75,7 @@ static const char *clib_extname(lua_State *L, const char *name)
   return name;
 }
 
-/* Check for a recognized ld script line. */
+
 static const char *clib_check_lds(lua_State *L, const char *buf)
 {
   const char *p, *e;
@@ -91,7 +88,7 @@ static const char *clib_check_lds(lua_State *L, const char *buf)
   return NULL;
 }
 
-/* Quick and dirty solution to resolve shared library name from ld script. */
+
 static const char *clib_resolve_lds(lua_State *L, const char *name)
 {
   FILE *fp = fopen(name, "r");
@@ -99,12 +96,12 @@ static const char *clib_resolve_lds(lua_State *L, const char *name)
   if (fp) {
     char buf[256];
     if (fgets(buf, sizeof(buf), fp)) {
-      if (!strncmp(buf, "/* GNU ld script", 16)) {  /* ld script magic? */
-	while (fgets(buf, sizeof(buf), fp)) {  /* Check all lines. */
+      if (!strncmp(buf, "/* GNU ld script", 16)) {  
+	while (fgets(buf, sizeof(buf), fp)) {  
 	  p = clib_check_lds(L, buf);
 	  if (p) break;
 	}
-      } else {  /* Otherwise check only the first line. */
+      } else {  
 	p = clib_check_lds(L, buf);
       }
     }
@@ -156,7 +153,7 @@ BOOL WINAPI GetModuleHandleExA(DWORD, LPCSTR, HMODULE*);
 
 #define CLIB_DEFHANDLE	((void *)-1)
 
-/* Default libraries. */
+
 enum {
   CLIB_HANDLE_EXE,
 #if !LJ_TARGET_UWP
@@ -243,11 +240,11 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 static void *clib_getsym(CLibrary *cl, const char *name)
 {
   void *p = NULL;
-  if (cl->handle == CLIB_DEFHANDLE) {  /* Search default libraries. */
+  if (cl->handle == CLIB_DEFHANDLE) {  
     MSize i;
     for (i = 0; i < CLIB_HANDLE_MAX; i++) {
       HINSTANCE h = (HINSTANCE)clib_def_handle[i];
-      if (!(void *)h) {  /* Resolve default library handles (once). */
+      if (!(void *)h) {  
 #if LJ_TARGET_UWP
 	h = (HINSTANCE)&__ImageBase;
 #else
@@ -308,10 +305,10 @@ static void *clib_getsym(CLibrary *cl, const char *name)
 
 #endif
 
-/* -- C library indexing -------------------------------------------------- */
+
 
 #if LJ_TARGET_X86 && LJ_ABI_WIN
-/* Compute argument size for fastcall/stdcall functions. */
+
 static CTSize clib_func_argsize(CTState *cts, CType *ct)
 {
   CTSize n = 0;
@@ -327,7 +324,7 @@ static CTSize clib_func_argsize(CTState *cts, CType *ct)
 }
 #endif
 
-/* Get redirected or mangled external symbol. */
+
 static const char *clib_extsym(CTState *cts, CType *ct, GCstr *name)
 {
   if (ct->sib) {
@@ -338,7 +335,7 @@ static const char *clib_extsym(CTState *cts, CType *ct, GCstr *name)
   return strdata(name);
 }
 
-/* Index a C library by name. */
+
 TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
 {
   TValue *tv = lj_tab_setstr(L, cl->cache, name);
@@ -351,7 +348,7 @@ TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
     if (ctype_isconstval(ct->info)) {
       CType *ctt = ctype_child(cts, ct);
       lj_assertCTS(ctype_isinteger(ctt->info) && ctt->size <= 4,
-		   "only 32 bit const supported");  /* NYI */
+		   "only 32 bit const supported");  
       if ((ctt->info & CTF_UNSIGNED) && (int32_t)ct->size < 0)
 	setnumV(tv, (lua_Number)(uint32_t)ct->size);
       else
@@ -366,7 +363,7 @@ TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
       lj_assertCTS(ctype_isfunc(ct->info) || ctype_isextern(ct->info),
 		   "unexpected ctype %08x in clib", ct->info);
 #if LJ_TARGET_X86 && LJ_ABI_WIN
-      /* Retry with decorated name for fastcall/stdcall functions. */
+      
       if (!p && ctype_isfunc(ct->info)) {
 	CTInfo cconv = ctype_cconv(ct->info);
 	if (cconv == CTCC_FASTCALL || cconv == CTCC_STDCALL) {
@@ -393,9 +390,9 @@ TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
   return tv;
 }
 
-/* -- C library management ------------------------------------------------ */
 
-/* Create a new CLibrary object and push it on the stack. */
+
+
 static CLibrary *clib_new(lua_State *L, GCtab *mt)
 {
   GCtab *t = lj_tab_new(L, 0, 0);
@@ -403,13 +400,13 @@ static CLibrary *clib_new(lua_State *L, GCtab *mt)
   CLibrary *cl = (CLibrary *)uddata(ud);
   cl->cache = t;
   ud->udtype = UDTYPE_FFI_CLIB;
-  /* NOBARRIER: The GCudata is new (marked white). */
+  
   setgcref(ud->metatable, obj2gco(mt));
   setudataV(L, L->top++, ud);
   return cl;
 }
 
-/* Load a C library. */
+
 void lj_clib_load(lua_State *L, GCtab *mt, GCstr *name, int global)
 {
   void *handle = clib_loadlib(L, strdata(name), global);
@@ -417,14 +414,14 @@ void lj_clib_load(lua_State *L, GCtab *mt, GCstr *name, int global)
   cl->handle = handle;
 }
 
-/* Unload a C library. */
+
 void lj_clib_unload(CLibrary *cl)
 {
   clib_unloadlib(cl);
   cl->handle = NULL;
 }
 
-/* Create the default C library object. */
+
 void lj_clib_default(lua_State *L, GCtab *mt)
 {
   CLibrary *cl = clib_new(L, mt);

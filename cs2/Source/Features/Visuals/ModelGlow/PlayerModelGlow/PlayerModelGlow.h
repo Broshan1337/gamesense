@@ -54,8 +54,8 @@ public:
     [[nodiscard]] cs2::Color color(auto&& playerPawn) const
     {
         if (const auto isEnemy = playerPawn.isEnemy(); isEnemy.has_value()) {
-            // the color is used as-is; the per-player glow saturation does not apply to
-            // user-picked RGBA colors (the model glow color has no alpha in-game either)
+            
+            
             const auto configuredColor = *isEnemy ? GET_CONFIG_VAR(model_glow_vars::EnemyColor) : GET_CONFIG_VAR(model_glow_vars::AllyColor);
             return cs2::Color{configuredColor.r(), configuredColor.g(), configuredColor.b(), configuredColor.a()};
         }

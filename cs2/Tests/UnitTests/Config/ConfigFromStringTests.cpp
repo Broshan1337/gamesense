@@ -1738,9 +1738,9 @@ testing::Values(
     ConfigFromStringTestParam{
         .bufferContent = u8"{\"Float\":abc}",
         .setExpectations = [](MockConfigValueSetter&) {
-            // parse failure: the setter must not be called (StrictMock enforces zero calls);
-            // the streaming parser then fails to find the closing brace, so the root never
-            // completes (nesting stays at 1, only the opening brace counts as read).
+            
+            
+            
         },
         .expectedConversionState{
             .nestingLevel = 1,

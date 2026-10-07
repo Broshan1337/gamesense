@@ -1,7 +1,4 @@
-/*
-** Client for the GDB JIT API.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #define lj_gdbjit_c
 #define LUA_CORE
@@ -19,114 +16,21 @@
 #include "lj_jit.h"
 #include "lj_dispatch.h"
 
-/* This is not compiled in by default.
-** Enable with -DLUAJIT_USE_GDBJIT in the Makefile and recompile everything.
-*/
+
 #ifdef LUAJIT_USE_GDBJIT
 
-/* The GDB JIT API allows JIT compilers to pass debug information about
-** JIT-compiled code back to GDB. You need at least GDB 7.0 or higher
-** to see it in action.
-**
-** This is a passive API, so it works even when not running under GDB
-** or when attaching to an already running process. Alas, this implies
-** enabling it always has a non-negligible overhead -- do not use in
-** release mode!
-**
-** The LuaJIT GDB JIT client is rather minimal at the moment. It gives
-** each trace a symbol name and adds a source location and frame unwind
-** information. Obviously LuaJIT itself and any embedding C application
-** should be compiled with debug symbols, too (see the Makefile).
-**
-** Traces are named TRACE_1, TRACE_2, ... these correspond to the trace
-** numbers from -jv or -jdump. Use "break TRACE_1" or "tbreak TRACE_1" etc.
-** to set breakpoints on specific traces (even ahead of their creation).
-**
-** The source location for each trace allows listing the corresponding
-** source lines with the GDB command "list" (but only if the Lua source
-** has been loaded from a file). Currently this is always set to the
-** location where the trace has been started.
-**
-** Frame unwind information can be inspected with the GDB command
-** "info frame". This also allows proper backtraces across JIT-compiled
-** code with the GDB command "bt".
-**
-** You probably want to add the following settings to a .gdbinit file
-** (or add them to ~/.gdbinit):
-**   set disassembly-flavor intel
-**   set breakpoint pending on
-**
-** Here's a sample GDB session:
-** ------------------------------------------------------------------------
 
-$ cat >x.lua
-for outer=1,100 do
-  for inner=1,100 do end
-end
-^D
 
-$ luajit -jv x.lua
-[TRACE   1 x.lua:2]
-[TRACE   2 (1/3) x.lua:1 -> 1]
 
-$ gdb --quiet --args luajit x.lua
-(gdb) tbreak TRACE_1
-Function "TRACE_1" not defined.
-Temporary breakpoint 1 (TRACE_1) pending.
-(gdb) run
-Starting program: luajit x.lua
 
-Temporary breakpoint 1, TRACE_1 () at x.lua:2
-2	  for inner=1,100 do end
-(gdb) list
-1	for outer=1,100 do
-2	  for inner=1,100 do end
-3	end
-(gdb) bt
-#0  TRACE_1 () at x.lua:2
-#1  0x08053690 in lua_pcall [...]
-[...]
-#7  0x0806ff90 in main [...]
-(gdb) disass TRACE_1
-Dump of assembler code for function TRACE_1:
-0xf7fd9fba <TRACE_1+0>:	mov    DWORD PTR ds:0xf7e0e2a0,0x1
-0xf7fd9fc4 <TRACE_1+10>:	movsd  xmm7,QWORD PTR [edx+0x20]
-[...]
-0xf7fd9ff8 <TRACE_1+62>:	jmp    0xf7fd2014
-End of assembler dump.
-(gdb) tbreak TRACE_2
-Function "TRACE_2" not defined.
-Temporary breakpoint 2 (TRACE_2) pending.
-(gdb) cont
-Continuing.
 
-Temporary breakpoint 2, TRACE_2 () at x.lua:1
-1	for outer=1,100 do
-(gdb) info frame
-Stack level 0, frame at 0xffffd7c0:
- eip = 0xf7fd9f60 in TRACE_2 (x.lua:1); saved eip 0x8053690
- called by frame at 0xffffd7e0
- source language unknown.
- Arglist at 0xffffd78c, args:
- Locals at 0xffffd78c, Previous frame's sp is 0xffffd7c0
- Saved registers:
-  ebx at 0xffffd7ac, ebp at 0xffffd7b8, esi at 0xffffd7b0, edi at 0xffffd7b4,
-  eip at 0xffffd7bc
-(gdb)
-
-** ------------------------------------------------------------------------
-*/
-
-/* -- GDB JIT API --------------------------------------------------------- */
-
-/* GDB JIT actions. */
 enum {
   GDBJIT_NOACTION = 0,
   GDBJIT_REGISTER,
   GDBJIT_UNREGISTER
 };
 
-/* GDB JIT entry. */
+
 typedef struct GDBJITentry {
   struct GDBJITentry *next_entry;
   struct GDBJITentry *prev_entry;
@@ -134,7 +38,7 @@ typedef struct GDBJITentry {
   uint64_t symfile_size;
 } GDBJITentry;
 
-/* GDB JIT descriptor. */
+
 typedef struct GDBJITdesc {
   uint32_t version;
   uint32_t action_flag;
@@ -146,15 +50,15 @@ GDBJITdesc __jit_debug_descriptor = {
   1, GDBJIT_NOACTION, NULL, NULL
 };
 
-/* GDB sets a breakpoint at this function. */
+
 void LJ_NOINLINE __jit_debug_register_code()
 {
   __asm__ __volatile__("");
 };
 
-/* -- In-memory ELF object definitions ------------------------------------ */
 
-/* ELF definitions. */
+
+
 typedef struct ELFheader {
   uint8_t emagic[4];
   uint8_t eclass;
@@ -229,7 +133,7 @@ enum {
   ELFSYM_BIND_GLOBAL = 1 << 4,
 };
 
-/* DWARF definitions. */
+
 #define DW_CIE_VERSION	1
 
 enum {
@@ -287,7 +191,7 @@ enum {
   DW_REG_SP, DW_REG_BP, DW_REG_SI, DW_REG_DI,
   DW_REG_RA,
 #elif LJ_TARGET_X64
-  /* Yes, the order is strange, but correct. */
+  
   DW_REG_AX, DW_REG_DX, DW_REG_CX, DW_REG_BX,
   DW_REG_SI, DW_REG_DI, DW_REG_BP, DW_REG_SP,
   DW_REG_8, DW_REG_9, DW_REG_10, DW_REG_11,
@@ -311,7 +215,7 @@ enum {
 #endif
 };
 
-/* Minimal list of sections for the in-memory ELF object. */
+
 enum {
   GDBJIT_SECT_NULL,
   GDBJIT_SECT_text,
@@ -332,29 +236,29 @@ enum {
   GDBJIT_SYM__MAX
 };
 
-/* In-memory ELF object. */
+
 typedef struct GDBJITobj {
-  ELFheader hdr;			/* ELF header. */
-  ELFsectheader sect[GDBJIT_SECT__MAX];	/* ELF sections. */
-  ELFsymbol sym[GDBJIT_SYM__MAX];	/* ELF symbol table. */
-  uint8_t space[4096];			/* Space for various section data. */
+  ELFheader hdr;			
+  ELFsectheader sect[GDBJIT_SECT__MAX];	
+  ELFsymbol sym[GDBJIT_SYM__MAX];	
+  uint8_t space[4096];			
 } GDBJITobj;
 
-/* Combined structure for GDB JIT entry and ELF object. */
+
 typedef struct GDBJITentryobj {
   GDBJITentry entry;
   size_t sz;
   GDBJITobj obj;
 } GDBJITentryobj;
 
-/* Template for in-memory ELF header. */
+
 static const ELFheader elfhdr_template = {
   .emagic = { 0x7f, 'E', 'L', 'F' },
   .eclass = LJ_64 ? 2 : 1,
   .eendian = LJ_ENDIAN_SELECT(1, 2),
   .eversion = 1,
 #if LJ_TARGET_LINUX
-  .eosabi = 0,  /* Nope, it's not 3. */
+  .eosabi = 0,  
 #elif defined(__FreeBSD__)
   .eosabi = 9,
 #elif defined(__NetBSD__)
@@ -399,24 +303,24 @@ static const ELFheader elfhdr_template = {
   .shstridx = GDBJIT_SECT_shstrtab
 };
 
-/* -- In-memory ELF object generation ------------------------------------- */
 
-/* Context for generating the ELF object for the GDB JIT API. */
+
+
 typedef struct GDBJITctx {
-  uint8_t *p;		/* Pointer to next address in obj.space. */
-  uint8_t *startp;	/* Pointer to start address in obj.space. */
-  GCtrace *T;		/* Generate symbols for this trace. */
-  uintptr_t mcaddr;	/* Machine code address. */
-  MSize szmcode;	/* Size of machine code. */
-  MSize spadjp;		/* Stack adjustment for parent trace or interpreter. */
-  MSize spadj;		/* Stack adjustment for trace itself. */
-  BCLine lineno;	/* Starting line number. */
-  const char *filename;	/* Starting file name. */
-  size_t objsize;	/* Final size of ELF object. */
-  GDBJITobj obj;	/* In-memory ELF object. */
+  uint8_t *p;		
+  uint8_t *startp;	
+  GCtrace *T;		
+  uintptr_t mcaddr;	
+  MSize szmcode;	
+  MSize spadjp;		
+  MSize spadj;		
+  BCLine lineno;	
+  const char *filename;	
+  size_t objsize;	
+  GDBJITobj obj;	
 } GDBJITctx;
 
-/* Add a zero-terminated string. */
+
 static uint32_t gdbjit_strz(GDBJITctx *ctx, const char *str)
 {
   uint8_t *p = ctx->p;
@@ -428,14 +332,14 @@ static uint32_t gdbjit_strz(GDBJITctx *ctx, const char *str)
   return ofs;
 }
 
-/* Append a decimal number. */
+
 static void gdbjit_catnum(GDBJITctx *ctx, uint32_t n)
 {
   if (n >= 10) { uint32_t m = n / 10; n = n % 10; gdbjit_catnum(ctx, m); }
   *ctx->p++ = '0' + n;
 }
 
-/* Add a SLEB128 value. */
+
 static void gdbjit_sleb128(GDBJITctx *ctx, int32_t v)
 {
   uint8_t *p = ctx->p;
@@ -445,7 +349,7 @@ static void gdbjit_sleb128(GDBJITctx *ctx, int32_t v)
   ctx->p = p;
 }
 
-/* Shortcuts to generate DWARF structures. */
+
 #define DB(x)		(*p++ = (x))
 #define DI8(x)		(*(int8_t *)p = (x), p++)
 #define DU16(x)		(*(uint16_t *)p = (x), p += 2)
@@ -459,12 +363,12 @@ static void gdbjit_sleb128(GDBJITctx *ctx, int32_t v)
   { uint32_t *szp_##name = (uint32_t *)p; p += 4; stmt \
     *szp_##name = (uint32_t)((p-(uint8_t *)szp_##name)-4); } \
 
-/* Initialize ELF section headers. */
+
 static void LJ_FASTCALL gdbjit_secthdr(GDBJITctx *ctx)
 {
   ELFsectheader *sect;
 
-  *ctx->p++ = '\0';  /* Empty string at start of string table. */
+  *ctx->p++ = '\0';  
 
 #define SECTDEF(id, tp, al) \
   sect = &ctx->obj.sect[GDBJIT_SECT_##id]; \
@@ -498,12 +402,12 @@ static void LJ_FASTCALL gdbjit_secthdr(GDBJITctx *ctx)
 #undef SECTDEF
 }
 
-/* Initialize symbol table. */
+
 static void LJ_FASTCALL gdbjit_symtab(GDBJITctx *ctx)
 {
   ELFsymbol *sym;
 
-  *ctx->p++ = '\0';  /* Empty string at start of string table. */
+  *ctx->p++ = '\0';  
 
   sym = &ctx->obj.sym[GDBJIT_SYM_FILE];
   sym->name = gdbjit_strz(ctx, "JIT mcode");
@@ -519,21 +423,21 @@ static void LJ_FASTCALL gdbjit_symtab(GDBJITctx *ctx)
   sym->info = ELFSYM_TYPE_FUNC|ELFSYM_BIND_GLOBAL;
 }
 
-/* Initialize .eh_frame section. */
+
 static void LJ_FASTCALL gdbjit_ehframe(GDBJITctx *ctx)
 {
   uint8_t *p = ctx->p;
   uint8_t *framep = p;
 
-  /* Emit DWARF EH CIE. */
+  
   DSECT(CIE,
-    DU32(0);			/* Offset to CIE itself. */
+    DU32(0);			
     DB(DW_CIE_VERSION);
-    DSTR("zR");			/* Augmentation. */
-    DUV(1);			/* Code alignment factor. */
-    DSV(-(int32_t)sizeof(uintptr_t));  /* Data alignment factor. */
-    DB(DW_REG_RA);		/* Return address register. */
-    DB(1); DB(DW_EH_PE_textrel|DW_EH_PE_udata4);  /* Augmentation data. */
+    DSTR("zR");			
+    DUV(1);			
+    DSV(-(int32_t)sizeof(uintptr_t));  
+    DB(DW_REG_RA);		
+    DB(1); DB(DW_EH_PE_textrel|DW_EH_PE_udata4);  
     DB(DW_CFA_def_cfa); DUV(DW_REG_SP); DUV(sizeof(uintptr_t));
 #if LJ_TARGET_PPC
     DB(DW_CFA_offset_extended_sf); DB(DW_REG_RA); DSV(-1);
@@ -543,13 +447,13 @@ static void LJ_FASTCALL gdbjit_ehframe(GDBJITctx *ctx)
     DALIGNNOP(sizeof(uintptr_t));
   )
 
-  /* Emit DWARF EH FDE. */
+  
   DSECT(FDE,
-    DU32((uint32_t)(p-framep));	/* Offset to CIE. */
-    DU32(0);			/* Machine code offset relative to .text. */
-    DU32(ctx->szmcode);		/* Machine code length. */
-    DB(0);			/* Augmentation data. */
-    /* Registers saved in CFRAME. */
+    DU32((uint32_t)(p-framep));	
+    DU32(0);			
+    DU32(ctx->szmcode);		
+    DB(0);			
+    
 #if LJ_TARGET_X86
     DB(DW_CFA_offset|DW_REG_BP); DUV(2);
     DB(DW_CFA_offset|DW_REG_DI); DUV(3);
@@ -560,7 +464,7 @@ static void LJ_FASTCALL gdbjit_ehframe(GDBJITctx *ctx)
     DB(DW_CFA_offset|DW_REG_BX); DUV(3);
     DB(DW_CFA_offset|DW_REG_15); DUV(4);
     DB(DW_CFA_offset|DW_REG_14); DUV(5);
-    /* Extra registers saved for JIT-compiled code. */
+    
     DB(DW_CFA_offset|DW_REG_13); DUV(LJ_GC64 ? 10 : 9);
     DB(DW_CFA_offset|DW_REG_12); DUV(LJ_GC64 ? 11 : 10);
 #elif LJ_TARGET_ARM
@@ -594,43 +498,43 @@ static void LJ_FASTCALL gdbjit_ehframe(GDBJITctx *ctx)
 #else
 #error "Unsupported target architecture"
 #endif
-    if (ctx->spadjp != ctx->spadj) {  /* Parent/interpreter stack frame size. */
+    if (ctx->spadjp != ctx->spadj) {  
       DB(DW_CFA_def_cfa_offset); DUV(ctx->spadjp);
-      DB(DW_CFA_advance_loc|1);  /* Only an approximation. */
+      DB(DW_CFA_advance_loc|1);  
     }
-    DB(DW_CFA_def_cfa_offset); DUV(ctx->spadj);  /* Trace stack frame size. */
+    DB(DW_CFA_def_cfa_offset); DUV(ctx->spadj);  
     DALIGNNOP(sizeof(uintptr_t));
   )
 
   ctx->p = p;
 }
 
-/* Initialize .debug_info section. */
+
 static void LJ_FASTCALL gdbjit_debuginfo(GDBJITctx *ctx)
 {
   uint8_t *p = ctx->p;
 
   DSECT(info,
-    DU16(2);			/* DWARF version. */
-    DU32(0);			/* Abbrev offset. */
-    DB(sizeof(uintptr_t));	/* Pointer size. */
+    DU16(2);			
+    DU32(0);			
+    DB(sizeof(uintptr_t));	
 
-    DUV(1);			/* Abbrev #1: DW_TAG_compile_unit. */
-    DSTR(ctx->filename);	/* DW_AT_name. */
-    DADDR(ctx->mcaddr);		/* DW_AT_low_pc. */
-    DADDR(ctx->mcaddr + ctx->szmcode);  /* DW_AT_high_pc. */
-    DU32(0);			/* DW_AT_stmt_list. */
+    DUV(1);			
+    DSTR(ctx->filename);	
+    DADDR(ctx->mcaddr);		
+    DADDR(ctx->mcaddr + ctx->szmcode);  
+    DU32(0);			
   )
 
   ctx->p = p;
 }
 
-/* Initialize .debug_abbrev section. */
+
 static void LJ_FASTCALL gdbjit_debugabbrev(GDBJITctx *ctx)
 {
   uint8_t *p = ctx->p;
 
-  /* Abbrev #1: DW_TAG_compile_unit. */
+  
   DUV(1); DUV(DW_TAG_compile_unit);
   DB(DW_children_no);
   DUV(DW_AT_name);	DUV(DW_FORM_string);
@@ -644,23 +548,23 @@ static void LJ_FASTCALL gdbjit_debugabbrev(GDBJITctx *ctx)
 
 #define DLNE(op, s)	(DB(DW_LNS_extended_op), DUV(1+(s)), DB((op)))
 
-/* Initialize .debug_line section. */
+
 static void LJ_FASTCALL gdbjit_debugline(GDBJITctx *ctx)
 {
   uint8_t *p = ctx->p;
 
   DSECT(line,
-    DU16(2);			/* DWARF version. */
+    DU16(2);			
     DSECT(header,
-      DB(1);			/* Minimum instruction length. */
-      DB(1);			/* is_stmt. */
-      DI8(0);			/* Line base for special opcodes. */
-      DB(2);			/* Line range for special opcodes. */
-      DB(3+1);			/* Opcode base at DW_LNS_advance_line+1. */
-      DB(0); DB(1); DB(1);	/* Standard opcode lengths. */
-      /* Directory table. */
+      DB(1);			
+      DB(1);			
+      DI8(0);			
+      DB(2);			
+      DB(3+1);			
+      DB(0); DB(1); DB(1);	
+      
       DB(0);
-      /* File name table. */
+      
       DSTR(ctx->filename); DUV(0); DUV(0); DUV(0);
       DB(0);
     )
@@ -679,7 +583,7 @@ static void LJ_FASTCALL gdbjit_debugline(GDBJITctx *ctx)
 
 #undef DLNE
 
-/* Undef shortcuts. */
+
 #undef DB
 #undef DI8
 #undef DU16
@@ -691,10 +595,10 @@ static void LJ_FASTCALL gdbjit_debugline(GDBJITctx *ctx)
 #undef DALIGNNOP
 #undef DSECT
 
-/* Type of a section initializer callback. */
+
 typedef void (LJ_FASTCALL *GDBJITinitf)(GDBJITctx *ctx);
 
-/* Call section initializer and set the section offset and size. */
+
 static void gdbjit_initsect(GDBJITctx *ctx, int sect, GDBJITinitf initf)
 {
   ctx->startp = ctx->p;
@@ -706,15 +610,15 @@ static void gdbjit_initsect(GDBJITctx *ctx, int sect, GDBJITinitf initf)
 #define SECTALIGN(p, a) \
   ((p) = (uint8_t *)(((uintptr_t)(p) + ((a)-1)) & ~(uintptr_t)((a)-1)))
 
-/* Build in-memory ELF object. */
+
 static void gdbjit_buildobj(GDBJITctx *ctx)
 {
   GDBJITobj *obj = &ctx->obj;
-  /* Fill in ELF header and clear structures. */
+  
   memcpy(&obj->hdr, &elfhdr_template, sizeof(ELFheader));
   memset(&obj->sect, 0, sizeof(ELFsectheader)*GDBJIT_SECT__MAX);
   memset(&obj->sym, 0, sizeof(ELFsymbol)*GDBJIT_SYM__MAX);
-  /* Initialize sections. */
+  
   ctx->p = obj->space;
   gdbjit_initsect(ctx, GDBJIT_SECT_shstrtab, gdbjit_secthdr);
   gdbjit_initsect(ctx, GDBJIT_SECT_strtab, gdbjit_symtab);
@@ -729,14 +633,14 @@ static void gdbjit_buildobj(GDBJITctx *ctx)
 
 #undef SECTALIGN
 
-/* -- Interface to GDB JIT API -------------------------------------------- */
+
 
 static int gdbjit_lock;
 
 static void gdbjit_lock_acquire()
 {
   while (__sync_lock_test_and_set(&gdbjit_lock, 1)) {
-    /* Just spin; futexes or pthreads aren't worth the portability cost. */
+    
   }
 }
 
@@ -745,16 +649,16 @@ static void gdbjit_lock_release()
   __sync_lock_release(&gdbjit_lock);
 }
 
-/* Add new entry to GDB JIT symbol chain. */
+
 static void gdbjit_newentry(lua_State *L, GDBJITctx *ctx)
 {
-  /* Allocate memory for GDB JIT entry and ELF object. */
+  
   MSize sz = (MSize)(sizeof(GDBJITentryobj) - sizeof(GDBJITobj) + ctx->objsize);
   GDBJITentryobj *eo = lj_mem_newt(L, sz, GDBJITentryobj);
-  memcpy(&eo->obj, &ctx->obj, ctx->objsize);  /* Copy ELF object. */
+  memcpy(&eo->obj, &ctx->obj, ctx->objsize);  
   eo->sz = sz;
   ctx->T->gdbjit_entry = (void *)eo;
-  /* Link new entry to chain and register it. */
+  
   eo->entry.prev_entry = NULL;
   gdbjit_lock_acquire();
   eo->entry.next_entry = __jit_debug_descriptor.first_entry;
@@ -769,7 +673,7 @@ static void gdbjit_newentry(lua_State *L, GDBJITctx *ctx)
   gdbjit_lock_release();
 }
 
-/* Add debug info for newly compiled trace and notify GDB. */
+
 void lj_gdbjit_addtrace(jit_State *J, GCtrace *T)
 {
   GDBJITctx ctx;
@@ -794,7 +698,7 @@ void lj_gdbjit_addtrace(jit_State *J, GCtrace *T)
   gdbjit_newentry(J->L, &ctx);
 }
 
-/* Delete debug info for trace and notify GDB. */
+
 void lj_gdbjit_deltrace(jit_State *J, GCtrace *T)
 {
   GDBJITentryobj *eo = (GDBJITentryobj *)T->gdbjit_entry;

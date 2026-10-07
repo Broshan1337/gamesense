@@ -1,7 +1,4 @@
-/*
-** FFI C callback handling.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #ifndef _LJ_CCALLBACK_H
 #define _LJ_CCALLBACK_H
@@ -11,7 +8,7 @@
 
 #if LJ_HASFFI
 
-/* Really belongs to lj_vm.h. */
+
 LJ_ASMF void lj_vm_ffi_callback(void);
 
 LJ_FUNC MSize lj_ccallback_ptr2slot(CTState *cts, void *p);

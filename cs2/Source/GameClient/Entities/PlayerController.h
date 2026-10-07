@@ -55,11 +55,11 @@ public:
         return hookContext.patternSearchResults().template get<OffsetToPlayerColor>().of(playerControllerPointer).toOptional();
     }
 
-    // m_nTickBase - the server tick this controller is currently predicting. This is the tick CS2's
-    // spread-seed generator hashes (velocity-cs2 reads exactly this field for its seed), so the
-    // aimbot's spread compensation needs it to predict the same seed the game will use for the shot.
-    // Resolved by field name through the schema system rather than a hardcoded offset, so a game
-    // update that moves the field does not silently feed a wrong tick. {} if unavailable.
+    
+    
+    
+    
+    
     [[nodiscard]] Optional<int> tickBase() const noexcept
     {
         if (!playerControllerPointer)
@@ -72,12 +72,12 @@ public:
         return value;
     }
 
-    // The pointer inside the controller's m_sSanitizedClanTag (CUtlString) - the string the
-    // game renders as our clan tag everywhere (scoreboard, #DecoratedPlayerName chat/death
-    // notices). Resolved by field name through the schema, like m_iPing above. The 2026-09-23
-    // update made client-visible clan tags real (GC SetMyClanId32BitEquipped / CSOPersonaDataPublic.
-    // clan_tag on the server side); the field itself is display-local data, so spoofing it
-    // (in-place rewrite - see ChatTools) changes what WE see. {} when unavailable.
+    
+    
+    
+    
+    
+    
     [[nodiscard]] Optional<char*> clanTagStringPointer() const noexcept
     {
         if (!playerControllerPointer)
@@ -92,10 +92,10 @@ public:
         return value;
     }
 
-    // m_iPing - this controller's round-trip latency in milliseconds, as displayed on the scoreboard.
-    // Used by the lag-comp record validity as velocity-cs2's one-way latency source (they read
-    // INetChannel::GetLatency(FLOW_OUTGOING); halving the RTT gives the same quantity without needing
-    // net-channel access). {} if unavailable.
+    
+    
+    
+    
     [[nodiscard]] Optional<int> ping() const noexcept
     {
         if (!playerControllerPointer)

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstddef> // std::size_t - the struct uses it but the C headers above don't provide it
+#include <cstddef> 
 
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -28,17 +28,17 @@ struct LinuxPlatformApi {
     static ssize_t readLink(const char* pathname, char* buf, std::size_t size) noexcept;
     static int processId() noexcept;
     static int threadId() noexcept;
-    // Fault-tolerant read (process_vm_readv against our own process): returns false instead of
-    // crashing when the address range is unmapped. The Linux equivalent of velocity's
-    // memory::safe_read - MANDATORY for any speculative pointer probing from our threads.
+    
+    
+    
     static bool safeRead(const void* address, void* out, std::size_t size) noexcept;
     static ssize_t pread(int fd, void* buf, size_t count, off_t offset) noexcept;
     static ssize_t write(int fd, const void* buf, size_t count) noexcept;
     static int close(int fd) noexcept;
     static int fstat(int fd, struct stat* buf) noexcept;
 
-    // Directory listing (for the config file dropdown). readDir returns the entry's d_name, or
-    // nullptr when the directory is exhausted ("." and ".." included - callers filter).
+    
+    
     static void* openDir(const char* pathname) noexcept;
     static const char* readDir(void* dirHandle) noexcept;
     static void closeDir(void* dirHandle) noexcept;

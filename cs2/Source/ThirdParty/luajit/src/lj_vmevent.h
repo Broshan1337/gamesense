@@ -1,14 +1,11 @@
-/*
-** VM event handling.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #ifndef _LJ_VMEVENT_H
 #define _LJ_VMEVENT_H
 
 #include "lj_obj.h"
 
-/* Registry key for VM event handler table. */
+
 #define LJ_VMEVENTS_REGKEY	"_VMEVENTS"
 #define LJ_VMEVENTS_HSIZE	4
 
@@ -21,7 +18,7 @@
   LJ_VMEVENT_##name##_, \
   LJ_VMEVENT_##name = ((LJ_VMEVENT_##name##_) & 7)|((hash) << 3)
 
-/* VM event IDs. */
+
 typedef enum {
   VMEVENT_DEF(BC,	0x00003883),
   VMEVENT_DEF(TRACE,	0x12d91467),

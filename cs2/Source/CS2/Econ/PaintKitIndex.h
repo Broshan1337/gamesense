@@ -3,42 +3,42 @@
 namespace cs2
 {
 
-// Only combinations empirically confirmed safe, or sourced directly from the public CS2
-// item schema (ByMykel/CSGO-API, cross-checked against our own live-confirmed data point -
-// M4A4/AsiimovM4A4's paint_index and item def index matched exactly), belong here. Forcing
-// an incompatible weapon+paint-kit pair (e.g. a knife-exclusive finish onto a rifle) causes
-// a SIGFPE in the engine's composite-material system - see project notes. SkinChangerData.h
-// is the only place these should be consumed from; never write a PaintKitIndex value here
-// without confirming which ItemDefinitionIndex it's actually valid for.
+
+
+
+
+
+
+
 enum class PaintKitIndex : int {
-    AsiimovM4A4 = 255, // confirmed live in-game this project
-    MarbleFade = 413, // knife-exclusive - confirmed live in-game this project (on a Karambit)
+    AsiimovM4A4 = 255, 
+    MarbleFade = 413, 
 
-    // Knife-exclusive finishes. NEVER apply any of these to a gun - an incompatible
-    // weapon+paint-kit pair SIGFPEs in the composite-material system (see the note above).
-    // SkinChangerData::resolveKnifePaintKit() is the only place these may be consumed from.
-    //
-    // Every index below was read directly out of the game's OWN shipped item schema
-    // (csgo/pak01_dir.vpk -> scripts/items/items_game.txt, "paint_kits" block), not from
-    // memory or a third-party dump. The extraction was cross-validated against the values
-    // already confirmed in this file - it independently reproduced Fade=38 (matches
-    // Glock18Fade/MAC10Fade), AmberFade=246 (matches four existing entries) and
-    // MarbleFade=413 (confirmed live in-game) - so the same parse producing the values below
-    // is trustworthy. Worth stressing: recalled-from-memory values for two of these were WRONG
-    // (Doppler Phase 1 is 418, not 415; 411 is a Damascus Steel variant, not Ultraviolet), so
-    // do not "correct" these against recollection - re-extract from items_game.txt instead.
-    KnifeFade = 38, // aa_fade - shared with guns, but valid on knives
-    KnifeMarbleFade = 413, // am_marble_fade
-    KnifeDopplerPhase1 = 418, // am_doppler_phase1
-    KnifeDopplerRuby = 415, // am_ruby_marbleized
-    KnifeDopplerSapphire = 416, // am_sapphire_marbleized
-    KnifeDopplerBlackPearl = 417, // am_blackpearl_marbleized
-    KnifeTigerTooth = 409, // an_tiger_orange
-    KnifeDamascusSteel = 410, // aq_damascus (NOT 247 - that one is the SG553-specific variant)
-    KnifeRustCoat = 414, // aq_steel_knife (the knife-specific variant, NOT 323/203)
-    KnifeCrimsonWeb = 12, // hy_webs
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    KnifeFade = 38, 
+    KnifeMarbleFade = 413, 
+    KnifeDopplerPhase1 = 418, 
+    KnifeDopplerRuby = 415, 
+    KnifeDopplerSapphire = 416, 
+    KnifeDopplerBlackPearl = 417, 
+    KnifeTigerTooth = 409, 
+    KnifeDamascusSteel = 410, 
+    KnifeRustCoat = 414, 
+    KnifeCrimsonWeb = 12, 
 
-    // M249
+    
     M249Aztec = 902,
     M249Magma = 266,
     M249DeepRelief = 983,
@@ -49,7 +49,7 @@ enum class PaintKitIndex : int {
     M249OSIPR = 1042,
     M249NebulaCrusader = 496,
     M249Warbird = 900,
-    // MAG7
+    
     MAG7CarbonFiber = 70,
     MAG7Chainmail = 327,
     MAG7HardWater = 666,
@@ -60,7 +60,7 @@ enum class PaintKitIndex : int {
     MAG7SWAG7 = 703,
     MAG7RustCoat = 754,
     MAG7HeavenGuard = 291,
-    // Negev
+    
     NegevArmySheen = 298,
     NegevManOWar = 432,
     NegevAnodizedNavy = 28,
@@ -71,7 +71,7 @@ enum class PaintKitIndex : int {
     NegevPowerLoader = 514,
     NegevPrototype = 950,
     NegevDesertStrike = 355,
-    // Nova
+    
     NovaArmySheen = 298,
     NovaGraphite = 214,
     NovaRedQuartz = 248,
@@ -82,7 +82,7 @@ enum class PaintKitIndex : int {
     NovaRustCoat = 323,
     NovaAntique = 286,
     NovaPlume = 890,
-    // SawedOff
+    
     SawedOffAmberFade = 246,
     SawedOffBrakeLight = 797,
     SawedOffCopper = 41,
@@ -93,7 +93,7 @@ enum class PaintKitIndex : int {
     SawedOffFirstClass = 345,
     SawedOffLimelight = 596,
     SawedOffApocalypto = 953,
-    // XM1014
+    
     XM1014AncientLore = 1021,
     XM1014Charter = 994,
     XM1014FrostBorre = 760,
@@ -104,7 +104,7 @@ enum class PaintKitIndex : int {
     XM1014TecluBurner = 521,
     XM1014XOXO = 1046,
     XM1014Scumbria = 505,
-    // CZ75Auto
+    
     CZ75AutoArmySheen = 298,
     CZ75AutoCopperFiber = 1195,
     CZ75AutoEmeraldQuartz = 859,
@@ -115,7 +115,7 @@ enum class PaintKitIndex : int {
     CZ75AutoPoisonDart = 315,
     CZ75AutoChalice = 325,
     CZ75AutoEmerald = 453,
-    // DesertEagle
+    
     DesertEagleBlaze = 37,
     DesertEagleHypnotic = 61,
     DesertEagleCobaltDisruption = 231,
@@ -126,7 +126,7 @@ enum class PaintKitIndex : int {
     DesertEagleTheBronze = 992,
     DesertEagleGoldenKoi = 185,
     DesertEagleSunsetStorm = 469,
-    // DualBerettas
+    
     DualBerettasCobaltQuartz = 249,
     DualBerettasHeist = 1005,
     DualBerettasHemoglobin = 220,
@@ -137,7 +137,7 @@ enum class PaintKitIndex : int {
     DualBerettasFloraCarnivora = 1156,
     DualBerettasTwinTurbo = 747,
     DualBerettasDualingDragons = 491,
-    // FiveSeveN
+    
     FiveSeveNBerriesAndCherries = 1002,
     FiveSeveNCopperGalaxy = 274,
     FiveSeveNSilverQuartz = 252,
@@ -148,7 +148,7 @@ enum class PaintKitIndex : int {
     FiveSeveNAngryMob = 837,
     FiveSeveNViolentDaimyo = 585,
     FiveSeveNFairyTale = 979,
-    // Glock18
+    
     Glock18Fade = 38,
     Glock18DragonTattoo = 48,
     Glock18SteelDisruption = 230,
@@ -159,7 +159,7 @@ enum class PaintKitIndex : int {
     Glock18NuclearGarden = 789,
     Glock18Brass = 159,
     Glock18BunsenBurner = 479,
-    // P2000
+    
     P2000AmberFade = 246,
     P2000SpaceRace = 1055,
     P2000PantherCamo = 1019,
@@ -170,7 +170,7 @@ enum class PaintKitIndex : int {
     P2000Scorpion = 71,
     P2000Silver = 32,
     P2000AcidEtched = 951,
-    // P250
+    
     P250Nevermore = 813,
     P250DigitalArchitect = 1081,
     P250SteelDisruption = 230,
@@ -181,7 +181,7 @@ enum class PaintKitIndex : int {
     P250Cartel = 388,
     P250Valence = 426,
     P250Verdigris = 848,
-    // R8Revolver
+    
     R8RevolverAmberFade = 523,
     R8RevolverFade = 522,
     R8RevolverBlaze = 37,
@@ -192,7 +192,7 @@ enum class PaintKitIndex : int {
     R8RevolverSkullCrusher = 843,
     R8RevolverBananaCannon = 1232,
     R8RevolverBoneForged = 952,
-    // Tec9
+    
     Tec9RedQuartz = 248,
     Tec9TitaniumBit = 272,
     Tec9Ossified = 36,
@@ -203,7 +203,7 @@ enum class PaintKitIndex : int {
     Tec9CutOut = 671,
     Tec9Isaac = 303,
     Tec9Avalanche = 520,
-    // USPS
+    
     USPSSerum = 221,
     USPSStainless = 277,
     USPSDarkWater = 60,
@@ -214,7 +214,7 @@ enum class PaintKitIndex : int {
     USPSBusinessClass = 364,
     USPSBlackLotus = 1102,
     USPSCortex = 705,
-    // AK47
+    
     AK47TheOutsiders = 113,
     AK47Hydroponic = 456,
     AK47SearingRage = 1207,
@@ -225,7 +225,7 @@ enum class PaintKitIndex : int {
     AK47Inheritance = 1171,
     AK47Cartel = 394,
     AK47PhantomDisruptor = 941,
-    // AUG
+    
     AUGAmberFade = 246,
     AUGDeathByPuppy = 913,
     AUGRicochet = 507,
@@ -236,7 +236,7 @@ enum class PaintKitIndex : int {
     AUGFlameJrmungandr = 758,
     AUGAnodizedNavy = 197,
     AUGHotRod = 33,
-    // Famas
+    
     FamasFaultyWiring = 1066,
     FamasNeuralNet = 477,
     FamasMeltdown = 1053,
@@ -247,7 +247,7 @@ enum class PaintKitIndex : int {
     FamasValence = 529,
     FamasDjinn = 429,
     FamasAfterimage = 154,
-    // GalilAR
+    
     GalilARAmberFade = 246,
     GalilARAquaTerrace = 460,
     GalilARBlueTitanium = 216,
@@ -258,7 +258,7 @@ enum class PaintKitIndex : int {
     GalilARSugarRush = 661,
     GalilARChromaticAberration = 1038,
     GalilARDestroyer = 1147,
-    // M4A1S
+    
     M4A1SFade = 1177,
     M4A1SMossQuartz = 862,
     M4A1SAtomicAlloy = 301,
@@ -269,7 +269,7 @@ enum class PaintKitIndex : int {
     M4A1SBasilisk = 383,
     M4A1SGuardian = 257,
     M4A1SMasterPiece = 321,
-    // M4A4
+    
     M4A4Daybreak = 471,
     M4A4BulletRain = 155,
     M4A4Mainframe = 780,
@@ -279,7 +279,7 @@ enum class PaintKitIndex : int {
     M4A4CyberSecurity = 985,
     M4A4DesolateSpace = 588,
     M4A4PolyMag = 1149,
-    // SG553
+    
     SG553DesertBlossom = 765,
     SG553LushRuins = 1022,
     SG553Hypnotic = 61,
@@ -290,7 +290,7 @@ enum class PaintKitIndex : int {
     SG553Aerial = 598,
     SG553Atlas = 553,
     SG553HazardPay = 1084,
-    // MAC10
+    
     MAC10Fade = 38,
     MAC10AmberFade = 246,
     MAC10LastDive = 651,
@@ -301,7 +301,7 @@ enum class PaintKitIndex : int {
     MAC10Malachite = 402,
     MAC10Oceanic = 682,
     MAC10NuclearGarden = 372,
-    // MP5SD
+    
     MP5SDCoProcessor = 781,
     MP5SDDesertStrike = 949,
     MP5SDLiquidation = 1231,
@@ -312,7 +312,7 @@ enum class PaintKitIndex : int {
     MP5SDNecroJr = 1137,
     MP5SDOxideOasis = 923,
     MP5SDGauss = 846,
-    // MP7
+    
     MP7Fade = 752,
     MP7Motherboard = 782,
     MP7VaultHeist = 1007,
@@ -323,7 +323,7 @@ enum class PaintKitIndex : int {
     MP7SpecialDelivery = 500,
     MP7AbyssalApparition = 1133,
     MP7Guerrilla = 1096,
-    // MP9
+    
     MP9SandScale = 630,
     MP9MountFuji = 1094,
     MP9PandorasBox = 448,
@@ -334,7 +334,7 @@ enum class PaintKitIndex : int {
     MP9Bioleak = 549,
     MP9RubyPoisonDart = 482,
     MP9StainedGlass = 867,
-    // P90
+    
     P90AncientEarth = 1020,
     P90AstralJormungandr = 759,
     P90ColdBlooded = 67,
@@ -345,7 +345,7 @@ enum class PaintKitIndex : int {
     P90DeathByKitty = 156,
     P90EmeraldDragon = 182,
     P90RunAndHide = 1000,
-    // PPBizon
+    
     PPBizonBreakerBox = 1083,
     PPBizonCarbonFiber = 70,
     PPBizonCobaltHalftone = 267,
@@ -356,7 +356,7 @@ enum class PaintKitIndex : int {
     PPBizonOsiris = 349,
     PPBizonHighRoller = 676,
     PPBizonAntique = 306,
-    // UMP45
+    
     UMP45Mechanism = 1085,
     UMP45Fade = 879,
     UMP45Blaze = 37,
@@ -367,7 +367,7 @@ enum class PaintKitIndex : int {
     UMP45MetalFlowers = 672,
     UMP45MinotaursLabyrinth = 441,
     UMP45Briefing = 615,
-    // AWP
+    
     AWPGraphite = 212,
     AWPWormGod = 424,
     AWPManOWar = 395,
@@ -378,7 +378,7 @@ enum class PaintKitIndex : int {
     AWPBlackBox = 1467,
     AWPIceCoaled = 1346,
     AWPLongdog = 1213,
-    // G3SG1
+    
     G3SG1AncientRitual = 1034,
     G3SG1Murky = 382,
     G3SG1VioletMurano = 739,
@@ -389,7 +389,7 @@ enum class PaintKitIndex : int {
     G3SG1KeepingTabs = 1095,
     G3SG1HighSeas = 712,
     G3SG1Hunter = 677,
-    // SCAR20
+    
     SCAR20ArmySheen = 298,
     SCAR20CarbonFiber = 70,
     SCAR20Emerald = 196,
@@ -400,7 +400,7 @@ enum class PaintKitIndex : int {
     SCAR20Cardiac = 391,
     SCAR20Assault = 914,
     SCAR20Cyrex = 312,
-    // SSG08
+    
     SSG08AcidFade = 253,
     SSG08CarbonFiber = 70,
     SSG08ThreatDetected = 996,

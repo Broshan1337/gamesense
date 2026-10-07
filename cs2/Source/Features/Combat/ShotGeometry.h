@@ -3,9 +3,9 @@
 #include <CS2/Classes/Vector.h>
 #include <Utils/Trig.h>
 
-// Small ray/basis math shared by the triggerbot's head-only and hitchance gates. Pure functions (no
-// hook context) - just the geometry of "where does a shot along these angles go, and does it reach a
-// hitbox sphere".
+
+
+
 namespace shot_geometry
 {
 
@@ -20,8 +20,8 @@ struct Angles {
     float yaw;
 };
 
-// Pitch/yaw (degrees) pointing from `from` to `to` - the engine's vector_angles (yaw = atan2(dy,dx),
-// pitch = atan2(-dz, hypot(dx,dy))). Used to re-aim at a shifted point (multipoint / extrapolation).
+
+
 [[nodiscard]] inline Angles anglesTo(const cs2::Vector& from, const cs2::Vector& to) noexcept
 {
     const auto dx = to.x - from.x;
@@ -34,9 +34,9 @@ struct Angles {
     };
 }
 
-// Source-engine AngleVectors (the "left" convention CS2's spread is applied in - matches velocity-cs2's
-// angle_vectors_left). Roll defaults to 0 (the crosshair has none). forward is the aim direction; left
-// and up span the tangent plane the spread offset is added in.
+
+
+
 [[nodiscard]] inline Basis angleVectors(float pitchDegrees, float yawDegrees, float rollDegrees = 0.0f) noexcept
 {
     const auto pitch = pitchDegrees * trig::kDegreesToRadians;
@@ -66,9 +66,9 @@ struct Angles {
     return {v.x * inverse, v.y * inverse, v.z * inverse};
 }
 
-// True if the ray from `eye` along unit `direction` passes within `radius` of `center` - i.e. a shot in
-// that direction would strike a sphere of that radius at center. Uses the perpendicular distance from
-// the center to the ray; anything behind the eye is a miss. Compares squared distances (no sqrt).
+
+
+
 [[nodiscard]] inline bool rayReachesSphere(const cs2::Vector& eye, const cs2::Vector& direction, const cs2::Vector& center, float radius) noexcept
 {
     const cs2::Vector toCenter{center.x - eye.x, center.y - eye.y, center.z - eye.z};

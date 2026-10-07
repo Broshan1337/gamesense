@@ -8,13 +8,13 @@
 #include <GameClient/Hitboxes.h>
 #include <Utils/Trig.h>
 
-// Port of velocity-cs2's rage::generate_multipoints (impl/rage.cpp:1954) - capsule-true multipoint
-// generation on REAL hitbox data. Points are anchored on the hitbox's capsule (ends + view-relative
-// ring points per body part), clamped inward of the capsule surface, then pulled toward the center by
-// dynamic_pointscale's probability that the current inaccuracy cone can actually reach them.
-//
-// All vector/quaternion math is inline here (no libm): quaternion layout matches the game's bone
-// cache entries our Lagcomp records store - rotation as (x, y, z, w).
+
+
+
+
+
+
+
 class MultiPoint {
 public:
     static constexpr int kMaxPoints = 12;
@@ -26,7 +26,7 @@ public:
 
     [[nodiscard]] static cs2::Vector rotateVector(const float* q, const cs2::Vector& v) noexcept
     {
-        // t = 2 * cross(q.xyz, v); v' = v + w * t + cross(q.xyz, t)
+        
         const float tx = 2.0f * (q[1] * v.z - q[2] * v.y);
         const float ty = 2.0f * (q[2] * v.x - q[0] * v.z);
         const float tz = 2.0f * (q[0] * v.y - q[1] * v.x);
@@ -37,9 +37,9 @@ public:
         };
     }
 
-    // Generates the candidate aim points for one hitbox. Returns the written count (>= 1: at worst the
-    // center). `boneRotation` is the hitbox bone's unit quaternion; `inaccuracy` is the weapon's
-    // current GetInaccuracy slope (drives dynamic_pointscale only).
+    
+    
+    
     static int generate(const Hitboxes::Entry& hb, const cs2::Vector& center, const float* boneRotation,
                         float pointScalePercent, const cs2::Vector& shootPos, float inaccuracy,
                         bool dynamicPointscale, Point* out) noexcept
@@ -70,7 +70,7 @@ public:
         const cs2::Vector capsuleA{center.x + rotatedMins.x, center.y + rotatedMins.y, center.z + rotatedMins.z};
         const cs2::Vector capsuleB{center.x + rotatedMaxs.x, center.y + rotatedMaxs.y, center.z + rotatedMaxs.z};
 
-        // Clamp a proposed point back toward the capsule axis so it stays within radius * `inward`.
+        
         const auto safePoint = [&](const cs2::Vector& point, float inward) noexcept {
             const auto abx = capsuleB.x - capsuleA.x;
             const auto aby = capsuleB.y - capsuleA.y;
@@ -92,15 +92,15 @@ public:
             return cs2::Vector{closest.x + dx * f, closest.y + dy * f, closest.z + dz * f};
         };
 
-        // View-relative frame aimed from the shooter at this hitbox (angle_vectors_left convention -
-        // ShotGeometry::angleVectors already yields forward/left/up; negate left for right).
+        
+        
         const auto shootDir = shot_geometry::normalized(cs2::Vector{center.x - shootPos.x, center.y - shootPos.y, center.z - shootPos.z});
         const auto angles = shot_geometry::anglesTo(shootPos, center);
         const auto basis = shot_geometry::angleVectors(angles.pitch, angles.yaw);
         const auto right = cs2::Vector{-basis.left.x, -basis.left.y, -basis.left.z};
 
         switch (hb.index) {
-        case 0: { // head - top-cap anchor + arc ring (CSGO multipoints)
+        case 0: { 
             const auto topCap = (capsuleA.z > capsuleB.z) ? capsuleA : capsuleB;
             out[count++] = {safePoint(cs2::Vector{topCap.x + basis.up.x * sr, topCap.y + basis.up.y * sr, topCap.z + basis.up.z * sr}, 0.85f), false};
             out[count++] = {safePoint(cs2::Vector{topCap.x - basis.forward.x * sr, topCap.y - basis.forward.y * sr, topCap.z - basis.forward.z * sr}, 0.85f), false};
@@ -123,7 +123,7 @@ public:
             break;
         }
         case 2:
-        case 3: { // stomach / pelvis
+        case 3: { 
             out[count++] = {safePoint(cs2::Vector{center.x + right.x * sr, center.y + right.y * sr, center.z + right.z * sr}, 0.9f), false};
             out[count++] = {safePoint(cs2::Vector{center.x - right.x * sr, center.y - right.y * sr, center.z - right.z * sr}, 0.9f), false};
             out[count++] = {safePoint(cs2::Vector{center.x + basis.up.x * sr * 0.7f, center.y + basis.up.y * sr * 0.7f, center.z + basis.up.z * sr * 0.7f}, 0.9f), false};
@@ -133,7 +133,7 @@ public:
         }
         case 4:
         case 5:
-        case 6: { // chest
+        case 6: { 
             out[count++] = {safePoint(cs2::Vector{center.x + right.x * sr, center.y + right.y * sr, center.z + right.z * sr}, 0.9f), false};
             out[count++] = {safePoint(cs2::Vector{center.x - right.x * sr, center.y - right.y * sr, center.z - right.z * sr}, 0.9f), false};
             out[count++] = {safePoint(cs2::Vector{center.x + basis.up.x * sr * 0.65f, center.y + basis.up.y * sr * 0.65f, center.z + basis.up.z * sr * 0.65f}, 0.9f), false};
@@ -142,14 +142,14 @@ public:
             out[count++] = {safePoint(cs2::Vector{center.x - (right.x + basis.up.x) * sr * 0.75f, center.y - (right.y + basis.up.y) * sr * 0.75f, center.z - (right.z + basis.up.z) * sr * 0.75f}, 0.9f), false};
             break;
         }
-        case 7: case 8: case 9: case 10: case 11: case 12: { // legs / feet
+        case 7: case 8: case 9: case 10: case 11: case 12: { 
             out[count++] = {safePoint(capsuleA, 0.9f), false};
             out[count++] = {safePoint(capsuleB, 0.9f), false};
             out[count++] = {safePoint(cs2::Vector{center.x + right.x * sr, center.y + right.y * sr, center.z + right.z * sr}, 0.85f), false};
             out[count++] = {safePoint(cs2::Vector{center.x - right.x * sr, center.y - right.y * sr, center.z - right.z * sr}, 0.85f), false};
             break;
         }
-        case 13: case 14: case 15: case 16: case 17: case 18: { // arms
+        case 13: case 14: case 15: case 16: case 17: case 18: { 
             out[count++] = {safePoint(capsuleA, 0.9f), false};
             out[count++] = {safePoint(capsuleB, 0.9f), false};
             out[count++] = {safePoint(cs2::Vector{center.x - basis.forward.x * sr * 0.7f, center.y - basis.forward.y * sr * 0.7f, center.z - basis.forward.z * sr * 0.7f}, 0.9f), false};
@@ -162,9 +162,9 @@ public:
         }
         }
 
-        // Dynamic point scale: pull each point toward the capsule center proportionally to the
-        // probability the inaccuracy cone can reach it:
-        // p = center + delta*probability, probability = min((effectiveR/(inaccuracy*dist))^2, 1).
+        
+        
+        
         if (dynamicPointscale && inaccuracy > 0.001f && hb.radius > 0.0f) {
             const auto dist = trig::squareRoot((center.x - shootPos.x) * (center.x - shootPos.x) + (center.y - shootPos.y) * (center.y - shootPos.y) + (center.z - shootPos.z) * (center.z - shootPos.z));
             if (dist > 0.0f) {

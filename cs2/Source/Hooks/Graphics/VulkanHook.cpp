@@ -32,12 +32,12 @@
 #include <UI/ImGui/SdlImGuiBackend.h>
 #include <UI/ImGui/ShadowStamp.h>
 
-// Vulkan presentation hook, pointer-cache-swap style - see VulkanHook.h for the full story.
-// Nothing links against libvulkan: the ImGui backend resolves its function set through
-// ImGui_ImplVulkan_LoadFunctions (IMGUI_IMPL_VULKAN_NO_PROTOTYPES), device functions come from
-// vkGetDeviceProcAddr on the game's captured device (dlsym'd loader export), and the hooked
-// pointers themselves are read straight out of the game's own cache. Every call goes through a
-// pointer.
+
+
+
+
+
+
 namespace
 {
 
@@ -50,15 +50,15 @@ struct LoaderFunctions {
 
 LoaderFunctions loader;
 
-// Fake instance + physical device stay alive for ImGui_ImplVulkan's lifetime (it wants handles;
-// it operates on the game's real device).
+
+
 VkInstance fakeInstance = VK_NULL_HANDLE;
 VkPhysicalDevice fakePhysicalDevice = VK_NULL_HANDLE;
 std::uint32_t queueFamily = 0;
 
 std::atomic<VkDevice> gameDevice{VK_NULL_HANDLE};
 
-// Everything the present-path code calls on the game's device.
+
 struct DeviceFunctions {
     PFN_vkDeviceWaitIdle deviceWaitIdle = nullptr;
     PFN_vkCreateSemaphore createSemaphore = nullptr;
@@ -102,7 +102,7 @@ struct DeviceFunctions {
     PFN_vkCmdCopyBufferToImage cmdCopyBufferToImage = nullptr;
     PFN_vkCreateSampler createSampler = nullptr;
     PFN_vkDestroySampler destroySampler = nullptr;
-    // Instance-level (the fake instance enumerates the real GPU on single-GPU systems).
+    
     PFN_vkGetPhysicalDeviceMemoryProperties getPhysicalDeviceMemoryProperties = nullptr;
 
     [[nodiscard]] bool complete() const noexcept
@@ -124,19 +124,19 @@ struct DeviceFunctions {
 DeviceFunctions deviceFunctions;
 bool deviceFunctionsResolved = false;
 
-// Our own render targets for the game's swapchain, indexed by backbuffer index. 10 slots
-// comfortably exceeds any realizable swapchain depth (CS2 asks for 3-4); if a swapchain ever
-// reports more, createRenderTarget fails loudly instead of silently skipping frame indices.
+
+
+
 constexpr std::size_t kMaxFrames = 10;
 struct FrameResources {
     ImGui_ImplVulkanH_Frame frame{};
-    VkSemaphore renderCompleteSemaphore = VK_NULL_HANDLE; // signaled after OUR pass, waited by present
+    VkSemaphore renderCompleteSemaphore = VK_NULL_HANDLE; 
 };
 FrameResources frames[kMaxFrames]{};
-// Committed only on success (see createRenderTarget): the ImGui backend captures the render
-// pass (its pipelines) and the descriptor pool (its texture sets) at Init, so a failed retry
-// attempt must never clobber the objects the backend still references. Render-target
-// generations retired by swapchain recreations stay alive for the same reason, until teardown.
+
+
+
+
 VkRenderPass renderPass = VK_NULL_HANDLE;
 VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 VkRenderPass retiredRenderPasses[kMaxFrames]{};
@@ -144,30 +144,30 @@ VkDescriptorPool retiredDescriptorPools[kMaxFrames]{};
 std::size_t retiredCount = 0;
 bool renderTargetsCreated = false;
 bool rendererInitialized = false;
-VkExtent2D swapchainExtent{};                            // from the game's create info; render pass must match it exactly
-VkFormat swapchainFormatCaptured = VK_FORMAT_UNDEFINED;  // from the game's create info; UNDEFINED = no create call seen yet
+VkExtent2D swapchainExtent{};                            
+VkFormat swapchainFormatCaptured = VK_FORMAT_UNDEFINED;  
 
-// Upload-buffer sync. ImGui_ImplVulkan rotates its vertex/index upload buffers over kMaxFrames
-// slots (initInfo.ImageCount) - one memcpy into the current slot per rendered frame. Unchained
-// submission lets many menu submits be queued at once (GPU hitch, Steam overlay depth), and a
-// fresh memcpy (or worse, a resize's vkDestroyBuffer+vkFreeMemory on a vertex-count jump -
-// exactly what clicks/popovers/page switches cause) could then hit a buffer a still-executing
-// submit is reading: garbled or half-faded menu frames. One fence per rotation slot closes the
-// race: before frame N fills slot (N+1) % kMaxFrames, wait for the fence of the submit that
-// used it (frame N-1-kMaxFrames - normally long done, so this is a no-op), reset it, submit
-// against it. menuUploadFrame mirrors the backend's rotation: it advances exactly when
-// RenderDrawData advances wrb->Index (a real render that passed the fb-size early-out).
+
+
+
+
+
+
+
+
+
+
 VkFence uploadSlotFences[kMaxFrames]{};
-std::uint64_t menuUploadFrame = 0; // present thread only, under renderLock
+std::uint64_t menuUploadFrame = 0; 
 
-// --- avatar texture (see avatar_texture in VulkanHook.h) --------------------------------
+
 
 struct AvatarUploadState {
-    // staged request (present thread producer, present thread consumer)
+    
     const unsigned char* pixels = nullptr;
     int width = 0;
     int height = 0;
-    // GPU resources, created as the pipeline progresses
+    
     VkBuffer staging = VK_NULL_HANDLE;
     VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
     VkImage image = VK_NULL_HANDLE;
@@ -175,20 +175,22 @@ struct AvatarUploadState {
     VkSampler sampler = VK_NULL_HANDLE;
     VkImageView view = VK_NULL_HANDLE;
     VkDescriptorSet descriptor = VK_NULL_HANDLE;
-    VkFence usedFence = VK_NULL_HANDLE; // the slot fence of the frame that recorded the upload
+    VkFence usedFence = VK_NULL_HANDLE; 
     bool uploadRecorded = false;
 };
 
+AvatarUploadState music;
+std::atomic<bool> musicRequestPending{false};
 AvatarUploadState avatar;
 std::atomic<bool> avatarRequestPending{false};
-// Menu logo (the swirl cutout): same machinery, second state. The UI stages decoded PNG bytes
-// once; until the descriptor is live the UI keeps the NS monogram fallback.
+
+
 AvatarUploadState logo;
 std::atomic<bool> logoRequestPending{false};
-// Lua texture pool (renderer.load_image). Slots recycle: release() hands the SLOT back while the
-// retired GPU state moves to a ring that is drained during teardown (after waitUntilDeviceIdle),
-// because an in-flight unchained submit may still sample the descriptor.
-constexpr int kMaxLuaTextures = 8; // keep in sync with lua_texture::kMaxTextures in the header
+
+
+
+constexpr int kMaxLuaTextures = 8; 
 AvatarUploadState luaTextures[kMaxLuaTextures];
 std::atomic<bool> luaTexturePending[kMaxLuaTextures]{};
 struct RetiredTexture {
@@ -210,11 +212,11 @@ int retiredCursor = 0;
     return UINT32_MAX;
 }
 
-// Called on the presentation path before the menu render pass. Two phases: record the upload
-// into the current frame's command buffer (executed by that frame's regular submit), then poll
-// the recording frame's slot fence on later frames and finalize (view + sampler + descriptor).
-// The slot fence cannot be reset under us: slot reuse waits >= kMaxFrames frames out.
-// Generic RGBA8 texture upload (see avatar_texture / logo_texture in VulkanHook.h).
+
+
+
+
+
 void processTextureUpload(VkDevice device, VkCommandBuffer commandBuffer, VkFence submitFence,
     AvatarUploadState& avatar, std::atomic<bool>& avatarRequestPending) noexcept
 {
@@ -315,16 +317,16 @@ void processTextureUpload(VkDevice device, VkCommandBuffer commandBuffer, VkFenc
             gui_log::write("hook: texture upload recorded (%dx%d)", avatar.width, avatar.height);
         }
 
-        std::free(const_cast<unsigned char*>(avatar.pixels)); // consumed either way
+        std::free(const_cast<unsigned char*>(avatar.pixels)); 
         avatar.pixels = nullptr;
         if (!ok)
             gui_log::write("hook: texture upload setup FAILED");
         return;
     }
 
-    // Upload submitted on an earlier frame: poll its fence, then finalize. A null fence means
-    // cleanupRenderTargets already drained it (a swapchain recreation landed mid-upload) - the
-    // image is in its final layout, go straight to finalizing.
+    
+    
+    
     if (avatar.usedFence != VK_NULL_HANDLE
         && deviceFunctions.waitForFences(device, 1, &avatar.usedFence, VK_TRUE, 0) != VK_SUCCESS)
         return;
@@ -360,7 +362,7 @@ void processTextureUpload(VkDevice device, VkCommandBuffer commandBuffer, VkFenc
     gui_log::write("hook: texture ready");
 }
 
-// See processTextureUpload - same state shape.
+
 void destroyTextureState(VkDevice device, AvatarUploadState& avatar, std::atomic<bool>& avatarRequestPending) noexcept
 {
     if (device == VK_NULL_HANDLE)
@@ -402,12 +404,12 @@ void destroyTextureState(VkDevice device, AvatarUploadState& avatar, std::atomic
     avatar.usedFence = VK_NULL_HANDLE;
 }
 
-// --- shadow stamp (see shadow_texture in VulkanHook.h) -----------------------------------
-// A precomputed gaussian-blurred rounded box the UI draws as soft shadows under cards and
-// popovers. Same staging machinery as the avatar texture: the upload is recorded into a menu
-// frame's command buffer (before the render pass), submitted with that frame's slot fence, and
-// the descriptor goes live once a fence poll proves the upload completed. Until then (or if
-// the upload failed) the UI keeps its layered-rect fake. Present-thread only.
+
+
+
+
+
+
 
 struct ShadowUploadState {
     VkBuffer staging = VK_NULL_HANDLE;
@@ -417,7 +419,7 @@ struct ShadowUploadState {
     VkSampler sampler = VK_NULL_HANDLE;
     VkImageView view = VK_NULL_HANDLE;
     VkDescriptorSet descriptor = VK_NULL_HANDLE;
-    VkFence usedFence = VK_NULL_HANDLE; // the slot fence of the frame that recorded the upload
+    VkFence usedFence = VK_NULL_HANDLE; 
     bool uploadRecorded = false;
     bool failed = false;
 };
@@ -525,7 +527,7 @@ void processShadowUpload(VkDevice device, VkCommandBuffer commandBuffer, VkFence
 
         std::free(pixels);
         if (!ok) {
-            // Clean up this attempt's partials; the UI keeps the layered-rect fake forever.
+            
             if (shadow.staging != VK_NULL_HANDLE) {
                 deviceFunctions.destroyBuffer(device, shadow.staging, nullptr);
                 shadow.staging = VK_NULL_HANDLE;
@@ -552,8 +554,8 @@ void processShadowUpload(VkDevice device, VkCommandBuffer commandBuffer, VkFence
         return;
     }
 
-    // Upload submitted on an earlier frame: poll its fence, then finalize. A null fence means
-    // cleanupRenderTargets already drained it - the image is in its final layout either way.
+    
+    
     if (shadow.usedFence != VK_NULL_HANDLE
         && deviceFunctions.waitForFences(device, 1, &shadow.usedFence, VK_TRUE, 0) != VK_SUCCESS)
         return;
@@ -633,10 +635,10 @@ void destroyShadowTexture(VkDevice device) noexcept
 
 SpinLock renderLock;
 
-[[nodiscard]] std::int64_t monotonicMs() noexcept; // defined with the public API below
-std::int64_t lastSkipLogMs = 0;                    // rate limiter for present-skip diagnostics
+[[nodiscard]] std::int64_t monotonicMs() noexcept; 
+std::int64_t lastSkipLogMs = 0;                    
 
-// --- pointer-cache swap records -------------------------------------------
+
 
 struct SwapSite {
     volatile std::uint64_t* site;
@@ -644,7 +646,7 @@ struct SwapSite {
     std::uint64_t replacement;
 };
 
-constexpr std::size_t kMaxSwapSites = 256; // .bss slots + per-object heap copies
+constexpr std::size_t kMaxSwapSites = 256; 
 SwapSite swapSites[kMaxSwapSites];
 std::size_t swapSiteCount = 0;
 
@@ -656,12 +658,12 @@ AcquireNextImageKHRFunc originalAcquireNextImageKHR = nullptr;
 QueuePresentKHRFunc originalQueuePresentKHR = nullptr;
 CreateSwapchainKHRFunc originalCreateSwapchainKHR = nullptr;
 
-// --- forward declarations ----------------------------------------------------
+
 
 void cleanupRenderTargets(VkDevice device) noexcept;
 [[nodiscard]] VkSemaphore renderImGui(VkQueue queue, const VkPresentInfoKHR* presentInfo) noexcept;
 
-// --- hooks ---------------------------------------------------------------------
+
 
 VkResult VKAPI_CALL hkAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain, std::uint64_t timeout, VkSemaphore semaphore, VkFence fence, std::uint32_t* pImageIndex) noexcept
 {
@@ -676,13 +678,13 @@ VkResult VKAPI_CALL hkAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapch
 
 VkResult VKAPI_CALL hkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSwapchainKHR* pSwapchain) noexcept
 {
-    // Swapchain recreation invalidates every backbuffer handle. The OLD views/framebuffers may
-    // still be referenced by command buffers that are IN FLIGHT on the present queue -
-    // destroying them here without syncing is a device-lost recipe (observed as an amdgpu
-    // context reset that took the whole desktop down during window resize). ORDERING MATTERS:
-    // take the render lock FIRST (no new command buffer can start recording against the old
-    // targets), THEN wait for the device idle (drains everything already submitted), and only
-    // then destroy. After the lock is released, rendering rebuilds against the new swapchain.
+    
+    
+    
+    
+    
+    
+    
     gui_log::write("hook: swapchain recreation (extent %ux%u) - syncing",
         pCreateInfo ? pCreateInfo->imageExtent.width : 0, pCreateInfo ? pCreateInfo->imageExtent.height : 0);
     {
@@ -694,8 +696,8 @@ VkResult VKAPI_CALL hkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreat
         cleanupRenderTargets(device);
     }
     swapchainExtent = pCreateInfo ? pCreateInfo->imageExtent : VkExtent2D{};
-    // The render pass must be created with the exact swapchain format - never guessed. A
-    // mismatched framebuffer (e.g. SRGB / HDR-capable formats) is a validation error at best.
+    
+    
     swapchainFormatCaptured = pCreateInfo ? pCreateInfo->imageFormat : VK_FORMAT_UNDEFINED;
 
     if (originalCreateSwapchainKHR)
@@ -706,21 +708,21 @@ VkResult VKAPI_CALL hkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreat
 
 VkResult VKAPI_CALL hkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPresentInfo) noexcept
 {
-    // One-shot deferred work, first present only (loader lock long released
-    // here, unlike in our constructor): link_map self-hide. No-op afterwards.
+    
+    
     fva::hooks::apply_deferred_link_hide();
-    // breadcrumb 0x100 = present entry; 0x107 = renderImGui returned; 0x108 = original present
-    // returned (see the 0x1xx present-path breadcrumb block inside renderImGui)
+    
+    
     CrashLogger::trace(0x100);
     const VkSemaphore menuDone = renderImGui(queue, pPresentInfo);
     CrashLogger::trace(0x107);
 
-    // Make the original present wait on our menu pass IN ADDITION to the game's own wait
-    // semaphores. APPEND, never replace: the game's binary semaphores must keep their single
-    // wait (replacing them here dropped the game's render-completion dependency). The
-    // compositor then shows the image only after both the game's straggler passes and our menu
-    // pass have finished - that is what closes the menu vanishing / pixelation / white-flash
-    // races under load. If the wait list were absurdly long, present unpatched (as before).
+    
+    
+    
+    
+    
+    
     VkPresentInfoKHR patched{};
     VkSemaphore waitSemaphores[9]{};
     if (menuDone != VK_NULL_HANDLE && pPresentInfo->waitSemaphoreCount < 8) {
@@ -744,10 +746,10 @@ VkResult VKAPI_CALL hkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPr
     return VK_ERROR_DEVICE_LOST;
 }
 
-// --- resolution-chain scan -------------------------------------------------------
 
-// The name string lives in the module's .rodata; validity of the target decides whether the
-// slot gets hooked.
+
+
+
 [[nodiscard]] bool isTargetName(const char* name) noexcept
 {
     return std::strcmp(name, "vkQueuePresentKHR") == 0
@@ -755,15 +757,15 @@ VkResult VKAPI_CALL hkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPr
         || std::strcmp(name, "vkCreateSwapchainKHR") == 0;
 }
 
-// Swaps the cache slot for one target. The slot holding `targetName`'s pointer is written by
-// the NEXT iteration's store (the store lags one name behind), so the caller passes the slot
-// observed at the following match.
+
+
+
 void hookSlotFor(const char* targetName, volatile std::uint64_t* slot) noexcept
 {
     if (!slot || *slot == 0)
-        return; // not populated yet - the caller retries later
+        return; 
 
-    // The two compiled copies of the chain write the same slots - skip already-hooked ones.
+    
     for (std::size_t i = 0; i < swapSiteCount; ++i) {
         if (swapSites[i].site == slot)
             return;
@@ -771,8 +773,8 @@ void hookSlotFor(const char* targetName, volatile std::uint64_t* slot) noexcept
     if (swapSiteCount >= kMaxSwapSites)
         return;
 
-    // The slot's current value is what our handler must call through - record it on the right
-    // original BEFORE the swap goes live, or the first hooked call jumps into null.
+    
+    
     const std::uint64_t original = *slot;
     std::uint64_t replacement = 0;
     if (std::strcmp(targetName, "vkQueuePresentKHR") == 0) {
@@ -790,9 +792,9 @@ void hookSlotFor(const char* targetName, volatile std::uint64_t* slot) noexcept
     swapSites[swapSiteCount++] = SwapSite{slot, original, replacement};
 }
 
-// Walks the resolution chain in the renderer's .text and hooks the three cache slots.
-// Returns the number of vkQueuePresentKHR slots swapped (0 = pattern drifted or cache not
-// populated - callers treat that as "not installed, retry").
+
+
+
 [[nodiscard]] std::size_t hookRendererCacheSlots() noexcept
 {
     const DynamicLibrary renderer{"librendersystemvulkan.so"};
@@ -812,8 +814,8 @@ void hookSlotFor(const char* targetName, volatile std::uint64_t* slot) noexcept
 
     std::size_t iterations = 0;
     std::size_t presentSites = 0;
-    // `pending` holds the previous iteration's target name (if any); the CURRENT iteration's
-    // store slot receives the previous iteration's resolved pointer.
+    
+    
     char name[vulkan_resolution_chain::kMaxNameLength];
     char pending[vulkan_resolution_chain::kMaxNameLength]{};
     bool pendingValid = false;
@@ -841,9 +843,9 @@ void hookSlotFor(const char* targetName, volatile std::uint64_t* slot) noexcept
     return presentSites;
 }
 
-// Re-asserts our handlers in case the game re-resolved its cache since install (a
-// re-resolution writes the original pointer back). Called once per frame from the install
-// retry path (which early-outs cheaply once installed).
+
+
+
 void verifySwaps() noexcept
 {
     for (std::size_t i = 0; i < swapSiteCount; ++i) {
@@ -855,13 +857,13 @@ void verifySwaps() noexcept
     }
 }
 
-// --- value scan for pointer copies --------------------------------------------
 
-// The renderer fills its .bss cache once, but per-object structures (device/swapchain
-// instances created before we injected) may hold their own copies of the function pointers.
-// This scan walks every writable mapping of the process and swaps any qword equal to the
-// original function pointer with our handler. One-time cost at install; the site list keeps
-// them restorable and re-asserted.
+
+
+
+
+
+
 struct PointerCopyScanResult {
     std::size_t sitesSwapped = 0;
     std::uint64_t bytesScanned = 0;
@@ -870,8 +872,8 @@ struct PointerCopyScanResult {
 
 [[nodiscard]] PointerCopyScanResult scanWritableMappingsForValue(std::uint64_t needle, std::uint64_t replacement) noexcept
 {
-    constexpr std::uint64_t kMaxTotalScanBytes = 3ull << 30;  // 3 GiB overall budget
-    constexpr std::uint64_t kMaxMappingScanBytes = 1ull << 30; // skip giant arenas beyond this
+    constexpr std::uint64_t kMaxTotalScanBytes = 3ull << 30;  
+    constexpr std::uint64_t kMaxMappingScanBytes = 1ull << 30; 
 
     PointerCopyScanResult result;
     std::uint64_t scannedBytes = 0;
@@ -884,7 +886,7 @@ struct PointerCopyScanResult {
         if (perms[1] != 'w')
             return;
         if (!path || std::strstr(path, "libMangoHud") != nullptr)
-            return; // never touch our own library's storage
+            return; 
 
         const std::uint64_t bytes = end - start;
         if (bytes > kMaxMappingScanBytes) {
@@ -903,8 +905,8 @@ struct PointerCopyScanResult {
             if (*site != needle)
                 continue;
 
-            // Skip sites we already swapped (dedupe across the three needles is not needed -
-            // the values differ - but a slot can match two phases of the install).
+            
+            
             bool alreadyRecorded = false;
             for (std::size_t i = 0; i < swapSiteCount; ++i) {
                 if (swapSites[i].site == site) {
@@ -921,7 +923,7 @@ struct PointerCopyScanResult {
         }
     };
 
-    // Stream /proc/self/maps line by line via pread with a running offset.
+    
     char line[512];
     std::size_t lineLength = 0;
     std::int64_t fileOffset = 0;
@@ -945,7 +947,7 @@ struct PointerCopyScanResult {
             } else if (lineLength + 1 < sizeof(line)) {
                 line[lineLength++] = c;
             } else {
-                lineLength = 0; // overlong line: drop it
+                lineLength = 0; 
             }
         }
         if (result.truncatedByBudget)
@@ -957,12 +959,12 @@ struct PointerCopyScanResult {
     return result;
 }
 
-// --- fake instance (ImGui handle provider) ---------------------------------------
+
 
 PFN_vkVoidFunction VKAPI_CALL imguiLoaderFunc(const char* name, void*) noexcept
 {
-    // Instance-level proc addresses dispatch on the object they are called with, so the
-    // backend's device-level pointers work with the game's real device.
+    
+    
     return loader.getInstanceProcAddr(fakeInstance, name);
 }
 
@@ -976,10 +978,10 @@ PFN_vkVoidFunction VKAPI_CALL imguiLoaderFunc(const char* name, void*) noexcept
     instanceInfo.ppEnabledExtensionNames = &instanceExtension;
 
 #ifndef NDEBUG
-    // Debug builds: enable Khronos validation on OUR instance. Validation is instance-scoped,
-    // so every call we make into the game's device (render pass layouts, load ops, semaphore
-    // states, barriers) gets checked while the game's own submits stay untouched. Degrades
-    // gracefully when the layer is not installed.
+    
+    
+    
+    
     {
         constexpr const char* kValidationLayer = "VK_LAYER_KHRONOS_validation";
         const auto enumerateLayers = reinterpret_cast<PFN_vkEnumerateInstanceLayerProperties>(
@@ -1015,13 +1017,13 @@ PFN_vkVoidFunction VKAPI_CALL imguiLoaderFunc(const char* name, void*) noexcept
     return true;
 }
 
-// --- render targets (donor parity) ----------------------------------------------
+
 
 [[nodiscard]] VkFormat swapchainFormat() noexcept
 {
-    // Prefer the format the game actually created its swapchain with (captured in
-    // hkCreateSwapchainKHR); the Wayland-based guess only covers the bootstrap case where the
-    // swapchain predates our hook and no create call was ever seen.
+    
+    
+    
     if (swapchainFormatCaptured != VK_FORMAT_UNDEFINED)
         return swapchainFormatCaptured;
     return gui_sdl::isUsingWayland() ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_B8G8R8A8_UNORM;
@@ -1029,10 +1031,10 @@ PFN_vkVoidFunction VKAPI_CALL imguiLoaderFunc(const char* name, void*) noexcept
 
 [[nodiscard]] bool createRenderTarget(VkDevice device, VkSwapchainKHR swapchain) noexcept
 {
-    // Everything is built into locals and only committed to the globals on success. The ImGui
-    // backend captured the PREVIOUS render pass (its pipelines) and descriptor pool (its
-    // texture sets) at Init, so a failed retry must neither clobber those objects (the old
-    // globals stay published) nor leak what this attempt already created (self-cleanup below).
+    
+    
+    
+    
     std::uint32_t imageCount = 0;
     deviceFunctions.getSwapchainImagesKHR(device, swapchain, &imageCount, nullptr);
     if (imageCount == 0 || imageCount > kMaxFrames) {
@@ -1091,15 +1093,15 @@ PFN_vkVoidFunction VKAPI_CALL imguiLoaderFunc(const char* name, void*) noexcept
             return fail("command buffer");
     }
 
-    // Render pass: DONT_CARE load - donor parity, empirically proven. LOAD (with either
-    // initialLayout) was tried here and black-screened the game while the menu still rendered:
-    // the game's last pass leaves the swapchain image in a layout our pass cannot truthfully
-    // claim at bootstrap (PRESENT_SRC_KHR is the likely actual), so the load executes against
-    // stale image state and reads black. DONT_CARE makes the driver skip touching prior
-    // contents entirely, which preserves them in practice on every driver this project targets
-    // (proven across the donor's lifetime) - the menu composites over the game frame as
-    // intended. Do not "fix" this back to LOAD without a truthful way to learn the game's
-    // actual final layout.
+    
+    
+    
+    
+    
+    
+    
+    
+    
     VkAttachmentDescription attachment{};
     attachment.format = format;
     attachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -1156,8 +1158,8 @@ PFN_vkVoidFunction VKAPI_CALL imguiLoaderFunc(const char* name, void*) noexcept
             return fail("framebuffer");
     }
 
-    // Per-backbuffer semaphore chaining our menu pass into the frame dependencies (signaled by
-    // the menu submit, appended to the original present's wait list - see hkQueuePresentKHR).
+    
+    
     VkSemaphoreCreateInfo semaphoreInfo{};
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     for (std::uint32_t i = 0; i < imageCount; ++i) {
@@ -1165,20 +1167,20 @@ PFN_vkVoidFunction VKAPI_CALL imguiLoaderFunc(const char* name, void*) noexcept
             return fail("semaphore");
     }
 
-    // The backend only ever allocates COMBINED_IMAGE_SAMPLER sets (font atlas + user textures).
+    
     constexpr VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 };
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT; // avatar RemoveTexture
+    poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT; 
     poolInfo.maxSets = poolSize.descriptorCount;
     poolInfo.poolSizeCount = 1;
     poolInfo.pPoolSizes = &poolSize;
     if (deviceFunctions.createDescriptorPool(device, &poolInfo, nullptr, &newDescriptorPool) != VK_SUCCESS)
         return fail("descriptor pool");
 
-    // Signaled at creation: a slot with no prior submit must never block the wait. Fences
-    // persist across recreations (submits and the avatar finalize path reference them), so
-    // only the missing ones are created.
+    
+    
+    
     for (auto& fence : uploadSlotFences) {
         if (fence != VK_NULL_HANDLE)
             continue;
@@ -1191,8 +1193,8 @@ PFN_vkVoidFunction VKAPI_CALL imguiLoaderFunc(const char* name, void*) noexcept
         }
     }
 
-    // Commit: publish the new generation; retire the previous one - still referenced by the
-    // backend's pipelines/sets, destroyed only at full teardown (destroyResources).
+    
+    
     if (renderPass != VK_NULL_HANDLE && retiredCount < kMaxFrames) {
         retiredRenderPasses[retiredCount] = renderPass;
         retiredDescriptorPools[retiredCount] = descriptorPool;
@@ -1243,11 +1245,11 @@ void cleanupRenderTargets(VkDevice device) noexcept
         }
     }
 
-    // Texture uploads recorded into a menu frame's command buffer (avatar, shadow stamp)
-    // finalize by polling that frame's slot fence. Tearing the fences down mid-upload would
-    // orphan them (wait on a destroyed fence): drain the pending ones first and drop the
-    // references - the uploads are complete after the wait, so their finalize steps run on a
-    // later present. Safe to block here: both callers ran vkDeviceWaitIdle first.
+    
+    
+    
+    
+    
     auto drainUploadFence = [&](VkFence& fence, const char* what) noexcept {
         if (fence == VK_NULL_HANDLE)
             return;
@@ -1260,8 +1262,8 @@ void cleanupRenderTargets(VkDevice device) noexcept
     if (shadow.uploadRecorded && shadow.descriptor == VK_NULL_HANDLE)
         drainUploadFence(shadow.usedFence, "shadow");
 
-    // Safe: both cleanupRenderTargets callers (swapchain recreation, full teardown) run
-    // vkDeviceWaitIdle first, so no submit references these fences anymore.
+    
+    
     for (auto& fence : uploadSlotFences) {
         if (fence != VK_NULL_HANDLE) {
             deviceFunctions.destroyFence(device, fence, nullptr);
@@ -1270,11 +1272,11 @@ void cleanupRenderTargets(VkDevice device) noexcept
     }
 }
 
-// --- present-path render -----------------------------------------------------------
 
-// ImGui renderer bootstrap on the first present, then the menu render itself. Mirrors the
-// donor's RenderImGui flow. Returns the semaphore our pass signals - the caller APPENDS it to
-// the original present's wait list - or VK_NULL_HANDLE when nothing was rendered/submitted.
+
+
+
+
 [[nodiscard]] VkSemaphore renderImGui(VkQueue queue, const VkPresentInfoKHR* presentInfo) noexcept
 {
     VkSemaphore menuDone = VK_NULL_HANDLE;
@@ -1288,7 +1290,7 @@ void cleanupRenderTargets(VkDevice device) noexcept
         return VK_NULL_HANDLE;
 
     if (!deviceFunctionsResolved) {
-        // One-time resolution against the game's real device.
+        
         deviceFunctions.getSwapchainImagesKHR = reinterpret_cast<PFN_vkGetSwapchainImagesKHR>(loader.getDeviceProcAddr(device, "vkGetSwapchainImagesKHR"));
         deviceFunctions.createImageView = reinterpret_cast<PFN_vkCreateImageView>(loader.getDeviceProcAddr(device, "vkCreateImageView"));
         deviceFunctions.destroyImageView = reinterpret_cast<PFN_vkDestroyImageView>(loader.getDeviceProcAddr(device, "vkDestroyImageView"));
@@ -1343,8 +1345,8 @@ void cleanupRenderTargets(VkDevice device) noexcept
 
     verifySwaps();
 
-    // ImGui does not like rendering multiple frames at once (donor's comment); serializes the
-    // (theoretical) multiple present threads.
+    
+    
     const std::lock_guard guard{renderLock};
 
     for (std::uint32_t i = 0; i < presentInfo->swapchainCount; ++i) {
@@ -1359,11 +1361,11 @@ void cleanupRenderTargets(VkDevice device) noexcept
             }
             gui_log::write("hook: render targets created");
         }
-        // Bootstrap only (no swapchain create call seen yet): approximate the pixel extent
-        // from point-space DisplaySize * framebuffer scale. Once hkCreateSwapchainKHR fires,
-        // the game's real extent is always used instead. The scale is sanity-bounded - a
-        // broken getSizeInPixels (0 or NaN) must not produce a zero render area (invalid
-        // render pass, driver UB).
+        
+        
+        
+        
+        
         if (swapchainExtent.width == 0) {
             const auto [w, h] = ImGui::GetIO().DisplaySize;
             const auto [sx, sy] = ImGui::GetIO().DisplayFramebufferScale;
@@ -1374,8 +1376,8 @@ void cleanupRenderTargets(VkDevice device) noexcept
 
         const std::uint32_t imageIndex = presentInfo->pImageIndices[i];
         if (imageIndex >= kMaxFrames) {
-            // Every skip is a present without the menu (flicker). Rate-limited so a capture
-            // session that hits this repeatedly shows up as a burst in the log.
+            
+            
             if (GUI::isMenuOpen() && monotonicMs() - lastSkipLogMs > 1000) {
                 lastSkipLogMs = monotonicMs();
                 gui_log::write("hook: present skipped - imageIndex %u >= kMaxFrames (menu flicker source)", imageIndex);
@@ -1391,14 +1393,14 @@ void cleanupRenderTargets(VkDevice device) noexcept
         }
         VkPipelineStageFlags menuWaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-        // Semaphore chaining (kChainIntoGameSemaphores) is DISABLED: CS2 runs with Steam's
-        // GameOverlay, which renders around the same present and shares those semaphores -
-        // chaining stole a binary signal from Steam's overlay and froze the whole queue
-        // (observed). Instead the menu submit runs unchained (no waits) and SIGNALS this
-        // frame's semaphore; hkQueuePresentKHR APPENDS it to the original present's wait list.
-        // Bare queue-submission ordering used to let the game's straggler passes race our menu
-        // (the old 1-frame glitch trade-off); the appended wait closes that race without
-        // consuming any of the game's own signals.
+        
+        
+        
+        
+        
+        
+        
+        
         constexpr bool kChainIntoGameSemaphores = false;
         VkSemaphore waitAll[2] = {};
         std::uint32_t waitCount = 0;
@@ -1417,9 +1419,9 @@ void cleanupRenderTargets(VkDevice device) noexcept
             submitInfo.pWaitSemaphores = waitAll;
             submitInfo.pWaitDstStageMask = &menuWaitStage;
         }
-        // Signal unconditionally: the hooked present appends this semaphore to its wait list
-        // (see hkQueuePresentKHR), so the compositor never sees a frame before the menu pass
-        // completed - even on frames where the menu drew nothing.
+        
+        
+        
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = &frameDone;
 
@@ -1429,20 +1431,20 @@ void cleanupRenderTargets(VkDevice device) noexcept
         deviceFunctions.resetCommandBuffer(fd->CommandBuffer, 0);
         deviceFunctions.beginCommandBuffer(fd->CommandBuffer, &beginInfo);
 
-        // The render area MUST match the framebuffer (swapchain image) extent. io.DisplaySize
-        // is window-point-space and lags during a resize - driving the render pass from it
-        // produced out-of-bounds render areas (driver GPU reset during resize).
+        
+        
+        
         VkExtent2D extent = swapchainExtent;
         if (extent.width == 0 || extent.height == 0) {
-            // Bootstrap only: bounded point-space * framebuffer scale (see above).
+            
             const auto [width, height] = ImGui::GetIO().DisplaySize;
             const auto [sx, sy] = ImGui::GetIO().DisplayFramebufferScale;
             const float fx = (sx > 0.0f && sx < 8.0f) ? sx : 1.0f;
             const float fy = (sy > 0.0f && sy < 8.0f) ? sy : 1.0f;
             extent = {static_cast<std::uint32_t>(width * fx + 0.5f), static_cast<std::uint32_t>(height * fy + 0.5f)};
         }
-        // Breadcrumb codes for CrashLogger (0x1xx = present path): a crash mid-frame names the
-        // exact last stage in /tmp/gamesense_crash.txt instead of leaving a pc to guess at.
+        
+        
         constexpr std::uint64_t kTraceFenceWait = 0x101;
         constexpr std::uint64_t kTraceAvatar = 0x102;
         constexpr std::uint64_t kTraceBeginPass = 0x103;
@@ -1450,10 +1452,10 @@ void cleanupRenderTargets(VkDevice device) noexcept
         constexpr std::uint64_t kTraceGuiRender = 0x105;
         constexpr std::uint64_t kTraceSubmit = 0x106;
 
-        // Upload-slot sync: fence-wait the buffer slot the ImGui backend rotation is about to
-        // reuse (slot (menuUploadFrame + 1) % kMaxFrames), then submit this frame against that
-        // fence. Only when this frame will actually run RenderDrawData - that is what advances
-        // the backend rotation our counter mirrors (same fb-size condition, same skip cases).
+        
+        
+        
+        
         const ImGuiIO& imguiIo = ImGui::GetIO();
         const bool willRender = imguiIo.DisplaySize.x * imguiIo.DisplayFramebufferScale.x > 0.0f
             && imguiIo.DisplaySize.y * imguiIo.DisplayFramebufferScale.y > 0.0f;
@@ -1462,11 +1464,11 @@ void cleanupRenderTargets(VkDevice device) noexcept
         if (willRender) {
             slotFence = uploadSlotFences[uploadSlot];
             if (slotFence != VK_NULL_HANDLE) {
-                // Normally long-signaled (the slot's submit finished kMaxFrames frames ago) -
-                // the cap only bounds a pathological stall; fail-open below self-heals.
+                
+                
                 if (deviceFunctions.waitForFences(device, 1, &slotFence, VK_TRUE, 5'000'000) != VK_SUCCESS) {
                     gui_log::write("hook: upload slot fence wait timed out (slot %zu)", uploadSlot);
-                    slotFence = VK_NULL_HANDLE; // fail-open, flagged in the log
+                    slotFence = VK_NULL_HANDLE; 
                 } else {
                     deviceFunctions.resetFences(device, 1, &slotFence);
                 }
@@ -1474,9 +1476,10 @@ void cleanupRenderTargets(VkDevice device) noexcept
         }
         CrashLogger::trace(kTraceFenceWait);
 
-        // Texture uploads record into this frame's command buffer BEFORE the render pass
-        // (transfers are illegal inside a render pass); readiness rides this frame's fence.
+        
+        
         if (willRender && rendererInitialized) {
+            processTextureUpload(device, fd->CommandBuffer, slotFence, music, musicRequestPending);
             processTextureUpload(device, fd->CommandBuffer, slotFence, avatar, avatarRequestPending);
             CrashLogger::trace(kTraceAvatar);
             processTextureUpload(device, fd->CommandBuffer, slotFence, logo, logoRequestPending);
@@ -1504,14 +1507,14 @@ void cleanupRenderTargets(VkDevice device) noexcept
             initInfo.DescriptorPool = descriptorPool;
             initInfo.Subpass = 0;
             initInfo.MinImageCount = 2;
-            // NOT the swapchain image count: ImGui_ImplVulkan_RenderDrawData rotates its
-            // vertex/index upload buffers over ImageCount slots. Submission is unchained (no
-            // semaphore waits), so up to ~swapchain-depth menu submits can be in flight at
-            // once; with ImageCount=2 present k+2's memcpy overwrote the buffer present k was
-            // still reading - garbled/white menu frames whenever the content changed (scroll).
-            // kMaxFrames slots exceeds any realizable in-flight depth (acquire back-pressure
-            // bounds the game to the swapchain depth), so a slot is only reused long after its
-            // submit completed.
+            
+            
+            
+            
+            
+            
+            
+            
             initInfo.ImageCount = kMaxFrames;
             initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
             initInfo.RenderPass = renderPass;
@@ -1541,14 +1544,14 @@ void cleanupRenderTargets(VkDevice device) noexcept
         const VkFence submitFence = rendered && willRender ? slotFence : VK_NULL_HANDLE;
         const VkResult submitted = deviceFunctions.queueSubmit(queue, 1, &submitInfo, submitFence);
         CrashLogger::trace(kTraceSubmit);
-        // A failed submit would leave present waiting forever on an unsignaled semaphore -
-        // never publish frameDone in that case; present unpatched, like the old behavior.
+        
+        
         if (submitted != VK_SUCCESS) {
             gui_log::write("hook: menu submit failed (%d) - presenting without our wait", static_cast<int>(submitted));
             continue;
         }
         if (menuDone == VK_NULL_HANDLE)
-            menuDone = frameDone; // first swapchain's pass; CS2 presents exactly one
+            menuDone = frameDone; 
     }
     return menuDone;
 }
@@ -1560,14 +1563,14 @@ void cleanupRenderTargets(VkDevice device) noexcept
     return static_cast<std::int64_t>(ts.tv_sec) * 1000 + ts.tv_nsec / 1'000'000;
 }
 
-} // namespace
+} 
 
-// --- public API (avatar_texture, see VulkanHook.h) -----------------------------------
+
 
 void VulkanHook::logo_texture::request(const void* pixelsRgba, int width, int height) noexcept
 {
     if (logo.descriptor != VK_NULL_HANDLE || logo.uploadRecorded || width <= 0 || height <= 0) {
-        std::free(const_cast<void*>(pixelsRgba)); // one texture per process; late requests dropped
+        std::free(const_cast<void*>(pixelsRgba)); 
         return;
     }
     logo.pixels = static_cast<const unsigned char*>(pixelsRgba);
@@ -1579,6 +1582,33 @@ void VulkanHook::logo_texture::request(const void* pixelsRgba, int width, int he
 void* VulkanHook::logo_texture::query() noexcept
 {
     return logo.descriptor != VK_NULL_HANDLE ? logo.descriptor : nullptr;
+}
+
+void VulkanHook::music_texture::request(const void* pixelsRgba, int width, int height) noexcept
+{
+    if (music.descriptor != VK_NULL_HANDLE || music.uploadRecorded || width <= 0 || height <= 0) {
+        std::free(const_cast<void*>(pixelsRgba));
+        return;
+    }
+    music.pixels = static_cast<const unsigned char*>(pixelsRgba);
+    music.width = width;
+    music.height = height;
+    musicRequestPending.store(true, std::memory_order_release);
+}
+
+void* VulkanHook::music_texture::query() noexcept
+{
+    return music.descriptor;
+}
+
+void VulkanHook::music_texture::release() noexcept
+{
+    if (music.descriptor == VK_NULL_HANDLE && !music.uploadRecorded && music.pixels == nullptr)
+        return;
+    // Covers change infrequently. Wait for previous draws before freeing the old image,
+    // rather than retaining every past album until the overlay shuts down.
+    waitUntilDeviceIdle();
+    destroyTextureState(gameDevice.load(std::memory_order_acquire), music, musicRequestPending);
 }
 
 void VulkanHook::avatar_texture::request(const void* pixelsRgba, int width, int height) noexcept
@@ -1603,7 +1633,7 @@ void* VulkanHook::shadow_texture::query() noexcept
     return shadow.descriptor;
 }
 
-// --- public API (lua_texture, see VulkanHook.h) --------------------------------------
+
 
 void VulkanHook::lua_texture::request(const int index, const void* pixelsRgba, const int width, const int height) noexcept
 {
@@ -1613,7 +1643,7 @@ void VulkanHook::lua_texture::request(const int index, const void* pixelsRgba, c
     }
     AvatarUploadState& state = luaTextures[index];
     if (state.descriptor != VK_NULL_HANDLE || state.uploadRecorded) {
-        std::free(const_cast<void*>(pixelsRgba)); // slot mid-upload / already live - reject
+        std::free(const_cast<void*>(pixelsRgba)); 
         return;
     }
     state.pixels = static_cast<const unsigned char*>(pixelsRgba);
@@ -1635,15 +1665,15 @@ void VulkanHook::lua_texture::release(const int index) noexcept
         return;
     AvatarUploadState& state = luaTextures[index];
     if (state.descriptor == VK_NULL_HANDLE && !state.uploadRecorded && state.pixels == nullptr)
-        return; // nothing staged - already free
-    // Retire the whole state (staged-but-not-recorded, mid-upload or live); the slot resets to
-    // empty. A staged request racing the retire loses its pixels pointer here - it is free()d
-    // either by this copy of the state during teardown or was never recorded, and the uploader
-    // tolerates a consumed slot on the next frame.
+        return; 
+    
+    
+    
+    
     RetiredTexture& retired = retiredLuaTextures[retiredCursor];
     retiredCursor = (retiredCursor + 1) % kMaxRetiredTextures;
     if (retired.used) {
-        // Ring overflow: drop the oldest state's CPU pixels only (its GPU objects leak, bounded).
+        
         std::free(const_cast<unsigned char*>(retired.state.pixels));
         retired.state.pixels = nullptr;
     }
@@ -1653,7 +1683,7 @@ void VulkanHook::lua_texture::release(const int index) noexcept
     luaTexturePending[index].store(false, std::memory_order_release);
 }
 
-// --- public API ---------------------------------------------------------------------
+
 
 bool VulkanHook::tryInstall() noexcept
 {
@@ -1662,13 +1692,13 @@ bool VulkanHook::tryInstall() noexcept
     constexpr std::int64_t kRetryIntervalMs = 250;
 
     if (installed.load(std::memory_order_acquire)) {
-        verifySwaps(); // cheap: keeps our handlers in place if the game re-resolves
+        verifySwaps(); 
         return true;
     }
     if (HookQuiesce::isShuttingDown())
-        return false; // never start hooking during teardown
+        return false; 
     if (!GUI::isInitialized())
-        return false; // the hook needs the ImGui context (its loader wrapper + status reporting)
+        return false; 
 
     const std::int64_t now = monotonicMs();
     static std::atomic<std::int64_t> lastAttempt{-kRetryIntervalMs};
@@ -1682,14 +1712,14 @@ bool VulkanHook::tryInstall() noexcept
 
     bool expected = false;
     if (!trying.compare_exchange_strong(expected, true, std::memory_order_acq_rel))
-        return installed.load(std::memory_order_acquire); // another thread is already installing
+        return installed.load(std::memory_order_acquire); 
 
     if (!loader.createInstance) {
         const DynamicLibrary vulkan{cs2::VULKAN_DLL};
         if (!static_cast<bool>(vulkan)) {
             gui_log::write("tryInstall: libvulkan not loaded yet");
             trying.store(false, std::memory_order_release);
-            return false; // libvulkan not loaded yet - retry later
+            return false; 
         }
         loader.getInstanceProcAddr = vulkan.getFunctionAddress("vkGetInstanceProcAddr").as<PFN_vkGetInstanceProcAddr>();
         loader.getDeviceProcAddr = vulkan.getFunctionAddress("vkGetDeviceProcAddr").as<PFN_vkGetDeviceProcAddr>();
@@ -1715,23 +1745,23 @@ bool VulkanHook::tryInstall() noexcept
     gui_log::write("tryInstall: fake instance ready (PD %p, queue family %u)",
         reinterpret_cast<void*>(fakePhysicalDevice), queueFamily);
 
-    // Handler globals are valid before any slot is swapped, so the game can start routing
-    // through them from the first store on. The present path is what matters; acquire runs
-    // first in the chain and captures the device before the first hooked present lands.
+    
+    
+    
     const std::size_t presentSites = hookRendererCacheSlots();
     if (presentSites == 0) {
-        // Cache not populated yet (or the pattern drifted). Restore anything we swapped and
-        // retry; if a future CS2 update permanently breaks this, this is the escalation
-        // trigger for the vendored-detour fallback.
+        
+        
+        
         restorePointers();
         trying.store(false, std::memory_order_release);
         return false;
     }
 
-    // The .bss cache slots are hooked - but structures created before our injection may hold
-    // their own COPIES of the function pointers and call through those instead (observed for
-    // vkQueuePresentKHR: acquire reaches us, present does not). Sweep writable memory for the
-    // original pointer values and swap the copies as well.
+    
+    
+    
+    
     const auto presentCopies = scanWritableMappingsForValue(reinterpret_cast<std::uint64_t>(originalQueuePresentKHR), reinterpret_cast<std::uint64_t>(&hkQueuePresentKHR));
     const auto acquireCopies = scanWritableMappingsForValue(reinterpret_cast<std::uint64_t>(originalAcquireNextImageKHR), reinterpret_cast<std::uint64_t>(&hkAcquireNextImageKHR));
     const auto createCopies = scanWritableMappingsForValue(reinterpret_cast<std::uint64_t>(originalCreateSwapchainKHR), reinterpret_cast<std::uint64_t>(&hkCreateSwapchainKHR));
@@ -1767,17 +1797,18 @@ void VulkanHook::waitUntilDeviceIdle() noexcept
 
 void VulkanHook::destroyResources() noexcept
 {
-    // Texture teardowns first: RemoveTexture writes into our descriptor pool, and the backend
-    // shutdown below expects its own sets to still be registered while it runs.
+    
+    
+    destroyTextureState(gameDevice.load(std::memory_order_acquire), music, musicRequestPending);
     destroyTextureState(gameDevice.load(std::memory_order_acquire), avatar, avatarRequestPending);
     destroyTextureState(gameDevice.load(std::memory_order_acquire), logo, logoRequestPending);
     for (int i = 0; i < kMaxLuaTextures; ++i)
         destroyTextureState(gameDevice.load(std::memory_order_acquire), luaTextures[i], luaTexturePending[i]);
     destroyShadowTexture(gameDevice.load(std::memory_order_acquire));
-    // Retired lua textures (released slots) - the device is idle below before the render target
-    // cleanup, but ImGui descriptor removal must happen while the backend still exists, so they
-    // go here with the other texture states. A dedicated dummy pending flag: a retired state
-    // never has a live request, and the shared slot flags must not be touched.
+    
+    
+    
+    
     for (auto& retired : retiredLuaTextures) {
         if (retired.used) {
             std::atomic<bool> dummyPending{false};
@@ -1786,9 +1817,9 @@ void VulkanHook::destroyResources() noexcept
         }
     }
 
-    // Renderer shutdown first: ImGui_ImplVulkan owns descriptor sets allocated from our pool and
-    // pipelines referencing our render pass. It must run while the ImGui context still exists
-    // (GUI::destroy destroys the context afterwards).
+    
+    
+    
     if (rendererInitialized) {
         ImGui_ImplVulkan_Shutdown();
         rendererInitialized = false;
@@ -1801,9 +1832,9 @@ void VulkanHook::destroyResources() noexcept
                 : nullptr)
             waitIdle(device);
         cleanupRenderTargets(device);
-        // Render pass / descriptor pool generations retired across swapchain recreations stay
-        // alive until now: the backend's pipelines and texture sets referenced them until its
-        // shutdown above (see the comment above `renderPass`).
+        
+        
+        
         for (std::size_t i = 0; i < retiredCount; ++i) {
             if (retiredRenderPasses[i]) {
                 deviceFunctions.destroyRenderPass(device, retiredRenderPasses[i], nullptr);

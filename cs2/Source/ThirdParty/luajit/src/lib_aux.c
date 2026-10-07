@@ -1,10 +1,4 @@
-/*
-** Auxiliary library for the Lua/C API.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-**
-** Major parts taken verbatim or adapted from the Lua interpreter.
-** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
-*/
+
 
 #include <errno.h>
 #include <stdarg.h>
@@ -27,7 +21,7 @@
 #include <sys/wait.h>
 #endif
 
-/* -- I/O error handling -------------------------------------------------- */
+
 
 LUALIB_API int luaL_fileresult(lua_State *L, int stat, const char *fname)
 {
@@ -35,7 +29,7 @@ LUALIB_API int luaL_fileresult(lua_State *L, int stat, const char *fname)
     setboolV(L->top++, 1);
     return 1;
   } else {
-    int en = errno;  /* Lua API calls may change this value. */
+    int en = errno;  
     setnilV(L->top++);
     if (fname)
       lua_pushfstring(L, "%s: %s", fname, strerror(en));
@@ -77,7 +71,7 @@ LUALIB_API int luaL_execresult(lua_State *L, int stat)
   return luaL_fileresult(L, 0, NULL);
 }
 
-/* -- Module registration ------------------------------------------------- */
+
 
 LUALIB_API const char *luaL_findtable(lua_State *L, int idx,
 				      const char *fname, int szhint)
@@ -89,17 +83,17 @@ LUALIB_API const char *luaL_findtable(lua_State *L, int idx,
     if (e == NULL) e = fname + strlen(fname);
     lua_pushlstring(L, fname, (size_t)(e - fname));
     lua_rawget(L, -2);
-    if (lua_isnil(L, -1)) {  /* no such field? */
-      lua_pop(L, 1);  /* remove this nil */
-      lua_createtable(L, 0, (*e == '.' ? 1 : szhint)); /* new table for field */
+    if (lua_isnil(L, -1)) {  
+      lua_pop(L, 1);  
+      lua_createtable(L, 0, (*e == '.' ? 1 : szhint)); 
       lua_pushlstring(L, fname, (size_t)(e - fname));
       lua_pushvalue(L, -2);
-      lua_settable(L, -4);  /* set new table into field */
-    } else if (!lua_istable(L, -1)) {  /* field has a non-table value? */
-      lua_pop(L, 2);  /* remove table and value */
-      return fname;  /* return problematic part of the name */
+      lua_settable(L, -4);  
+    } else if (!lua_istable(L, -1)) {  
+      lua_pop(L, 2);  
+      return fname;  
     }
-    lua_remove(L, -2);  /* remove previous table */
+    lua_remove(L, -2);  
     fname = e + 1;
   } while (*e == '.');
   return NULL;
@@ -121,9 +115,9 @@ LUALIB_API void luaL_pushmodule(lua_State *L, const char *modname, int sizehint)
     if (luaL_findtable(L, LUA_GLOBALSINDEX, modname, sizehint) != NULL)
       lj_err_callerv(L, LJ_ERR_BADMODN, modname);
     lua_pushvalue(L, -1);
-    lua_setfield(L, -3, modname);  /* _LOADED[modname] = new table. */
+    lua_setfield(L, -3, modname);  
   }
-  lua_remove(L, -2);  /* Remove _LOADED table. */
+  lua_remove(L, -2);  
 }
 
 LUALIB_API void luaL_openlib(lua_State *L, const char *libname,
@@ -132,12 +126,12 @@ LUALIB_API void luaL_openlib(lua_State *L, const char *libname,
   lj_lib_checkfpu(L);
   if (libname) {
     luaL_pushmodule(L, libname, libsize(l));
-    lua_insert(L, -(nup + 1));  /* Move module table below upvalues. */
+    lua_insert(L, -(nup + 1));  
   }
   if (l)
     luaL_setfuncs(L, l, nup);
   else
-    lua_pop(L, nup);  /* Remove upvalues. */
+    lua_pop(L, nup);  
 }
 
 LUALIB_API void luaL_register(lua_State *L, const char *libname,
@@ -151,12 +145,12 @@ LUALIB_API void luaL_setfuncs(lua_State *L, const luaL_Reg *l, int nup)
   luaL_checkstack(L, nup, "too many upvalues");
   for (; l->name; l++) {
     int i;
-    for (i = 0; i < nup; i++)  /* Copy upvalues to the top. */
+    for (i = 0; i < nup; i++)  
       lua_pushvalue(L, -nup);
     lua_pushcclosure(L, l->func, nup);
     lua_setfield(L, -(nup + 2), l->name);
   }
-  lua_pop(L, nup);  /* Remove upvalues. */
+  lua_pop(L, nup);  
 }
 
 LUALIB_API const char *luaL_gsub(lua_State *L, const char *s,
@@ -167,16 +161,16 @@ LUALIB_API const char *luaL_gsub(lua_State *L, const char *s,
   luaL_Buffer b;
   luaL_buffinit(L, &b);
   while ((wild = strstr(s, p)) != NULL) {
-    luaL_addlstring(&b, s, (size_t)(wild - s));  /* push prefix */
-    luaL_addstring(&b, r);  /* push replacement in place of pattern */
-    s = wild + l;  /* continue after `p' */
+    luaL_addlstring(&b, s, (size_t)(wild - s));  
+    luaL_addstring(&b, r);  
+    s = wild + l;  
   }
-  luaL_addstring(&b, s);  /* push last suffix */
+  luaL_addstring(&b, s);  
   luaL_pushresult(&b);
   return lua_tostring(L, -1);
 }
 
-/* -- Buffer handling ----------------------------------------------------- */
+
 
 #define bufflen(B)	((size_t)((B)->p - (B)->buffer))
 #define bufffree(B)	((size_t)(LUAL_BUFFERSIZE - bufflen(B)))
@@ -185,7 +179,7 @@ static int emptybuffer(luaL_Buffer *B)
 {
   size_t l = bufflen(B);
   if (l == 0)
-    return 0;  /* put nothing on stack */
+    return 0;  
   lua_pushlstring(B->L, B->buffer, l);
   B->p = B->buffer;
   B->lvl++;
@@ -196,7 +190,7 @@ static void adjuststack(luaL_Buffer *B)
 {
   if (B->lvl > 1) {
     lua_State *L = B->L;
-    int toget = 1;  /* number of levels to concat */
+    int toget = 1;  
     size_t toplen = lua_strlen(L, -1);
     do {
       size_t l = lua_strlen(L, -(toget+1));
@@ -247,14 +241,14 @@ LUALIB_API void luaL_addvalue(luaL_Buffer *B)
   lua_State *L = B->L;
   size_t vl;
   const char *s = lua_tolstring(L, -1, &vl);
-  if (vl <= bufffree(B)) {  /* fit into buffer? */
-    memcpy(B->p, s, vl);  /* put it there */
+  if (vl <= bufffree(B)) {  
+    memcpy(B->p, s, vl);  
     B->p += vl;
-    lua_pop(L, 1);  /* remove from stack */
+    lua_pop(L, 1);  
   } else {
     if (emptybuffer(B))
-      lua_insert(L, -2);  /* put buffer before new value */
-    B->lvl++;  /* add new value into B stack */
+      lua_insert(L, -2);  
+    B->lvl++;  
     adjuststack(B);
   }
 }
@@ -266,11 +260,11 @@ LUALIB_API void luaL_buffinit(lua_State *L, luaL_Buffer *B)
   B->lvl = 0;
 }
 
-/* -- Reference management ------------------------------------------------ */
+
 
 #define FREELIST_REF	0
 
-/* Convert a stack index to an absolute index. */
+
 #define abs_index(L, i) \
   ((i) > 0 || (i) <= LUA_REGISTRYINDEX ? (i) : lua_gettop(L) + (i) + 1)
 
@@ -279,18 +273,18 @@ LUALIB_API int luaL_ref(lua_State *L, int t)
   int ref;
   t = abs_index(L, t);
   if (lua_isnil(L, -1)) {
-    lua_pop(L, 1);  /* remove from stack */
-    return LUA_REFNIL;  /* `nil' has a unique fixed reference */
+    lua_pop(L, 1);  
+    return LUA_REFNIL;  
   }
-  lua_rawgeti(L, t, FREELIST_REF);  /* get first free element */
-  ref = (int)lua_tointeger(L, -1);  /* ref = t[FREELIST_REF] */
-  lua_pop(L, 1);  /* remove it from stack */
-  if (ref != 0) {  /* any free element? */
-    lua_rawgeti(L, t, ref);  /* remove it from list */
-    lua_rawseti(L, t, FREELIST_REF);  /* (t[FREELIST_REF] = t[ref]) */
-  } else {  /* no free elements */
+  lua_rawgeti(L, t, FREELIST_REF);  
+  ref = (int)lua_tointeger(L, -1);  
+  lua_pop(L, 1);  
+  if (ref != 0) {  
+    lua_rawgeti(L, t, ref);  
+    lua_rawseti(L, t, FREELIST_REF);  
+  } else {  
     ref = (int)lua_objlen(L, t);
-    ref++;  /* create new reference */
+    ref++;  
   }
   lua_rawseti(L, t, ref);
   return ref;
@@ -301,13 +295,13 @@ LUALIB_API void luaL_unref(lua_State *L, int t, int ref)
   if (ref >= 0) {
     t = abs_index(L, t);
     lua_rawgeti(L, t, FREELIST_REF);
-    lua_rawseti(L, t, ref);  /* t[ref] = t[FREELIST_REF] */
+    lua_rawseti(L, t, ref);  
     lua_pushinteger(L, ref);
-    lua_rawseti(L, t, FREELIST_REF);  /* t[FREELIST_REF] = ref */
+    lua_rawseti(L, t, FREELIST_REF);  
   }
 }
 
-/* -- Default allocator and panic function -------------------------------- */
+
 
 static int panic(lua_State *L)
 {

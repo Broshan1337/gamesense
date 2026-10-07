@@ -1,7 +1,4 @@
-/*
-** Userdata handling.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #ifndef _LJ_UDATA_H
 #define _LJ_UDATA_H

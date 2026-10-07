@@ -1,10 +1,4 @@
-/*
-** Base and coroutine library.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-**
-** Major portions taken verbatim or adapted from the Lua interpreter.
-** Copyright (C) 1994-2011 Lua.org, PUC-Rio. See Copyright Notice in lua.h
-*/
+
 
 #include <stdio.h>
 
@@ -37,7 +31,7 @@
 #include "lj_strfmt.h"
 #include "lj_lib.h"
 
-/* -- Base library: checks ------------------------------------------------ */
+
 
 #define LJLIB_MODULE_base
 
@@ -53,10 +47,10 @@ LJLIB_ASM(assert)		LJLIB_REC(.)
   return FFH_UNREACHABLE;
 }
 
-/* ORDER LJ_T */
+
 LJLIB_PUSH("nil")
 LJLIB_PUSH("boolean")
-LJLIB_PUSH(top-1)  /* boolean */
+LJLIB_PUSH(top-1)  
 LJLIB_PUSH("userdata")
 LJLIB_PUSH("string")
 LJLIB_PUSH("upval")
@@ -66,14 +60,14 @@ LJLIB_PUSH("function")
 LJLIB_PUSH("trace")
 LJLIB_PUSH("cdata")
 LJLIB_PUSH("table")
-LJLIB_PUSH(top-9)  /* userdata */
+LJLIB_PUSH(top-9)  
 LJLIB_PUSH("number")
 LJLIB_ASM_(type)		LJLIB_REC(.)
-/* Recycle the lj_lib_checkany(L, 1) from assert. */
 
-/* -- Base library: iterators --------------------------------------------- */
 
-/* This solves a circular dependency problem -- change FF_next_N as needed. */
+
+
+
 LJ_STATIC_ASSERT((int)FF_next == FF_next_N);
 
 LJLIB_ASM(next)			LJLIB_REC(.)
@@ -89,8 +83,8 @@ static int ffh_pairs(lua_State *L, MMS mm)
   TValue *o = lj_lib_checkany(L, 1);
   cTValue *mo = lj_meta_lookup(L, o, mm);
   if ((LJ_52 || tviscdata(o)) && !tvisnil(mo)) {
-    L->top = o+1;  /* Only keep one argument. */
-    copyTV(L, L->base-1-LJ_FR2, mo);  /* Replace callable. */
+    L->top = o+1;  
+    copyTV(L, L->base-1-LJ_FR2, mo);  
     return FFH_TAILCALL;
   } else {
     if (!tvistab(o)) lj_err_argt(L, 1, LUA_TTABLE);
@@ -123,10 +117,10 @@ LJLIB_ASM(ipairs)		LJLIB_REC(xpairs 1)
   return ffh_pairs(L, MM_ipairs);
 }
 
-/* -- Base library: getters and setters ----------------------------------- */
+
 
 LJLIB_ASM_(getmetatable)	LJLIB_REC(.)
-/* Recycle the lj_lib_checkany(L, 1) from assert. */
+
 
 LJLIB_ASM(setmetatable)		LJLIB_REC(.)
 {
@@ -166,7 +160,7 @@ LJLIB_CF(setfenv)
   if (!(o < L->top && tvisfunc(o))) {
     int level = lj_lib_checkint(L, 1);
     if (level == 0) {
-      /* NOBARRIER: A thread (i.e. L) is never black. */
+      
       setgcref(L->env, obj2gco(t));
       return 0;
     }
@@ -264,7 +258,7 @@ LJLIB_CF(select)		LJLIB_REC(.)
   }
 }
 
-/* -- Base library: conversions ------------------------------------------- */
+
 
 LJLIB_ASM(tonumber)		LJLIB_REC(.)
 {
@@ -329,9 +323,9 @@ LJLIB_ASM(tostring)		LJLIB_REC(.)
 {
   TValue *o = lj_lib_checkany(L, 1);
   cTValue *mo;
-  L->top = o+1;  /* Only keep one argument. */
+  L->top = o+1;  
   if (!tvisnil(mo = lj_meta_lookup(L, o, MM_tostring))) {
-    copyTV(L, L->base-1-LJ_FR2, mo);  /* Replace callable. */
+    copyTV(L, L->base-1-LJ_FR2, mo);  
     return FFH_TAILCALL;
   }
   lj_gc_check(L);
@@ -339,7 +333,7 @@ LJLIB_ASM(tostring)		LJLIB_REC(.)
   return FFH_RES(1);
 }
 
-/* -- Base library: throw and catch errors -------------------------------- */
+
 
 LJLIB_CF(error)
 {
@@ -356,20 +350,17 @@ LJLIB_CF(error)
 LJLIB_ASM(pcall)		LJLIB_REC(.)
 {
   lj_lib_checkany(L, 1);
-  lj_lib_checkfunc(L, 2);  /* For xpcall only. */
+  lj_lib_checkfunc(L, 2);  
   return FFH_UNREACHABLE;
 }
 LJLIB_ASM_(xpcall)		LJLIB_REC(.)
 
-/* -- Base library: load Lua code ----------------------------------------- */
+
 
 static int load_aux(lua_State *L, int status, int envarg)
 {
   if (status == LUA_OK) {
-    /*
-    ** Set environment table for top-level function.
-    ** Don't do this for non-native bytecode, which returns a prototype.
-    */
+    
     if (tvistab(L->base+envarg-1) && tvisfunc(L->top-1)) {
       GCfunc *fn = funcV(L->top-1);
       GCtab *t = tabV(L->base+envarg-1);
@@ -388,7 +379,7 @@ LJLIB_CF(loadfile)
   GCstr *fname = lj_lib_optstr(L, 1);
   GCstr *mode = lj_lib_optstr(L, 2);
   int status;
-  lua_settop(L, 3);  /* Ensure env arg exists. */
+  lua_settop(L, 3);  
   status = luaL_loadfilex(L, fname ? strdata(fname) : NULL,
 			  mode ? strdata(mode) : NULL);
   return load_aux(L, status, 3);
@@ -399,13 +390,13 @@ static const char *reader_func(lua_State *L, void *ud, size_t *size)
   UNUSED(ud);
   luaL_checkstack(L, 2, "too many nested functions");
   copyTV(L, L->top++, L->base);
-  lua_call(L, 0, 1);  /* Call user-supplied function. */
+  lua_call(L, 0, 1);  
   L->top--;
   if (tvisnil(L->top)) {
     *size = 0;
     return NULL;
   } else if (tvisstr(L->top) || tvisnumber(L->top)) {
-    copyTV(L, L->base+4, L->top);  /* Anchor string in reserved stack slot. */
+    copyTV(L, L->base+4, L->top);  
     return lua_tolstring(L, 5, size);
   } else {
     lj_err_caller(L, LJ_ERR_RDRSTR);
@@ -426,18 +417,18 @@ LJLIB_CF(load)
       SBufExt *sbx = bufV(L->base);
       s = sbx->r;
       len = sbufxlen(sbx);
-      if (!name) name = &G(L)->strempty;  /* Buffers are not NUL-terminated. */
+      if (!name) name = &G(L)->strempty;  
     } else {
       GCstr *str = lj_lib_checkstr(L, 1);
       s = strdata(str);
       len = str->len;
     }
-    lua_settop(L, 4);  /* Ensure env arg exists. */
+    lua_settop(L, 4);  
     status = luaL_loadbufferx(L, s, len, name ? strdata(name) : s,
 			      mode ? strdata(mode) : NULL);
   } else {
     lj_lib_checkfunc(L, 1);
-    lua_settop(L, 5);  /* Reserve a slot for the string from the reader. */
+    lua_settop(L, 5);  
     status = lua_loadx(L, reader_func, NULL, name ? strdata(name) : "=(load)",
 		       mode ? strdata(mode) : NULL);
   }
@@ -460,7 +451,7 @@ LJLIB_CF(dofile)
   return (int)(L->top - L->base) - 1;
 }
 
-/* -- Base library: GC control -------------------------------------------- */
+
 
 LJLIB_CF(gcinfo)
 {
@@ -470,7 +461,7 @@ LJLIB_CF(gcinfo)
 
 LJLIB_CF(collectgarbage)
 {
-  int opt = lj_lib_checkopt(L, 1, LUA_GCCOLLECT,  /* ORDER LUA_GC* */
+  int opt = lj_lib_checkopt(L, 1, LUA_GCCOLLECT,  
     "\4stop\7restart\7collect\5count\1\377\4step\10setpause\12setstepmul\1\377\11isrunning");
   int32_t data = lj_lib_optint(L, 2, 0);
   if (opt == LUA_GCCOUNT) {
@@ -486,21 +477,21 @@ LJLIB_CF(collectgarbage)
   return 1;
 }
 
-/* -- Base library: miscellaneous functions ------------------------------- */
 
-LJLIB_PUSH(top-2)  /* Upvalue holds weak table. */
+
+LJLIB_PUSH(top-2)  
 LJLIB_CF(newproxy)
 {
   lua_settop(L, 1);
   lua_newuserdata(L, 0);
-  if (lua_toboolean(L, 1) == 0) {  /* newproxy(): without metatable. */
+  if (lua_toboolean(L, 1) == 0) {  
     return 1;
-  } else if (lua_isboolean(L, 1)) {  /* newproxy(true): with metatable. */
+  } else if (lua_isboolean(L, 1)) {  
     lua_newtable(L);
     lua_pushvalue(L, -1);
     lua_pushboolean(L, 1);
-    lua_rawset(L, lua_upvalueindex(1));  /* Remember mt in weak table. */
-  } else {  /* newproxy(proxy): inherit metatable. */
+    lua_rawset(L, lua_upvalueindex(1));  
+  } else {  
     int validproxy = 0;
     if (lua_getmetatable(L, 1)) {
       lua_rawget(L, lua_upvalueindex(1));
@@ -560,7 +551,7 @@ LJLIB_SET(_VERSION)
 
 #include "lj_libdef.h"
 
-/* -- Coroutine library --------------------------------------------------- */
+
 
 #define LJLIB_MODULE_coroutine
 
@@ -645,14 +636,14 @@ LJLIB_NOREG LJLIB_ASM(coroutine_wrap_aux)
   return ffh_resume(L, threadV(lj_lib_upvalue(L, 1)), 1);
 }
 
-/* Inline declarations. */
+
 LJ_ASMF void lj_ff_coroutine_wrap_aux(void);
 #if !(LJ_TARGET_MIPS && defined(ljamalg_c))
 LJ_FUNCA_NORET void LJ_FASTCALL lj_ffh_coroutine_wrap_err(lua_State *L,
 							  lua_State *co);
 #endif
 
-/* Error handler, called from assembler VM. */
+
 void LJ_FASTCALL lj_ffh_coroutine_wrap_err(lua_State *L, lua_State *co)
 {
   co->top--; copyTV(L, L->top, co->top); L->top++;
@@ -662,7 +653,7 @@ void LJ_FASTCALL lj_ffh_coroutine_wrap_err(lua_State *L, lua_State *co)
     lj_err_run(L);
 }
 
-/* Forward declaration. */
+
 static void setpc_wrap_aux(lua_State *L, GCfunc *fn);
 
 LJLIB_CF(coroutine_wrap)
@@ -676,17 +667,17 @@ LJLIB_CF(coroutine_wrap)
 
 #include "lj_libdef.h"
 
-/* Fix the PC of wrap_aux. Really ugly workaround. */
+
 static void setpc_wrap_aux(lua_State *L, GCfunc *fn)
 {
   setmref(fn->c.pc, &L2GG(L)->bcff[lj_lib_init_coroutine[1]+2]);
 }
 
-/* ------------------------------------------------------------------------ */
+
 
 static void newproxy_weaktable(lua_State *L)
 {
-  /* NOBARRIER: The table is new (marked white). */
+  
   GCtab *t = lj_tab_new(L, 0, 1);
   settabV(L, L->top++, t);
   setgcref(t->metatable, obj2gco(t));
@@ -697,11 +688,11 @@ static void newproxy_weaktable(lua_State *L)
 
 LUALIB_API int luaopen_base(lua_State *L)
 {
-  /* NOBARRIER: Table and value are the same. */
+  
   GCtab *env = tabref(L->env);
   settabV(L, lj_tab_setstr(L, env, lj_str_newlit(L, "_G")), env);
-  lua_pushliteral(L, LUA_VERSION);  /* top-3. */
-  newproxy_weaktable(L);  /* top-2. */
+  lua_pushliteral(L, LUA_VERSION);  
+  newproxy_weaktable(L);  
   LJ_LIB_REG(L, "_G", base);
   LJ_LIB_REG(L, LUA_COLIBNAME, coroutine);
   return 2;

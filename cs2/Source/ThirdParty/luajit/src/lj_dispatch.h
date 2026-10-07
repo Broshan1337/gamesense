@@ -1,7 +1,4 @@
-/*
-** Instruction dispatch handling.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #ifndef _LJ_DISPATCH_H
 #define _LJ_DISPATCH_H
@@ -13,7 +10,7 @@
 #endif
 
 #if LJ_TARGET_MIPS
-/* Need our own global offset table for the dreaded MIPS calling conventions. */
+
 
 #ifndef _LJ_VM_H
 LJ_ASMF int32_t LJ_FASTCALL lj_vm_modi(int32_t a, int32_t b);
@@ -67,46 +64,46 @@ GOTDEF(GOTENUM)
 };
 #endif
 
-/* Type of hot counter. Must match the code in the assembler VM. */
-/* 16 bits are sufficient. Only 0.0015% overhead with maximum slot penalty. */
+
+
 typedef uint16_t HotCount;
 
-/* Number of hot counter hash table entries (must be a power of two). */
+
 #define HOTCOUNT_SIZE		64
 #define HOTCOUNT_PCMASK		((HOTCOUNT_SIZE-1)*sizeof(HotCount))
 
-/* Hotcount decrements. */
+
 #define HOTCOUNT_LOOP		2
 #define HOTCOUNT_CALL		1
 
-/* This solves a circular dependency problem -- bump as needed. Sigh. */
+
 #define GG_NUM_ASMFF	57
 
 #define GG_LEN_DDISP	(BC__MAX + GG_NUM_ASMFF)
 #define GG_LEN_SDISP	BC_FUNCF
 #define GG_LEN_DISP	(GG_LEN_DDISP + GG_LEN_SDISP)
 
-/* Global state, main thread and extra fields are allocated together. */
+
 typedef struct GG_State {
-  lua_State L;				/* Main thread. */
-  global_State g;			/* Global state. */
+  lua_State L;				
+  global_State g;			
 #if LJ_TARGET_ARM && !LJ_TARGET_NX
-  /* Make g reachable via K12 encoded DISPATCH-relative addressing. */
+  
   uint8_t align1[(16-sizeof(global_State))&15];
 #endif
 #if LJ_TARGET_MIPS
-  ASMFunction got[LJ_GOT__MAX];		/* Global offset table. */
+  ASMFunction got[LJ_GOT__MAX];		
 #endif
 #if LJ_HASJIT
-  jit_State J;				/* JIT state. */
-  HotCount hotcount[HOTCOUNT_SIZE];	/* Hot counters. */
+  jit_State J;				
+  HotCount hotcount[HOTCOUNT_SIZE];	
 #if LJ_TARGET_ARM && !LJ_TARGET_NX
-  /* Ditto for J. */
+  
   uint8_t align2[(16-sizeof(jit_State)-sizeof(HotCount)*HOTCOUNT_SIZE)&15];
 #endif
 #endif
-  ASMFunction dispatch[GG_LEN_DISP];	/* Instruction dispatch tables. */
-  BCIns bcff[GG_NUM_ASMFF];		/* Bytecode for ASM fast functions. */
+  ASMFunction dispatch[GG_LEN_DISP];	
+  BCIns bcff[GG_NUM_ASMFF];		
 } GG_State;
 
 #define GG_OFS(field)	((int)offsetof(GG_State, field))
@@ -128,14 +125,14 @@ typedef struct GG_State {
 #define hotcount_set(gg, pc, val) \
   (hotcount_get((gg), (pc)) = (HotCount)(val))
 
-/* Dispatch table management. */
+
 LJ_FUNC void lj_dispatch_init(GG_State *GG);
 #if LJ_HASJIT
 LJ_FUNC void lj_dispatch_init_hotcount(global_State *g);
 #endif
 LJ_FUNC void LJ_FASTCALL lj_dispatch_update(global_State *g, int nolock);
 
-/* Instruction dispatch callback for hooks or when recording. */
+
 LJ_FUNCA void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc);
 LJ_FUNCA ASMFunction LJ_FASTCALL lj_dispatch_call(lua_State *L, const BCIns*pc);
 #if LJ_HASJIT
@@ -146,7 +143,7 @@ LJ_FUNCA void LJ_FASTCALL lj_dispatch_profile(lua_State *L, const BCIns *pc);
 #endif
 
 #if LJ_HASFFI && !defined(_BUILDVM_H)
-/* Save/restore errno and GetLastError() around hooks, exits and recording. */
+
 #include <errno.h>
 #if LJ_TARGET_WINDOWS
 #define WIN32_LEAN_AND_MEAN

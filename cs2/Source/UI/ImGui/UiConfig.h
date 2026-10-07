@@ -3,19 +3,19 @@
 #include <atomic>
 #include <optional>
 
-#include <Utils/ManuallyDestructible.h> // load-bearing order: GlobalContext.h relies on it (see dllmain.cpp)
+#include <Utils/ManuallyDestructible.h> 
 #include <GlobalContext/GlobalContext.h>
 #include <GlobalContext/HookQuiesce.h>
 
-// Present-thread access to the config system for the ImGui menu. The Panorama UI used
-// GET_CONFIG_VAR/SET_CONFIG_VAR from the game thread; the ImGui menu renders (and the user
-// clicks) on the Vulkan present thread, so this wrapper constructs the HookContext there.
-// Semantics are exactly Config<HookContext>::getVariable/setVariable - including the change
-// handlers (feature onDisable hooks) and the autosave scheduling, whose file IO stays on the
-// game thread (ViewRenderHook_onRenderStart -> config().performFileOperation()).
-//
-// Every accessor returns/does nothing while the context is missing or shutting down (teardown
-// race safety): widgets simply render the last-known values and ignore clicks during unload.
+
+
+
+
+
+
+
+
+
 namespace ui_config
 {
 
@@ -36,9 +36,9 @@ template <typename ConfigVariable>
     return ConfigVariable::kDefaultValue;
 }
 
-// Widgets may ignore the return value (false = context unavailable during teardown, click
-// was dropped). Every successful set() bumps changeEpoch - the menu's config-dirty dot diffs
-// this against the epoch at the last explicit save/switch.
+
+
+
 inline std::atomic<std::uint64_t> changeEpoch{0};
 
 template <typename ConfigVariable>
@@ -53,8 +53,8 @@ bool set(typename ConfigVariable::ValueType newValue) noexcept
     return changed;
 }
 
-// Direct context access for the rare UI feature that needs more than config vars (the avatar
-// loader reads the Osiris directory path). Same guards and thread as withConfig.
+
+
 template <typename Functor>
 [[nodiscard]] bool withContext(Functor&& functor) noexcept
 {
@@ -65,7 +65,7 @@ template <typename Functor>
     return true;
 }
 
-// --- config file management (the navbar dropdown / SAVE / NEW / restore defaults) ---
+
 
 template <typename Functor>
 bool withConfig(Functor&& functor) noexcept

@@ -1,8 +1,4 @@
-/*
-** $Id: lauxlib.h,v 1.88.1.1 2007/12/27 13:02:25 roberto Exp $
-** Auxiliary functions for building Lua libraries
-** See Copyright Notice in lua.h
-*/
+
 
 
 #ifndef lauxlib_h
@@ -15,7 +11,7 @@
 #include "lua.h"
 
 
-/* extra error code for `luaL_load' */
+
 #define LUA_ERRFILE     (LUA_ERRERR+1)
 
 typedef struct luaL_Reg {
@@ -55,7 +51,7 @@ LUALIB_API int (luaL_error) (lua_State *L, const char *fmt, ...);
 LUALIB_API int (luaL_checkoption) (lua_State *L, int narg, const char *def,
                                    const char *const lst[]);
 
-/* pre-defined references */
+
 #define LUA_NOREF       (-2)
 #define LUA_REFNIL      (-1)
 
@@ -76,7 +72,7 @@ LUALIB_API const char *(luaL_gsub) (lua_State *L, const char *s, const char *p,
 LUALIB_API const char *(luaL_findtable) (lua_State *L, int idx,
                                          const char *fname, int szhint);
 
-/* From Lua 5.2. */
+
 LUALIB_API int luaL_fileresult(lua_State *L, int stat, const char *fname);
 LUALIB_API int luaL_execresult(lua_State *L, int stat);
 LUALIB_API int (luaL_loadfilex) (lua_State *L, const char *filename,
@@ -92,11 +88,7 @@ LUALIB_API void *(luaL_testudata) (lua_State *L, int ud, const char *tname);
 LUALIB_API void (luaL_setmetatable) (lua_State *L, const char *tname);
 
 
-/*
-** ===============================================================
-** some useful macros
-** ===============================================================
-*/
+
 
 #define luaL_argcheck(L, cond,numarg,extramsg)	\
 		((void)((cond) || luaL_argerror(L, (numarg), (extramsg))))
@@ -119,22 +111,18 @@ LUALIB_API void (luaL_setmetatable) (lua_State *L, const char *tname);
 
 #define luaL_opt(L,f,n,d)	(lua_isnoneornil(L,(n)) ? (d) : f(L,(n)))
 
-/* From Lua 5.2. */
+
 #define luaL_newlibtable(L, l) \
 	lua_createtable(L, 0, sizeof(l)/sizeof((l)[0]) - 1)
 #define luaL_newlib(L, l)	(luaL_newlibtable(L, l), luaL_setfuncs(L, l, 0))
 
-/*
-** {======================================================
-** Generic Buffer manipulation
-** =======================================================
-*/
+
 
 
 
 typedef struct luaL_Buffer {
-  char *p;			/* current position in buffer */
-  int lvl;  /* number of strings in the stack (level) */
+  char *p;			
+  int lvl;  
   lua_State *L;
   char buffer[LUAL_BUFFERSIZE];
 } luaL_Buffer;
@@ -143,7 +131,7 @@ typedef struct luaL_Buffer {
   ((void)((B)->p < ((B)->buffer+LUAL_BUFFERSIZE) || luaL_prepbuffer(B)), \
    (*(B)->p++ = (char)(c)))
 
-/* compatibility only */
+
 #define luaL_putchar(B,c)	luaL_addchar(B,c)
 
 #define luaL_addsize(B,n)	((B)->p += (n))
@@ -156,6 +144,6 @@ LUALIB_API void (luaL_addvalue) (luaL_Buffer *B);
 LUALIB_API void (luaL_pushresult) (luaL_Buffer *B);
 
 
-/* }====================================================== */
+
 
 #endif

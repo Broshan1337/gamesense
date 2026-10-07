@@ -1,48 +1,45 @@
-/*
-** ARM instruction emitter.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
 
-/* -- Constant encoding --------------------------------------------------- */
+
+
 
 static uint8_t emit_invai[16] = {
-  /* AND */ (ARMI_AND^ARMI_BIC) >> 21,
-  /* EOR */ 0,
-  /* SUB */ (ARMI_SUB^ARMI_ADD) >> 21,
-  /* RSB */ 0,
-  /* ADD */ (ARMI_ADD^ARMI_SUB) >> 21,
-  /* ADC */ (ARMI_ADC^ARMI_SBC) >> 21,
-  /* SBC */ (ARMI_SBC^ARMI_ADC) >> 21,
-  /* RSC */ 0,
-  /* TST */ 0,
-  /* TEQ */ 0,
-  /* CMP */ (ARMI_CMP^ARMI_CMN) >> 21,
-  /* CMN */ (ARMI_CMN^ARMI_CMP) >> 21,
-  /* ORR */ 0,
-  /* MOV */ (ARMI_MOV^ARMI_MVN) >> 21,
-  /* BIC */ (ARMI_BIC^ARMI_AND) >> 21,
-  /* MVN */ (ARMI_MVN^ARMI_MOV) >> 21
+   (ARMI_AND^ARMI_BIC) >> 21,
+   0,
+   (ARMI_SUB^ARMI_ADD) >> 21,
+   0,
+   (ARMI_ADD^ARMI_SUB) >> 21,
+   (ARMI_ADC^ARMI_SBC) >> 21,
+   (ARMI_SBC^ARMI_ADC) >> 21,
+   0,
+   0,
+   0,
+   (ARMI_CMP^ARMI_CMN) >> 21,
+   (ARMI_CMN^ARMI_CMP) >> 21,
+   0,
+   (ARMI_MOV^ARMI_MVN) >> 21,
+   (ARMI_BIC^ARMI_AND) >> 21,
+   (ARMI_MVN^ARMI_MOV) >> 21
 };
 
-/* Encode constant in K12 format for data processing instructions. */
+
 static uint32_t emit_isk12(ARMIns ai, int32_t n)
 {
   uint32_t invai, i, m = (uint32_t)n;
-  /* K12: unsigned 8 bit value, rotated in steps of two bits. */
+  
   for (i = 0; i < 4096; i += 256, m = lj_rol(m, 2))
     if (m <= 255) return ARMI_K12|m|i;
-  /* Otherwise try negation/complement with the inverse instruction. */
+  
   invai = emit_invai[((ai >> 21) & 15)];
-  if (!invai) return 0;  /* Failed. No inverse instruction. */
+  if (!invai) return 0;  
   m = ~(uint32_t)n;
   if (invai == ((ARMI_SUB^ARMI_ADD) >> 21) ||
       invai == (ARMI_CMP^ARMI_CMN) >> 21) m++;
   for (i = 0; i < 4096; i += 256, m = lj_rol(m, 2))
     if (m <= 255) return ARMI_K12|(invai<<21)|m|i;
-  return 0;  /* Failed. */
+  return 0;  
 }
 
-/* -- Emit basic instructions --------------------------------------------- */
+
 
 static void emit_dnm(ASMState *as, ARMIns ai, Reg rd, Reg rn, Reg rm)
 {
@@ -92,7 +89,7 @@ static void emit_lso(ASMState *as, ARMIns ai, Reg rd, Reg rn, int32_t ofs)
 {
   lj_assertA(ofs >= -4095 && ofs <= 4095,
 	     "load/store offset %d out of range", ofs);
-  /* Combine LDR/STR pairs to LDRD/STRD. */
+  
   if (*as->mcp == (ai|ARMI_LS_P|ARMI_LS_U|ARMF_D(rd^1)|ARMF_N(rn)|(ofs^4)) &&
       (ai & ~(ARMI_LDR^ARMI_STR)) == ARMI_STR && rd != rn &&
       (uint32_t)ofs <= 252 && !(ofs & 3) && !((rd ^ (ofs >>2)) & 1) &&
@@ -115,12 +112,12 @@ static void emit_vlso(ASMState *as, ARMIns ai, Reg rd, Reg rn, int32_t ofs)
 }
 #endif
 
-/* -- Emit loads/stores --------------------------------------------------- */
 
-/* Prefer spills of BASE/L. */
+
+
 #define emit_canremat(ref)	((ref) < ASMREF_L)
 
-/* Try to find a one step delta relative to another constant. */
+
 static int emit_kdelta1(ASMState *as, Reg d, int32_t i)
 {
   RegSet work = ~as->freeset & RSET_GPR;
@@ -141,10 +138,10 @@ static int emit_kdelta1(ASMState *as, Reg d, int32_t i)
     }
     rset_clear(work, r);
   }
-  return 0;  /* Failed. */
+  return 0;  
 }
 
-/* Try to find a two step delta relative to another constant. */
+
 static int emit_kdelta2(ASMState *as, Reg rd, int32_t i)
 {
   RegSet work = ~as->freeset & RSET_GPR;
@@ -170,7 +167,7 @@ static int emit_kdelta2(ASMState *as, Reg rd, int32_t i)
     }
     rset_clear(work, r);
   }
-  return 0;  /* Failed. */
+  return 0;  
 }
 
 #define emit_movw_k(k) \
@@ -178,29 +175,29 @@ static int emit_kdelta2(ASMState *as, Reg rd, int32_t i)
 #define emit_movt_k(k) \
   (ARMI_MOVT | (((k) >> 16) & 0x0fffu) | ((((k) >> 16) & 0xf000u) << 4))
 
-/* Load a 32 bit constant into a GPR. */
+
 static void emit_loadi(ASMState *as, Reg rd, int32_t i)
 {
   uint32_t k = emit_isk12(ARMI_MOV, i);
   lj_assertA(rset_test(as->freeset, rd) || rd == RID_TMP,
 	     "dest reg %d not free", rd);
   if (k) {
-    /* Standard K12 constant. */
+    
     emit_d(as, ARMI_MOV^k, rd);
   } else if ((as->flags & JIT_F_ARMV6T2) && (uint32_t)i < 0x00010000u) {
-    /* 16 bit loword constant for ARMv6T2. */
+    
     emit_d(as, emit_movw_k(i), rd);
   } else if (emit_kdelta1(as, rd, i)) {
-    /* One step delta relative to another constant. */
+    
   } else if ((as->flags & JIT_F_ARMV6T2)) {
-    /* 32 bit hiword/loword constant for ARMv6T2. */
+    
     emit_d(as, emit_movt_k(i), rd);
     emit_d(as, emit_movw_k(i), rd);
   } else if (emit_kdelta2(as, rd, i)) {
-    /* Two step delta relative to another constant. */
+    
   } else {
-    /* Otherwise construct the constant with up to 4 instructions. */
-    /* NYI: use mvn+bic, use pc-relative loads. */
+    
+    
     for (;;) {
       uint32_t sh = lj_ffs(i) & ~1;
       int32_t m = i & (255 << sh);
@@ -218,7 +215,7 @@ static void emit_loadi(ASMState *as, Reg rd, int32_t i)
 
 static Reg ra_allock(ASMState *as, intptr_t k, RegSet allow);
 
-/* Get/set from constant pointer. */
+
 static void emit_lsptr(ASMState *as, ARMIns ai, Reg r, void *p)
 {
   int32_t i = i32ptr(p);
@@ -227,7 +224,7 @@ static void emit_lsptr(ASMState *as, ARMIns ai, Reg r, void *p)
 }
 
 #if !LJ_SOFTFP
-/* Load a number constant into an FPR. */
+
 static void emit_loadk64(ASMState *as, Reg r, IRIns *ir)
 {
   cTValue *tv = ir_knum(ir);
@@ -249,21 +246,21 @@ static void emit_loadk64(ASMState *as, Reg r, IRIns *ir)
 }
 #endif
 
-/* Get/set global_State fields. */
+
 #define emit_getgl(as, r, field) \
   emit_lsptr(as, ARMI_LDR, (r), (void *)&J2G(as->J)->field)
 #define emit_setgl(as, r, field) \
   emit_lsptr(as, ARMI_STR, (r), (void *)&J2G(as->J)->field)
 
-/* Trace number is determined from pc of exit instruction. */
+
 #define emit_setvmstate(as, i)		UNUSED(i)
 
-/* -- Emit control-flow instructions -------------------------------------- */
 
-/* Label for internal jumps. */
+
+
 typedef MCode *MCLabel;
 
-/* Return label pointing to current PC. */
+
 #define emit_label(as)		((as)->mcp)
 
 static void emit_branch(ASMState *as, ARMIns ai, MCode *target)
@@ -286,15 +283,15 @@ static void emit_call(ASMState *as, void *target)
       *p = ARMI_BLX | ((uint32_t)(delta>>2) & 0x00ffffffu) | ((delta&2) << 23);
     else
       *p = ARMI_BL | ((uint32_t)(delta>>2) & 0x00ffffffu);
-  } else {  /* Target out of range: need indirect call. But don't use R0-R3. */
+  } else {  
     Reg r = ra_allock(as, i32ptr(target), RSET_RANGE(RID_R4, RID_R12+1));
     *p = ARMI_BLXr | ARMF_M(r);
   }
 }
 
-/* -- Emit generic operations --------------------------------------------- */
 
-/* Generic move between two regs. */
+
+
 static void emit_movrr(ASMState *as, IRIns *ir, Reg dst, Reg src)
 {
 #if LJ_SOFTFP
@@ -306,19 +303,19 @@ static void emit_movrr(ASMState *as, IRIns *ir, Reg dst, Reg src)
     return;
   }
 #endif
-  if (as->mcp != as->mcloop) {  /* Swap early registers for loads/stores. */
+  if (as->mcp != as->mcloop) {  
     MCode ins = *as->mcp, swp = (src^dst);
     if ((ins & 0x0c000000) == 0x04000000 && (ins & 0x02000010) != 0x02000010) {
       if (!((ins ^ (dst << 16)) & 0x000f0000))
-	*as->mcp = ins ^ (swp << 16);  /* Swap N in load/store. */
+	*as->mcp = ins ^ (swp << 16);  
       if (!(ins & 0x00100000) && !((ins ^ (dst << 12)) & 0x0000f000))
-	*as->mcp = ins ^ (swp << 12);  /* Swap D in store. */
+	*as->mcp = ins ^ (swp << 12);  
     }
   }
   emit_dm(as, ARMI_MOV, dst, src);
 }
 
-/* Generic load of register with base and (small) offset address. */
+
 static void emit_loadofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
 {
 #if LJ_SOFTFP
@@ -331,7 +328,7 @@ static void emit_loadofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
     emit_lso(as, ARMI_LDR, r, base, ofs);
 }
 
-/* Generic store of register with base and (small) offset address. */
+
 static void emit_storeofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
 {
 #if LJ_SOFTFP
@@ -344,7 +341,7 @@ static void emit_storeofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
     emit_lso(as, ARMI_STR, r, base, ofs);
 }
 
-/* Emit an arithmetic/logic operation with a constant operand. */
+
 static void emit_opk(ASMState *as, ARMIns ai, Reg dest, Reg src,
 		     int32_t i, RegSet allow)
 {
@@ -355,7 +352,7 @@ static void emit_opk(ASMState *as, ARMIns ai, Reg dest, Reg src,
     emit_dnm(as, ai, dest, src, ra_allock(as, i, allow));
 }
 
-/* Add offset to pointer. */
+
 static void emit_addptr(ASMState *as, Reg r, int32_t ofs)
 {
   if (ofs)

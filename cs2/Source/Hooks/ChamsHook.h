@@ -8,23 +8,23 @@
 #include <Platform/DynamicLibrary.h>
 #include <Utils/StatusReport.h>
 
-// GeneratePrimitives vtable patches for the enemy chams (see Features/Visuals/Chams/Chams.h).
-//
-// GeneratePrimitives is the VIRTUAL method at byte offset +0x20 of every SceneObjectDesc vtable
-// (slot 4 after the address point), signature (desc, CS2::SceneObject*, ISceneView*,
-// CUtlVector<CMeshDrawPrimitive_t>*). Five descriptor classes route the scene's meshes; pawns
-// specifically go through CAnimatableSceneObjectDesc (its OWN override, not the inherited base -
-// the 2026-08-25 "gen=117462 enemy=0" lesson).
-//
-// The vtables belong to process-global descriptor singletons we never construct, so like the
-// scene render hooks they are patched in place (one qword, saved original, restore on unload).
-// Vtable resolution is typeinfo-name based (update-resilient); the 2026-08-20 static VAs are the
-// fallback knowledge: Base 0xA0D0B8, MeshBuilder 0xA0CE00, InstancedMesh 0xA0CC50, Aggregate
-// 0xA0C4D8, Animatable 0xA0C918 (address points, libscenesystem.so).
+
+
+
+
+
+
+
+
+
+
+
+
+
 namespace chams_hook
 {
 
-// The replacement itself lives in EntryPoints.h next to the other scene hook bodies.
+
 void onGeneratePrimitives(void* desc, void* sceneObject, void* sceneView, void* primitives) noexcept;
 
 inline constexpr int kTargetCount = 5;
@@ -53,7 +53,7 @@ inline std::uintptr_t addressPoints[kTargetCount]{};
     return 0;
 }
 
-// Which patched descriptor class this call came from (0-4), or -1.
+
 [[nodiscard]] inline int classIndexFor(const void* desc) noexcept
 {
     if (!desc)

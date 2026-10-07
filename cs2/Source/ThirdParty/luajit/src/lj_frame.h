@@ -1,7 +1,4 @@
-/*
-** Stack frames.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #ifndef _LJ_FRAME_H
 #define _LJ_FRAME_H
@@ -9,18 +6,9 @@
 #include "lj_obj.h"
 #include "lj_bc.h"
 
-/* -- Lua stack frame ----------------------------------------------------- */
 
-/* Frame type markers in LSB of PC (4-byte aligned) or delta (8-byte aligned:
-**
-**    PC  00  Lua frame
-** delta 001  C frame
-** delta 010  Continuation frame
-** delta 011  Lua vararg frame
-** delta 101  cpcall() frame
-** delta 110  ff pcall() frame
-** delta 111  ff pcall() frame with active hook
-*/
+
+
 enum {
   FRAME_LUA, FRAME_C, FRAME_CONT, FRAME_VARG,
   FRAME_LUAP, FRAME_CP, FRAME_PCALL, FRAME_PCALLH
@@ -29,20 +17,9 @@ enum {
 #define FRAME_P			4
 #define FRAME_TYPEP		(FRAME_TYPE|FRAME_P)
 
-/* Macros to access and modify Lua frames. */
+
 #if LJ_FR2
-/* Two-slot frame info, required for 64 bit PC/GCRef:
-**
-**                   base-2  base-1      |  base  base+1 ...
-**                  [func   PC/delta/ft] | [slots ...]
-**                  ^-- frame            | ^-- base   ^-- top
-**
-** Continuation frames:
-**
-**   base-4  base-3  base-2  base-1      |  base  base+1 ...
-**  [cont      PC ] [func   PC/delta/ft] | [slots ...]
-**                  ^-- frame            | ^-- base   ^-- top
-*/
+
 #define frame_gc(f)		(gcval((f)-1))
 #define frame_ftsz(f)		((ptrdiff_t)(f)->ftsz)
 #define frame_pc(f)		((const BCIns *)frame_ftsz(f))
@@ -50,20 +27,7 @@ enum {
 #define setframe_ftsz(f, sz)	((f)->ftsz = (sz))
 #define setframe_pc(f, pc)	((f)->ftsz = (int64_t)(intptr_t)(pc))
 #else
-/* One-slot frame info, sufficient for 32 bit PC/GCRef:
-**
-**              base-1              |  base  base+1 ...
-**              lo     hi           |
-**             [func | PC/delta/ft] | [slots ...]
-**             ^-- frame            | ^-- base   ^-- top
-**
-** Continuation frames:
-**
-**  base-2      base-1              |  base  base+1 ...
-**  lo     hi   lo     hi           |
-** [cont | PC] [func | PC/delta/ft] | [slots ...]
-**             ^-- frame            | ^-- base   ^-- top
-*/
+
 #define frame_gc(f)		(gcref((f)->fr.func))
 #define frame_ftsz(f)		((ptrdiff_t)(f)->fr.tp.ftsz)
 #define frame_pc(f)		(mref((f)->fr.tp.pcr, const BCIns))
@@ -84,7 +48,7 @@ enum {
 #define frame_delta(f)		(frame_ftsz(f) >> 3)
 #define frame_sized(f)		(frame_ftsz(f) & ~FRAME_TYPEP)
 
-enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  /* Special continuations. */
+enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  
 
 #if LJ_FR2
 #define frame_contpc(f)		(frame_pc((f)-2))
@@ -108,13 +72,13 @@ enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  /* Special continuations. */
 #define frame_prevl(f)		((f) - (1+LJ_FR2+bc_a(frame_pc(f)[-1])))
 #define frame_prevd(f)		((TValue *)((char *)(f) - frame_sized(f)))
 #define frame_prev(f)		(frame_islua(f)?frame_prevl(f):frame_prevd(f))
-/* Note: this macro does not skip over FRAME_VARG. */
 
-/* -- C stack frame ------------------------------------------------------- */
 
-/* Macros to access and modify the C stack frame chain. */
 
-/* These definitions must match with the arch-specific *.dasc files. */
+
+
+
+
 #if LJ_TARGET_X86
 #if LJ_ABI_WIN
 #define CFRAME_OFS_ERRF		(19*4)
@@ -273,7 +237,7 @@ enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  /* Special continuations. */
 #endif
 
 #define CFRAME_RESUME		1
-#define CFRAME_UNWIND_FF	2  /* Only used in unwinder. */
+#define CFRAME_UNWIND_FF	2  
 #define CFRAME_RAWMASK		(~(intptr_t)(CFRAME_RESUME|CFRAME_UNWIND_FF))
 
 #define cframe_errfunc(cf)	(*(int32_t *)(((char *)(cf))+CFRAME_OFS_ERRF))

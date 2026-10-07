@@ -1,12 +1,9 @@
-/*
-** LuaJIT core and libraries amalgamation.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #define ljamalg_c
 #define LUA_CORE
 
-/* To get the mremap prototype. Must be defined before any system includes. */
+
 #if defined(__linux__) && !defined(_GNU_SOURCE)
 #define _GNU_SOURCE
 #endif

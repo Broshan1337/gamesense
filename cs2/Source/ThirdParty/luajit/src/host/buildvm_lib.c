@@ -1,7 +1,4 @@
-/*
-** LuaJIT VM builder: library definition compiler.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #include "buildvm.h"
 #include "lj_obj.h"
@@ -9,7 +6,7 @@
 #include "lj_lib.h"
 #include "buildvm_libbc.h"
 
-/* Context for library definitions. */
+
 static uint8_t obuf[8192];
 static uint8_t *optr;
 static char modname[80];
@@ -38,7 +35,7 @@ static void libdef_name(const char *p, int kind)
     fprintf(stderr, "Error: string too long: '%s'\n",  p);
     exit(1);
   }
-  if (optr+1+n+2 > obuf+sizeof(obuf)) {  /* +2 for caller. */
+  if (optr+1+n+2 > obuf+sizeof(obuf)) {  
     fprintf(stderr, "Error: output buffer overflow\n");
     exit(1);
   }
@@ -79,7 +76,7 @@ static void libdef_module(BuildCtx *ctx, char *p, int arg)
     optr = obuf;
     *optr++ = (uint8_t)ffid;
     *optr++ = (uint8_t)ffasmfunc;
-    *optr++ = 0;  /* Hash table size. */
+    *optr++ = 0;  
     modstate = 1;
     fprintf(ctx->fp, "#ifdef %sMODULE_%s\n", LIBDEF_PREFIX, p);
     fprintf(ctx->fp, "#undef %sMODULE_%s\n", LIBDEF_PREFIX, p);
@@ -129,7 +126,7 @@ static void libdef_func(BuildCtx *ctx, char *p, int arg)
 	modstate = 2;
 	fprintf(ctx->fp, "  %s%s", arg ? LABEL_PREFIX_FFH : LABEL_PREFIX_CF, p);
       }
-      if (regfunc != REGFUNC_NOREGUV) obuf[2]++;  /* Bump hash table size. */
+      if (regfunc != REGFUNC_NOREGUV) obuf[2]++;  
       libdef_name(regfunc == REGFUNC_NOREGUV ? "" : p, arg);
     }
   } else if (ctx->mode == BUILD_ffdef) {
@@ -195,7 +192,7 @@ static void libdef_lua(BuildCtx *ctx, char *p, int arg)
       if (!strcmp(libbc_map[i].name, p)) {
 	int ofs = libbc_map[i].ofs;
 	int len = libbc_map[i+1].ofs - ofs;
-	obuf[2]++;  /* Bump hash table size. */
+	obuf[2]++;  
 	*optr++ = LIBINIT_LUA;
 	libdef_name(p, 0);
 	memcpy(optr, libbc_code + ofs, len);
@@ -308,10 +305,10 @@ static void libdef_set(BuildCtx *ctx, char *p, int arg)
 {
   UNUSED(arg);
   if (ctx->mode == BUILD_libdef) {
-    if (p[0] == '!' && p[1] == '\0') p[0] = '\0';  /* Set env. */
+    if (p[0] == '!' && p[1] == '\0') p[0] = '\0';  
     libdef_name(p, LIBINIT_STRING);
     *optr++ = LIBINIT_SET;
-    obuf[2]++;  /* Bump hash table size. */
+    obuf[2]++;  
   }
 }
 
@@ -344,7 +341,7 @@ static const LibDefHandler libdef_handlers[] = {
   { NULL,	NULL,		(LibDefFunc)0,		0 }
 };
 
-/* Emit C source code for library function definitions. */
+
 void emit_lib(BuildCtx *ctx)
 {
   const char *fname;
@@ -360,7 +357,7 @@ void emit_lib(BuildCtx *ctx)
   ffasmfunc = 0;
 
   while ((fname = *ctx->args++)) {
-    char buf[256];  /* We don't care about analyzing lines longer than that. */
+    char buf[256];  
     FILE *fp;
     if (fname[0] == '-' && fname[1] == '\0') {
       fp = stdin;
@@ -376,7 +373,7 @@ void emit_lib(BuildCtx *ctx)
     regfunc = REGFUNC_OK;
     while (fgets(buf, sizeof(buf), fp) != NULL) {
       char *p;
-      /* Simplistic pre-processor. Only handles top-level #if/#endif. */
+      
       if (buf[0] == '#' && buf[1] == 'i' && buf[2] == 'f') {
 	int ok = 1;
 	size_t len = strlen(buf);

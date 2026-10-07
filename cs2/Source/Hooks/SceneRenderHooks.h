@@ -8,23 +8,23 @@
 #include <Platform/DynamicLibrary.h>
 #include <Utils/StatusReport.h>
 
-// Scene-render function hooks for the ported FrameworkCS2 visuals (WorldColors recolors,
-// Removals). Unlike the VMT hooks in this project these vtables belong to process-global
-// descriptor/singleton classes we never construct ourselves, so they are patched in place:
-// one qword per hooked slot, saved original restored on uninstall (the same mechanism the
-// chams experiments used - see project notes).
-//
-//   - CParticleObjectDesc::DrawArray        libparticles.so  vtable slot 1 (count in ECX,
-//     stride-0x70 CMeshDrawPrimitive array) - inferno/molotov particle recolor pass-through.
-//   - CLightBinnerGPU::ProcessLights        libscenesystem.so vtable slot 3 (jmp thunk target
-//     behind it) - per-light color recolor pass-through.
-//   - RenderingPipelineCsgoPostHud          libclient.so     vtable slot 0 - flash overlay
-//     removal by skipping the whole layer (reference does the same early-return).
-//     Typeinfo name is "29CRenderingPipelineCsgoPostHud" (class has the leading C).
-//
-// Slot indices and class names were verified offline against the live binaries (capstone; see
-// project_frameworkcs2_port memory). Everything fails closed with a StatusReport entry instead
-// of guessing.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 namespace scene_render_hooks
 {
 
@@ -57,7 +57,7 @@ inline std::uintptr_t renderLegsFunction{0};
 {
     bool allResolved = true;
 
-    // Particles: libparticles.so CParticleObjectDesc vtable slot 1.
+    
     {
         const DynamicLibrary particlesLibrary{cs2::PARTICLES_DLL};
         if (const auto vtable = typeinfo_vtable::findPrimaryVtable(particlesLibrary.getVmtFinderParams().rodataSection, particlesLibrary.getVmtFinderParams().dataRelRoSection, particlesLibrary.getCodeSection(), "CParticleObjectDesc")) {
@@ -71,7 +71,7 @@ inline std::uintptr_t renderLegsFunction{0};
         }
     }
 
-    // Lights: libscenesystem.so CLightBinnerGPU vtable slot 3.
+    
     {
         const DynamicLibrary scenesystemLibrary{cs2::SCENESYSTEM_DLL};
         const auto rodata = scenesystemLibrary.getVmtFinderParams().rodataSection;
@@ -87,7 +87,7 @@ inline std::uintptr_t renderLegsFunction{0};
             allResolved = false;
         }
 
-        // Sky: libscenesystem.so CSkyBoxObjectDesc vtable slot 1 (DrawArray; slot 0 is a getter).
+        
         if (const auto vtable = typeinfo_vtable::findPrimaryVtable(rodata, dataRelRo, text, "CSkyBoxObjectDesc")) {
             if (hooks.skyBoxDrawArray.install(vtable->addressPoint + sizeof(void*), reinterpret_cast<std::uintptr_t>(&onSkyBoxDrawArray)))
                 StatusReport::record("SkyBoxDrawArray hook (libscenesystem CSkyBoxObjectDesc slot 1)", true);
@@ -98,9 +98,9 @@ inline std::uintptr_t renderLegsFunction{0};
             allResolved = false;
         }
 
-        // World geometry: libscenesystem.so CBaseSceneObjectDesc + CAggregateSceneObjectDesc
-        // DrawArray (slot 1). Live-map instance counting showed the bulk of scene objects run
-        // through these two descriptor types (world color recolor pass-through).
+        
+        
+        
         if (const auto vtable = typeinfo_vtable::findPrimaryVtable(rodata, dataRelRo, text, "CBaseSceneObjectDesc")) {
             if (hooks.sceneObjectDrawArray.install(vtable->addressPoint + sizeof(void*), reinterpret_cast<std::uintptr_t>(&onSceneObjectDrawArray)))
                 StatusReport::record("SceneObjectDrawArray hook (libscenesystem CBaseSceneObjectDesc slot 1)", true);
@@ -122,8 +122,8 @@ inline std::uintptr_t renderLegsFunction{0};
         }
     }
 
-    // Flash overlay: libclient.so RenderingPipelineCsgoPostHud vtable slot 0, patched on demand
-    // by Removals (install()/uninstall() only manage the always-on pass-through hooks).
+    
+    
     {
         const DynamicLibrary clientLibrary{cs2::CLIENT_DLL};
         if (const auto vtable = typeinfo_vtable::findPrimaryVtable(clientLibrary.getVmtFinderParams().rodataSection, clientLibrary.getVmtFinderParams().dataRelRoSection, clientLibrary.getCodeSection(), "CRenderingPipelineCsgoPostHud")) {
@@ -135,7 +135,7 @@ inline std::uintptr_t renderLegsFunction{0};
         }
     }
 
-    // First-person legs: libclient.so function referencing the "FirstpersonLegsPrepass" string.
+    
     {
         const DynamicLibrary clientLibrary{cs2::CLIENT_DLL};
         if (const auto function = string_xref::findFunctionStart(clientLibrary.getStringLiteralsSection(), clientLibrary.getCodeSection(), "FirstpersonLegsPrepass")) {
@@ -151,7 +151,7 @@ inline std::uintptr_t renderLegsFunction{0};
 }
 
 
-// Removals feature toggles (idempotent; no-ops when the anchor never resolved).
+
 inline void setFlashOverlayRemoved(bool removed) noexcept
 {
     if (removed && !flashOverlaySlot)

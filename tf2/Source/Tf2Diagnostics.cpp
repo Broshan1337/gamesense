@@ -13,8 +13,8 @@ namespace ns_tf2 {
 
 namespace {
 
-// Modules the game maps, by the suffix we expect in dl_iterate_phdr names. The census
-// line reports which of these are present so a missing one is visible immediately.
+
+
 const char *const kGameModules[] = {
     "client.so",
     "engine.so",
@@ -32,12 +32,12 @@ const char *const kGameModules[] = {
     "filesystem_stdio.so",
     "libsteam_api.so",
     "soundemittersystem.so",
-    // VAC recon: the Steam client library - where the CS2-era VAC enforcement lives
+    
     "steamclient.so",
 };
 
-// Boundary-aware suffix match: the path must END in "/<name>" so "steamclient.so" never
-// satisfies a "client.so" probe.
+
+
 bool modulePathMatches(const char *path, const char *name)
 {
     const size_t len = std::strlen(name);
@@ -49,15 +49,15 @@ bool modulePathMatches(const char *path, const char *name)
     return path[pathLen - len - 1] == '/';
 }
 
-// Interface version candidates, harvested from OUR 64-bit binaries (strings -a, 2026-09-14).
-// Never reuse the 32-bit Enoch versions (e.g. it uses VGUI_Surface031; ours is 030).
+
+
 const char *const kInterfaceCandidates[] = {
-    // client
+    
     "VClient017",
     "VClientEntityList003",
     "VClientPrediction001",
     "VClientDllSharedAppSystems001",
-    // engine
+    
     "VEngineClient014",
     "VEngineClient013",
     "VEngineServer023",
@@ -76,7 +76,7 @@ const char *const kInterfaceCandidates[] = {
     "VCvarQuery001",
     "VoiceServer002",
     "VSoundEmitter002",
-    // vgui / surface / input
+    
     "VGUI_ivgui008",
     "VGUI_Surface030",
     "VGUI_Panel009",
@@ -85,7 +85,7 @@ const char *const kInterfaceCandidates[] = {
     "VGUI_InputInternal001",
     "VGUI_System010",
     "VGUI_Localize005",
-    // material system / studio
+    
     "VMaterialSystem080",
     "VMaterialSystem082",
     "VMaterialSystemConfig002",
@@ -93,7 +93,7 @@ const char *const kInterfaceCandidates[] = {
     "VPhysics031",
     "VPhysicsCollision007",
     "VPhysicsSurfaceProps001",
-    // systems
+    
     "VFileSystem022",
     "VDataCache003",
     "VProcessUtils001",
@@ -125,7 +125,7 @@ int phdrCensusCb(dl_phdr_info *info, size_t, void *data)
     return 0;
 }
 
-} // namespace
+} 
 
 void runDiagnostics()
 {
@@ -145,9 +145,9 @@ void runDiagnostics()
         {"studiorender.so", nullptr, nullptr, 0},
     };
 
-    // The game mapped these modules by path (client.so from tf/bin/linux64, the rest from
-    // bin/linux64), so handles come from a /proc/self/maps scan: find each module's real
-    // path and grab an RTLD_NOLOAD handle on it.
+    
+    
+    
     FILE *maps = fopen("/proc/self/maps", "r");
     if (!maps) {
         log("maps unreadable - probes skipped");
@@ -156,10 +156,10 @@ void runDiagnostics()
 
     char lineBuf[512];
     while (fgets(lineBuf, sizeof(lineBuf), maps)) {
-        // maps fields: addr perms offset dev inode pathname. The pathname may contain
-        // SPACES ("Team Fortress 2"), so it is the rest of the line after the inode -
-        // a %s scan truncates it at the first space and silently misses the game's
-        // own modules (seen live: only steamclient.so matched).
+        
+        
+        
+        
         const char *p = lineBuf;
         for (int field = 0; field < 5; ++field) {
             while (*p && !isspace(static_cast<unsigned char>(*p)))
@@ -214,4 +214,4 @@ void runDiagnostics()
     log("--- diagnostics done ---");
 }
 
-} // namespace ns_tf2
+} 

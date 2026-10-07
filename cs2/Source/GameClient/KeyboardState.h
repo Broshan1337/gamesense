@@ -6,15 +6,15 @@
 #include <Platform/DynamicLibrary.h>
 #include <SDL/SdlFunctions.h>
 
-// Polls SDL for raw key state.
-//
-// Deliberately a poll rather than event tracking: features on the input path need to know whether a
-// key is held right now, and SDL already maintains that array for us. Tracking key-down/key-up
-// through PeepEventsHook would mean reconstructing state the game already has, and would go wrong
-// the moment an event is missed (alt-tab, focus loss).
-//
-// The resolved function is cached: this runs once per user command, and re-resolving it would mean
-// a dlopen on every tick - the same mistake that made the hit sound audibly late.
+
+
+
+
+
+
+
+
+
 class KeyboardState {
 public:
     [[nodiscard]] static bool isKeyDown(int scancode) noexcept
@@ -34,8 +34,8 @@ public:
         return keys[scancode] != 0;
     }
 
-    // First held scancode in [minScancode, maxScancode], or -1 if none. One state fetch for the
-    // whole scan - the keybind capture UI uses this to find "whatever key was just pressed".
+    
+    
     [[nodiscard]] static int firstDownIndex(int minScancode, int maxScancode) noexcept
     {
         if (maxScancode < minScancode)
@@ -68,6 +68,6 @@ private:
         return cached;
     }
 
-    // Constant-initialised and trivially destructible: no __cxa_guard under -nostdlib.
+    
     inline static sdl3::SDL_GetKeyboardState* cached{nullptr};
 };

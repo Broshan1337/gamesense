@@ -1,9 +1,4 @@
-/*
-** $Id: lua.h,v 1.218.1.5 2008/08/06 13:30:12 roberto Exp $
-** Lua - An Extensible Extension Language
-** Lua.org, PUC-Rio, Brazil (https://www.lua.org)
-** See Copyright Notice at the end of this file
-*/
+
 
 
 #ifndef lua_h
@@ -23,23 +18,21 @@
 #define LUA_AUTHORS	"R. Ierusalimschy, L. H. de Figueiredo & W. Celes"
 
 
-/* mark for precompiled code (`<esc>Lua') */
+
 #define	LUA_SIGNATURE	"\033Lua"
 
-/* option for multiple returns in `lua_pcall' and `lua_call' */
+
 #define LUA_MULTRET	(-1)
 
 
-/*
-** pseudo-indices
-*/
+
 #define LUA_REGISTRYINDEX	(-10000)
 #define LUA_ENVIRONINDEX	(-10001)
 #define LUA_GLOBALSINDEX	(-10002)
 #define lua_upvalueindex(i)	(LUA_GLOBALSINDEX-(i))
 
 
-/* thread status */
+
 #define LUA_OK		0
 #define LUA_YIELD	1
 #define LUA_ERRRUN	2
@@ -53,23 +46,17 @@ typedef struct lua_State lua_State;
 typedef int (*lua_CFunction) (lua_State *L);
 
 
-/*
-** functions that read/write blocks when loading/dumping Lua chunks
-*/
+
 typedef const char * (*lua_Reader) (lua_State *L, void *ud, size_t *sz);
 
 typedef int (*lua_Writer) (lua_State *L, const void* p, size_t sz, void* ud);
 
 
-/*
-** prototype for memory-allocation functions
-*/
+
 typedef void * (*lua_Alloc) (void *ud, void *ptr, size_t osize, size_t nsize);
 
 
-/*
-** basic types
-*/
+
 #define LUA_TNONE		(-1)
 
 #define LUA_TNIL		0
@@ -84,30 +71,26 @@ typedef void * (*lua_Alloc) (void *ud, void *ptr, size_t osize, size_t nsize);
 
 
 
-/* minimum Lua stack available to a C function */
+
 #define LUA_MINSTACK	20
 
 
-/*
-** generic extra include file
-*/
+
 #if defined(LUA_USER_H)
 #include LUA_USER_H
 #endif
 
 
-/* type of numbers in Lua */
+
 typedef LUA_NUMBER lua_Number;
 
 
-/* type for integer functions */
+
 typedef LUA_INTEGER lua_Integer;
 
 
 
-/*
-** state manipulation
-*/
+
 LUA_API lua_State *(lua_newstate) (lua_Alloc f, void *ud);
 LUA_API void       (lua_close) (lua_State *L);
 LUA_API lua_State *(lua_newthread) (lua_State *L);
@@ -115,9 +98,7 @@ LUA_API lua_State *(lua_newthread) (lua_State *L);
 LUA_API lua_CFunction (lua_atpanic) (lua_State *L, lua_CFunction panicf);
 
 
-/*
-** basic stack manipulation
-*/
+
 LUA_API int   (lua_gettop) (lua_State *L);
 LUA_API void  (lua_settop) (lua_State *L, int idx);
 LUA_API void  (lua_pushvalue) (lua_State *L, int idx);
@@ -129,9 +110,7 @@ LUA_API int   (lua_checkstack) (lua_State *L, int sz);
 LUA_API void  (lua_xmove) (lua_State *from, lua_State *to, int n);
 
 
-/*
-** access functions (stack -> C)
-*/
+
 
 LUA_API int             (lua_isnumber) (lua_State *L, int idx);
 LUA_API int             (lua_isstring) (lua_State *L, int idx);
@@ -155,9 +134,7 @@ LUA_API lua_State      *(lua_tothread) (lua_State *L, int idx);
 LUA_API const void     *(lua_topointer) (lua_State *L, int idx);
 
 
-/*
-** push functions (C -> stack)
-*/
+
 LUA_API void  (lua_pushnil) (lua_State *L);
 LUA_API void  (lua_pushnumber) (lua_State *L, lua_Number n);
 LUA_API void  (lua_pushinteger) (lua_State *L, lua_Integer n);
@@ -172,9 +149,7 @@ LUA_API void  (lua_pushlightuserdata) (lua_State *L, void *p);
 LUA_API int   (lua_pushthread) (lua_State *L);
 
 
-/*
-** get functions (Lua -> stack)
-*/
+
 LUA_API void  (lua_gettable) (lua_State *L, int idx);
 LUA_API void  (lua_getfield) (lua_State *L, int idx, const char *k);
 LUA_API void  (lua_rawget) (lua_State *L, int idx);
@@ -185,9 +160,7 @@ LUA_API int   (lua_getmetatable) (lua_State *L, int objindex);
 LUA_API void  (lua_getfenv) (lua_State *L, int idx);
 
 
-/*
-** set functions (stack -> Lua)
-*/
+
 LUA_API void  (lua_settable) (lua_State *L, int idx);
 LUA_API void  (lua_setfield) (lua_State *L, int idx, const char *k);
 LUA_API void  (lua_rawset) (lua_State *L, int idx);
@@ -196,9 +169,7 @@ LUA_API int   (lua_setmetatable) (lua_State *L, int objindex);
 LUA_API int   (lua_setfenv) (lua_State *L, int idx);
 
 
-/*
-** `load' and `call' functions (load and run Lua code)
-*/
+
 LUA_API void  (lua_call) (lua_State *L, int nargs, int nresults);
 LUA_API int   (lua_pcall) (lua_State *L, int nargs, int nresults, int errfunc);
 LUA_API int   (lua_cpcall) (lua_State *L, lua_CFunction func, void *ud);
@@ -208,16 +179,12 @@ LUA_API int   (lua_load) (lua_State *L, lua_Reader reader, void *dt,
 LUA_API int (lua_dump) (lua_State *L, lua_Writer writer, void *data);
 
 
-/*
-** coroutine functions
-*/
+
 LUA_API int  (lua_yield) (lua_State *L, int nresults);
 LUA_API int  (lua_resume) (lua_State *L, int narg);
 LUA_API int  (lua_status) (lua_State *L);
 
-/*
-** garbage-collection function and options
-*/
+
 
 #define LUA_GCSTOP		0
 #define LUA_GCRESTART		1
@@ -232,9 +199,7 @@ LUA_API int  (lua_status) (lua_State *L);
 LUA_API int (lua_gc) (lua_State *L, int what, int data);
 
 
-/*
-** miscellaneous functions
-*/
+
 
 LUA_API int   (lua_error) (lua_State *L);
 
@@ -247,11 +212,7 @@ LUA_API void lua_setallocf (lua_State *L, lua_Alloc f, void *ud);
 
 
 
-/*
-** ===============================================================
-** some useful macros
-** ===============================================================
-*/
+
 
 #define lua_pop(L,n)		lua_settop(L, -(n)-1)
 
@@ -282,9 +243,7 @@ LUA_API void lua_setallocf (lua_State *L, lua_Alloc f, void *ud);
 
 
 
-/*
-** compatibility macros and functions
-*/
+
 
 #define lua_open()	luaL_newstate()
 
@@ -296,20 +255,14 @@ LUA_API void lua_setallocf (lua_State *L, lua_Alloc f, void *ud);
 #define lua_Chunkwriter		lua_Writer
 
 
-/* hack */
+
 LUA_API void lua_setlevel	(lua_State *from, lua_State *to);
 
 
-/*
-** {======================================================================
-** Debug API
-** =======================================================================
-*/
 
 
-/*
-** Event codes
-*/
+
+
 #define LUA_HOOKCALL	0
 #define LUA_HOOKRET	1
 #define LUA_HOOKLINE	2
@@ -317,18 +270,16 @@ LUA_API void lua_setlevel	(lua_State *from, lua_State *to);
 #define LUA_HOOKTAILRET 4
 
 
-/*
-** Event masks
-*/
+
 #define LUA_MASKCALL	(1 << LUA_HOOKCALL)
 #define LUA_MASKRET	(1 << LUA_HOOKRET)
 #define LUA_MASKLINE	(1 << LUA_HOOKLINE)
 #define LUA_MASKCOUNT	(1 << LUA_HOOKCOUNT)
 
-typedef struct lua_Debug lua_Debug;  /* activation record */
+typedef struct lua_Debug lua_Debug;  
 
 
-/* Functions to be called by the debuger in specific events */
+
 typedef void (*lua_Hook) (lua_State *L, lua_Debug *ar);
 
 
@@ -343,7 +294,7 @@ LUA_API lua_Hook lua_gethook (lua_State *L);
 LUA_API int lua_gethookmask (lua_State *L);
 LUA_API int lua_gethookcount (lua_State *L);
 
-/* From Lua 5.2. */
+
 LUA_API void *lua_upvalueid (lua_State *L, int idx, int n);
 LUA_API void lua_upvaluejoin (lua_State *L, int idx1, int n1, int idx2, int n2);
 LUA_API int lua_loadx (lua_State *L, lua_Reader reader, void *dt,
@@ -353,50 +304,29 @@ LUA_API void lua_copy (lua_State *L, int fromidx, int toidx);
 LUA_API lua_Number lua_tonumberx (lua_State *L, int idx, int *isnum);
 LUA_API lua_Integer lua_tointegerx (lua_State *L, int idx, int *isnum);
 
-/* From Lua 5.3. */
+
 LUA_API int lua_isyieldable (lua_State *L);
 
 
 struct lua_Debug {
   int event;
-  const char *name;	/* (n) */
-  const char *namewhat;	/* (n) `global', `local', `field', `method' */
-  const char *what;	/* (S) `Lua', `C', `main', `tail' */
-  const char *source;	/* (S) */
-  int currentline;	/* (l) */
-  int nups;		/* (u) number of upvalues */
-  int linedefined;	/* (S) */
-  int lastlinedefined;	/* (S) */
-  char short_src[LUA_IDSIZE]; /* (S) */
-  /* private part */
-  int i_ci;  /* active function */
+  const char *name;	
+  const char *namewhat;	
+  const char *what;	
+  const char *source;	
+  int currentline;	
+  int nups;		
+  int linedefined;	
+  int lastlinedefined;	
+  char short_src[LUA_IDSIZE]; 
+  
+  int i_ci;  
 };
 
-/* }====================================================================== */
 
 
-/******************************************************************************
-* Copyright (C) 1994-2008 Lua.org, PUC-Rio.  All rights reserved.
-*
-* Permission is hereby granted, free of charge, to any person obtaining
-* a copy of this software and associated documentation files (the
-* "Software"), to deal in the Software without restriction, including
-* without limitation the rights to use, copy, modify, merge, publish,
-* distribute, sublicense, and/or sell copies of the Software, and to
-* permit persons to whom the Software is furnished to do so, subject to
-* the following conditions:
-*
-* The above copyright notice and this permission notice shall be
-* included in all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-******************************************************************************/
+
+
 
 
 #endif

@@ -12,8 +12,8 @@
 namespace
 {
 
-// All tests share one scripts directory; the framework state is global, so tests run in a
-// fixed order-friendly pattern: each test uses a fresh script name.
+
+
 class LuaManagerTests : public ::testing::Test
 {
 protected:
@@ -92,8 +92,8 @@ TEST_F(LuaManagerTests, ValidScriptNameAcceptsNormalNamesAndRejectsTraversalAndN
     EXPECT_TRUE(lua::validScriptName("My Script (v2).lua"));
     EXPECT_FALSE(lua::validScriptName("script.txt"));
     EXPECT_FALSE(lua::validScriptName("lua"));
-    EXPECT_FALSE(lua::validScriptName("../etc/passwd.lua")); // '/' rejected
-    EXPECT_FALSE(lua::validScriptName("..lua"));             // leading dot-dot segment rejected
+    EXPECT_FALSE(lua::validScriptName("../etc/passwd.lua")); 
+    EXPECT_FALSE(lua::validScriptName("..lua"));             
     EXPECT_FALSE(lua::validScriptName(""));
     EXPECT_FALSE(lua::validScriptName(nullptr));
 }
@@ -111,15 +111,15 @@ TEST_F(LuaManagerTests, LoadRunsScriptAndRegistersPaintCallback)
 TEST_F(LuaManagerTests, RuntimeErrorIsContainedAndAutoDisablesTheScript)
 {
     ASSERT_TRUE(writeScript("broken.lua", "error('boom at runtime')\n"));
-    // load() reports failure for a top-level error, but the script stays loaded-and-errored
-    // (the menu displays lastError instead of silently dropping it).
+    
+    
     ASSERT_FALSE(lua::load("broken.lua"));
     const int slot = lua::loadedIndex("broken.lua");
     ASSERT_GE(slot, 0);
     EXPECT_TRUE(lua::scripts[slot].errored);
     EXPECT_NE(std::strstr(lua::scripts[slot].lastError, "boom at runtime"), nullptr);
 
-    // Dispatching into an errored script is a no-op, not a crash.
+    
     lua::dispatchEvent("player_hurt");
     lua::dispatchPaint(nullptr);
     lua::dispatchTick();
@@ -143,9 +143,9 @@ TEST_F(LuaManagerTests, InfiniteLoopIsStoppedByInstructionBudget)
     ASSERT_GE(slot, 0);
     EXPECT_FALSE(lua::scripts[slot].errored);
 
-    // Paint dispatch must return (budget abort), with the script auto-disabled. nullptr draw
-    // list: a renderer.* call inside the loop errors out instead of drawing (also covers the
-    // null-draw-list guard).
+    
+    
+    
     lua::dispatchPaint(nullptr);
     EXPECT_TRUE(lua::scripts[slot].errored);
     EXPECT_NE(std::strstr(lua::scripts[slot].lastError, "instruction budget exceeded"), nullptr);
@@ -170,7 +170,7 @@ TEST_F(LuaManagerTests, SandboxStripsDangerousLibraries)
 
 TEST_F(LuaManagerTests, BytecodeChunksAreRejectedByLoad)
 {
-    // ESC + garbage = a precompiled chunk - safeLoad must refuse it.
+    
     ASSERT_TRUE(writeScript("bytecode.lua", "assert(not pcall(load, \"\\27LuaJIT-garbage\"))\n"));
     const int slot = loadSlot("bytecode.lua");
     ASSERT_GE(slot, 0);
@@ -192,7 +192,7 @@ TEST_F(LuaManagerTests, IdaPatternParsingAndScanning)
 {
     lua::PatternByte bytes[lua::kMaxPatternBytes]{};
 
-    // parse: mixed case + wildcards ("??" and bare "?" are each ONE wildcard byte)
+    
     ASSERT_EQ(lua::parseIdaPattern("48 8B 05 ?? ?", bytes, lua::kMaxPatternBytes), 5);
     EXPECT_FALSE(bytes[0].wildcard);
     EXPECT_EQ(bytes[0].value, 0x48);
@@ -200,30 +200,30 @@ TEST_F(LuaManagerTests, IdaPatternParsingAndScanning)
     EXPECT_TRUE(bytes[3].wildcard);
     EXPECT_TRUE(bytes[4].wildcard);
 
-    // parse: rejects garbage, empties, and overlong patterns
+    
     EXPECT_EQ(lua::parseIdaPattern("48 ZZ 05", bytes, lua::kMaxPatternBytes), 0);
     EXPECT_EQ(lua::parseIdaPattern("   ", bytes, lua::kMaxPatternBytes), 0);
     EXPECT_EQ(lua::parseIdaPattern("11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF 00", bytes, 8), 0);
 
-    // scan: find with wildcards, miss without
+    
     const unsigned char data[] = {0x10, 0x48, 0x89, 0x99, 0xAB, 0x00, 0x48, 0x89, 0x05, 0xFF};
     ASSERT_EQ(lua::parseIdaPattern("48 89 ?? AB", bytes, lua::kMaxPatternBytes), 4);
     const auto* match = lua::scanMemoryPattern(data, sizeof(data), bytes, 4);
     ASSERT_NE(match, nullptr);
     EXPECT_EQ(match - data, 1);
     EXPECT_EQ(lua::parseIdaPattern("48 89 05 AB", bytes, lua::kMaxPatternBytes), 4);
-    EXPECT_EQ(lua::scanMemoryPattern(data, sizeof(data), bytes, 4), nullptr); // 05 != 99
+    EXPECT_EQ(lua::scanMemoryPattern(data, sizeof(data), bytes, 4), nullptr); 
 
-    // scan: pattern longer than the buffer never matches (no overflow)
+    
     EXPECT_EQ(lua::scanMemoryPattern(data, sizeof(data), bytes, lua::kMaxPatternBytes), nullptr);
     EXPECT_EQ(lua::scanMemoryPattern(nullptr, 10, bytes, 1), nullptr);
 }
 
 TEST_F(LuaManagerTests, PatternScanFromScriptErrorsOnGarbageBeforeTouchingModules)
 {
-    // Invalid pattern -> Lua error (auto-disable) without any module lookup (which the test
-    // binary cannot perform - LinuxPlatformApi::dlopen is gmock-routed here). load() reports
-    // false for a top-level error while keeping the slot loaded-and-errored.
+    
+    
+    
     ASSERT_TRUE(writeScript("badpattern.lua", "memory.pattern_scan(\"libc.so.6\", \"not a pattern ZZ\")\n"));
     ASSERT_FALSE(lua::load("badpattern.lua"));
     const int slot = lua::loadedIndex("badpattern.lua");
@@ -238,7 +238,7 @@ TEST_F(LuaManagerTests, HttpGetRejectsShellInjectionInUrl)
     const int slot = loadSlot("httpbad.lua");
     ASSERT_GE(slot, 0);
     EXPECT_FALSE(lua::scripts[slot].errored) << lua::scripts[slot].lastError;
-    // No request should have been spawned.
+    
     for (const auto& httpSlot : lua::httpSlots)
         EXPECT_FALSE(httpSlot.active);
 }
@@ -260,16 +260,16 @@ TEST_F(LuaManagerTests, ReloadReplacesTheState)
     void* firstState = lua::scripts[lua::loadedIndex("reload.lua")].L;
     ASSERT_NE(firstState, nullptr);
 
-    ASSERT_GE(loadSlot("reload.lua"), 0); // second load replaces the first state
+    ASSERT_GE(loadSlot("reload.lua"), 0); 
     const int slot = lua::loadedIndex("reload.lua");
     ASSERT_GE(slot, 0);
     EXPECT_FALSE(lua::scripts[slot].errored);
-    // The new state may legally reuse the closed state's address (same allocator), so only
-    // liveness is asserted here.
+    
+    
     EXPECT_NE(lua::scripts[slot].L, nullptr);
 }
 
-// ---- entity API (bridges) ----
+
 
 namespace
 {
@@ -366,11 +366,11 @@ TEST_F(LuaManagerTests, EntityApiReadsValuesThroughBridges)
     EXPECT_FALSE(lua::scripts[slot].errored) << lua::scripts[slot].lastError;
 }
 
-// ---- gui.* (script menu items + sidecar persistence) ----
+
 
 TEST_F(LuaManagerTests, GuiItemsRestoreSidecarValuesAndSaveOnUnload)
 {
-    // Pre-seed the sidecar as if an earlier session had saved state for this script.
+    
     ASSERT_TRUE(writeScript("persist.lua.gui", "c\tEnable Things\t0\ns\tAmount\t77\t0\t100\n"));
 
     ASSERT_TRUE(writeScript("persist.lua",
@@ -387,7 +387,7 @@ TEST_F(LuaManagerTests, GuiItemsRestoreSidecarValuesAndSaveOnUnload)
     ASSERT_GE(slot, 0);
     EXPECT_FALSE(lua::scripts[slot].errored) << lua::scripts[slot].lastError;
 
-    // Unload persists the current values (checkbox 0 from the seed, slider changed to 5).
+    
     lua::unloadScript(slot);
     char sidecar[512];
     ASSERT_TRUE(readWholeFile("persist.lua.gui", sidecar, sizeof(sidecar)));
@@ -410,7 +410,7 @@ TEST_F(LuaManagerTests, GuiSliderClampsSetValuesAndValidatesLabels)
     EXPECT_FALSE(lua::scripts[slot].errored) << lua::scripts[slot].lastError;
 }
 
-// ---- event args ----
+
 
 TEST_F(LuaManagerTests, EventArgsReachCallbacksAsTables)
 {
@@ -447,7 +447,7 @@ TEST_F(LuaManagerTests, DispatchWithoutArgsPassesNilEvent)
     EXPECT_FALSE(lua::scripts[slot].errored) << lua::scripts[slot].lastError;
 }
 
-// ---- steam.* helpers (steamid64 string transport) ----
+
 
 TEST_F(LuaManagerTests, SteamId64FormatParseRoundTripAboveDoublePrecision)
 {
@@ -455,26 +455,26 @@ TEST_F(LuaManagerTests, SteamId64FormatParseRoundTripAboveDoublePrecision)
     lua::formatSteamId64(76561197960265728ULL, buffer, sizeof(buffer));
     EXPECT_STREQ(buffer, "76561197960265728");
 
-    // 76561197960265728 > 2^53: a double round-trip corrupts the low bits - exactly why ids
-    // cross the Lua boundary as strings.
+    
+    
     std::uint64_t out = 0;
     ASSERT_TRUE(lua::parseSteamId64("76561197960265728", &out));
     EXPECT_EQ(out, 76561197960265728ULL);
     ASSERT_TRUE(lua::parseSteamId64("76561197960265729", &out));
     EXPECT_EQ(out, 76561197960265729ULL);
 
-    EXPECT_FALSE(lua::parseSteamId64("", &out));                       // empty
-    EXPECT_FALSE(lua::parseSteamId64("0", &out));                      // 0 is not a valid id
-    EXPECT_FALSE(lua::parseSteamId64("007", &out));                    // leading zero refused
-    EXPECT_FALSE(lua::parseSteamId64("-76561197960265728", &out));     // sign refused
-    EXPECT_FALSE(lua::parseSteamId64(" 76561197960265728", &out));     // whitespace refused
-    EXPECT_FALSE(lua::parseSteamId64("76561197960265728\n", &out));    // trailing garbage refused
-    EXPECT_FALSE(lua::parseSteamId64("76561197960265728abc", &out));   // trailing garbage refused
-    EXPECT_FALSE(lua::parseSteamId64("99999999999999999999", &out));   // overflow refused
-    EXPECT_FALSE(lua::parseSteamId64(nullptr, &out));                  // null refused
+    EXPECT_FALSE(lua::parseSteamId64("", &out));                       
+    EXPECT_FALSE(lua::parseSteamId64("0", &out));                      
+    EXPECT_FALSE(lua::parseSteamId64("007", &out));                    
+    EXPECT_FALSE(lua::parseSteamId64("-76561197960265728", &out));     
+    EXPECT_FALSE(lua::parseSteamId64(" 76561197960265728", &out));     
+    EXPECT_FALSE(lua::parseSteamId64("76561197960265728\n", &out));    
+    EXPECT_FALSE(lua::parseSteamId64("76561197960265728abc", &out));   
+    EXPECT_FALSE(lua::parseSteamId64("99999999999999999999", &out));   
+    EXPECT_FALSE(lua::parseSteamId64(nullptr, &out));                  
 }
 
-// ---- api v3 (delay_call / database / gui.tab / http.request / cmd guards) ----
+
 
 TEST_F(LuaManagerTests, DelayCallFiresOnLaterDispatchWithArgs)
 {
@@ -487,8 +487,8 @@ TEST_F(LuaManagerTests, DelayCallFiresOnLaterDispatchWithArgs)
     ASSERT_GE(slot, 0);
     EXPECT_FALSE(lua::scripts[slot].errored) << lua::scripts[slot].lastError;
 
-    // First dispatch: nothing due yet (deadline is now + 0). The monotonic clock has advanced
-    // past 0 by the time dispatch runs, so the first drain fires it.
+    
+    
     lua::dispatchTick();
     lua::dispatchPaint(nullptr);
     EXPECT_TRUE(lua::scripts[slot].errored);
@@ -520,7 +520,7 @@ TEST_F(LuaManagerTests, DatabasePersistsAcrossReload)
     ASSERT_GE(slot, 0);
     EXPECT_FALSE(lua::scripts[slot].errored) << lua::scripts[slot].lastError;
 
-    // A freshly loaded state reads the previous state's writes back.
+    
     lua::unloadScript(slot);
     ASSERT_TRUE(writeScript("dbtest.lua",
         "assert(database.read('name') == 'value with spaces', 'string')\n"
@@ -543,7 +543,7 @@ TEST_F(LuaManagerTests, HttpRequestValidatesArguments)
         "assert(not pcall(http.request, 'POST', 'http://x/', 'http://x/\\'/', function() end) or true, 'quote in url')\n"
         "assert(not pcall(http.request, 'GET', 'http://x/'), 'missing callback')\n"
         "error('all request validations passed')\n"));
-    ASSERT_FALSE(lua::load("httpbad2.lua")); // every pcall refused -> the sentinel error fires
+    ASSERT_FALSE(lua::load("httpbad2.lua")); 
     const int slot = lua::loadedIndex("httpbad2.lua");
     ASSERT_GE(slot, 0);
     EXPECT_NE(std::strstr(lua::scripts[slot].lastError, "all request validations passed"), nullptr) << lua::scripts[slot].lastError;
@@ -566,14 +566,14 @@ TEST_F(LuaManagerTests, GuiTabNamesTheSubtabAndDividerAddsARow)
     EXPECT_EQ(lua::scripts[slot].guiItemCount, 3);
 }
 
-// ---- gui.page (items on native menu pages) ----
+
 
 TEST_F(LuaManagerTests, ScriptPageNamesResolveCaseInsensitivelyWithVisualsAlias)
 {
     EXPECT_EQ(lua::scriptPageFromName("Rage"), static_cast<int>(lua::ScriptPage::Rage));
     EXPECT_EQ(lua::scriptPageFromName("movement"), static_cast<int>(lua::ScriptPage::Movement));
     EXPECT_EQ(lua::scriptPageFromName("Player Info"), static_cast<int>(lua::ScriptPage::PlayerInfo));
-    EXPECT_EQ(lua::scriptPageFromName("VISUALS"), static_cast<int>(lua::ScriptPage::Glow)); // alias
+    EXPECT_EQ(lua::scriptPageFromName("VISUALS"), static_cast<int>(lua::ScriptPage::Glow)); 
     EXPECT_EQ(lua::scriptPageFromName("Misc"), static_cast<int>(lua::ScriptPage::Misc));
     EXPECT_EQ(lua::scriptPageFromName("Not A Page"), -2);
     EXPECT_EQ(lua::scriptPageFromName(""), -2);
@@ -602,7 +602,7 @@ TEST_F(LuaManagerTests, GuiPageRoutesSubsequentItemsToNativePagesAndBack)
     EXPECT_EQ(lua::scripts[slot].guiItems[3].page, static_cast<int>(lua::ScriptPage::Subtab));
 }
 
-// ---- map name (client.get_map_name, captured by the game_newmap hook) ----
+
 
 TEST_F(LuaManagerTests, GetMapNameReturnsCapturedMapAndIgnoresEmptyCaptures)
 {
@@ -615,7 +615,7 @@ TEST_F(LuaManagerTests, GetMapNameReturnsCapturedMapAndIgnoresEmptyCaptures)
     ASSERT_TRUE(readWholeFile("mapname.lua.db", sidecar, sizeof(sidecar)));
     EXPECT_NE(std::strstr(sidecar, "de_mirage"), nullptr);
 
-    // nil/empty captures must not clobber the last valid name
+    
     lua::setCurrentMapName(nullptr);
     lua::setCurrentMapName("");
     ASSERT_TRUE(writeScript("mapname2.lua", "database.write('map', client.get_map_name() or 'none')\n"));
@@ -635,7 +635,7 @@ TEST_F(LuaManagerTests, GetMapNameTruncatesOverlongNames)
     EXPECT_FALSE(lua::scripts[slot].errored) << lua::scripts[slot].lastError;
 }
 
-// ---- imgui.* (script windows; hard-gated to the "menu" callback) ----
+
 
 TEST_F(LuaManagerTests, ImguiBindingsErrorOutsideTheMenuCallback)
 {
@@ -648,15 +648,15 @@ TEST_F(LuaManagerTests, ImguiBindingsErrorOutsideTheMenuCallback)
     ASSERT_GE(slot, 0);
     EXPECT_TRUE(lua::scripts[slot].hasMenu);
     EXPECT_FALSE(lua::scripts[slot].hasPaint);
-    // dispatchMenuWindows must be inert without an installed imguiContextQuery (tests have none)
+    
     lua::dispatchMenuWindows();
     EXPECT_EQ(lua::scripts[slot].imguiWidgetCount, 0);
 }
 
 TEST_F(LuaManagerTests, MenuCallbackRegistrationDoesNotFireOutsideTheMenuLayer)
 {
-    // A "menu" callback that WOULD touch imgui.* must never run without the ImGui gate - the
-    // dispatch is a no-op here (imguiContextQuery null), so the script stays healthy.
+    
+    
     ASSERT_TRUE(writeScript("menucb.lua",
         "client.set_event_callback(\"menu\", function()\n"
         "    imgui.begin('window')\n"
@@ -672,10 +672,10 @@ TEST_F(LuaManagerTests, MenuCallbackRegistrationDoesNotFireOutsideTheMenuLayer)
 
 TEST_F(LuaManagerTests, RendererClipHelpersGuardAgainstUnbalancedPops)
 {
-    // pop_clip without a push must error (would otherwise trip ImGui's clip assertions), and a
-    // push/pop pair is accepted shape-wise (nullptr draw list errors first here - both guards
-    // fire in this test: paint list guard for push, clip-stack guard for pop can only be
-    // reached inside a paint dispatch, which the nullptr list never enters).
+    
+    
+    
+    
     ASSERT_TRUE(writeScript("clipguard.lua",
         "local ok, err = pcall(renderer.push_clip, 0, 0, 10, 10)\n"
         "assert(not ok and tostring(err):find('paint', 1, true), 'push_clip outside paint: ' .. tostring(err))\n"
@@ -709,7 +709,7 @@ TEST_F(LuaManagerTests, LibPreloadSharesGlobalsWithScripts)
     ASSERT_GE(slot, 0);
     EXPECT_FALSE(lua::scripts[slot].errored) << lua::scripts[slot].lastError;
 
-    // A broken lib fails the script load with the lib path in the error.
+    
     char badPath[320];
     std::snprintf(badPath, sizeof(badPath), "%s/99_bad.lua", libDir);
     {
@@ -727,8 +727,8 @@ TEST_F(LuaManagerTests, LibPreloadSharesGlobalsWithScripts)
 
 TEST_F(LuaManagerTests, EntityGetAllErrorsOnUnknownClassWithoutBridge)
 {
-    // Without the bridge the binding answers with an empty table (never crashes); the
-    // unknown-class error path only exists once the EntryPoints bridge is installed.
+    
+    
     ASSERT_TRUE(writeScript("getallnil.lua",
         "assert(entity.get_all('C_PlantedC4') ~= nil)\n"
         "assert(next(entity.get_all('C_PlantedC4')) == nil, 'no bridge -> empty list')\n"));
@@ -747,12 +747,12 @@ TEST_F(LuaManagerTests, TraceBindingsAreGameThreadOnly)
     EXPECT_FALSE(lua::scripts[slot].errored) << lua::scripts[slot].lastError;
 }
 
-// ---- api v5 (event strings, unload, dropdown clamp, new gui types, config, entity+) ----
+
 
 TEST_F(LuaManagerTests, DropdownSetClampsToOptionRange)
 {
-    // Regression: gui.set on a dropdown used to clamp through the slider min/max range
-    // (0/0), resetting every set to option 0.
+    
+    
     ::unlink("/tmp/ns_lua_unit_tests/dropdownclamp.lua.gui");
     ASSERT_TRUE(writeScript("dropdownclamp.lua",
         "local d = gui.dropdown(\"Mode\", {\"a\", \"b\", \"c\"}, 0)\n"
@@ -805,7 +805,7 @@ TEST_F(LuaManagerTests, UnloadCallbackFiresOnUnload)
     ASSERT_TRUE(readWholeFile("unloadcb.lua.db", sidecar, sizeof(sidecar)));
     EXPECT_NE(std::strstr(sidecar, "farewell"), nullptr) << sidecar;
 
-    // An erroring unload callback cannot break the unload itself.
+    
     ASSERT_TRUE(writeScript("unloaderr.lua",
         "client.set_event_callback(\"unload\", function() error(\"boom\") end)\n"));
     const int errSlot = loadSlot("unloaderr.lua");
@@ -930,14 +930,14 @@ TEST_F(LuaManagerTests, CmdShotPrimitivesAreGameThreadOnly)
 
 TEST_F(LuaManagerTests, DeathStormWithHttpDeliveriesKeepsStackBasePristine)
 {
-    // Reproduction of the in-game freeze/crash (2026-09-11/12): ONLY dead_comedian.lua running,
-    // repeated player_death dispatches each firing http.get, responses delivered on the paint
-    // thread. The repair counter must stay ZERO - a repair here means the corruption writer
-    // reproduces in the harness and can be bisected.
+    
+    
+    
+    
     lua::spawnHostShellQuery = [](const char*) noexcept -> pid_t {
         const pid_t pid = ::fork();
         if (pid == 0)
-            ::_exit(0); // fake curl: exits immediately, waitpid(WNOHANG) reaps it
+            ::_exit(0); 
         return pid;
     };
 
@@ -960,7 +960,7 @@ TEST_F(LuaManagerTests, DeathStormWithHttpDeliveriesKeepsStackBasePristine)
         };
         lua::dispatchEvent("player_death", args, 2);
         EXPECT_FALSE(lua::scripts[slot].errored) << lua::scripts[slot].lastError << " (death " << death << ")";
-        // stage a body + force "process done" so pollHttp delivers it on the paint dispatch
+        
         for (auto& s : lua::httpSlots) {
             if (!s.active)
                 continue;

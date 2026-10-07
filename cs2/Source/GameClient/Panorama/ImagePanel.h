@@ -69,12 +69,12 @@ public:
     }
 
 private:
-    // 2026-10-05: the UiScaleFactorOffset pattern matches 32 sites on the 2026-10-04+ build
-    // (the update duplicated this copy-shape across panel types) and the uniqueness check
-    // zeroes it - the fallback below used to read through offset 0 (the panel's vptr as a
-    // float!) and assert-abort debug builds in-match. Degraded to a logged fallback until
-    // the pattern is re-forged with a unique anchor; a wrong-but-bounded scale only skews
-    // panel rendering, an abort kills the whole session.
+    
+    
+    
+    
+    
+    
     [[nodiscard]] float uiScaleFactor() const
     {
         const auto scale = uiPanel().getUiScaleFactor().valueOr(1.0f);

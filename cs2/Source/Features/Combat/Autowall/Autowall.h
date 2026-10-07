@@ -9,25 +9,25 @@
 #include <GameClient/Tracing/Tracing.h>
 #include <Utils/Optional.h>
 
-// Velocity-parity bullet penetration for the rage aimbot: given a shot ray and the weapon's inputs,
-// returns the damage that survives all wall layers between start and endPoint, or {} if the shot
-// cannot reach it (another player in the way / too much accumulated loss / degenerate geometry).
-//
-// The per-layer loss math is transcribed from the game's own FireBullets penetration code
-// (libclient sub_14FDBA0; full RE trail in AUTOWALL_RE_NOTES.md):
-//     loss = max(0, 3.75 / penPower) * (3.0 / ff_pen)      ff_pen = ff_damage_bullet_penetration
-//          + 0.16 * currentDamage
-//          + thickness^2 / (24 * ff_pen)
-//     dead when damage drops below 1; at most 4 layers (the game's default penetration count).
-// Geometry uses our own verified TraceShape wrapper: forward trace finds each wall's entry face,
-// a reversed trace from the target side gives the exit face. With more than one parallel wall the
-// first iteration spans them all (conservative - may reject some multi-layer shots, never accepts
-// a shot that would not penetrate).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class Autowall {
 public:
-    // `damageAtPoint` = unarmored, range-falloff-applied damage at the impact point (the caller's
-    // estimate); armor/hitgroup scaling stays with the caller so this stays context-free.
-    // Returns {} when the point is not reachable through walls.
+    
+    
+    
     [[nodiscard]] static Optional<float> penetratedDamage(const cs2::Vector& start,
                                                           const cs2::Vector& endPoint,
                                                           void* skipEntity, void* targetEntity,
@@ -48,18 +48,20 @@ public:
         float damage = damageAtPoint;
         cs2::Vector pos = start;
         for (int layer = 0; layer < kMaxLayers; ++layer) {
-            // The game's FireBullets mask (0x1C300B @ 0x152A0ED) - includes CONTENTS_GRATE so grates
-            // are traced and their near-zero thickness handled by the loss formula, like the server.
+            
+            
             const auto fwd = Tracing::traceLine(pos, endPoint, skipEntity, kBulletMask);
-            if (!fwd.didHit || fwd.hitEntity == targetEntity)
-                return damage;                       // reached the target (this segment is clear)
+            if (!fwd.valid)
+                return {};
+            if (fwd.reaches(targetEntity))
+                return damage;                       
             if (fwd.hitEntity != nullptr)
-                return {};                           // another player blocks - never penetrable
+                return {};                           
 
-            // Reversed trace from the target side: its first world hit is the exit face of the
-            // nearest-to-target wall along the remaining path.
+            
+            
             const auto rev = Tracing::traceLine(endPoint, pos, skipEntity, kBulletMask);
-            if (!rev.didHit || rev.hitEntity != nullptr)
+            if (!rev.valid || !rev.didHit || rev.hitEntity != nullptr)
                 return {};
 
             const float wx = fwd.endPos.x - rev.endPos.x;
@@ -74,17 +76,17 @@ public:
             if (damage < 1.0f)
                 return {};
 
-            // Continue from just past the exit face (epsilon along the shot direction).
+            
             pos = offset(rev.endPos, dir, kExitEpsilon);
         }
-        return {};                                   // too many layers
+        return {};                                   
     }
 
-    // Live value of ff_damage_bullet_penetration, read exactly the way the game's own readers do
-    // it: the value-slot getter is resolved by SIGNATURE (see TracingSigs.h - the reader site
-    // `lea rbx,[cvar obj] / mov esi,-1 / call <getter>` ties the getter and the cvar object
-    // together), the cvar object address likewise. The caller then dereferences and falls back
-    // to a static default on null - same shape as the reader cluster in the game's code.
+    
+    
+    
+    
+    
     [[nodiscard]] static float ffBulletPenetration() noexcept
     {
         const auto& anchors = tracing_sigs::resolved();
@@ -97,17 +99,17 @@ public:
         if (!valuePtr)
             return kDefaultFfPenetration;
         const auto value = *valuePtr;
-        if (!(value > 0.1f))                         // matches the game's own tiny-value branch guard
+        if (!(value > 0.1f))                         
             return kDefaultFfPenetration;
         return value;
     }
 
 private:
-    static constexpr int kMaxLayers = 4;             // the game's default penetration count
-    static constexpr float kExitEpsilon = 2.0f;      // step past the exit face before the next segment
+    static constexpr int kMaxLayers = 4;             
+    static constexpr float kExitEpsilon = 2.0f;      
     static constexpr float kDefaultFfPenetration = 1.0f;
 
-    static constexpr std::uint64_t kBulletMask = 0x1C300B;               // FireBullets mask (incl. CONTENTS_GRATE)
+    static constexpr std::uint64_t kBulletMask = 0x1C300B;               
 
     [[nodiscard]] static float maxPositive(float v) noexcept
     {
@@ -116,7 +118,7 @@ private:
 
     [[nodiscard]] static float squareRoot(float v) noexcept
     {
-        // Newton iterations (no libm in this project), same idea as Utils/Trig.h.
+        
         if (v <= 0.0f)
             return 0.0f;
         float guess = v * 0.5f + 0.5f;

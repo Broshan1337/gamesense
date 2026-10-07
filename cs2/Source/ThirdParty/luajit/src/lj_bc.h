@@ -1,7 +1,4 @@
-/*
-** Bytecode instruction format.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #ifndef _LJ_BC_H
 #define _LJ_BC_H
@@ -9,19 +6,9 @@
 #include "lj_def.h"
 #include "lj_arch.h"
 
-/* Bytecode instruction format, 32 bit wide, fields of 8 or 16 bit:
-**
-** +----+----+----+----+
-** | B  | C  | A  | OP | Format ABC
-** +----+----+----+----+
-** |    D    | A  | OP | Format AD
-** +--------------------
-** MSB               LSB
-**
-** In-memory instructions are always stored in host byte order.
-*/
 
-/* Operand ranges and related constants. */
+
+
 #define BCMAX_A		0xff
 #define BCMAX_B		0xff
 #define BCMAX_C		0xff
@@ -30,7 +17,7 @@
 #define NO_REG		BCMAX_A
 #define NO_JMP		(~(BCPos)0)
 
-/* Macros to get instruction fields. */
+
 #define bc_op(i)	((BCOp)((i)&0xff))
 #define bc_a(i)		((BCReg)(((i)>>8)&0xff))
 #define bc_b(i)		((BCReg)((i)>>24))
@@ -38,7 +25,7 @@
 #define bc_d(i)		((BCReg)((i)>>16))
 #define bc_j(i)		((ptrdiff_t)bc_d(i)-BCBIAS_J)
 
-/* Macros to set instruction fields. */
+
 #define setbc_byte(p, x, ofs) \
   ((uint8_t *)(p))[LJ_ENDIAN_SELECT(ofs, 3-ofs)] = (uint8_t)(x)
 #define setbc_op(p, x)	setbc_byte(p, (x), 0)
@@ -49,27 +36,16 @@
   ((uint16_t *)(p))[LJ_ENDIAN_SELECT(1, 0)] = (uint16_t)(x)
 #define setbc_j(p, x)	setbc_d(p, (BCPos)((int32_t)(x)+BCBIAS_J))
 
-/* Macros to compose instructions. */
+
 #define BCINS_ABC(o, a, b, c) \
   (((BCIns)(o))|((BCIns)(a)<<8)|((BCIns)(b)<<24)|((BCIns)(c)<<16))
 #define BCINS_AD(o, a, d) \
   (((BCIns)(o))|((BCIns)(a)<<8)|((BCIns)(d)<<16))
 #define BCINS_AJ(o, a, j)	BCINS_AD(o, a, (BCPos)((int32_t)(j)+BCBIAS_J))
 
-/* Bytecode instruction definition. Order matters, see below.
-**
-** (name, filler, Amode, Bmode, Cmode or Dmode, metamethod)
-**
-** The opcode name suffixes specify the type for RB/RC or RD:
-** V = variable slot
-** S = string const
-** N = number const
-** P = primitive type (~itype)
-** B = unsigned byte literal
-** M = multiple args/results
-*/
+
 #define BCDEF(_) \
-  /* Comparison ops. ORDER OPR. */ \
+   \
   _(ISLT,	var,	___,	var,	lt) \
   _(ISGE,	var,	___,	var,	lt) \
   _(ISLE,	var,	___,	var,	le) \
@@ -84,7 +60,7 @@
   _(ISEQP,	var,	___,	pri,	eq) \
   _(ISNEP,	var,	___,	pri,	eq) \
   \
-  /* Unary test and copy ops. */ \
+   \
   _(ISTC,	dst,	___,	var,	___) \
   _(ISFC,	dst,	___,	var,	___) \
   _(IST,	___,	___,	var,	___) \
@@ -92,13 +68,13 @@
   _(ISTYPE,	var,	___,	lit,	___) \
   _(ISNUM,	var,	___,	lit,	___) \
   \
-  /* Unary ops. */ \
+   \
   _(MOV,	dst,	___,	var,	___) \
   _(NOT,	dst,	___,	var,	___) \
   _(UNM,	dst,	___,	var,	unm) \
   _(LEN,	dst,	___,	var,	len) \
   \
-  /* Binary ops. ORDER OPR. ORDER ARITH. VV last, POW must be next. */ \
+   \
   _(ADDVN,	dst,	var,	num,	add) \
   _(SUBVN,	dst,	var,	num,	sub) \
   _(MULVN,	dst,	var,	num,	mul) \
@@ -120,7 +96,7 @@
   _(POW,	dst,	var,	var,	pow) \
   _(CAT,	dst,	rbase,	rbase,	concat) \
   \
-  /* Constant ops. */ \
+   \
   _(KSTR,	dst,	___,	str,	___) \
   _(KCDATA,	dst,	___,	cdata,	___) \
   _(KSHORT,	dst,	___,	lits,	___) \
@@ -128,7 +104,7 @@
   _(KPRI,	dst,	___,	pri,	___) \
   _(KNIL,	base,	___,	base,	___) \
   \
-  /* Upvalue and function ops. */ \
+   \
   _(UGET,	dst,	___,	uv,	___) \
   _(USETV,	uv,	___,	var,	___) \
   _(USETS,	uv,	___,	str,	___) \
@@ -137,7 +113,7 @@
   _(UCLO,	rbase,	___,	jump,	___) \
   _(FNEW,	dst,	___,	func,	gc) \
   \
-  /* Table ops. */ \
+   \
   _(TNEW,	dst,	___,	lit,	gc) \
   _(TDUP,	dst,	___,	tab,	gc) \
   _(GGET,	dst,	___,	str,	index) \
@@ -152,7 +128,7 @@
   _(TSETM,	base,	___,	num,	newindex) \
   _(TSETR,	var,	var,	var,	newindex) \
   \
-  /* Calls and vararg handling. T = tail call. */ \
+   \
   _(CALLM,	base,	lit,	lit,	call) \
   _(CALL,	base,	lit,	lit,	call) \
   _(CALLMT,	base,	___,	lit,	call) \
@@ -162,13 +138,13 @@
   _(VARG,	base,	lit,	lit,	___) \
   _(ISNEXT,	base,	___,	jump,	___) \
   \
-  /* Returns. */ \
+   \
   _(RETM,	base,	___,	lit,	___) \
   _(RET,	rbase,	___,	lit,	___) \
   _(RET0,	rbase,	___,	lit,	___) \
   _(RET1,	rbase,	___,	lit,	___) \
   \
-  /* Loops and branches. I/J = interp/JIT, I/C/L = init/call/loop. */ \
+   \
   _(FORI,	base,	___,	jump,	___) \
   _(JFORI,	base,	___,	jump,	___) \
   \
@@ -186,7 +162,7 @@
   \
   _(JMP,	rbase,	___,	jump,	___) \
   \
-  /* Bit operators. ORDER OPR. ORDER BIT. */ \
+   \
   _(BNOT,	dst,	___,	var,	___) \
   _(BAND,	dst,	var,	var,	___) \
   _(BOR,	dst,	var,	var,	___) \
@@ -195,7 +171,7 @@
   _(BSHR,	dst,	var,	var,	___) \
   _(BSAR,	dst,	var,	var,	___) \
   \
-  /* Function headers. I/J = interp/JIT, F/V/C = fixarg/vararg/C func. */ \
+   \
   _(FUNCF,	rbase,	___,	___,	___) \
   _(IFUNCF,	rbase,	___,	___,	___) \
   _(JFUNCF,	rbase,	___,	lit,	___) \
@@ -205,7 +181,7 @@
   _(FUNCC,	rbase,	___,	___,	___) \
   _(FUNCCW,	rbase,	___,	___,	___)
 
-/* Bytecode opcode numbers. */
+
 typedef enum {
 #define BCENUM(name, ma, mb, mc, mt)	BC_##name,
 BCDEF(BCENUM)
@@ -236,17 +212,17 @@ LJ_STATIC_ASSERT((int)BC_FUNCF + 2 == (int)BC_JFUNCF);
 LJ_STATIC_ASSERT((int)BC_FUNCV + 1 == (int)BC_IFUNCV);
 LJ_STATIC_ASSERT((int)BC_FUNCV + 2 == (int)BC_JFUNCV);
 
-/* This solves a circular dependency problem, change as needed. */
+
 #define FF_next_N	4
 
-/* Stack slots used by FORI/FORL, relative to operand A. */
+
 enum {
   FORL_IDX, FORL_STOP, FORL_STEP, FORL_EXT
 };
 
-/* Bytecode operand modes. ORDER BCMode */
+
 typedef enum {
-  BCMnone, BCMdst, BCMbase, BCMvar, BCMrbase, BCMuv,  /* Mode A must be <= 7 */
+  BCMnone, BCMdst, BCMbase, BCMvar, BCMrbase, BCMuv,  
   BCMlit, BCMlits, BCMpri, BCMnum, BCMstr, BCMtab, BCMfunc, BCMjump, BCMcdata,
   BCM_max
 } BCMode;

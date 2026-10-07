@@ -22,12 +22,12 @@ public:
         return GET_CONFIG_VAR(outline_glow_vars::GlowWeapons);
     }
 
-    [[nodiscard]] bool shouldApplyGlow(EntityTypeInfo /* entityTypeInfo */, auto&& weapon) const noexcept
+    [[nodiscard]] bool shouldApplyGlow(EntityTypeInfo , auto&& weapon) const noexcept
     {
         return !weapon.hasOwner().valueOr(true);
     }
 
-    [[nodiscard]] Optional<color::HueInteger> hue(EntityTypeInfo entityTypeInfo, auto&& /* weapon */) const
+    [[nodiscard]] Optional<color::HueInteger> hue(EntityTypeInfo entityTypeInfo, auto&& ) const
     {
         switch (entityTypeInfo.typeIndex) {
         case EntityTypeInfo::indexOf<cs2::C_MolotovGrenade>():
@@ -44,7 +44,7 @@ public:
         return outline_glow_params::kWeaponGlowRange;
     }
 
-    [[nodiscard]] cs2::Color color(EntityTypeInfo entityTypeInfo, auto&& /* weapon */) const noexcept
+    [[nodiscard]] cs2::Color color(EntityTypeInfo entityTypeInfo, auto&& ) const noexcept
     {
         switch (entityTypeInfo.typeIndex) {
         case EntityTypeInfo::indexOf<cs2::C_MolotovGrenade>():

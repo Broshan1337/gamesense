@@ -73,11 +73,11 @@ private:
 
 class EntityClassifier {
 public:
-    // Whether the init has actually captured class pointers. The one-shot init used to run
-    // at module init - which happens in the MAIN MENU, where the entity-system global is
-    // still null - so every lookup failed and the classifier stayed empty FOREVER (the
-    // 2026-10-03 silent-death class: ESP, glow, knife skins all classified nothing, no
-    // crash, no log line). Callers now retry until this is true.
+    
+    
+    
+    
+    
     [[nodiscard]] bool initialized() const noexcept
     {
         return entityClasses[0] != nullptr;

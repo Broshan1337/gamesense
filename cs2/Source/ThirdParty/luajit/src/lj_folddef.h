@@ -1,4 +1,4 @@
-/* This is a generated file. DO NOT EDIT! */
+
 
 static const FoldFunc fold_func[] = {
   fold_kfold_numarith,

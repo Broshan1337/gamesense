@@ -320,7 +320,7 @@ TEST_F(ModelGlowActiveTest, ImmunePlayerUpdateInSceneObjectUpdater) {
     EXPECT_CALL(mockPlayerPawn, isTTorCT()).WillOnce(testing::Return(true));
     EXPECT_CALL(mockPlayerPawn, isControlledByLocalPlayer()).WillOnce(testing::Return(false));
     EXPECT_CALL(mockPlayerPawn, baseEntity()).WillOnce(testing::ReturnRef(mockBaseEntity));
-    // the picked RGBA color is used as-is even for spawn-protected players
+    
     EXPECT_CALL(mockBaseEntity, applySpawnProtectionEffectRecursively(cs2::Color{255, 0, 165}));
 
     modelGlow.updateInSceneObjectUpdater()(

@@ -1,7 +1,4 @@
-/*
-** Internal assertions.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #define lj_assert_c
 #define LUA_CORE
@@ -21,7 +18,7 @@ void lj_assert_fail(global_State *g, const char *file, int line,
   vfprintf(stderr, fmt, argp);
   fputc('\n', stderr);
   va_end(argp);
-  UNUSED(g);  /* May be NULL. TODO: optionally dump state. */
+  UNUSED(g);  
   abort();
 }
 

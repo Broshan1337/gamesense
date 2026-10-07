@@ -20,7 +20,7 @@ public:
     template <template <typename...> typename WeaponType>
     [[nodiscard]] bool has() const noexcept
     {
-        if (!weaponHandles)
+        if (!hasValidWeaponHandles())
             return false;
 
         for (int i = 0; i < weaponHandles->size; ++i) {
@@ -34,7 +34,7 @@ public:
     template <template <typename...> typename WeaponType>
     [[nodiscard]] decltype(auto) get() const noexcept
     {
-        if (!weaponHandles)
+        if (!hasValidWeaponHandles())
             return hookContext.template make<WeaponType<HookContext>>(nullptr);
 
         for (int i = 0; i < weaponHandles->size; ++i) {
@@ -48,7 +48,7 @@ public:
     template <typename F>
     void forEach(F f) const noexcept
     {
-        if (!weaponHandles)
+        if (!hasValidWeaponHandles())
             return;
 
         for (int i = 0; i < weaponHandles->size; ++i) {
@@ -59,6 +59,13 @@ public:
     }
 
 private:
+    [[nodiscard]] bool hasValidWeaponHandles() const noexcept
+    {
+        // Reject corrupt counts before indexing a network inventory.
+        return weaponHandles && weaponHandles->memory
+            && weaponHandles->size > 0 && weaponHandles->size <= 64;
+    }
+
     HookContext& hookContext;
     cs2::CUtlVector<cs2::CEntityHandle>* weaponHandles;
 };

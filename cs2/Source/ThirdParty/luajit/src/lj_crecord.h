@@ -1,7 +1,4 @@
-/*
-** Trace recorder for C data operations.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #ifndef _LJ_CRECORD_H
 #define _LJ_CRECORD_H

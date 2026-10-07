@@ -13,15 +13,15 @@ struct CvarPatterns {
     [[nodiscard]] static consteval auto addTier0Patterns(auto tier0Patterns) noexcept
     {
         return tier0Patterns
-            // 2026-09-26 re-derivation (the walk at tier0 0x157A50 = the game's own convar
-            // registry iteration): mov rax,[rbx+0x50] = the node-array pointer at CCvar+0x50,
-            // then movzx eax,word [rax+r12+0xa] = the per-node next-handle. The old 6-byte
-            // pattern matched a decoy "push rbx; push rax" pair (byte-match green, resolved
-            // garbage). FieldFieldOffset subtracts offsetof(ConVarList::memory)=8 back to the
-            // member base (CCvar+0x48); the list head handle sits at CCvar+0x58, i.e. at
-            // offsetof(ConVarList)=0x48 + sizeof(memory ptr)=8 = the first list field after the
-            // memory pointer (see CUtlLinkedList.h; CCvar+0x4A is allocationCount, NOT the
-            // head - an earlier revision of this comment said 0x4A and was wrong).
+            
+            
+            
+            
+            
+            
+            
+            
+            
             .template addPattern<OffsetToConVarList, CodePattern{"48 8B 43 ? 42 0F B7 44 20 0A"}.add(3).read8()>();
     }
 };

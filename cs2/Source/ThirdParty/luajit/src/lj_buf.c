@@ -1,7 +1,4 @@
-/*
-** Buffer handling.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #define lj_buf_c
 #define LUA_CORE
@@ -14,7 +11,7 @@
 #include "lj_tab.h"
 #include "lj_strfmt.h"
 
-/* -- Buffer management --------------------------------------------------- */
+
 
 static void buf_grow(SBuf *sb, MSize sz)
 {
@@ -24,7 +21,7 @@ static void buf_grow(SBuf *sb, MSize sz)
   if (nsz < LJ_MIN_SBUF) nsz = LJ_MIN_SBUF;
   while (nsz < sz) nsz += nsz;
   flag = sbufflag(sb);
-  if ((flag & SBUF_FLAG_COW)) {  /* Copy-on-write semantics. */
+  if ((flag & SBUF_FLAG_COW)) {  
     lj_assertG_(G(sbufL(sb)), sb->w == sb->e, "bad SBuf COW");
     b = (char *)lj_mem_new(sbufL(sb), nsz);
     setsbufflag(sb, flag & ~(GCSize)SBUF_FLAG_COW);
@@ -34,13 +31,13 @@ static void buf_grow(SBuf *sb, MSize sz)
     b = (char *)lj_mem_realloc(sbufL(sb), sb->b, osz, nsz);
   }
   if ((flag & SBUF_FLAG_EXT)) {
-    sbufX(sb)->r = sbufX(sb)->r - sb->b + b;  /* Adjust read pointer, too. */
+    sbufX(sb)->r = sbufX(sb)->r - sb->b + b;  
   }
-  /* Adjust buffer pointers. */
+  
   sb->b = b;
   sb->w = b + len;
   sb->e = b + nsz;
-  if ((flag & SBUF_FLAG_BORROW)) {  /* Adjust borrowed buffer pointers. */
+  if ((flag & SBUF_FLAG_BORROW)) {  
     SBuf *bsb = mref(sbufX(sb)->bsb, SBuf);
     bsb->b = b;
     bsb->w = b + len;
@@ -64,14 +61,14 @@ LJ_NOINLINE char *LJ_FASTCALL lj_buf_more2(SBuf *sb, MSize sz)
     MSize len = sbufxlen(sbx);
     if (LJ_UNLIKELY(sz > LJ_MAX_BUF || len + sz > LJ_MAX_BUF))
       lj_err_mem(sbufL(sbx));
-    if (len + sz > sbufsz(sbx)) {  /* Must grow. */
+    if (len + sz > sbufsz(sbx)) {  
       buf_grow((SBuf *)sbx, len + sz);
     } else if (sbufiscow(sb) || sbufxslack(sbx) < (sbufsz(sbx) >> 3)) {
-      /* Also grow to avoid excessive compactions, if slack < size/8. */
-      buf_grow((SBuf *)sbx, sbuflen(sbx) + sz);  /* Not sbufxlen! */
+      
+      buf_grow((SBuf *)sbx, sbuflen(sbx) + sz);  
       return sbx->w;
     }
-    if (sbx->r != sbx->b) {  /* Compact by moving down. */
+    if (sbx->r != sbx->b) {  
       memmove(sbx->b, sbx->r, len);
       sbx->r = sbx->b;
       sbx->w = sbx->b + len;
@@ -93,7 +90,7 @@ void LJ_FASTCALL lj_buf_shrink(lua_State *L, SBuf *sb)
   MSize osz = (MSize)(sb->e - b);
   if (osz > 2*LJ_MIN_SBUF) {
     b = lj_mem_realloc(L, b, osz, (osz >> 1));
-    sb->w = sb->b = b;  /* Not supposed to keep data across shrinks. */
+    sb->w = sb->b = b;  
     sb->e = b + (osz >> 1);
   }
   lj_assertG_(G(sbufL(sb)), !sbufisext(sb), "YAGNI shrink SBufExt");
@@ -125,7 +122,7 @@ MSize LJ_FASTCALL lj_bufx_more(SBufExt *sbx, MSize sz)
 #endif
 #endif
 
-/* -- Low-level buffer put operations ------------------------------------- */
+
 
 SBuf *lj_buf_putmem(SBuf *sb, const void *q, MSize len)
 {
@@ -165,7 +162,7 @@ SBuf * LJ_FASTCALL lj_buf_putstr(SBuf *sb, GCstr *s)
   return sb;
 }
 
-/* -- High-level buffer put operations ------------------------------------ */
+
 
 SBuf * LJ_FASTCALL lj_buf_putstr_reverse(SBuf *sb, GCstr *s)
 {
@@ -223,7 +220,7 @@ SBuf *lj_buf_putstr_rep(SBuf *sb, GCstr *s, int32_t rep)
     if (LJ_UNLIKELY(tlen > LJ_MAX_STR))
       lj_err_mem(sbufL(sb));
     w = lj_buf_more(sb, (MSize)tlen);
-    if (len == 1) {  /* Optimize a common case. */
+    if (len == 1) {  
       uint32_t c = strdata(s)[0];
       do { *w++ = c; } while (--rep > 0);
     } else {
@@ -246,8 +243,8 @@ SBuf *lj_buf_puttab(SBuf *sb, GCtab *t, GCstr *sep, int32_t i, int32_t e)
       cTValue *o = lj_tab_getint(t, i);
       char *w;
       if (!o) {
-      badtype:  /* Error: bad element type. */
-	sb->w = (char *)(intptr_t)i;  /* Store failing index. */
+      badtype:  
+	sb->w = (char *)(intptr_t)i;  
 	return NULL;
       } else if (tvisstr(o)) {
 	MSize len = strV(o)->len;
@@ -270,14 +267,14 @@ SBuf *lj_buf_puttab(SBuf *sb, GCtab *t, GCstr *sep, int32_t i, int32_t e)
   return sb;
 }
 
-/* -- Miscellaneous buffer operations ------------------------------------- */
+
 
 GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb)
 {
   return lj_str_new(sbufL(sb), sb->b, sbuflen(sb));
 }
 
-/* Concatenate two strings. */
+
 GCstr *lj_buf_cat2str(lua_State *L, GCstr *s1, GCstr *s2)
 {
   MSize len1 = s1->len, len2 = s2->len;
@@ -287,7 +284,7 @@ GCstr *lj_buf_cat2str(lua_State *L, GCstr *s1, GCstr *s2)
   return lj_str_new(L, buf, len1 + len2);
 }
 
-/* Read ULEB128 from buffer. */
+
 uint32_t LJ_FASTCALL lj_buf_ruleb128(const char **pp)
 {
   const uint8_t *w = (const uint8_t *)*pp;

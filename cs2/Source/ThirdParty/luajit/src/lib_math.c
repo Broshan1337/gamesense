@@ -1,7 +1,4 @@
-/*
-** Math library.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #include <math.h>
 
@@ -18,7 +15,7 @@
 #include "lj_vm.h"
 #include "lj_prng.h"
 
-/* ------------------------------------------------------------------------ */
+
 
 #define LJLIB_MODULE_math
 
@@ -59,14 +56,14 @@ LJLIB_ASM(math_log)		LJLIB_REC(math_log)
 #else
     x = lj_vm_log2(x); y = 1.0 / lj_vm_log2(y);
 #endif
-    setnumV(L->base-1-LJ_FR2, x*y);  /* Do NOT join the expression to x / y. */
+    setnumV(L->base-1-LJ_FR2, x*y);  
     return FFH_RES(1);
   }
   return FFH_RETRY;
 }
 
-LJLIB_LUA(math_deg) /* function(x) return x * 57.29577951308232 end */
-LJLIB_LUA(math_rad) /* function(x) return x * 0.017453292519943295 end */
+LJLIB_LUA(math_deg) 
+LJLIB_LUA(math_rad) 
 
 LJLIB_ASM(math_atan2)		LJLIB_REC(.)
 {
@@ -99,36 +96,32 @@ LJLIB_ASM_(math_max)		LJLIB_REC(math_minmax IR_MAX)
 LJLIB_PUSH(3.14159265358979323846) LJLIB_SET(pi)
 LJLIB_PUSH(1e310) LJLIB_SET(huge)
 
-/* ------------------------------------------------------------------------ */
 
-/* This implements a Tausworthe PRNG with period 2^223. Based on:
-**   Tables of maximally-equidistributed combined LFSR generators,
-**   Pierre L'Ecuyer, 1991, table 3, 1st entry.
-** Full-period ME-CF generator with L=64, J=4, k=223, N1=49.
-*/
 
-/* Union needed for bit-pattern conversion between uint64_t and double. */
+
+
+
 typedef union { uint64_t u64; double d; } U64double;
 
-/* PRNG seeding function. */
+
 static void random_seed(PRNGState *rs, double d)
 {
-  uint32_t r = 0x11090601;  /* 64-k[i] as four 8 bit constants. */
+  uint32_t r = 0x11090601;  
   int i;
   for (i = 0; i < 4; i++) {
     U64double u;
     uint32_t m = 1u << (r&255);
     r >>= 8;
     u.d = d = d * 3.14159265358979323846 + 2.7182818284590452354;
-    if (u.u64 < m) u.u64 += m;  /* Ensure k[i] MSB of u[i] are non-zero. */
+    if (u.u64 < m) u.u64 += m;  
     rs->u[i] = u.u64;
   }
   for (i = 0; i < 10; i++)
     (void)lj_prng_u64(rs);
 }
 
-/* PRNG extract function. */
-LJLIB_PUSH(top-2)  /* Upvalue holds userdata with PRNGState. */
+
+LJLIB_PUSH(top-2)  
 LJLIB_CF(math_random)		LJLIB_REC(.)
 {
   int n = (int)(L->top - L->base);
@@ -152,7 +145,7 @@ LJLIB_CF(math_random)		LJLIB_REC(.)
     double r1 = lj_lib_checknum(L, 1);
 #endif
     if (n == 1) {
-      d = lj_vm_floor(d*r1) + 1.0;  /* d is an int in range [1, r1] */
+      d = lj_vm_floor(d*r1) + 1.0;  
     } else {
 #if LJ_DUALNUM
       double r2;
@@ -166,7 +159,7 @@ LJLIB_CF(math_random)		LJLIB_REC(.)
 #else
       double r2 = lj_lib_checknum(L, 2);
 #endif
-      d = lj_vm_floor(d*(r2-r1+1.0)) + r1;  /* d is an int in range [r1, r2] */
+      d = lj_vm_floor(d*(r2-r1+1.0)) + r1;  
     }
 #if LJ_DUALNUM
     if (isint) {
@@ -174,13 +167,13 @@ LJLIB_CF(math_random)		LJLIB_REC(.)
       return 1;
     }
 #endif
-  }  /* else: d is a double in range [0, 1] */
+  }  
   setnumV(L->top++, d);
   return 1;
 }
 
-/* PRNG seed function. */
-LJLIB_PUSH(top-2)  /* Upvalue holds userdata with PRNGState. */
+
+LJLIB_PUSH(top-2)  
 LJLIB_CF(math_randomseed)
 {
   PRNGState *rs = (PRNGState *)(uddata(udataV(lj_lib_upvalue(L, 1))));
@@ -191,7 +184,7 @@ LJLIB_CF(math_randomseed)
   return 0;
 }
 
-/* ------------------------------------------------------------------------ */
+
 
 #include "lj_libdef.h"
 

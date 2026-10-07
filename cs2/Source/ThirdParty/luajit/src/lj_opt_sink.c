@@ -1,7 +1,4 @@
-/*
-** SINK: Allocation Sinking and Store Sinking.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #define lj_opt_sink_c
 #define LUA_CORE
@@ -15,31 +12,31 @@
 #include "lj_iropt.h"
 #include "lj_target.h"
 
-/* Some local macros to save typing. Undef'd at the end. */
+
 #define IR(ref)		(&J->cur.ir[(ref)])
 
-/* Check whether the store ref points to an eligible allocation. */
+
 static IRIns *sink_checkalloc(jit_State *J, IRIns *irs)
 {
   IRIns *ir = IR(irs->op1);
   if (!irref_isk(ir->op2))
-    return NULL;  /* Non-constant key. */
+    return NULL;  
   if (ir->o == IR_HREFK || ir->o == IR_AREF)
     ir = IR(ir->op1);
   else if (!(ir->o == IR_HREF || ir->o == IR_NEWREF ||
 	     ir->o == IR_FREF || ir->o == IR_ADD))
-    return NULL;  /* Unhandled reference type (for XSTORE). */
+    return NULL;  
   ir = IR(ir->op1);
   if (!(ir->o == IR_TNEW || ir->o == IR_TDUP || ir->o == IR_CNEW))
-    return NULL;  /* Not an allocation. */
-  return ir;  /* Return allocation. */
+    return NULL;  
+  return ir;  
 }
 
-/* Recursively check whether a value depends on a PHI. */
+
 static int sink_phidep(jit_State *J, IRRef ref, int *workp)
 {
   IRIns *ir = IR(ref);
-  if (!*workp) return 1;  /* Give up and pretend it does. */
+  if (!*workp) return 1;  
   (*workp)--;
   if (irt_isphi(ir->t)) return 1;
   if (ir->op1 >= REF_FIRST && sink_phidep(J, ir->op1, workp)) return 1;
@@ -47,7 +44,7 @@ static int sink_phidep(jit_State *J, IRRef ref, int *workp)
   return 0;
 }
 
-/* Check whether a value is a sinkable PHI or loop-invariant. */
+
 static int sink_checkphi(jit_State *J, IRIns *ira, IRRef ref)
 {
   if (ref >= REF_FIRST) {
@@ -55,49 +52,40 @@ static int sink_checkphi(jit_State *J, IRIns *ira, IRRef ref)
     if (irt_isphi(ir->t) || (ir->o == IR_CONV && ir->op2 == IRCONV_NUM_INT &&
 			     irt_isphi(IR(ir->op1)->t))) {
       ira->prev++;
-      return 1;  /* Sinkable PHI. */
+      return 1;  
     }
-    /* Otherwise the value must be loop-invariant. */
+    
     if (ref < J->loopref) {
-      /* Check for PHI dependencies, but give up after reasonable effort. */
+      
       int work = 64;
       return !sink_phidep(J, ref, &work);
     } else {
-      return 0;  /* Loop-variant. */
+      return 0;  
     }
   }
-  return 1;  /* Constant (non-PHI). */
+  return 1;  
 }
 
-/* Mark non-sinkable allocations using single-pass backward propagation.
-**
-** Roots for the marking process are:
-** - Some PHIs or snapshots (see below).
-** - Non-PHI, non-constant values stored to PHI allocations.
-** - All guards.
-** - Any remaining loads not eliminated by store-to-load forwarding.
-** - Stores with non-constant keys.
-** - All stored values.
-*/
+
 static void sink_mark_ins(jit_State *J)
 {
   IRIns *ir, *irlast = IR(J->cur.nins-1);
   for (ir = irlast ; ; ir--) {
     switch (ir->o) {
     case IR_BASE:
-      return;  /* Finished. */
+      return;  
     case IR_ALOAD: case IR_HLOAD: case IR_XLOAD: case IR_TBAR: case IR_ALEN:
-      irt_setmark(IR(ir->op1)->t);  /* Mark ref for remaining loads. */
+      irt_setmark(IR(ir->op1)->t);  
       break;
     case IR_FLOAD:
       if (irt_ismarked(ir->t) || ir->op2 == IRFL_TAB_META)
-	irt_setmark(IR(ir->op1)->t);  /* Mark table for remaining loads. */
+	irt_setmark(IR(ir->op1)->t);  
       break;
     case IR_ASTORE: case IR_HSTORE: case IR_FSTORE: case IR_XSTORE: {
       IRIns *ira = sink_checkalloc(J, ir);
       if (!ira || (irt_isphi(ira->t) && !sink_checkphi(J, ira, ir->op2)))
-	irt_setmark(IR(ir->op1)->t);  /* Mark ineligible ref. */
-      irt_setmark(IR(ir->op2)->t);  /* Mark stored value. */
+	irt_setmark(IR(ir->op1)->t);  
+      irt_setmark(IR(ir->op2)->t);  
       break;
       }
 #if LJ_HASFFI
@@ -106,21 +94,21 @@ static void sink_mark_ins(jit_State *J)
 	  (!sink_checkphi(J, ir, ir->op2) ||
 	   (LJ_32 && ir+1 < irlast && (ir+1)->o == IR_HIOP &&
 	    !sink_checkphi(J, ir, (ir+1)->op2))))
-	irt_setmark(ir->t);  /* Mark ineligible allocation. */
+	irt_setmark(ir->t);  
 #endif
-      /* fallthrough */
+      
     case IR_USTORE:
-      irt_setmark(IR(ir->op2)->t);  /* Mark stored value. */
+      irt_setmark(IR(ir->op2)->t);  
       break;
 #if LJ_HASFFI
     case IR_CALLXS:
 #endif
     case IR_CALLS:
-      irt_setmark(IR(ir->op1)->t);  /* Mark (potentially) stored values. */
+      irt_setmark(IR(ir->op1)->t);  
       break;
     case IR_PHI: {
       IRIns *irl = IR(ir->op1), *irr = IR(ir->op2);
-      irl->prev = irr->prev = 0;  /* Clear PHI value counts. */
+      irl->prev = irr->prev = 0;  
       if (irl->o == irr->o &&
 	  (irl->o == IR_TNEW || irl->o == IR_TDUP ||
 	   (LJ_HASFFI && (irl->o == IR_CNEW || irl->o == IR_CNEWI))))
@@ -130,7 +118,7 @@ static void sink_mark_ins(jit_State *J)
       break;
       }
     default:
-      if (irt_ismarked(ir->t) || irt_isguard(ir->t)) {  /* Propagate mark. */
+      if (irt_ismarked(ir->t) || irt_isguard(ir->t)) {  
 	if (ir->op1 >= REF_FIRST) irt_setmark(IR(ir->op1)->t);
 	if (ir->op2 >= REF_FIRST) irt_setmark(IR(ir->op2)->t);
       }
@@ -139,7 +127,7 @@ static void sink_mark_ins(jit_State *J)
   }
 }
 
-/* Mark all instructions referenced by a snapshot. */
+
 static void sink_mark_snap(jit_State *J, SnapShot *snap)
 {
   SnapEntry *map = &J->cur.snapmap[snap->mapofs];
@@ -151,7 +139,7 @@ static void sink_mark_snap(jit_State *J, SnapShot *snap)
   }
 }
 
-/* Iteratively remark PHI refs with differing marks or PHI value counts. */
+
 static void sink_remark_phi(jit_State *J)
 {
   IRIns *ir;
@@ -169,7 +157,7 @@ static void sink_remark_phi(jit_State *J)
   } while (remark);
 }
 
-/* Sweep instructions and tag sunken allocations and stores. */
+
 static void sink_sweep_ins(jit_State *J)
 {
   IRIns *ir, *irbase = IR(REF_BASE);
@@ -200,7 +188,7 @@ static void sink_sweep_ins(jit_State *J)
       if (!irt_ismarked(ir->t)) {
 	ir->t.irt &= ~IRT_GUARD;
 	ir->prev = REGSP(RID_SINK, 0);
-	J->cur.sinktags = 1;  /* Signal present SINK tags to assembler. */
+	J->cur.sinktags = 1;  
       } else {
 	irt_clearmark(ir->t);
 	ir->prev = REGSP_INIT;
@@ -226,17 +214,13 @@ static void sink_sweep_ins(jit_State *J)
   for (ir = IR(J->cur.nk); ir < irbase; ir++) {
     irt_clearmark(ir->t);
     ir->prev = REGSP_INIT;
-    /* The false-positive of irt_is64() for ASMREF_L (REF_NIL) is OK here. */
+    
     if (irt_is64(ir->t) && ir->o != IR_KNULL)
       ir++;
   }
 }
 
-/* Allocation sinking and store sinking.
-**
-** 1. Mark all non-sinkable allocations.
-** 2. Then sink all remaining allocations and the related stores.
-*/
+
 void lj_opt_sink(jit_State *J)
 {
   const uint32_t need = (JIT_F_OPT_SINK|JIT_F_OPT_FWD|

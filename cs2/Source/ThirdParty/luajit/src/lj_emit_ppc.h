@@ -1,9 +1,6 @@
-/*
-** PPC instruction emitter.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
 
-/* -- Emit basic instructions --------------------------------------------- */
+
+
 
 static void emit_tab(ASMState *as, PPCIns pi, Reg rt, Reg ra, Reg rb)
 {
@@ -51,15 +48,15 @@ static void emit_rotlwi(ASMState *as, Reg ra, Reg rs, int32_t n)
   emit_rot(as, PPCI_RLWINM, ra, rs, n, 0, 31);
 }
 
-/* -- Emit loads/stores --------------------------------------------------- */
+
 
 #define jglofs(as, k) \
   (((uintptr_t)(k) - (uintptr_t)J2G(as->J) - 32768) & 0xffff)
 
-/* Prefer rematerialization of BASE/L from global_State over spills. */
+
 #define emit_canremat(ref)	((ref) <= REF_BASE)
 
-/* Try to find a one step delta relative to another constant. */
+
 static int emit_kdelta1(ASMState *as, Reg rd, int32_t i)
 {
   RegSet work = ~as->freeset & RSET_GPR;
@@ -76,10 +73,10 @@ static int emit_kdelta1(ASMState *as, Reg rd, int32_t i)
     }
     rset_clear(work, r);
   }
-  return 0;  /* Failed. */
+  return 0;  
 }
 
-/* Load a 32 bit constant into a GPR. */
+
 static void emit_loadi(ASMState *as, Reg r, int32_t i)
 {
   if (checki16(i)) {
@@ -103,7 +100,7 @@ static void emit_loadi(ASMState *as, Reg r, int32_t i)
 
 static Reg ra_allock(ASMState *as, intptr_t k, RegSet allow);
 
-/* Get/set from constant pointer. */
+
 static void emit_lsptr(ASMState *as, PPCIns pi, Reg r, void *p, RegSet allow)
 {
   int32_t jgl = i32ptr(J2G(as->J));
@@ -121,7 +118,7 @@ static void emit_lsptr(ASMState *as, PPCIns pi, Reg r, void *p, RegSet allow)
 #define emit_loadk64(as, r, ir) \
   emit_lsptr(as, PPCI_LFD, ((r) & 31), (void *)&ir_knum((ir))->u64, RSET_GPR)
 
-/* Get/set global_State fields. */
+
 static void emit_lsglptr(ASMState *as, PPCIns pi, Reg r, int32_t ofs)
 {
   emit_tai(as, pi, r, RID_JGL, ofs-32768);
@@ -132,15 +129,15 @@ static void emit_lsglptr(ASMState *as, PPCIns pi, Reg r, int32_t ofs)
 #define emit_setgl(as, r, field) \
   emit_lsglptr(as, PPCI_STW, (r), (int32_t)offsetof(global_State, field))
 
-/* Trace number is determined from per-trace exit stubs. */
+
 #define emit_setvmstate(as, i)		UNUSED(i)
 
-/* -- Emit control-flow instructions -------------------------------------- */
 
-/* Label for internal jumps. */
+
+
 typedef MCode *MCLabel;
 
-/* Return label pointing to current PC. */
+
 #define emit_label(as)		((as)->mcp)
 
 static void emit_condbranch(ASMState *as, PPCIns pi, PPCCC cc, MCode *target)
@@ -165,7 +162,7 @@ static void emit_call(ASMState *as, void *target)
   ptrdiff_t delta = (char *)target - (char *)p;
   if ((((delta>>2) + 0x00800000) >> 24) == 0) {
     *p = PPCI_BL | (delta & 0x03fffffcu);
-  } else {  /* Target out of range: need indirect call. Don't use arg reg. */
+  } else {  
     RegSet allow = RSET_GPR & ~RSET_RANGE(RID_R0, REGARG_LASTGPR+1);
     Reg r = ra_allock(as, i32ptr(target), allow);
     *p = PPCI_BCTRL;
@@ -174,12 +171,12 @@ static void emit_call(ASMState *as, void *target)
   }
 }
 
-/* -- Emit generic operations --------------------------------------------- */
+
 
 #define emit_mr(as, dst, src) \
   emit_asb(as, PPCI_MR, (dst), (src), (src))
 
-/* Generic move between two regs. */
+
 static void emit_movrr(ASMState *as, IRIns *ir, Reg dst, Reg src)
 {
   UNUSED(ir);
@@ -189,7 +186,7 @@ static void emit_movrr(ASMState *as, IRIns *ir, Reg dst, Reg src)
     emit_fb(as, PPCI_FMR, dst, src);
 }
 
-/* Generic load of register with base and (small) offset address. */
+
 static void emit_loadofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
 {
   if (r < RID_MAX_GPR)
@@ -198,7 +195,7 @@ static void emit_loadofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
     emit_fai(as, irt_isnum(ir->t) ? PPCI_LFD : PPCI_LFS, r, base, ofs);
 }
 
-/* Generic store of register with base and (small) offset address. */
+
 static void emit_storeofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
 {
   if (r < RID_MAX_GPR)
@@ -207,7 +204,7 @@ static void emit_storeofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
     emit_fai(as, irt_isnum(ir->t) ? PPCI_STFD : PPCI_STFS, r, base, ofs);
 }
 
-/* Emit a compare (for equality) with a constant operand. */
+
 static void emit_cmpi(ASMState *as, Reg r, int32_t k)
 {
   if (checki16(k)) {
@@ -220,7 +217,7 @@ static void emit_cmpi(ASMState *as, Reg r, int32_t k)
   }
 }
 
-/* Add offset to pointer. */
+
 static void emit_addptr(ASMState *as, Reg r, int32_t ofs)
 {
   if (ofs) {

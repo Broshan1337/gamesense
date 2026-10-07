@@ -61,19 +61,19 @@ GotBackup g_dl_iterate_backup;
 bool g_initialized = false;
 pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// Every maps line that must never reach steamclient. The memfd alias and the
-// GDB-fallback copy share no single substring with the on-disk name, hence a
-// token list instead of one needle:
-//   libMangoHud.so    - on-disk name AND the memfd name (inject_memfd creates
-//                       the memfd as "libMangoHud.so", so its maps line reads
-//                       "/memfd:libMangoHud.so (deleted)")
-//   memfd:libMangoHud - belt and suspenders if the memfd name ever changes
-//   .fc-cache-        - inject.sh GDB fallback copies the lib to
-//                       /tmp/.font-unix/.fc-cache-<ts>, whose maps line
-//                       contains neither of the above
-//
-// Tokens live XOR-encrypted (vac_str.h): the module's own name must not sit
-// in .rodata as a scannable byte string.
+
+
+
+
+
+
+
+
+
+
+
+
+
 namespace
 {
 VAC_XSTR(kTokModule, "libMangoHud.so");
@@ -85,10 +85,10 @@ VAC_XSTR(kLogMapsOpen, "[vac] maps open intercepted (%s)");
 VAC_XSTR(kLogMapsOpenFd, "[vac] maps open intercepted (fd)");
 VAC_XSTR(kLogFiltered, "[vac] filtered our module from maps output");
 VAC_XSTR(kLogInstalled, "[vac] hooks installed (steamclient GOT)");
-} // namespace
+} 
 
-// gui_log::write carries no __attribute__((format)), so a decrypted runtime
-// format string keeps -Wformat-security quiet while staying out of .rodata.
+
+
 template <std::size_t N>
 static void vac_log_fmt(const vac_str::Encrypted<N>& fmt)
 {
@@ -111,18 +111,18 @@ struct MapsTracker {
     FILE* fp;
     int fd;
     bool active;
-    // Read-hook state. `clean` holds judged-clean bytes awaiting delivery
-    // (short returns are legal for read(); the caller just calls again).
-    // `part` holds the current incomplete line fragment. Invariant: part
-    // never contains '\n' - a line is judged exactly once, whole.
+    
+    
+    
+    
     char clean[4352];
     std::size_t clean_len;
     std::size_t clean_pos;
     char part[4352];
     std::size_t part_len;
-    // Fgets-hook state. `line` accumulates fragments of the current line
-    // across small-buffer fgets calls; `pend` holds judged-clean output
-    // served back in size-1 slices.
+    
+    
+    
     char line[4352];
     std::size_t line_len;
     char pend[4352];
@@ -130,8 +130,8 @@ struct MapsTracker {
     std::size_t pend_pos;
 };
 
-// One judged line never exceeds these; anything longer is not maps-shaped
-// and falls back to atomic judging (documented at each site).
+
+
 constexpr std::size_t kCleanCap = sizeof(MapsTracker::clean);
 constexpr std::size_t kPartCap = sizeof(MapsTracker::part);
 constexpr std::size_t kLineCap = sizeof(MapsTracker::line);
@@ -142,18 +142,18 @@ MapsTracker g_maps_files[kMaxMapsFiles];
 int g_maps_count = 0;
 pthread_mutex_t g_maps_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// FILE* wrappers around spoofed cheat-file fds (created via fdopen in the
-// fopen hook). Tracked so the fclose hook can untrack the fd it implicitly
-// closes. Sized to integrity's kMaxFakeFiles.
+
+
+
 struct SpoofFp {
     FILE* fp;
     int fd;
 };
 SpoofFp g_spoof_fps[4];
 
-// Observability: VAC snooping us is an anomaly worth exactly one log line per
-// session per event (the log contract is anomaly-only). Counters stay
-// queryable via vac_hook_stats() for the in-game status page.
+
+
+
 unsigned long g_stat_maps_opens = 0;
 unsigned long g_stat_lines_filtered = 0;
 unsigned long g_stat_spoofs = 0;
@@ -174,8 +174,8 @@ static bool token_in_line(const char* token, std::size_t tlen, const char* data,
 
 static bool line_is_hidden(const char* data, std::size_t len) noexcept
 {
-    // Tokens are decrypted into stack buffers: the plaintext module name
-    // exists only transiently, never in .rodata.
+    
+    
     char module[32];
     char memfd[32];
     char fallback[32];
@@ -198,7 +198,7 @@ static bool is_maps_path(const char* path) noexcept
                     ::strstr(path, "/proc/self/mem"));
 }
 
-// All slot helpers require g_maps_mutex held.
+
 static int alloc_maps_slot() noexcept
 {
     if (g_maps_count >= kMaxMapsFiles)
@@ -274,10 +274,10 @@ static void** resolve_got_dynamic(const char* sym_name)
     return nullptr;
 }
 
-// ld.so may have already adjusted .dynamic d_ptr entries to absolute
-// addresses (glibc inside pressure-vessel containers does); other contexts
-// leave link-time vaddrs. If the value lands inside the module image, use
-// it as-is -- otherwise add the load base.
+
+
+
+
 static uintptr_t ns_adjust_ptr(void* base, uintptr_t v)
 {
     const uintptr_t b = (uintptr_t)base;
@@ -317,10 +317,10 @@ static void** find_got_entry(void* base, const char* sym_name)
         }
     }
 
-    // Walk the PLT relocation table directly -- no DT_HASH/DT_GNU_HASH dependency.
-    // steamclient.so dropped DT_HASH in the 2026-09-10 Steam client update, which
-    // broke the old hash-chain lookup and sent us into the stale hardcoded-offset
-    // fallback: two de-Xed text pages + clobbered code inside steamclient.
+    
+    
+    
+    
     if (!symtab || !strtab || !jmprel || !pltrelsz) return nullptr;
 
     const size_t entry_size = use_rela ? sizeof(Elf64_Rela) : sizeof(Elf64_Rel);
@@ -341,7 +341,7 @@ static void** find_got_entry(void* base, const char* sym_name)
 
     return nullptr;
 }
-} // anonymous namespace
+} 
 
 extern "C" {
 
@@ -350,9 +350,9 @@ FILE* vac_fopen_hook(const char* path, const char* mode)
 {
     if (!g_orig_fopen) return nullptr;
 
-    // Cheat-file opens (VAC hashing our file from disk) get the fake clean
-    // ELF on a memfd-backed fd, wrapped with fdopen so fread/fseek/ftell keep
-    // working on it. Fail closed: never hand out the real cheat file.
+    
+    
+    
     if (path && ::security::integrity::is_ready() &&
         ::security::integrity::is_cheat_path(path)) {
         const int sfd = ::security::integrity::open_spoofed_file(path, O_RDONLY, 0);
@@ -377,8 +377,8 @@ FILE* vac_fopen_hook(const char* path, const char* mode)
             ::security::integrity::close_spoofed_file(sfd);
             return nullptr;
         }
-        // Cheat path confirmed but no spoof fd (pool exhausted / memfd
-        // failed): fail closed rather than handing out the real file.
+        
+        
         return nullptr;
     }
 
@@ -393,9 +393,9 @@ FILE* vac_fopen_hook(const char* path, const char* mode)
             const bool first = !g_logged_first_open;
             if (first) g_logged_first_open = true;
             pthread_mutex_unlock(&g_maps_mutex);
-            // Proves the GOT hook actually intercepts steamclient's maps
-            // enumeration (which nominally goes through __wrap_fopen): if this
-            // line never appears, the hook is bypassed and maps hiding is off.
+            
+            
+            
             if (first) vac_log_fmt_arg(kLogMapsOpen, path);
         } else {
             pthread_mutex_unlock(&g_maps_mutex);
@@ -445,8 +445,8 @@ int vac_open_hook(const char* path, int flags, ...)
             if (first) vac_log_fmt_arg(kLogSpoofed, path ? path : "?");
             return spoofed_fd;
         }
-        // Cheat path confirmed but no spoof fd (pool exhausted / memfd
-        // failed): fail closed with ENOENT rather than the real file.
+        
+        
         if (path && ::security::integrity::is_cheat_path(path)) {
             errno = ENOENT;
             return -1;
@@ -476,9 +476,9 @@ int vac_openat_hook(int dirfd, const char* path, int flags, ...)
         va_end(args);
     }
 
-    // Modern glibc fopen() opens via openat, not open: without this hook the
-    // file-spoof above misses every fopen-issued open, and a maps enumeration
-    // issued as openat(AT_FDCWD, "/proc/self/maps") would bypass tracking.
+    
+    
+    
     if (::security::integrity::is_ready())
     {
         int spoofed_fd = ::security::integrity::open_spoofed_file(path, flags, mode);
@@ -491,8 +491,8 @@ int vac_openat_hook(int dirfd, const char* path, int flags, ...)
             if (first) vac_log_fmt_arg(kLogSpoofed, path ? path : "?");
             return spoofed_fd;
         }
-        // Cheat path confirmed but no spoof fd (pool exhausted / memfd
-        // failed): fail closed with ENOENT rather than the real file.
+        
+        
         if (path && ::security::integrity::is_cheat_path(path)) {
             errno = ENOENT;
             return -1;
@@ -515,12 +515,12 @@ char* vac_fgets_hook(char* buf, int size, FILE* fp)
     if (!g_orig_fgets) return nullptr;
     if (!buf || size < 2 || !fp) return g_orig_fgets(buf, size, fp);
 
-    // Small-buffer callers split one maps line across many fgets calls; a
-    // hide token straddling the split would never match if each fragment
-    // were judged alone (observed live with 53-byte reads: leak). So
-    // fragments are accumulated until the newline and the whole line is
-    // judged exactly once. Clean output is served back in size-1 slices,
-    // preserving fgets short-return semantics for small buffers.
+    
+    
+    
+    
+    
+    
     pthread_mutex_lock(&g_maps_mutex);
     int slot = find_maps_slot_by_fp(fp);
     if (slot < 0) {
@@ -531,7 +531,7 @@ char* vac_fgets_hook(char* buf, int size, FILE* fp)
     for (;;) {
         MapsTracker& t = g_maps_files[slot];
 
-        // 1. Serve pending clean output first.
+        
         if (t.pend_pos < t.pend_len) {
             std::size_t n = t.pend_len - t.pend_pos;
             if (n > static_cast<std::size_t>(size - 1))
@@ -547,7 +547,7 @@ char* vac_fgets_hook(char* buf, int size, FILE* fp)
             return buf;
         }
 
-        // 2. Accumulate one full line, skipping hidden ones entirely.
+        
         t.line_len = 0;
         bool eof = false;
         for (;;) {
@@ -560,24 +560,24 @@ char* vac_fgets_hook(char* buf, int size, FILE* fp)
             std::size_t n = ::strlen(frag);
             std::size_t room = (t.line_len < kLineCap) ? kLineCap - t.line_len : 0;
             if (n > room) {
-                // Pathological >4K line (never maps-shaped): judge the capped
-                // head atomically below; the rest is drained as continuation.
+                
+                
                 n = room;
                 if (n == 0) {
-                    t.line_len = kLineCap + 1; // overflow marker
+                    t.line_len = kLineCap + 1; 
                     break;
                 }
             }
             ::memcpy(t.line + t.line_len, frag, n);
             t.line_len += n;
             if (t.line_len > 0 && t.line[t.line_len - 1] == '\n')
-                break; // complete line (fgets keeps the newline)
+                break; 
             if (n < sizeof(frag) - 1)
-                break; // short fragment without newline: EOF-adjacent tail
+                break; 
         }
 
         if (t.line_len == 0 && eof) {
-            // True EOF, nothing pending: keep EOF semantics, free the slot.
+            
             free_maps_slot(slot);
             pthread_mutex_unlock(&g_maps_mutex);
             return nullptr;
@@ -595,34 +595,34 @@ char* vac_fgets_hook(char* buf, int size, FILE* fp)
             pthread_mutex_lock(&g_maps_mutex);
             if (!g_maps_files[slot].active || g_maps_files[slot].fp != fp) {
                 pthread_mutex_unlock(&g_maps_mutex);
-                return nullptr; // closed mid-read: fail closed
+                return nullptr; 
             }
             if (overlong) {
-                // Drain the rest of the over-long hidden line, then continue.
+                
                 char drain[1024];
                 while (g_orig_fgets(drain, sizeof(drain), fp) &&
                        ::strlen(drain) == sizeof(drain) - 1 &&
                        drain[sizeof(drain) - 2] != '\n') {
                 }
             }
-            continue; // next line
+            continue; 
         }
 
         if (overlong) {
-            // Over-long but clean: serve the capped head now; the remainder
-            // stays in the stream and is judged as continuation (documented
-            // fallback for non-maps-shaped input only).
+            
+            
+            
             ::memcpy(t.pend, t.line, kLineCap);
             t.pend_len = kLineCap;
             t.pend_pos = 0;
-            continue; // loop back to serve from pend
+            continue; 
         }
 
-        // Clean line (possibly an EOF tail without newline): stage + serve.
+        
         ::memcpy(t.pend, t.line, t.line_len);
         t.pend_len = t.line_len;
         t.pend_pos = 0;
-        // Loop back to the serve step (handles size < line uniformly).
+        
     }
 }
 
@@ -632,18 +632,18 @@ ssize_t vac_read_hook(int fd, void* buf, size_t count)
     if (!g_orig_read) return -1;
     if (!buf || count == 0) return g_orig_read(fd, buf, count);
 
-    // Spoofed cheat-file fds are memfd-backed: the kernel itself serves the
-    // fake content, so pass through and keep pread/lseek/mmap coherent
-    // (no userspace offset shadow to drift).
+    
+    
+    
     if (::security::integrity::should_spoof_fd(fd))
         return g_orig_read(fd, buf, count);
 
-    // Exact line filtering at ANY caller chunk size: judged-clean bytes wait
-    // in `clean` (short returns are legal for read()), while the current
-    // incomplete line accumulates in `part` and is judged exactly once,
-    // whole. A token split across read() boundaries can therefore never be
-    // judged half-seen (observed live with 37-byte reads: leak). 0 is
-    // returned only at true EOF - never to paper over an all-hidden chunk.
+    
+    
+    
+    
+    
+    
     pthread_mutex_lock(&g_maps_mutex);
     const int slot0 = find_maps_slot_by_fd(fd);
     if (slot0 < 0) {
@@ -659,11 +659,11 @@ ssize_t vac_read_hook(int fd, void* buf, size_t count)
         int slot = find_maps_slot_by_fd(fd);
         if (slot < 0) {
             pthread_mutex_unlock(&g_maps_mutex);
-            return 0; // closed mid-read: fail closed, emit nothing
+            return 0; 
         }
         MapsTracker& t = g_maps_files[slot];
 
-        // 1. Deliver pending clean bytes first.
+        
         if (t.clean_pos < t.clean_len) {
             std::size_t n = t.clean_len - t.clean_pos;
             if (n > count)
@@ -678,10 +678,10 @@ ssize_t vac_read_hook(int fd, void* buf, size_t count)
             return static_cast<ssize_t>(n);
         }
 
-        // 2. Accumulate the current line until newline, EOF, or cap.
+        
         bool eof = false;
         while (t.part_len < kPartCap) {
-            // Newline check first: part may already hold one from a big read.
+            
             bool has_nl = false;
             for (std::size_t i = 0; i < t.part_len; ++i) {
                 if (t.part[i] == '\n') {
@@ -697,7 +697,7 @@ ssize_t vac_read_hook(int fd, void* buf, size_t count)
             } while (n < 0 && errno == EINTR);
             if (n < 0) {
                 pthread_mutex_unlock(&g_maps_mutex);
-                return n; // nothing emitted yet: part preserved for retry
+                return n; 
             }
             if (n == 0) {
                 eof = true;
@@ -706,7 +706,7 @@ ssize_t vac_read_hook(int fd, void* buf, size_t count)
             t.part_len += static_cast<std::size_t>(n);
         }
 
-        // 3. Carve one line (through the first newline) or the EOF tail.
+        
         std::size_t line_end = t.part_len;
         bool complete = false;
         for (std::size_t i = 0; i < t.part_len; ++i) {
@@ -719,7 +719,7 @@ ssize_t vac_read_hook(int fd, void* buf, size_t count)
         const bool overlong = !complete && !eof && t.part_len >= kPartCap;
 
         if (t.part_len == 0 && eof) {
-            // True EOF, nothing pending: keep EOF semantics, free the slot.
+            
             free_maps_slot(slot);
             pthread_mutex_unlock(&g_maps_mutex);
             return 0;
@@ -733,15 +733,15 @@ ssize_t vac_read_hook(int fd, void* buf, size_t count)
         if (first) g_logged_first_filter = true;
 
         if (!hidden) {
-            // Stage the clean line (or capped head) for delivery.
+            
             const std::size_t stage = overlong ? kPartCap : (complete ? line_end : t.part_len);
             ::memcpy(t.clean, t.part, stage);
             t.clean_len = stage;
             t.clean_pos = 0;
         }
         if (complete || overlong || eof) {
-            // Consume the judged head; the remainder (next line's head, or
-            // an over-long line's continuation) stays for the next round.
+            
+            
             const std::size_t consumed = overlong ? kPartCap : (complete ? line_end : t.part_len);
             const std::size_t rest = t.part_len - consumed;
             if (rest)
@@ -750,7 +750,7 @@ ssize_t vac_read_hook(int fd, void* buf, size_t count)
         }
         pthread_mutex_unlock(&g_maps_mutex);
         if (first) vac_log_fmt(kLogFiltered);
-        // Loop back: deliver staged clean bytes, or read past a hidden line.
+        
     }
 }
 
@@ -778,9 +778,9 @@ int vac_fclose_hook(FILE* fp)
     if (!g_orig_fclose) return -1;
     if (!fp) return g_orig_fclose(fp);
 
-    // Without this, every tracked maps FILE* leaks its slot (fclose never
-    // reaches the close hook - it closes via libc internally), and the 9th
-    // maps open in a session goes untracked and leaks our module name.
+    
+    
+    
     pthread_mutex_lock(&g_maps_mutex);
     free_maps_slot(find_maps_slot_by_fp(fp));
     int spoof_fd = -1;
@@ -794,36 +794,36 @@ int vac_fclose_hook(FILE* fp)
     }
     pthread_mutex_unlock(&g_maps_mutex);
 
-    const int r = g_orig_fclose(fp); // also closes the underlying fd
+    const int r = g_orig_fclose(fp); 
     if (spoof_fd >= 0)
         ::security::integrity::forget_spoofed_fd(spoof_fd);
     return r;
 }
 
-// dl_iterate_phdr filter hook: steamclient's dl_iterate_phdr calls (VAC
-// enumerating loaded objects) never see our module - the entry whose base is
-// ours is dropped from the callback chain. This replaces the permanent
-// link_map splice, which left the loader map/counters desynced and asserted
-// the game dead on every audio capture device switch (_dl_close_worker
-// 'idx == nloaded', 2026-09-13 x3). The REAL map stays consistent 100% of the
-// time: no mutation, no dlcloses walking a broken list, evasion intact.
+
+
+
+
+
+
+
 struct PhdrFilterCtx {
     int (*real_cb)(struct dl_phdr_info*, size_t, void*);
     void* real_data;
     std::uintptr_t self_base;
 };
 
-// Self base cached at install time: dladdr() takes the loader lock, and the
-// hook runs INSIDE dl_iterate_phdr's own loader-lock window - a dladdr there
-// self-deadlocks (observed 2026-09-13: every spawn through Steam's socket
-// stalled with "no status report" while the hook was live).
+
+
+
+
 std::uintptr_t g_phdr_self_base = 0;
 
 static int vac_phdr_filter_cb(struct dl_phdr_info* info, size_t size, void* data)
 {
     const auto* ctx = static_cast<const PhdrFilterCtx*>(data);
     if (info && static_cast<std::uintptr_t>(info->dlpi_addr) == ctx->self_base)
-        return 0; // our entry: swallowed, the walk continues normally
+        return 0; 
     return ctx->real_cb(info, size, ctx->real_data);
 }
 
@@ -836,7 +836,7 @@ int vac_dl_iterate_hook(int (*callback)(struct dl_phdr_info*, size_t, void*), vo
     return g_orig_dl_iterate(&vac_phdr_filter_cb, &ctx);
 }
 
-} // extern "C"
+} 
 
 namespace
 {
@@ -855,22 +855,22 @@ static void patch_got(void** got, void* newval, GotBackup* backup)
 {
     if (!got) return;
 
-    // Save/restore the page's ACTUAL protection: the old code forced
-    // PROT_READ on restore, which permanently de-wrote an rw-p GOT page
-    // (later lazy PLT resolutions would SIGSEGV on the write) and merged
-    // adjacent VMAs - i.e. visibly changed the very maps layout VAC's
-    // range reporter sends home. Per-page restore keeps the layout
-    // bit-identical (the harness diffs maps before/after for exactly this).
-    //
-    // Exactly ONE page is touched: a GOT entry is one 8-byte aligned pointer
-    // and can never straddle a page boundary. The old 0x2000 span could run
-    // past a mapping end (ENOMEM: mprotect fails wholesale, the write then
-    // faults) - observed live when .got ended at a segment boundary.
-    // A single page containing a readable address always re-protects, so
-    // this cannot fail that way. Page size is 4096: x86_64-only project.
-    // NOTE: the mask MUST stay uintptr_t-wide (~(uintptr_t)0xFFF): a 32-bit
-    // ~0xFFFu truncates the address to 32 bits (observed: page 0x43034000
-    // for a 0x7f.. got -> ENOMEM on every patch -> silent no-op hooks).
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     const uintptr_t page = (uintptr_t)got & ~(uintptr_t)0xFFFu;
     int saved = PROT_READ;
     FILE* maps = ::fopen("/proc/self/maps", "r");
@@ -894,7 +894,7 @@ static void patch_got(void** got, void* newval, GotBackup* backup)
     }
 
     if (mprotect((void*)page, 0x1000, PROT_READ | PROT_WRITE) != 0)
-        return; // fail closed: never patch what we cannot write safely
+        return; 
 
     backup->entry = got;
     backup->original = *got;
@@ -917,25 +917,25 @@ static void restore_got(GotBackup* backup)
     backup->valid = false;
 }
 
-// ---- link_map hiding ----
-//
-// Removes our loader node so in-process enumeration (dl_iterate_phdr,
-// dlopen-NOLOAD-by-name service modules) no longer lists the module. The
-// mapping itself stays (that layer is filtered separately via maps hooks).
-//
-// Safety case (audited 2026-09-11):
-// - CrashLogger enumerates via /proc/self/maps, not link_map: unaffected.
-// - RTLD_DEFAULT lookups target libc symbols: unaffected by our absence.
-// - LuaJIT unwinding uses the libgcc frame registry (__register_frame),
-//   which is independent of link_map and persists until dlclose: unaffected.
-// - l_moduleBase/l_patternScan by OUR name start returning nil: accepted
-//   (no shipped script depends on it; keeps scripts from hard-depending).
-// - Forward-chain consistency: splice and restore only ever rewrite l_next
-//   forward links around an untouched self node, so a concurrent
-//   dl_iterate_phdr (forward walk) always sees a valid chain. Same risk
-//   posture as the GOT patching.
-// - install runs under the loader lock (constructor time); uninstall runs
-//   on the menu unload path before SelfUnload's dladdr/RTLD_NOLOAD/dlclose.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 link_map* g_lm_self = nullptr;
 link_map* g_lm_prev = nullptr;
 link_map* g_lm_next = nullptr;
@@ -943,21 +943,21 @@ bool g_link_hidden = false;
 bool g_deferred_done = false;
 std::atomic<bool> g_deferred_attempted{false};
 
-// REVERTED 2026-09-11: production self-hide disabled while a deterministic
-// inject-time freeze (log ends at "tryInstall: attempt begin", no fault, no
-// core, no crash log) is bisected - it correlated with this feature landing.
-// RE-ENABLED deferred 2026-09-11: the splice itself is unchanged, but it now
-// runs from apply_deferred_link_hide() on the present path (loader lock long
-// released) instead of inside the constructor's dlopen. See header.
-//
-// DISABLED AGAIN 2026-09-13 (diagnostic): three crashes, all exactly at audio
-// capture device switches, all `_dl_close_worker: Assertion 'idx == nloaded'`
-// — a loader map/counter desync. Our spliced-out node is the only loader-level
-// anomaly in the process, and glibc's _dl_nloaded still counts the node we
-// removed from the list. The SteamModule reverted this same feature for the
-// same class of bug on 09-11. Test session: if crashes stop with the hide off,
-// the hide design must become hide-only-during-dl_iterate_phdr (hook the call,
-// splice, delegate, restore) instead of a permanent splice.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 constexpr bool kEnableLinkHide = false;
 
 VAC_XSTR(kLogLinkHide, "[vac] link_map node unlinked");
@@ -990,8 +990,8 @@ static bool splice_out(link_map* self, link_map* head) noexcept
     return true;
 }
 
-// Self-locate via our own function address: exact by construction (no other
-// module can contain it). Refuses the main executable (head of the chain).
+
+
 static bool hide_self() noexcept
 {
     Dl_info info{};
@@ -1006,7 +1006,7 @@ static bool hide_self() noexcept
     return false;
 }
 
-} // anonymous namespace
+} 
 
 namespace security::regions
 {
@@ -1059,10 +1059,10 @@ bool install_vac_hook()
     void** close_got = g_orig_close ? resolve_got_dynamic("close") : nullptr;
     void** fclose_got = g_orig_fclose ? resolve_got_dynamic("fclose") : nullptr;
 
-    // No hardcoded-offset fallback: after a steamclient.so update those stale
-    // offsets land inside .text and patch_got de-Xes 2 text pages + clobbers
-    // code (the 2026-09-10 SEGV inside steamclient). If GOT resolution fails,
-    // skip the hook -- a failed hide is never a crash.
+    
+    
+    
+    
 
     patch_got(fopen_got, (void*)vac_fopen_hook, &g_fopen_backup);
     patch_got(fgets_got, (void*)vac_fgets_hook, &g_fgets_backup);
@@ -1083,11 +1083,11 @@ bool install_vac_hook()
         patch_got(fclose_got, (void*)vac_fclose_hook, &g_fclose_backup);
     }
     if (g_orig_dl_iterate) {
-        // The dl_iterate_phdr filter is the SAFE link-hide: VAC's object
-        // enumerations never see us, and the loader map itself is never
-        // mutated - dlcloses (audio capture device switches included) walk a
-        // fully consistent map. (The permanent splice asserted the game dead
-        // three times on 2026-09-13.)
+        
+        
+        
+        
+        
         Dl_info self{};
         if (::dladdr(reinterpret_cast<const void*>(&vac_dl_iterate_hook), &self) != 0 && self.dli_fbase)
             g_phdr_self_base = reinterpret_cast<std::uintptr_t>(self.dli_fbase);
@@ -1097,9 +1097,9 @@ bool install_vac_hook()
 
     ::security::integrity::initialize();
 
-    // NOTE: no link_map work here anymore - apply_deferred_link_hide() (Vulkan
-    // present path) handles it once the loader lock is released. Splicing
-    // inside this constructor froze the game (2026-09-11).
+    
+    
+    
     g_deferred_done = false;
     g_deferred_attempted.store(false, std::memory_order_relaxed);
 
@@ -1114,9 +1114,9 @@ void uninstall_vac_hook()
 {
     pthread_mutex_lock(&g_mutex);
 
-    // First: re-link our node, before anything else. The SelfUnload
-    // dladdr/RTLD_NOLOAD/dlclose chain and any later dlopen expect a
-    // consistent loader view again.
+    
+    
+    
     const bool was_hidden = g_link_hidden;
     link_restore();
 
@@ -1142,7 +1142,7 @@ bool link_hide_by_substr(const char* substr) noexcept
     if (!substr || !*substr || g_link_hidden) return false;
     link_map* head = link_head();
     if (!head) return false;
-    // Skip head (main executable) by construction: only named DSOs qualify.
+    
     for (link_map* lm = head->l_next; lm; lm = lm->l_next) {
         if (lm->l_name && ::strstr(lm->l_name, substr))
             return splice_out(lm, head);
@@ -1153,8 +1153,8 @@ bool link_hide_by_substr(const char* substr) noexcept
 void link_restore() noexcept
 {
     if (!g_link_hidden || !g_lm_self || !g_lm_prev) return;
-    // Only re-link if nobody disturbed the splice point meanwhile; if it
-    // moved, stay hidden (fail safe) - unload still works via fname lookup.
+    
+    
     if (g_lm_prev->l_next != g_lm_next) return;
     if (g_lm_next && g_lm_next->l_prev != g_lm_prev) return;
     g_lm_prev->l_next = g_lm_self;
@@ -1167,10 +1167,10 @@ bool link_is_hidden() noexcept
     return g_link_hidden;
 }
 
-// Deferred one-shot, called from hkQueuePresentKHR (see VulkanHook.cpp):
-// first present happens long after our dlopen returned, so no loader lock
-// is held here - unlike the constructor, where the splice froze the game.
-// Cost after the first call: one relaxed atomic load.
+
+
+
+
 void apply_deferred_link_hide() noexcept
 {
     if (g_deferred_attempted.load(std::memory_order_relaxed))
@@ -1178,7 +1178,7 @@ void apply_deferred_link_hide() noexcept
     pthread_mutex_lock(&g_mutex);
     if (!g_initialized || g_deferred_done) {
         pthread_mutex_unlock(&g_mutex);
-        return; // not installed (yet): retry on a later present
+        return; 
     }
     g_deferred_done = true;
     g_deferred_attempted.store(true, std::memory_order_relaxed);
@@ -1187,9 +1187,9 @@ void apply_deferred_link_hide() noexcept
 
     if (already || !kEnableLinkHide)
         return;
-    // Attempt/result pair is deliberate debug scaffolding for the 2026-09-11
-    // freeze: if the log ever ends at "attempt" again, the splice itself is
-    // guilty; if "attempt" never appears, the present path never ran.
+    
+    
+    
     vac_log_fmt(kLogLinkAttempt);
     if (hide_self())
         vac_log_fmt(kLogLinkHide);
@@ -1208,5 +1208,5 @@ VacHookStats vac_hook_stats() noexcept
     return out;
 }
 
-} // namespace fva::hooks
+} 
 

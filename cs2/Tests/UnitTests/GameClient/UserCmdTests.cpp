@@ -4,11 +4,11 @@
 
 #include <GameClient/UserCmd.h>
 
-// The random_seed accessors on the command wrapper, against real wrapper-shaped memory: a base
-// message pointer at kBaseMessageOffset(64) plus the base-message has-bits word at +16. These
-// tests pin the two behaviours the wire depends on - an unset seed reads back as EMPTY (not zero,
-// which is a legitimate seed), and every write marks its has-bit, because unmarked fields simply
-// do not serialize (the lesson UserCmd's own setFloatField comment carries).
+
+
+
+
+
 
 namespace {
 
@@ -32,7 +32,7 @@ struct FakeCommand {
     }
 };
 
-} // namespace
+} 
 
 TEST(UserCmdRandomSeedTest, UnsetSeedReadsBackEmptyNotZero)
 {
@@ -79,11 +79,11 @@ TEST(UserCmdRandomSeedTest, NegativeSeedsRoundTripBitExact)
 
 TEST(UserCmdRandomSeedTest, MissingBaseMessageIsANoOp)
 {
-    alignas(8) std::byte empty[128]{}; // >= kBaseMessageOffset(64)+8 so the pointer slot itself is real memory
+    alignas(8) std::byte empty[128]{}; 
     const UserCmd userCmd{reinterpret_cast<cs2::CUserCmd*>(empty)};
     EXPECT_FALSE(static_cast<bool>(userCmd));
 
-    // Must not write through any garbage-pointer arithmetic path.
+    
     userCmd.setRandomSeed(7);
     EXPECT_FALSE(userCmd.randomSeed().hasValue());
 }

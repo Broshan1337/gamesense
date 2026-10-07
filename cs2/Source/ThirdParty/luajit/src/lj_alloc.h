@@ -1,7 +1,4 @@
-/*
-** Bundled memory allocator.
-** Donated to the public domain.
-*/
+
 
 #ifndef _LJ_ALLOC_H
 #define _LJ_ALLOC_H

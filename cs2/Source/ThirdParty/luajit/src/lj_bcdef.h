@@ -1,4 +1,4 @@
-/* This is a generated file. DO NOT EDIT! */
+
 
 LJ_DATADEF const uint16_t lj_bc_ofs[] = {
 0,

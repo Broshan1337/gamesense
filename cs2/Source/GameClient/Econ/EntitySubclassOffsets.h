@@ -5,9 +5,9 @@
 #include <CS2/Classes/Entities/C_BaseEntity.h>
 #include <Utils/FieldOffset.h>
 
-// Resolved once (via SchemaSystem) and cached for the lifetime of the process. m_nSubclassID
-// is what the engine resolves a weapon's specific "subclass" (e.g. which knife type) from -
-// see BaseWeapon::setSubclassID() and the knife changer experiment in SkinChanger.h.
+
+
+
 struct EntitySubclassOffsets {
     explicit EntitySubclassOffsets(auto&& schemaSystem) noexcept
         : subclassID{resolve(schemaSystem, "m_nSubclassID")}

@@ -59,8 +59,8 @@ public:
         return {getSection(".rodata"), getSection(".data.rel.ro")};
     }
 
-    // String literals ("FirstpersonLegsPrepass") live in the mergeable string section, which is
-    // NOT part of .rodata - scanning .rodata alone finds nothing.
+    
+    
     [[nodiscard]] MemorySection getStringLiteralsSection() const noexcept
     {
         return getSection(".rodata.str1.1");
@@ -89,11 +89,11 @@ private:
 
                             base = (void*)(linkMap->l_addr + shdr->sh_addr);
                             size = shdr->sh_size;
-                            // Cleanup is done once, below, on both the found and not-found
-                            // paths. Releasing here as well used to double-munmap the same
-                            // range and, worse, double-close the fd - if anything else in the
-                            // process reused that descriptor number in between, the second
-                            // close() would silently reap an unrelated file.
+                            
+                            
+                            
+                            
+                            
                             break;
                         }
                         LinuxPlatformApi::munmap(map, st.st_size);

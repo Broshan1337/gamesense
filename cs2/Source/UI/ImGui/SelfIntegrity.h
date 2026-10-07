@@ -9,21 +9,21 @@
 #include <UI/ImGui/GuiLog.h>
 #include <Utils/ObfAnnotations.h>
 
-// Self-integrity watchdog (present thread, every ~15 s - see GUI::render).
-//
-// Two tamper signals, both log-only (gui.log is anomaly-only: a healthy session never
-// writes, so any line here IS the alert):
-//  1. Own .text checksum drift. Baseline is established on the FIRST present frame - by
-//     then every init-time patch (vtables, GOTs, cvar force-writes) has settled, and the
-//     injector (memfd or gdb) has already detached: dlopen returned before any render.
-//     A later drift means someone patched or breakpointed (0xCC) our code in memory.
-//  2. A tracer attached to the process (TracerPid != 0) while running - someone debugging
-//     the module live. A tracer present during module INIT (the injector itself) never
-//     reaches this check because the present hook does not run until after it detached.
-//
-// Deliberately NOT a hard kill/exit: the module runs inside a live game process (see the
-// map-transition crash history) and a defensive self-destruct is a far worse failure mode
-// than a logged anomaly.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 namespace self_integrity
 {
 
@@ -42,9 +42,9 @@ struct TextRange {
     return hash;
 }
 
-// Executable PT_LOAD range of the module that owns `landmark` (a pointer into our own
-// code). dl_iterate_phdr here is OUR call - the VAC-hardening GOT hook filters only
-// steamclient's calls, not ours, and our link_map node stays intact by design.
+
+
+
 [[nodiscard]] inline NS_OBF_FLATTEN TextRange ownTextRange(const void* landmark) noexcept
 {
     struct Ctx {
@@ -62,7 +62,7 @@ struct TextRange {
             const std::uintptr_t end = start + phdr.p_memsz;
             if (c->landmarkAddr < start || c->landmarkAddr >= end)
                 continue;
-            // landmark module found: return its exec segment
+            
             for (int j = 0; j < info->dlpi_phnum; ++j) {
                 const auto& p = info->dlpi_phdr[j];
                 if (p.p_type == PT_LOAD && (p.p_flags & PF_X) != 0) {
@@ -80,7 +80,7 @@ struct TextRange {
 
 [[nodiscard]] inline NS_OBF_FLATTEN int readTracerPid() noexcept
 {
-    const int fd = LinuxPlatformApi::open("/proc/self/status", 0 /* O_RDONLY */);
+    const int fd = LinuxPlatformApi::open("/proc/self/status", 0 );
     if (fd < 0)
         return -1;
     char buf[2048];
@@ -104,8 +104,8 @@ struct TextRange {
     return -1;
 }
 
-// Call every frame from the present thread; internally throttled. Establishes the baseline
-// on the first call, then re-checks.
+
+
 inline NS_OBF_FLATTEN void tick() noexcept
 {
     static std::uint64_t baselineHash{0};
@@ -128,18 +128,18 @@ inline NS_OBF_FLATTEN void tick() noexcept
 
     if (baselineHash == 0) {
         baselineHash = hash;
-        // Publish a liveness/range report for the LOADER's external watchdog (hardening
-        // 2026-09-24): the loader derives the authoritative exec range itself from the
-        // target's maps and keeps ITS OWN baseline hash (VMP'd loader memory) - an in-process
-        // attacker cannot rewrite either. This file is the module's "integrity tick is alive"
-        // signal (its presence is required by the watchdog) and a range cross-check: a range
-        // disagreement between here and maps = someone tampered with the file -> logged by
-        // the loader, never fatal.
+        
+        
+        
+        
+        
+        
+        
         {
             char path[192];
             if (ns_paths::joinFormat(path, sizeof(path), "ns_module_integrity", "_%d",
                     LinuxPlatformApi::processId())) {
-                if (const int fd = LinuxPlatformApi::open(path, 0x41 /* O_WRONLY|O_CREAT */, 0600); fd >= 0) {
+                if (const int fd = LinuxPlatformApi::open(path, 0x41 , 0600); fd >= 0) {
                     char line[160];
                     const int len = std::snprintf(line, sizeof(line),
                         "NSINT01 %d %lx %zx %llx\n", LinuxPlatformApi::processId(),
@@ -165,4 +165,4 @@ inline NS_OBF_FLATTEN void tick() noexcept
     }
 }
 
-} // namespace self_integrity
+} 

@@ -1,7 +1,4 @@
-/*
-** Bit manipulation library.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #define lib_bit_c
 #define LUA_LIB
@@ -24,7 +21,7 @@
 #include "lj_ff.h"
 #include "lj_lib.h"
 
-/* ------------------------------------------------------------------------ */
+
 
 #define LJLIB_MODULE_bit
 
@@ -140,7 +137,7 @@ LJLIB_ASM(bit_band)		LJLIB_REC(bit_nary IR_BAND)
 LJLIB_ASM_(bit_bor)		LJLIB_REC(bit_nary IR_BOR)
 LJLIB_ASM_(bit_bxor)		LJLIB_REC(bit_nary IR_BXOR)
 
-/* ------------------------------------------------------------------------ */
+
 
 LJLIB_CF(bit_tohex)		LJLIB_REC(.)
 {
@@ -169,7 +166,7 @@ LJLIB_CF(bit_tohex)		LJLIB_REC(.)
   return 1;
 }
 
-/* ------------------------------------------------------------------------ */
+
 
 #include "lj_libdef.h"
 

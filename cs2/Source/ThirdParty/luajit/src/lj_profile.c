@@ -1,7 +1,4 @@
-/*
-** Low-overhead profiling.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #define lj_profile_c
 #define LUA_CORE
@@ -54,45 +51,40 @@ typedef unsigned int (WINAPI *WMM_TPFUNC)(unsigned int);
 
 #endif
 
-/* Profiler state. */
+
 typedef struct ProfileState {
-  global_State *g;		/* VM state that started the profiler. */
-  luaJIT_profile_callback cb;	/* Profiler callback. */
-  void *data;			/* Profiler callback data. */
-  SBuf sb;			/* String buffer for stack dumps. */
-  int interval;			/* Sample interval in milliseconds. */
-  int samples;			/* Number of samples for next callback. */
-  int vmstate;			/* VM state when profile timer triggered. */
+  global_State *g;		
+  luaJIT_profile_callback cb;	
+  void *data;			
+  SBuf sb;			
+  int interval;			
+  int samples;			
+  int vmstate;			
 #if LJ_PROFILE_SIGPROF
-  struct sigaction oldsa;	/* Previous SIGPROF state. */
+  struct sigaction oldsa;	
 #elif LJ_PROFILE_PTHREAD
-  pthread_mutex_t lock;		/* g->hookmask update lock. */
-  pthread_t thread;		/* Timer thread. */
-  int abort;			/* Abort timer thread. */
+  pthread_mutex_t lock;		
+  pthread_t thread;		
+  int abort;			
 #elif LJ_PROFILE_WTHREAD
 #if LJ_TARGET_WINDOWS
-  HINSTANCE wmm;		/* WinMM library handle. */
-  WMM_TPFUNC wmm_tbp;		/* WinMM timeBeginPeriod function. */
-  WMM_TPFUNC wmm_tep;		/* WinMM timeEndPeriod function. */
+  HINSTANCE wmm;		
+  WMM_TPFUNC wmm_tbp;		
+  WMM_TPFUNC wmm_tep;		
 #endif
-  CRITICAL_SECTION lock;	/* g->hookmask update lock. */
-  HANDLE thread;		/* Timer thread. */
-  int abort;			/* Abort timer thread. */
+  CRITICAL_SECTION lock;	
+  HANDLE thread;		
+  int abort;			
 #endif
 } ProfileState;
 
-/* Sadly, we have to use a static profiler state.
-**
-** The SIGPROF variant needs a static pointer to the global state, anyway.
-** And it would be hard to extend for multiple threads. You can still use
-** multiple VMs in multiple threads, but only profile one at a time.
-*/
+
 static ProfileState profile_state;
 
-/* Default sample interval in milliseconds. */
+
 #define LJ_PROFILE_INTERVAL_DEFAULT	10
 
-/* -- Profiler/hook interaction ------------------------------------------- */
+
 
 #if !LJ_PROFILE_SIGPROF
 void LJ_FASTCALL lj_profile_hook_enter(global_State *g)
@@ -137,9 +129,9 @@ void lj_profile_unlock(void)
 }
 #endif
 
-/* -- Profile callbacks --------------------------------------------------- */
 
-/* Callback from profile hook (HOOK_PROFILE already cleared). */
+
+
 void LJ_FASTCALL lj_profile_interpreter(lua_State *L)
 {
   ProfileState *ps = &profile_state;
@@ -153,7 +145,7 @@ void LJ_FASTCALL lj_profile_interpreter(lua_State *L)
     g->hookmask = HOOK_VMEVENT;
     lj_dispatch_update(g, 1);
     profile_unlock(ps);
-    ps->cb(ps->data, L, samples, ps->vmstate);  /* Invoke user callback. */
+    ps->cb(ps->data, L, samples, ps->vmstate);  
     profile_lock(ps);
     mask |= (g->hookmask & HOOK_PROFILE);
   }
@@ -162,15 +154,15 @@ void LJ_FASTCALL lj_profile_interpreter(lua_State *L)
   profile_unlock(ps);
 }
 
-/* Trigger profile hook. Asynchronous call from OS-specific profile timer. */
+
 static void profile_trigger(ProfileState *ps)
 {
   global_State *g = ps->g;
   uint8_t mask;
   profile_lock(ps);
-  ps->samples++;  /* Always increment number of samples. */
+  ps->samples++;  
   mask = g->hookmask;
-  if (!(mask & (HOOK_PROFILE|HOOK_VMEVENT|HOOK_GC))) {  /* Set profile hook. */
+  if (!(mask & (HOOK_PROFILE|HOOK_VMEVENT|HOOK_GC))) {  
     int st = g->vmstate;
     ps->vmstate = st >= 0 ? 'N' :
 		  st == ~LJ_VMST_INTERP ? 'I' :
@@ -182,18 +174,18 @@ static void profile_trigger(ProfileState *ps)
   profile_unlock(ps);
 }
 
-/* -- OS-specific profile timer handling ---------------------------------- */
+
 
 #if LJ_PROFILE_SIGPROF
 
-/* SIGPROF handler. */
+
 static void profile_signal(int sig)
 {
   UNUSED(sig);
   profile_trigger(&profile_state);
 }
 
-/* Start profiling timer. */
+
 static void profile_timer_start(ProfileState *ps)
 {
   int interval = ps->interval;
@@ -212,7 +204,7 @@ static void profile_timer_start(ProfileState *ps)
   sigaction(SIGPROF, &sa, &ps->oldsa);
 }
 
-/* Stop profiling timer. */
+
 static void profile_timer_stop(ProfileState *ps)
 {
   struct itimerval tm;
@@ -224,7 +216,7 @@ static void profile_timer_stop(ProfileState *ps)
 
 #elif LJ_PROFILE_PTHREAD
 
-/* POSIX timer thread. */
+
 static void *profile_thread(ProfileState *ps)
 {
   int interval = ps->interval;
@@ -245,7 +237,7 @@ static void *profile_thread(ProfileState *ps)
   return NULL;
 }
 
-/* Start profiling timer thread. */
+
 static void profile_timer_start(ProfileState *ps)
 {
   pthread_mutex_init(&ps->lock, 0);
@@ -253,7 +245,7 @@ static void profile_timer_start(ProfileState *ps)
   pthread_create(&ps->thread, NULL, (void *(*)(void *))profile_thread, ps);
 }
 
-/* Stop profiling timer thread. */
+
 static void profile_timer_stop(ProfileState *ps)
 {
   ps->abort = 1;
@@ -263,7 +255,7 @@ static void profile_timer_stop(ProfileState *ps)
 
 #elif LJ_PROFILE_WTHREAD
 
-/* Windows timer thread. */
+
 static DWORD WINAPI profile_thread(void *psx)
 {
   ProfileState *ps = (ProfileState *)psx;
@@ -282,11 +274,11 @@ static DWORD WINAPI profile_thread(void *psx)
   return 0;
 }
 
-/* Start profiling timer thread. */
+
 static void profile_timer_start(ProfileState *ps)
 {
 #if LJ_TARGET_WINDOWS && !LJ_TARGET_UWP
-  if (!ps->wmm) {  /* Load WinMM library on-demand. */
+  if (!ps->wmm) {  
     ps->wmm = LJ_WIN_LOADLIBA("winmm.dll");
     if (ps->wmm) {
       ps->wmm_tbp = (WMM_TPFUNC)GetProcAddress(ps->wmm, "timeBeginPeriod");
@@ -303,7 +295,7 @@ static void profile_timer_start(ProfileState *ps)
   ps->thread = CreateThread(NULL, 0, profile_thread, ps, 0, NULL);
 }
 
-/* Stop profiling timer thread. */
+
 static void profile_timer_stop(ProfileState *ps)
 {
   ps->abort = 1;
@@ -313,9 +305,9 @@ static void profile_timer_stop(ProfileState *ps)
 
 #endif
 
-/* -- Public profiling API ------------------------------------------------ */
 
-/* Start profiling. */
+
+
 LUA_API void luaJIT_profile_start(lua_State *L, const char *mode,
 				  luaJIT_profile_callback cb, void *data)
 {
@@ -336,13 +328,13 @@ LUA_API void luaJIT_profile_start(lua_State *L, const char *mode,
       lj_trace_flushall(L);
       break;
 #endif
-    default:  /* Ignore unknown mode chars. */
+    default:  
       break;
     }
   }
   if (ps->g) {
     luaJIT_profile_stop(L);
-    if (ps->g) return;  /* Profiler in use by another VM. */
+    if (ps->g) return;  
   }
   ps->g = G(L);
   ps->interval = interval;
@@ -353,12 +345,12 @@ LUA_API void luaJIT_profile_start(lua_State *L, const char *mode,
   profile_timer_start(ps);
 }
 
-/* Stop profiling. */
+
 LUA_API void luaJIT_profile_stop(lua_State *L)
 {
   ProfileState *ps = &profile_state;
   global_State *g = ps->g;
-  if (G(L) == g) {  /* Only stop profiler if started by this VM. */
+  if (G(L) == g) {  
     ps->g = NULL;
     profile_timer_stop(ps);
     g->hookmask &= ~HOOK_PROFILE;
@@ -372,7 +364,7 @@ LUA_API void luaJIT_profile_stop(lua_State *L)
   }
 }
 
-/* Return a compact stack dump. */
+
 LUA_API const char *luaJIT_profile_dumpstack(lua_State *L, const char *fmt,
 					     int depth, size_t *len)
 {

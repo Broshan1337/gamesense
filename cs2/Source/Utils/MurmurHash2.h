@@ -2,12 +2,12 @@
 
 #include <cstdint>
 
-// MurmurHash2, lowercasing each byte as it goes - Source 2's own string-hashing convention.
-// Portable, no OS dependency.
-//
-// Lives here rather than inside a feature because two unrelated subsystems need the exact same
-// hash: the skin changer's subclass token (C_BaseEntity::m_nSubclassID) and CUtlStringToken,
-// which the engine uses as the key type for game-event fields. Both use seed 0x31415926.
+
+
+
+
+
+
 [[nodiscard]] inline std::uint32_t murmurHash2Lower(const char* str, int len, std::uint32_t seed) noexcept
 {
     constexpr std::uint32_t m = 0x5bd1e995;

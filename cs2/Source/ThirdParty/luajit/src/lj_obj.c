@@ -1,25 +1,22 @@
-/*
-** Miscellaneous object handling.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #define lj_obj_c
 #define LUA_CORE
 
 #include "lj_obj.h"
 
-/* Object type names. */
-LJ_DATADEF const char *const lj_obj_typename[] = {  /* ORDER LUA_T */
+
+LJ_DATADEF const char *const lj_obj_typename[] = {  
   "no value", "nil", "boolean", "userdata", "number", "string",
   "table", "function", "userdata", "thread", "proto", "cdata"
 };
 
-LJ_DATADEF const char *const lj_obj_itypename[] = {  /* ORDER LJ_T */
+LJ_DATADEF const char *const lj_obj_itypename[] = {  
   "nil", "boolean", "boolean", "userdata", "string", "upval", "thread",
   "proto", "function", "trace", "cdata", "table", "userdata", "number"
 };
 
-/* Compare two objects without calling metamethods. */
+
 int LJ_FASTCALL lj_obj_equal(cTValue *o1, cTValue *o2)
 {
   if (itype(o1) == itype(o2)) {
@@ -33,7 +30,7 @@ int LJ_FASTCALL lj_obj_equal(cTValue *o1, cTValue *o2)
   return numberVnum(o1) == numberVnum(o2);
 }
 
-/* Return pointer to object or its object data. */
+
 const void * LJ_FASTCALL lj_obj_ptr(global_State *g, cTValue *o)
 {
   UNUSED(g);

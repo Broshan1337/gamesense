@@ -1,10 +1,4 @@
-/*
-** I/O library.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-**
-** Major portions taken verbatim or adapted from the Lua interpreter.
-** Copyright (C) 1994-2011 Lua.org, PUC-Rio. See Copyright Notice in lua.h
-*/
+
 
 #include <errno.h>
 #include <stdio.h>
@@ -27,23 +21,23 @@
 #include "lj_lib.h"
 #include "lj_strscan.h"
 
-/* Userdata payload for I/O file. */
+
 typedef struct IOFileUD {
-  FILE *fp;		/* File handle. */
-  uint32_t type;	/* File type. */
+  FILE *fp;		
+  uint32_t type;	
 } IOFileUD;
 
-#define IOFILE_TYPE_FILE	0	/* Regular file. */
-#define IOFILE_TYPE_PIPE	1	/* Pipe. */
-#define IOFILE_TYPE_STDF	2	/* Standard file handle. */
+#define IOFILE_TYPE_FILE	0	
+#define IOFILE_TYPE_PIPE	1	
+#define IOFILE_TYPE_STDF	2	
 #define IOFILE_TYPE_MASK	3
 
-#define IOFILE_FLAG_CLOSE	4	/* Close after io.lines() iterator. */
+#define IOFILE_FLAG_CLOSE	4	
 
 #define IOSTDF_UD(L, id)	(&gcref(G(L)->gcroot[(id)])->ud)
 #define IOSTDF_IOF(L, id)	((IOFileUD *)uddata(IOSTDF_UD(L, (id))))
 
-/* -- Open/close helpers -------------------------------------------------- */
+
 
 static IOFileUD *io_tofilep(lua_State *L)
 {
@@ -74,7 +68,7 @@ static IOFileUD *io_file_new(lua_State *L)
   IOFileUD *iof = (IOFileUD *)lua_newuserdata(L, sizeof(IOFileUD));
   GCudata *ud = udataV(L->top-1);
   ud->udtype = UDTYPE_IO_FILE;
-  /* NOBARRIER: The GCudata is new (marked white). */
+  
   setgcrefr(ud->metatable, curr_func(L)->c.env);
   iof->fp = NULL;
   iof->type = IOFILE_TYPE_FILE;
@@ -120,7 +114,7 @@ static int io_file_close(lua_State *L, IOFileUD *iof)
   return luaL_fileresult(L, ok, NULL);
 }
 
-/* -- Read/write helpers -------------------------------------------------- */
+
 
 static int io_file_readnum(lua_State *L, FILE *fp)
 {
@@ -196,9 +190,9 @@ static int io_file_read(lua_State *L, IOFileUD *iof, int start)
   clearerr(fp);
   if (nargs == 0) {
     ok = io_file_readline(L, fp, 1);
-    n = start+1;  /* Return 1 result. */
+    n = start+1;  
   } else {
-    /* The results plus the buffers go on top of the args. */
+    
     luaL_checkstack(L, nargs+LUA_MINSTACK, "too many arguments");
     ok = 1;
     for (n = start; nargs-- && ok; n++) {
@@ -223,7 +217,7 @@ static int io_file_read(lua_State *L, IOFileUD *iof, int start)
   if (ferror(fp))
     return luaL_fileresult(L, 0, NULL);
   if (!ok)
-    setnilV(L->top-1);  /* Replace last result with nil. */
+    setnilV(L->top-1);  
   return n - start;
 }
 
@@ -256,7 +250,7 @@ static int io_file_iter(lua_State *L)
   if (iof->fp == NULL)
     lj_err_caller(L, LJ_ERR_IOCLFL);
   L->top = L->base;
-  if (n) {  /* Copy upvalues with options to stack. */
+  if (n) {  
     lj_state_checkstack(L, (MSize)n);
     memcpy(L->top, &fn->c.upvalue[1], n*sizeof(TValue));
     L->top += n;
@@ -265,7 +259,7 @@ static int io_file_iter(lua_State *L)
   if (ferror(iof->fp))
     lj_err_callermsg(L, strVdata(L->top-2));
   if (tvisnil(L->base) && (iof->type & IOFILE_FLAG_CLOSE)) {
-    io_file_close(L, iof);  /* Return values are ignored. */
+    io_file_close(L, iof);  
     return 0;
   }
   return n;
@@ -280,7 +274,7 @@ static int io_file_lines(lua_State *L)
   return 1;
 }
 
-/* -- I/O file methods ---------------------------------------------------- */
+
 
 #define LJLIB_MODULE_io_method
 
@@ -313,7 +307,7 @@ LJLIB_CF(io_method_flush)		LJLIB_REC(io_flush 0)
 }
 
 #if LJ_32 && defined(__ANDROID__) && __ANDROID_API__ < 24
-/* The Android NDK is such an unmatched marvel of engineering. */
+
 extern int fseeko32(FILE *, long int, int) __asm__("fseeko");
 extern long int ftello32(FILE *) __asm__("ftello");
 #define fseeko(fp, pos, whence)	(fseeko32((fp), (pos), (whence)))
@@ -403,11 +397,11 @@ LJLIB_PUSH(top-1) LJLIB_SET(__index)
 
 #include "lj_libdef.h"
 
-/* -- I/O library functions ----------------------------------------------- */
+
 
 #define LJLIB_MODULE_io
 
-LJLIB_PUSH(top-2) LJLIB_SET(!)  /* Set environment. */
+LJLIB_PUSH(top-2) LJLIB_SET(!)  
 
 LJLIB_CF(io_open)
 {
@@ -479,7 +473,7 @@ static int io_std_getset(lua_State *L, ptrdiff_t id, const char *mode)
     } else {
       io_file_open(L, mode);
     }
-    /* NOBARRIER: The standard I/O handles are GC roots. */
+    
     setgcref(G(L)->gcroot[id], gcV(L->top-1));
   } else {
     setudataV(L, L->top++, IOSTDF_UD(L, id));
@@ -500,12 +494,12 @@ LJLIB_CF(io_output)
 LJLIB_CF(io_lines)
 {
   if (L->base == L->top) setnilV(L->top++);
-  if (!tvisnil(L->base)) {  /* io.lines(fname) */
+  if (!tvisnil(L->base)) {  
     IOFileUD *iof = io_file_open(L, "r");
     iof->type = IOFILE_TYPE_FILE|IOFILE_FLAG_CLOSE;
     L->top--;
     setudataV(L, L->base, udataV(L->top));
-  } else {  /* io.lines() iterates over stdin. */
+  } else {  
     setudataV(L, L->base, IOSTDF_UD(L, GCROOT_IO_INPUT));
   }
   return io_file_lines(L);
@@ -525,14 +519,14 @@ LJLIB_CF(io_type)
 
 #include "lj_libdef.h"
 
-/* ------------------------------------------------------------------------ */
+
 
 static GCobj *io_std_new(lua_State *L, FILE *fp, const char *name)
 {
   IOFileUD *iof = (IOFileUD *)lua_newuserdata(L, sizeof(IOFileUD));
   GCudata *ud = udataV(L->top-1);
   ud->udtype = UDTYPE_IO_FILE;
-  /* NOBARRIER: The GCudata is new (marked white). */
+  
   setgcref(ud->metatable, gcV(L->top-3));
   iof->fp = fp;
   iof->type = IOFILE_TYPE_STDF;

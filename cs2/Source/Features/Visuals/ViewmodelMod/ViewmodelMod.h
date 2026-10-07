@@ -7,10 +7,10 @@
 #include <HookContext/HookContextMacros.h>
 #include "ViewmodelModConfigVariables.h"
 
-// Viewmodel modification: the FOV comes from the hooked ClientModeCSNormal::getViewmodelFov
-// (self-gating on its config), the POSITION from forcing the game's own viewmodel_offset_x/y/z
-// cvars every frame while enabled - originals cached on first enable, restored exactly on
-// disable (the Sky Bloom pattern; the game never re-reads anything we cannot rewrite).
+
+
+
+
 template <typename HookContext>
 class ViewmodelMod {
 public:
@@ -19,8 +19,8 @@ public:
     {
     }
 
-    // Per-frame tick: drives the viewmodel position cvars. Statics because feature instances
-    // are rebuilt per hook call and the cache spans the whole session.
+    
+    
     void run() const noexcept
     {
         const bool enabled = GET_CONFIG_VAR(viewmodel_mod_vars::ModifyPosition);
@@ -44,9 +44,9 @@ public:
                 else
                     allRead = false;
             }
-            // Fail open-ish: partial reads still force the offsets (disabling then leaves the
-            // last forced values instead of a wrong restore), but a full read failure never
-            // marks the cache valid, so disable does not scribble zeros over the cvars.
+            
+            
+            
             originalsValid = allRead;
         }
 
@@ -73,7 +73,7 @@ private:
         return hookContext.template make<CvarSystem>();
     }
 
-    // The game's stock viewmodel offset cvars - present in libclient (strings verified).
+    
     static constexpr const char* kOffsetCvarNames[3] = {"viewmodel_offset_x", "viewmodel_offset_y", "viewmodel_offset_z"};
 
     inline static bool positionWasEnabled{false};

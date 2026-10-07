@@ -1,7 +1,4 @@
-/*
-** FFI C call handling.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #ifndef _LJ_CCALL_H
 #define _LJ_CCALL_H
@@ -11,16 +8,16 @@
 
 #if LJ_HASFFI
 
-/* -- C calling conventions ----------------------------------------------- */
+
 
 #if LJ_TARGET_X86ORX64
 
 #if LJ_TARGET_X86
-#define CCALL_NARG_GPR		2	/* For fastcall arguments. */
+#define CCALL_NARG_GPR		2	
 #define CCALL_NARG_FPR		0
 #define CCALL_NRET_GPR		2
-#define CCALL_NRET_FPR		1	/* For FP results on x87 stack. */
-#define CCALL_ALIGN_STACKARG	0	/* Don't align argument on stack. */
+#define CCALL_NRET_FPR		1	
+#define CCALL_ALIGN_STACKARG	0	
 #elif LJ_ABI_WIN
 #define CCALL_NARG_GPR		4
 #define CCALL_NARG_FPR		4
@@ -32,7 +29,7 @@
 #define CCALL_NARG_FPR		8
 #define CCALL_NRET_GPR		2
 #define CCALL_NRET_FPR		2
-#define CCALL_VECTOR_REG	1	/* Pass vectors in registers. */
+#define CCALL_VECTOR_REG	1	
 #endif
 
 #define CCALL_SPS_FREE		1
@@ -52,7 +49,7 @@ typedef intptr_t GPRArg;
 #elif LJ_TARGET_ARM
 
 #define CCALL_NARG_GPR		4
-#define CCALL_NRET_GPR		2	/* For softfp double. */
+#define CCALL_NRET_GPR		2	
 #if LJ_ABI_SOFTFP
 #define CCALL_NARG_FPR		0
 #define CCALL_NRET_FPR		0
@@ -90,7 +87,7 @@ typedef union FPRArg {
 
 #define CCALL_NARG_GPR		8
 #define CCALL_NARG_FPR		(LJ_ABI_SOFTFP ? 0 : 8)
-#define CCALL_NRET_GPR		4	/* For complex double. */
+#define CCALL_NRET_GPR		4	
 #define CCALL_NRET_FPR		(LJ_ABI_SOFTFP ? 0 : 1)
 #define CCALL_SPS_EXTRA		4
 #define CCALL_SPS_FREE		0
@@ -115,7 +112,7 @@ typedef union FPRArg {
 
 #elif LJ_TARGET_MIPS64
 
-/* FP args are positional and overlay the GPR array. */
+
 #define CCALL_NARG_GPR		8
 #define CCALL_NARG_FPR		0
 #define CCALL_NRET_GPR		2
@@ -154,43 +151,43 @@ typedef union FPRArg {
 #define CCALL_NUM_FPR \
   (CCALL_NARG_FPR > CCALL_NRET_FPR ? CCALL_NARG_FPR : CCALL_NRET_FPR)
 
-/* Check against constants in lj_ctype.h. */
+
 LJ_STATIC_ASSERT(CCALL_NUM_GPR <= CCALL_MAX_GPR);
 LJ_STATIC_ASSERT(CCALL_NUM_FPR <= CCALL_MAX_FPR);
 
 #define CCALL_NUM_STACK		31
 #define CCALL_SIZE_STACK	(CCALL_NUM_STACK * CTSIZE_PTR)
 
-/* -- C call state -------------------------------------------------------- */
+
 
 typedef LJ_ALIGN(CCALL_ALIGN_CALLSTATE) struct CCallState {
-  void (*func)(void);		/* Pointer to called function. */
-  uint32_t spadj;		/* Stack pointer adjustment. */
-  uint8_t nsp;			/* Number of bytes on stack. */
-  uint8_t retref;		/* Return value by reference. */
+  void (*func)(void);		
+  uint32_t spadj;		
+  uint8_t nsp;			
+  uint8_t retref;		
 #if LJ_TARGET_X64
-  uint8_t ngpr;			/* Number of arguments in GPRs. */
-  uint8_t nfpr;			/* Number of arguments in FPRs. */
+  uint8_t ngpr;			
+  uint8_t nfpr;			
 #elif LJ_TARGET_X86
-  uint8_t resx87;		/* Result on x87 stack: 1:float, 2:double. */
+  uint8_t resx87;		
 #elif LJ_TARGET_ARM64
-  void *retp;			/* Aggregate return pointer in x8. */
+  void *retp;			
 #elif LJ_TARGET_PPC
-  uint8_t nfpr;			/* Number of arguments in FPRs. */
+  uint8_t nfpr;			
 #endif
 #if LJ_32
   int32_t align1;
 #endif
 #if CCALL_NUM_FPR
-  FPRArg fpr[CCALL_NUM_FPR];	/* Arguments/results in FPRs. */
+  FPRArg fpr[CCALL_NUM_FPR];	
 #endif
-  GPRArg gpr[CCALL_NUM_GPR];	/* Arguments/results in GPRs. */
-  GPRArg stack[CCALL_NUM_STACK];	/* Stack slots. */
+  GPRArg gpr[CCALL_NUM_GPR];	
+  GPRArg stack[CCALL_NUM_STACK];	
 } CCallState;
 
-/* -- C call handling ----------------------------------------------------- */
 
-/* Really belongs to lj_vm.h. */
+
+
 LJ_ASMF void LJ_FASTCALL lj_vm_ffi_call(CCallState *cc);
 
 LJ_FUNC CTypeID lj_ccall_ctid_vararg(CTState *cts, cTValue *o);

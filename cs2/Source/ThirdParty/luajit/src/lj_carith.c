@@ -1,7 +1,4 @@
-/*
-** C data arithmetic.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #include "lj_obj.h"
 
@@ -18,15 +15,15 @@
 #include "lj_carith.h"
 #include "lj_strscan.h"
 
-/* -- C data arithmetic --------------------------------------------------- */
 
-/* Binary operands of an operator converted to ctypes. */
+
+
 typedef struct CDArith {
   uint8_t *p[2];
   CType *ct[2];
 } CDArith;
 
-/* Check arguments for arithmetic metamethods. */
+
 static int carith_checkarg(lua_State *L, CTState *cts, CDArith *ca)
 {
   TValue *o = L->base;
@@ -48,7 +45,7 @@ static int carith_checkarg(lua_State *L, CTState *cts, CDArith *ca)
 	p = (uint8_t *)*(void **)p;
 	ct = ctype_get(cts,
 	  lj_ctype_intern(cts, CTINFO(CT_PTR, CTALIGN_PTR|id), CTSIZE_PTR));
-	if (i) {  /* cts->tab may have been reallocated. */
+	if (i) {  
 	  ca->ct[0] = ctype_get(cts, id0);
 	}
       }
@@ -75,24 +72,24 @@ static int carith_checkarg(lua_State *L, CTState *cts, CDArith *ca)
 	CType *cct = lj_ctype_getfield(cts, ct, strV(o), &ofs);
 	if (cct && ctype_isconstval(cct->info)) {
 	  ca->ct[i] = ctype_child(cts, cct);
-	  ca->p[i] = (uint8_t *)&cct->size;  /* Assumes ct does not grow. */
+	  ca->p[i] = (uint8_t *)&cct->size;  
 	  ok = 1;
 	} else {
-	  ca->ct[1-i] = ct;  /* Use enum to improve error message. */
+	  ca->ct[1-i] = ct;  
 	  ca->p[1-i] = NULL;
 	  break;
 	}
       }
     } else {
       ca->ct[i] = NULL;
-      ca->p[i] = (void *)(intptr_t)1;  /* To make it unequal. */
+      ca->p[i] = (void *)(intptr_t)1;  
       ok = 0;
     }
   }
   return ok;
 }
 
-/* Pointer arithmetic. */
+
 static int carith_ptr(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
 {
   CType *ctp = ca->ct[0];
@@ -105,24 +102,22 @@ static int carith_ptr(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
     if ((mm == MM_sub || mm == MM_eq || mm == MM_lt || mm == MM_le) &&
 	(ctype_isptr(ca->ct[1]->info) || ctype_isrefarray(ca->ct[1]->info))) {
       uint8_t *pp2 = ca->p[1];
-      if (mm == MM_eq) {  /* Pointer equality. Incompatible pointers are ok. */
+      if (mm == MM_eq) {  
 	setboolV(L->top-1, (pp == pp2));
 	return 1;
       }
       if (!lj_cconv_compatptr(cts, ctp, ca->ct[1], CCF_IGNQUAL))
 	return 0;
-      if (mm == MM_sub) {  /* Pointer difference. */
+      if (mm == MM_sub) {  
 	intptr_t diff;
-	sz = lj_ctype_size(cts, ctype_cid(ctp->info));  /* Element size. */
+	sz = lj_ctype_size(cts, ctype_cid(ctp->info));  
 	if (sz == 0 || sz == CTSIZE_INVALID)
 	  return 0;
 	diff = ((intptr_t)pp - (intptr_t)pp2) / (int32_t)sz;
-	/* All valid pointer differences on x64 are in (-2^47, +2^47),
-	** which fits into a double without loss of precision.
-	*/
+	
 	setintptrV(L->top-1, diff);
 	return 1;
-      } else if (mm == MM_lt) {  /* Pointer comparison (unsigned). */
+      } else if (mm == MM_lt) {  
 	setboolV(L->top-1, ((uintptr_t)pp < (uintptr_t)pp2));
 	return 1;
       } else {
@@ -138,17 +133,17 @@ static int carith_ptr(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
     if (mm == MM_sub) idx = (ptrdiff_t)(~(uintptr_t)idx+1u);
   } else if (mm == MM_add && ctype_isnum(ctp->info) &&
       (ctype_isptr(ca->ct[1]->info) || ctype_isrefarray(ca->ct[1]->info))) {
-    /* Swap pointer and index. */
+    
     ctp = ca->ct[1]; pp = ca->p[1];
     lj_cconv_ct_ct(cts, ctype_get(cts, CTID_INT_PSZ), ca->ct[0],
 		   (uint8_t *)&idx, ca->p[0], 0);
   } else {
     return 0;
   }
-  sz = lj_ctype_size(cts, ctype_cid(ctp->info));  /* Element size. */
+  sz = lj_ctype_size(cts, ctype_cid(ctp->info));  
   if (sz == CTSIZE_INVALID)
     return 0;
-  pp += idx*(int32_t)sz;  /* Compute pointer + index. */
+  pp += idx*(int32_t)sz;  
   id = lj_ctype_intern(cts, CTINFO(CT_PTR, CTALIGN_PTR|ctype_cid(ctp->info)),
 		       CTSIZE_PTR);
   cd = lj_cdata_new(cts, id, CTSIZE_PTR);
@@ -158,7 +153,7 @@ static int carith_ptr(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
   return 1;
 }
 
-/* 64 bit integer arithmetic. */
+
 static int carith_int64(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
 {
   if (ctype_isnum(ca->ct[0]->info) && ca->ct[0]->size <= 8 &&
@@ -222,7 +217,7 @@ static int carith_int64(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
   return 0;
 }
 
-/* Handle ctype arithmetic metamethods. */
+
 static int lj_carith_meta(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
 {
   cTValue *tv = NULL;
@@ -241,10 +236,10 @@ static int lj_carith_meta(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
   if (!tv) {
     const char *repr[2];
     int i, isenum = -1, isstr = -1;
-    if (mm == MM_eq) {  /* Equality checks never raise an error. */
+    if (mm == MM_eq) {  
       int eq = ca->p[0] == ca->p[1];
       setboolV(L->top-1, eq);
-      setboolV(&G(L)->tmptv2, eq);  /* Remember for trace recorder. */
+      setboolV(&G(L)->tmptv2, eq);  
       return 1;
     }
     for (i = 0; i < 2; i++) {
@@ -266,27 +261,27 @@ static int lj_carith_meta(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
   return lj_meta_tailcall(L, tv);
 }
 
-/* Arithmetic operators for cdata. */
+
 int lj_carith_op(lua_State *L, MMS mm)
 {
   CTState *cts = ctype_cts(L);
   CDArith ca;
   if (carith_checkarg(L, cts, &ca) && mm != MM_len && mm != MM_concat) {
     if (carith_int64(L, cts, &ca, mm) || carith_ptr(L, cts, &ca, mm)) {
-      copyTV(L, &G(L)->tmptv2, L->top-1);  /* Remember for trace recorder. */
+      copyTV(L, &G(L)->tmptv2, L->top-1);  
       return 1;
     }
   }
   return lj_carith_meta(L, cts, &ca, mm);
 }
 
-/* -- 64 bit bit operations helpers --------------------------------------- */
+
 
 #if LJ_64
 #define B64DEF(name) \
   static LJ_AINLINE uint64_t lj_carith_##name(uint64_t x, int32_t sh)
 #else
-/* Not inlined on 32 bit archs, since some of these are quite lengthy. */
+
 #define B64DEF(name) \
   uint64_t LJ_NOINLINE lj_carith_##name(uint64_t x, int32_t sh)
 #endif
@@ -314,7 +309,7 @@ uint64_t lj_carith_shift64(uint64_t x, int32_t sh, int op)
   return x;
 }
 
-/* Equivalent to lj_lib_checkbit(), but handles cdata. */
+
 uint64_t lj_carith_check64(lua_State *L, int narg, CTypeID *id)
 {
   TValue *o = L->base + narg-1;
@@ -322,7 +317,7 @@ uint64_t lj_carith_check64(lua_State *L, int narg, CTypeID *id)
   err:
     lj_err_argt(L, narg, LUA_TNUMBER);
   } else if (LJ_LIKELY(tvisnumber(o))) {
-    /* Handled below. */
+    
   } else if (tviscdata(o)) {
     CTState *cts = ctype_cts(L);
     uint8_t *sp = (uint8_t *)cdataptr(cdataV(o));
@@ -337,9 +332,9 @@ uint64_t lj_carith_check64(lua_State *L, int narg, CTypeID *id)
     if (ctype_isenum(s->info)) s = ctype_child(cts, s);
     if ((s->info & (CTMASK_NUM|CTF_BOOL|CTF_FP|CTF_UNSIGNED)) ==
 	CTINFO(CT_NUM, CTF_UNSIGNED) && s->size == 8)
-      *id = CTID_UINT64;  /* Use uint64_t, since it has the highest rank. */
+      *id = CTID_UINT64;  
     else if (!*id)
-      *id = CTID_INT64;  /* Use int64_t, unless already set. */
+      *id = CTID_INT64;  
     lj_cconv_ct_ct(cts, ctype_get(cts, *id), s,
 		   (uint8_t *)&x, sp, CCF_ARG(narg));
     return x;
@@ -353,7 +348,7 @@ uint64_t lj_carith_check64(lua_State *L, int narg, CTypeID *id)
   }
 }
 
-/* Check bit operator arguments. No coercion from strings. */
+
 uint64_t lj_carith_checkbit64(lua_State *L, cTValue *o, CTypeID *id)
 {
   if (tviscdata(o)) {
@@ -370,38 +365,38 @@ uint64_t lj_carith_checkbit64(lua_State *L, cTValue *o, CTypeID *id)
     if (ctype_isenum(s->info)) s = ctype_child(cts, s);
     if ((s->info & (CTMASK_NUM|CTF_BOOL|CTF_FP|CTF_UNSIGNED)) ==
 	CTINFO(CT_NUM, CTF_UNSIGNED) && s->size == 8)
-      *id = CTID_UINT64;  /* Use uint64_t, since it has the highest rank. */
+      *id = CTID_UINT64;  
     else if (!*id)
-      *id = CTID_INT64;  /* Use int64_t, unless already set. */
+      *id = CTID_INT64;  
     lj_cconv_ct_ct(cts, ctype_get(cts, *id), s,
 		   (uint8_t *)&x, sp, 0);
     return x;
   } else if (LJ_LIKELY(tvisint(o))) {
-    return (uint64_t)intV(o);  /* Sign-extended. */
+    return (uint64_t)intV(o);  
   } else {
     if (!tvisnum(o)) lj_err_optype(L, o, LJ_ERR_OPARITH);
-    return (uint64_t)lj_num2bit(numV(o));  /* Sign-extended. */
+    return (uint64_t)lj_num2bit(numV(o));  
   }
 }
 
-/* -- 64 bit integer arithmetic helpers ----------------------------------- */
+
 
 #if LJ_32 && LJ_HASJIT
-/* Signed/unsigned 64 bit multiplication. */
+
 int64_t lj_carith_mul64(int64_t a, int64_t b)
 {
   return a * b;
 }
 #endif
 
-/* Unsigned 64 bit division. */
+
 uint64_t lj_carith_divu64(uint64_t a, uint64_t b)
 {
   if (b == 0) return U64x(80000000,00000000);
   return a / b;
 }
 
-/* Signed 64 bit division. */
+
 int64_t lj_carith_divi64(int64_t a, int64_t b)
 {
   if (b == 0 || (a == (int64_t)U64x(80000000,00000000) && b == -1))
@@ -409,14 +404,14 @@ int64_t lj_carith_divi64(int64_t a, int64_t b)
   return a / b;
 }
 
-/* Unsigned 64 bit modulo. */
+
 uint64_t lj_carith_modu64(uint64_t a, uint64_t b)
 {
   if (b == 0) return U64x(80000000,00000000);
   return a % b;
 }
 
-/* Signed 64 bit modulo. */
+
 int64_t lj_carith_modi64(int64_t a, int64_t b)
 {
   if (b == 0) return U64x(80000000,00000000);
@@ -424,7 +419,7 @@ int64_t lj_carith_modi64(int64_t a, int64_t b)
   return a % b;
 }
 
-/* Unsigned 64 bit x^k. */
+
 uint64_t lj_carith_powu64(uint64_t x, uint64_t k)
 {
   uint64_t y;
@@ -444,7 +439,7 @@ uint64_t lj_carith_powu64(uint64_t x, uint64_t k)
   return y;
 }
 
-/* Signed 64 bit x^k. */
+
 int64_t lj_carith_powi64(int64_t x, int64_t k)
 {
   if (k == 0)

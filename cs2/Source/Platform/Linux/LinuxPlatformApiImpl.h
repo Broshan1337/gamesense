@@ -4,7 +4,7 @@
 #include <dlfcn.h>
 #include <link.h>
 #include <signal.h>
-#include <stdio.h> // ::rename
+#include <stdio.h> 
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
@@ -87,7 +87,7 @@ int LinuxPlatformApi::processId() noexcept
     return ::getpid();
 }
 
-// gettid(2) - no glibc wrapper guarantee across target libcs, go through the raw syscall.
+
 int LinuxPlatformApi::threadId() noexcept
 {
     return static_cast<int>(::syscall(SYS_gettid));

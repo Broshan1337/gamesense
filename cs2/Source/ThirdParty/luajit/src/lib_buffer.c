@@ -1,7 +1,4 @@
-/*
-** Buffer library.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #define lib_buffer_c
 #define LUA_LIB
@@ -29,9 +26,9 @@
 #include "lj_serialize.h"
 #include "lj_lib.h"
 
-/* -- Helper functions ---------------------------------------------------- */
 
-/* Check that the first argument is a string buffer. */
+
+
 static SBufExt *buffer_tobuf(lua_State *L)
 {
   if (!(L->base < L->top && tvisbuf(L->base)))
@@ -39,7 +36,7 @@ static SBufExt *buffer_tobuf(lua_State *L)
   return bufV(L->base);
 }
 
-/* Ditto, but for writers. */
+
 static LJ_AINLINE SBufExt *buffer_tobufw(lua_State *L)
 {
   SBufExt *sbx = buffer_tobuf(L);
@@ -49,7 +46,7 @@ static LJ_AINLINE SBufExt *buffer_tobufw(lua_State *L)
 
 #define buffer_toudata(sbx)	((GCudata *)(sbx)-1)
 
-/* -- Buffer methods ------------------------------------------------------ */
+
 
 #define LJLIB_MODULE_buffer_method
 
@@ -57,7 +54,7 @@ LJLIB_CF(buffer_method_free)
 {
   SBufExt *sbx = buffer_tobuf(L);
   lj_bufx_free(L, sbx);
-  L->top = L->base+1;  /* Chain buffer object. */
+  L->top = L->base+1;  
   return 1;
 }
 
@@ -65,7 +62,7 @@ LJLIB_CF(buffer_method_reset)		LJLIB_REC(.)
 {
   SBufExt *sbx = buffer_tobuf(L);
   lj_bufx_reset(sbx);
-  L->top = L->base+1;  /* Chain buffer object. */
+  L->top = L->base+1;  
   return 1;
 }
 
@@ -81,7 +78,7 @@ LJLIB_CF(buffer_method_skip)		LJLIB_REC(.)
   } else {
     sbx->r = sbx->w = sbx->b;
   }
-  L->top = L->base+1;  /* Chain buffer object. */
+  L->top = L->base+1;  
   return 1;
 }
 
@@ -109,7 +106,7 @@ LJLIB_CF(buffer_method_set)		LJLIB_REC(.)
   ref = gcV(L->base+1);
   setgcref(sbx->cowref, ref);
   lj_gc_objbarrier(L, buffer_toudata(sbx), ref);
-  L->top = L->base+1;  /* Chain buffer object. */
+  L->top = L->base+1;  
   return 1;
 }
 
@@ -131,20 +128,20 @@ LJLIB_CF(buffer_method_put)		LJLIB_REC(.)
       if (sbx2 == sbx) lj_err_arg(L, (int)(arg+1), LJ_ERR_BUFFER_SELF);
       lj_buf_putmem((SBuf *)sbx, sbx2->r, sbufxlen(sbx2));
     } else if (!mo && !tvisnil(mo = lj_meta_lookup(L, o, MM_tostring))) {
-      /* Call __tostring metamethod inline. */
+      
       copyTV(L, L->top++, mo);
       copyTV(L, L->top++, o);
       lua_call(L, 1, 1);
-      o = &L->base[arg];  /* The stack may have been reallocated. */
+      o = &L->base[arg];  
       copyTV(L, &L->base[arg], L->top-1);
       L->top = L->base + narg;
-      goto retry;  /* Retry with the result. */
+      goto retry;  
     } else {
       lj_err_argtype(L, (int)(arg+1), "string/number/__tostring");
     }
-    /* Probably not useful to inline other __tostring MMs, e.g. FFI numbers. */
+    
   }
-  L->top = L->base+1;  /* Chain buffer object. */
+  L->top = L->base+1;  
   lj_gc_check(L);
   return 1;
 }
@@ -153,7 +150,7 @@ LJLIB_CF(buffer_method_putf)		LJLIB_REC(.)
 {
   SBufExt *sbx = buffer_tobufw(L);
   lj_strfmt_putarg(L, (SBuf *)sbx, 2, 2);
-  L->top = L->base+1;  /* Chain buffer object. */
+  L->top = L->base+1;  
   lj_gc_check(L);
   return 1;
 }
@@ -164,7 +161,7 @@ LJLIB_CF(buffer_method_get)		LJLIB_REC(.)
   ptrdiff_t arg, narg = L->top - L->base;
   if (narg == 1) {
     narg++;
-    setnilV(L->top++);  /* get() is the same as get(nil). */
+    setnilV(L->top++);  
   }
   for (arg = 1; arg < narg; arg++) {
     TValue *o = &L->base[arg];
@@ -195,7 +192,7 @@ LJLIB_CF(buffer_method_putcdata)	LJLIB_REC(.)
   }
   len = (MSize)lj_lib_checkintrange(L, 3, 0, LJ_MAX_BUF);
   lj_buf_putmem((SBuf *)sbx, p, len);
-  L->top = L->base+1;  /* Chain buffer object. */
+  L->top = L->base+1;  
   return 1;
 }
 
@@ -219,7 +216,7 @@ LJLIB_CF(buffer_method_commit)		LJLIB_REC(.)
   MSize len = (MSize)lj_lib_checkintrange(L, 2, 0, LJ_MAX_BUF);
   if (len > sbufleft(sbx)) lj_err_arg(L, 2, LJ_ERR_NUMRNG);
   sbx->w += len;
-  L->top = L->base+1;  /* Chain buffer object. */
+  L->top = L->base+1;  
   return 1;
 }
 
@@ -242,7 +239,7 @@ LJLIB_CF(buffer_method_encode)		LJLIB_REC(.)
   cTValue *o = lj_lib_checkany(L, 2);
   lj_serialize_put(sbx, o);
   lj_gc_check(L);
-  L->top = L->base+1;  /* Chain buffer object. */
+  L->top = L->base+1;  
   return 1;
 }
 
@@ -280,11 +277,11 @@ LJLIB_CF(buffer_method___len)		LJLIB_REC(.)
 LJLIB_PUSH("buffer") LJLIB_SET(__metatable)
 LJLIB_PUSH(top-1) LJLIB_SET(__index)
 
-/* -- Buffer library functions -------------------------------------------- */
+
 
 #define LJLIB_MODULE_buffer
 
-LJLIB_PUSH(top-2) LJLIB_SET(!)  /* Set environment. */
+LJLIB_PUSH(top-2) LJLIB_SET(!)  
 
 LJLIB_CF(buffer_new)
 {
@@ -315,7 +312,7 @@ LJLIB_CF(buffer_new)
   env = tabref(curr_func(L)->c.env);
   ud = lj_udata_new(L, sizeof(SBufExt), env);
   ud->udtype = UDTYPE_BUFFER;
-  /* NOBARRIER: The GCudata is new (marked white). */
+  
   setgcref(ud->metatable, obj2gco(env));
   setudataV(L, L->top++, ud);
   sbx = (SBufExt *)uddata(ud);
@@ -344,7 +341,7 @@ LJLIB_CF(buffer_decode)			LJLIB_REC(.)
   return 1;
 }
 
-/* ------------------------------------------------------------------------ */
+
 
 #include "lj_libdef.h"
 

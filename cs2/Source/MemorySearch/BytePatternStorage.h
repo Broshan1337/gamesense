@@ -6,8 +6,8 @@
 #include "BytePatternConverter.h"
 #include "PatternVault.h"
 
-// The stored bytes are XOR ciphertext (PatternVault.h): plaintext pattern bytes must not
-// reach the emitted binary. Only the consteval evaluation below ever sees plaintext.
+
+
 template <std::size_t Capacity>
 struct BytePatternStorage {
     explicit(false) consteval BytePatternStorage(const char (&patternString)[Capacity])

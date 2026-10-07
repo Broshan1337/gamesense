@@ -1,7 +1,4 @@
-/*
-** Library function support.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #define lj_lib_c
 #define LUA_CORE
@@ -26,7 +23,7 @@
 #include "lj_bcdump.h"
 #include "lj_lib.h"
 
-/* -- Library initialization ---------------------------------------------- */
+
 
 static GCtab *lib_create_table(lua_State *L, const char *libname, int hsize)
 {
@@ -39,7 +36,7 @@ static GCtab *lib_create_table(lua_State *L, const char *libname, int hsize)
 	lj_err_callerv(L, LJ_ERR_BADMODN, libname);
       settabV(L, L->top, tabV(L->top-1));
       L->top++;
-      lua_setfield(L, -3, libname);  /* _LOADED[libname] = new table */
+      lua_setfield(L, -3, libname);  
     }
     L->top--;
     settabV(L, L->top-1, tabV(L->top));
@@ -67,7 +64,7 @@ static const uint8_t *lib_read_lfunc(lua_State *L, const uint8_t *p, GCtab *tab)
   pt = lj_bcread_proto(&ls);
   pt->firstline = ~(BCLine)0;
   fn = lj_func_newL_empty(L, pt, tabref(L->env));
-  /* NOBARRIER: See below for common barrier. */
+  
   setfuncV(L, lj_tab_setstr(L, tab, name), fn);
   return (const uint8_t *)ls.p;
 }
@@ -82,7 +79,7 @@ void lj_lib_register(lua_State *L, const char *libname,
   GCtab *tab = lib_create_table(L, libname, *p++);
   ptrdiff_t tpos = L->top - L->base;
 
-  /* Avoid barriers further down. */
+  
   lj_gc_anybarriert(L, tab);
   tab->nomm = 0;
 
@@ -106,11 +103,11 @@ void lj_lib_register(lua_State *L, const char *libname,
       else
 	setmref(fn->c.pc, bcff++);
       if (tag == LIBINIT_ASM_)
-	fn->c.f = ofn->c.f;  /* Copy handler from previous function. */
+	fn->c.f = ofn->c.f;  
       else
-	fn->c.f = *cf++;  /* Get cf or handler from C function table. */
+	fn->c.f = *cf++;  
       if (len) {
-	/* NOBARRIER: See above for common barrier. */
+	
 	setfuncV(L, lj_tab_setstr(L, tab, lj_str_new(L, name, len)), fn);
       }
       ofn = fn;
@@ -123,7 +120,7 @@ void lj_lib_register(lua_State *L, const char *libname,
 	L->top -= 2;
 	if (tvisstr(L->top+1) && strV(L->top+1)->len == 0)
 	  env = tabV(L->top);
-	else  /* NOBARRIER: See above for common barrier. */
+	else  
 	  copyTV(L, lj_tab_set(L, tab, L->top+1), L->top);
 	break;
       case LIBINIT_NUMBER:
@@ -152,7 +149,7 @@ void lj_lib_register(lua_State *L, const char *libname,
   }
 }
 
-/* Push internal function on the stack. */
+
 GCfunc *lj_lib_pushcc(lua_State *L, lua_CFunction f, int id, int n)
 {
   GCfunc *fn;
@@ -167,7 +164,7 @@ void lj_lib_prereg(lua_State *L, const char *name, lua_CFunction f, GCtab *env)
 {
   luaL_findtable(L, LUA_REGISTRYINDEX, "_PRELOAD", 4);
   lua_pushcfunction(L, f);
-  /* NOBARRIER: The function is new (marked white). */
+  
   setgcref(funcV(L->top-1)->c.env, obj2gco(env));
   lua_setfield(L, -2, name);
   L->top--;
@@ -176,14 +173,14 @@ void lj_lib_prereg(lua_State *L, const char *name, lua_CFunction f, GCtab *env)
 int lj_lib_postreg(lua_State *L, lua_CFunction cf, int id, const char *name)
 {
   GCfunc *fn = lj_lib_pushcf(L, cf, id);
-  GCtab *t = tabref(curr_func(L)->c.env);  /* Reference to parent table. */
+  GCtab *t = tabref(curr_func(L)->c.env);  
   setfuncV(L, lj_tab_setstr(L, t, lj_str_newz(L, name)), fn);
   lj_gc_anybarriert(L, t);
   setfuncV(L, L->top++, fn);
   return 1;
 }
 
-/* -- Type checks --------------------------------------------------------- */
+
 
 TValue *lj_lib_checkany(lua_State *L, int narg)
 {
@@ -206,7 +203,7 @@ GCstr *lj_lib_checkstr(lua_State *L, int narg)
     }
   }
   lj_err_argt(L, narg, LUA_TSTRING);
-  return NULL;  /* unreachable */
+  return NULL;  
 }
 
 GCstr *lj_lib_optstr(lua_State *L, int narg)
@@ -281,7 +278,7 @@ GCproto *lj_lib_checkLproto(lua_State *L, int narg, int nolua)
     }
   }
   lj_err_argt(L, narg, LUA_TFUNCTION);
-  return NULL;  /* unreachable */
+  return NULL;  
 }
 
 GCtab *lj_lib_checktab(lua_State *L, int narg)
@@ -302,7 +299,7 @@ GCtab *lj_lib_checktabornil(lua_State *L, int narg)
       return NULL;
   }
   lj_err_arg(L, narg, LJ_ERR_NOTABN);
-  return NULL;  /* unreachable */
+  return NULL;  
 }
 
 int lj_lib_checkopt(lua_State *L, int narg, int def, const char *lst)
@@ -322,11 +319,9 @@ int lj_lib_checkopt(lua_State *L, int narg, int def, const char *lst)
   return def;
 }
 
-/* -- Strict type checks -------------------------------------------------- */
 
-/* The following type checks do not coerce between strings and numbers.
-** And they handle plain int64_t/uint64_t FFI numbers, too.
-*/
+
+
 
 #if LJ_HASBUFFER
 GCstr *lj_lib_checkstrx(lua_State *L, int narg)
@@ -345,10 +340,7 @@ int32_t lj_lib_checkintrange(lua_State *L, int narg, int32_t a, int32_t b)
       int32_t i = intV(o);
       if (i >= a && i <= b) return i;
     } else if (LJ_LIKELY(tvisnum(o))) {
-      /* For performance reasons, this doesn't check for integerness or
-      ** integer overflow. Overflow detection still works, since all FPUs
-      ** return either MININT or MAXINT, which is then out of range.
-      */
+      
       int32_t i = lj_num2int(numV(o));
       if (i >= a && i <= b) return i;
 #if LJ_HASFFI
@@ -371,7 +363,7 @@ int32_t lj_lib_checkintrange(lua_State *L, int narg, int32_t a, int32_t b)
   }
 badtype:
   lj_err_argt(L, narg, LUA_TNUMBER);
-  return 0;  /* unreachable */
+  return 0;  
 }
 #endif
 

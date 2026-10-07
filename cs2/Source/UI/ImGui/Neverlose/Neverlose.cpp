@@ -110,43 +110,43 @@
 #include <Features/Visuals/ViewmodelMod/ViewmodelModConfigVariables.h>
 #include <Features/Visuals/WorldColors/WorldColorsConfigVariables.h>
 
-// Neverlose-style menu - see Neverlose.h. Layout metrics and colors follow the design contract
-// (FORFUTURETESTS/neverlose-last/DESIGN.md); the row/card/nav primitives are adapted from the
-// reference implementation, rebound from demo state onto our config system.
+
+
+
 namespace
 {
 
-// --- design tokens -----------------------------------------------------------
-//
-// Base metrics are the 1.0-design values; every frame applyMetrics() derives the actual
-// metrics from menuScale (user-adjustable in the profile popover). The text sizes must match
-// the loaded font pixel sizes, so loadFonts() reads them too - changing the scale reloads the
-// fonts before the next atlas build.
+
+
+
+
+
+
 
 constexpr ImU32 C(int r, int g, int b, int a = 255) { return IM_COL32(r, g, b, a); }
 
-// Shared color tokens - the hand-drawn chrome re-uses these everywhere, so a theme pass is a
-// one-line change per token instead of hunting dozens of literal C(...) calls.
-// COLORING NOTE: the GTK experiment was reverted per user decision - the original near-black
-// palette IS the look; the design (corners, switch geometry, structure) stays GTK-shaped, and
-// colors stay in the user's hand (config accents + these tokens).
-constexpr ImU32 kCardBg = C(16, 16, 18, 204);        // card body fill (soft translucency: the scene glows through)
-constexpr ImU32 kSidebarBg = C(16, 16, 18, 204);     // nav rail fill
-constexpr ImU32 kHairline = C(26, 26, 30);           // in-card separators
-constexpr ImU32 kHairlineSoft = C(30, 30, 33);       // control/shell outlines
-constexpr ImU32 kPillBg = C(24, 24, 26);             // value pill / button resting fill
-constexpr ImU32 kPillBgHover = C(32, 32, 36);        // value pill / button hovered fill
-constexpr ImU32 kRowHover = C(37, 37, 41);           // nav/list row hover fill (slightly lighter than pills)
-constexpr ImU32 kShellBg = C(12, 12, 13, 244);       // shell window body
-constexpr ImU32 kToolbarBg = C(10, 10, 11, 216);     // toolbar band over the shell
-constexpr ImU32 kInsetBg = C(23, 23, 25);            // inset surfaces: search field, list rows, script windows
-constexpr ImU32 kPopupBg = C(18, 18, 20, 255);        // popover body - fully opaque: page text
-                                                      // must never bleed through (mid-fade frames
-                                                      // used to ghost rows over the cards)
-constexpr ImU32 kPopupBorder = C(54, 54, 60, 205);   // popover outline
-constexpr ImU32 kTextBodyCol = C(207, 209, 218);     // row label text
-constexpr ImU32 kTextFaint = C(114, 119, 132);       // captions/eyebrows: readable-dim (the old
-                                                     // C(91..) pair was ~2.3:1 on the shell)
+
+
+
+
+
+constexpr ImU32 kCardBg = C(16, 16, 18, 204);        
+constexpr ImU32 kSidebarBg = C(16, 16, 18, 204);     
+constexpr ImU32 kHairline = C(26, 26, 30);           
+constexpr ImU32 kHairlineSoft = C(30, 30, 33);       
+constexpr ImU32 kPillBg = C(24, 24, 26);             
+constexpr ImU32 kPillBgHover = C(32, 32, 36);        
+constexpr ImU32 kRowHover = C(37, 37, 41);           
+constexpr ImU32 kShellBg = C(12, 12, 13, 244);       
+constexpr ImU32 kToolbarBg = C(10, 10, 11, 216);     
+constexpr ImU32 kInsetBg = C(23, 23, 25);            
+constexpr ImU32 kPopupBg = C(18, 18, 20, 255);        
+                                                      
+                                                      
+constexpr ImU32 kPopupBorder = C(54, 54, 60, 205);   
+constexpr ImU32 kTextBodyCol = C(207, 209, 218);     
+constexpr ImU32 kTextFaint = C(114, 119, 132);       
+                                                     
 
 float kTextBody = 15.0f;
 float kTextControl = 14.0f;
@@ -161,18 +161,18 @@ float kSidebarWidth = 158.0f;
 float kToolbarHeight = 56.0f;
 float kRowHeight = 37.0f;
 
-float menuScale = 1.0f;     // 1.0 = design size; adjusted in the profile popover
+float menuScale = 1.0f;     
 bool menuScaleInitialized = false;
-float shellHeightBase = 576.0f; // centering baseline (design height * menuScale) - the adaptive
-                                // shell animates kShellHeight per page; the base keeps the
-                                // default centering / drag clamps from drifting while it eases
-float lastContentHeight = 0.0f; // previous frame's page content height (adaptive height target)
-float navScroll = 0.0f;     // sidebar nav rail scroll (the expanded Visuals list can outgrow
-                            // the space above the account bar - wheel-scrolls, clipped)
-float navContentEnd = 0.0f; // shell-absolute bottom of last frame's laid-out nav rail (the rail
-                            // scroll clamp reads it - hand-counted estimates drifted stale)
+float shellHeightBase = 576.0f; 
+                                
+                                
+float lastContentHeight = 0.0f; 
+float navScroll = 0.0f;     
+                            
+float navContentEnd = 0.0f; 
+                            
 
-// Live glow color for the popover swatch: in rainbow mode the swatch shows the CURRENT hue.
+
 ImU32 glowTintPreview() noexcept
 {
     const auto glowColor = ui_config::get<MenuGlowColor>();
@@ -187,12 +187,12 @@ ImU32 glowTintPreview() noexcept
     return C(static_cast<int>(r * 255.0f), static_cast<int>(g * 255.0f), static_cast<int>(bch * 255.0f), glowColor.a());
 }
 
-// Derives the menu accent from the watermark's text color while keeping it READABLE on the from the watermark's text color while keeping it READABLE on the
-// dark menu: the perceived luminance (Rec. 709 weights) decides whether the source color is
-// on the darker or the lighter side, and is clamped into a readable band by mixing toward
-// white (too dark - invisible on the dark UI) or toward black (too bright - glaring next to
-// the dim shell). Done at compile time; the watermark green (~0.74 luma) passes through
-// unchanged, darker picks get lifted, near-white picks get tamed.
+
+
+
+
+
+
 constexpr float kMinReadableLuma = 0.42f;
 
 constexpr std::uint8_t lerpChannel(std::uint8_t c, std::uint8_t target, float t) noexcept
@@ -202,31 +202,31 @@ constexpr std::uint8_t lerpChannel(std::uint8_t c, std::uint8_t target, float t)
 
 constexpr ImU32 accentFromWatermark() noexcept
 {
-    // Rec. 709 luminance, 0..1
+    
     constexpr auto wm = watermark_panel_params::kTextColor;
     const float luma = (0.2126f * wm.r() + 0.7152f * wm.g() + 0.0722f * wm.b()) / 255.0f;
     if (luma < kMinReadableLuma) {
-        // too dark for the dark shell -> lighten toward white just enough to clear the floor
+        
         const float t = (kMinReadableLuma - luma) / (1.0f - luma);
         return C(lerpChannel(wm.r(), 255, t), lerpChannel(wm.g(), 255, t), lerpChannel(wm.b(), 255, t));
     }
     if (luma > 0.92f) {
-        // too bright -> pull back toward the accent blue so it stops glaring
+        
         const float t = (luma - 0.9f) / luma;
         return C(lerpChannel(wm.r(), 75, t), lerpChannel(wm.g(), 126, t), lerpChannel(wm.b(), 255, t));
     }
     return C(wm.r(), wm.g(), wm.b());
 }
 
-// Menu theme colors, editable in the profile popover (RGBA channel popover, like the feature
-// color pickers) and persisted via config. Primary accent tints nav/chrome/text highlights;
-// the SECONDARY colors cover the interactive controls: buttons (toggles, checkboxes, keybind
-// pills) and sliders (track fills). All three are refreshed from config every frame.
+
+
+
+
 ImU32 g_accent = accentFromWatermark();
 ImU32 g_buttonAccent = C(150, 127, 238);
 ImU32 g_sliderAccent = C(150, 127, 238);
 
-// Present-thread refresh from the config vars (called once per frame from renderGameOverlay).
+
 void refreshMenuTheme() noexcept
 {
     const auto accent = ui_config::get<MenuAccentColor>();
@@ -236,9 +236,9 @@ void refreshMenuTheme() noexcept
     const auto slider = ui_config::get<MenuSliderColor>();
     g_sliderAccent = C(slider.r(), slider.g(), slider.b(), slider.a());
 
-    // Fading-RGB style: recolors the three theme accents with the same hue clock the glow
-    // rainbow uses (MenuGlowSpeed), so style and glow cycle together when both are on. Only
-    // the RGB channels cycle - each color keeps its configured alpha.
+    
+    
+    
     if (ui_config::get<MenuStyleRainbow>()) {
         const float hue = std::fmod(static_cast<float>(ImGui::GetTime()) * ui_config::get<MenuGlowSpeed>() * 0.1f, 1.0f);
         float r = 0.0f, g = 0.0f, b = 0.0f;
@@ -251,7 +251,7 @@ void refreshMenuTheme() noexcept
         g_sliderAccent = tinted(slider);
     }
 
-    // Publish for the game-thread panorama HUD (the HudThemeColor recolor follows the theme).
+    
     theme_accent::publish(static_cast<std::uint8_t>(g_accent >> IM_COL32_R_SHIFT & 0xFF),
         static_cast<std::uint8_t>(g_accent >> IM_COL32_G_SHIFT & 0xFF),
         static_cast<std::uint8_t>(g_accent >> IM_COL32_B_SHIFT & 0xFF));
@@ -263,7 +263,7 @@ struct StylePreset {
 };
 
 constexpr StylePreset kStylePresets[] = {
-    {"Default v2", C(150, 127, 238)}, // the logo's light purple - the new default theme
+    {"Default v2", C(150, 127, 238)}, 
     {"Default (green)", accentFromWatermark()},
     {"Blue", C(75, 126, 255)},
     {"Cyan", C(115, 214, 210)},
@@ -273,10 +273,10 @@ constexpr StylePreset kStylePresets[] = {
     {"Red", C(235, 87, 87)},
 };
 
-// Scales a 1.0-design measurement by the menu scale.
+
 [[nodiscard]] float s(float v) noexcept { return v * menuScale; }
 
-// Vertical offset centering a control of the given height inside the current row.
+
 [[nodiscard]] float rowCentered(float controlHeight) noexcept { return (kRowHeight - controlHeight) * 0.5f; }
 
 void applyMetrics() noexcept
@@ -296,7 +296,7 @@ void applyMetrics() noexcept
     kRowHeight = 37.0f * menuScale;
 }
 
-// Page identity - order matches the navigation rail.
+
 enum class Page
 {
     Rage,
@@ -314,7 +314,7 @@ enum class Page
     Misc
 };
 
-// --- embedded fonts (objcopy symbols, see Source/CMakeLists.txt) ----------------
+
 
 extern "C" const unsigned char _binary_Inter_Medium_ttf_start[];
 extern "C" const unsigned char _binary_Inter_Medium_ttf_end[];
@@ -322,42 +322,42 @@ extern "C" const unsigned char _binary_Inter_SemiBold_ttf_start[];
 extern "C" const unsigned char _binary_Inter_SemiBold_ttf_end[];
 extern "C" const unsigned char _binary_fa_solid_900_ttf_start[];
 extern "C" const unsigned char _binary_fa_solid_900_ttf_end[];
-// CJK fallback subset (a few KB): the codepoints our UI strings use, generated from the
-// system's Noto Sans CJK by fonts/make-cjk-subset.py (the Inter fonts are Latin-only; without
-// this, skin names like "\xE9\xBE\x8D\xE7\x8E\x8B (Dragon King)" render as boxes).
+
+
+
 extern "C" const unsigned char _binary_NotoCJK_subset_ttf_start[];
 extern "C" const unsigned char _binary_NotoCJK_subset_ttf_end[];
 
-// The FontAwesome codepoints this UI actually uses - a compact glyph range keeps the atlas
-// small (the full FA range is ~7k glyphs).
+
+
 constexpr ImWchar kIconCodepoints[] = {
-    0xf002, // search          (global search)
-    0xf005, // star            (radio favorites)
-    0xf007, // user            (Player Info)
-    0xf013, // cog             (Misc)
-    0xf028, // volume-up       (Sound)
-    0xf03d, // video           (Viewmodel)
-    0xf03e, // image           (Visuals group)
-    0xf04b, // play            (Radio)
-    0xf04d, // stop            (Radio)
-    0xf05b, // crosshairs      (Rage)
-    0xf06e, // eye             (Outline Glow)
-    0xf0c7, // save            (toolbar)
-    0xf0d0, // magic           (Effects)
-    0xf108, // desktop         (Hud)
-    0xf1fc, // paint-brush     (Model Glow)
-    0xf70c, // person-running  (Movement)
-    0xf519, // broadcast-tower (Radio)
-    0xf6cb, // dagger          (Inventory)
-    0xf121, // code            (Scripts)
-    0xf8cc, // mouse           (Legit)
-    0xf11c, // keyboard        (bind indicator on bound toggle rows)
+    0xf002, 
+    0xf005, 
+    0xf007, 
+    0xf013, 
+    0xf028, 
+    0xf03d, 
+    0xf03e, 
+    0xf04b, 
+    0xf04d, 
+    0xf05b, 
+    0xf06e, 
+    0xf0c7, 
+    0xf0d0, 
+    0xf108, 
+    0xf1fc, 
+    0xf70c, 
+    0xf519, 
+    0xf6cb, 
+    0xf121, 
+    0xf8cc, 
+    0xf11c, 
     0
 };
 
-// Icon glyphs used inline as UTF-8 string literals. A wrong byte used to render as the atlas
-// fallback (the LAST range glyph - the mouse), so these are decoded and checked against
-// kIconCodepoints at compile time. Add new constants here instead of raw literals.
+
+
+
 constexpr ImWchar iconCodepointOf(const char (&utf8)[4]) noexcept
 {
     return static_cast<ImWchar>(((utf8[0] & 0x0F) << 12) | ((utf8[1] & 0x3F) << 6) | (utf8[2] & 0x3F));
@@ -372,48 +372,48 @@ constexpr bool iconInAtlas(ImWchar codepoint) noexcept
     return false;
 }
 
-constexpr char kIconStar[4] = {'\xEF', '\x80', '\x85', '\0'}; // f005 star (radio favorites, knife preview)
+constexpr char kIconStar[4] = {'\xEF', '\x80', '\x85', '\0'}; 
 static_assert(iconInAtlas(iconCodepointOf(kIconStar)), "star glyph missing from kIconCodepoints");
 
-constexpr char kIconKeyboard[4] = {'\xEF', '\x84', '\x9C', '\0'}; // f11c keyboard (bind indicator)
+constexpr char kIconKeyboard[4] = {'\xEF', '\x84', '\x9C', '\0'}; 
 static_assert(iconInAtlas(iconCodepointOf(kIconKeyboard)), "keyboard glyph missing from kIconCodepoints");
 
-// --- state ---------------------------------------------------------------------
+
 
 struct SelectPopup {
     bool open = false;
     int owner = -1;
     int count = 0;
     const char* const* options = nullptr;
-    void (*apply)(int index) = nullptr; // writes the committed option into config
+    void (*apply)(int index) = nullptr; 
     ImVec2 anchor{};
     float width = 134.0f;
     int openedFrame = 0;
 
-    // Paint-kit picker mode (Inventory page): rows come from PaintKitDatabase for
-    // paintKitDefIndex instead of the static options[] table, the apply callback receives the
-    // RAW KIT ID (not a row index), and the list is searchable + wheel-scrollable (60+ entries
-    // for some weapons - a plain dropdown would be twice the menu's height).
+    
+    
+    
+    
     bool paintKitMode = false;
     std::uint16_t paintKitDefIndex = 0;
-    int paintKitCurrentId = 0; // highlights the committed row
+    int paintKitCurrentId = 0; 
     float paintKitScroll = 0.0f;
     char paintKitSearch[24] = "";
 
-    // Item-def picker mode (Inventory page LOCAL ITEMS): rows come from an arbitrary
-    // ItemDefEntry list (cases / keys from ItemDefDatabase) instead of PaintKitDatabase -
-    // same search/scroll/apply machinery, apply still receives the raw def index.
+    
+    
+    
     const cs2::ItemDefEntry* itemList = nullptr;
     int itemCount = 0;
 
-    // String-list mode (persona presets): rows are plain text options - apply receives the
-    // option INDEX.
+    
+    
     const char* const* stringList = nullptr;
     int stringCount = 0;
 
-    // Skips the virtual "None" row (defIndex 0) for pickers where "none" is meaningless -
-    // ALSO required whenever an entry legitimately uses defIndex 0, or it would collide
-    // with the None row's PushID (the 2026-09-07 radio-phrase ID conflict).
+    
+    
+    
     bool omitNone = false;
 };
 
@@ -422,21 +422,21 @@ struct State {
     bool visualsExpanded = false;
     bool scriptsExpanded = false;
     SelectPopup popup;
-    // keybind capture (mirrors the Panorama KeybindCapture state machine); the row being
-    // captured is identified by its control id
+    
+    
     enum class Capture { Inactive, WaitingRelease, WaitingPress };
     Capture capture = Capture::Inactive;
     int captureOwner = -1;
-    float captureAge = 0.0f;   // time spent in WaitingRelease (2s cap - see keybindRow)
-    int editingSlider = -1; // control id of the slider whose pill is being text-edited
+    float captureAge = 0.0f;   
+    int editingSlider = -1; 
     char editBuffer[12] = "";
     bool profileOpen = false;
     int profileOpenedFrame = -1;
-    float scalePreview = 1.0f; // scale slider drag carry: last previewed value, committed on release
+    float scalePreview = 1.0f; 
     bool scaleDragging = false;
 
-    // multi-select combo popover (rows registered by multiSelectVar via generic accessors -
-    // the popover is drawn outside this row's template context, after the content clip)
+    
+    
     bool multiSelectOpen = false;
     int multiSelectOwner = -1;
     int multiSelectOpenedFrame = -1;
@@ -446,7 +446,7 @@ struct State {
     void (*multiSelectToggle)(std::size_t) = nullptr;
     const char* const* multiSelectNames = nullptr;
 
-    // color picker popover (same accessor pattern, for one RGBA config var)
+    
     bool colorPickerOpen = false;
     int colorPickerOwner = -1;
     int colorPickerOpenedFrame = -1;
@@ -454,9 +454,9 @@ struct State {
     color::Rgba (*colorGet)() = nullptr;
     void (*colorSet)(color::Rgba) = nullptr;
 
-    // feature-bind popup (right-click on a registered toggle): edits the FeatureBinds registry
-    // entry at featureBindIndex - key capture reuses the State::Capture machine with a dedicated
-    // owner id (never a real control id, which are small positive ints)
+    
+    
+    
     bool featureBindOpen = false;
     int featureBindOpenedFrame = -1;
     int featureBindIndex = -1;
@@ -477,17 +477,17 @@ StyleSelectState styleSelect;
 
 State state;
 
-// The glow pages share one nav tab: a segmented control at the top of the page switches between
-// the Outline Glow and Model Glow feature sections (0 = outline, 1 = model).
+
+
 int glowSubTab = 0;
-// Which glow sub-tab the rows currently being rendered belong to - search index entries are
-// tagged with it so a search hit opens the right sub-tab.
+
+
 int searchGlowSubTab = 0;
 
-// Sub-page groups for the other tabbed pages (pageSubTabPills): Rage splits aim/accuracy,
-// Legit splits aim/triggerbot, Misc splits general/chat/other. The search index tags rows with
-// the same searchGlowSubTab global (it is the generic sub-tab tag; inventory's categories reuse
-// it too), and activateSearchMatch maps a hit back onto the page's own sub-tab variable.
+
+
+
+
 int rageSubTab = 0;
 constexpr const char* const kRageSubTabs[] = {"Aimbot", "Accuracy"};
 int legitSubTab = 0;
@@ -495,55 +495,55 @@ constexpr const char* const kLegitSubTabs[] = {"Aimbot", "Triggerbot"};
 int miscSubTab = 0;
 constexpr const char* const kMiscSubTabs[] = {"General", "Chat", "Other"};
 
-// content scrolling (manual - the hand-drawn content does not live in an ImGui child).
-// scrollTarget is what the wheel writes; scrollOffset (the rendered position) eases toward it
-// with a frame-rate independent exponential decay - wheel notches land as a short glide
-// instead of a 40px jump, and trackpads accumulate naturally.
+
+
+
+
 float scrollOffset = 0.0f;
-float dropdownScroll = 0.0f; // (retired with the plain dropdown layer - kept so the save struct offsets stay stable)
+float dropdownScroll = 0.0f; 
 float scrollTarget = 0.0f;
 float maxScroll = 0.0f;
 
-ImVec2 shellBase{0.0f, 0.0f}; // window position, set each frame in render()
+ImVec2 shellBase{0.0f, 0.0f}; 
 
-// --- global search ---------------------------------------------------------------------
-// Rows self-register (label, page, content-relative y) into this index while their page
-// renders. The full index is built lazily on first search open by ghost-rendering one page
-// per frame into an offscreen throwaway window (widgets are skipped there - only our layout
-// code runs), so the index can never drift from the actual row labels.
+
+
+
+
+
 
 constexpr int kSearchIndexCap = 512;
 
 struct SearchEntry {
     const char* label;
     Page page;
-    float contentY; // top of the row, relative to the content area top
-    int subTab = 0; // glow page sub-tab the row belongs to (0 = outline, 1 = model)
+    float contentY; 
+    int subTab = 0; 
 };
 
 SearchEntry searchIndex[kSearchIndexCap];
 int searchIndexCount = 0;
-int searchIndexPageCursor = 0; // next Page to ghost-render during the build
+int searchIndexPageCursor = 0; 
 bool searchIndexBuilt = false;
-bool searchIndexing = false;   // true only during a ghost page run
+bool searchIndexing = false;   
 
 bool searchOpen = false;
 int searchOpenedFrame = -1;
 char searchQuery[64] = "";
-int searchSelected = 0; // keyboard selection into the visible match list
+int searchSelected = 0; 
 
 constexpr const char* kPageNames[] = {
     "Rage", "Legit", "Movement", "Player Info", "Glow",
     "Viewmodel", "Effects", "Hud", "Sound", "Inventory", "Radio", "Scripts", "Misc"
 };
-// gui.page() maps names -> ScriptPage (LuaManager.h) and the menu renders by Page: the two
-// tables must stay in lockstep.
+
+
 static_assert(lua::kScriptPageCount == static_cast<int>(sizeof(kPageNames) / sizeof(kPageNames[0])),
     "kPageNames and lua::kScriptPageNames diverged");
 static_assert(static_cast<int>(lua::ScriptPage::Misc) == static_cast<int>(Page::Misc),
     "ScriptPage order no longer matches Page");
 
-// Case-insensitive substring locator; returns nullptr when absent (or the needle is empty).
+
 [[nodiscard]] const char* searchMatchPosition(const char* haystack, const char* needle) noexcept
 {
     if (!needle[0])
@@ -558,23 +558,23 @@ static_assert(static_cast<int>(lua::ScriptPage::Misc) == static_cast<int>(Page::
     return nullptr;
 }
 
-// Case-insensitive substring match (strcasestr is GNU-only; keep it portable and local).
+
 [[nodiscard]] bool searchMatches(const char* haystack, const char* needle) noexcept
 {
     return searchMatchPosition(haystack, needle) != nullptr;
 }
 
-// cinematic open: 0 right after the menu is toggled open, eased to 1 while rendering
+
 float reveal = 1.0f;
-// Set on the menu-close falling edge (beginDismiss); the reveal transform then runs BACKWARDS
-// (scale down + slide + fade) while GUI.cpp keeps the render path alive past the alpha fade.
-// Cleared once the animation lands (reveal ~ 0) and on reopen (beginReveal wins).
+
+
+
 bool dismissActive = false;
 
 bool configPopoverOpen = false;
-std::uint64_t lastCleanConfigEpoch = 0; // ui_config::changeEpoch at the last save/switch/restore
+std::uint64_t lastCleanConfigEpoch = 0; 
 int configPopoverOpenedFrame = -1;
-ImVec2 menuOffset{0.0f, 0.0f}; // user drag offset from the screen-centered position
+ImVec2 menuOffset{0.0f, 0.0f}; 
 bool draggingWindow = false;
 ImVec2 dragStartMouse{0.0f, 0.0f};
 ImVec2 dragStartOffset{0.0f, 0.0f};
@@ -582,7 +582,7 @@ char newConfigName[41] = "";
 char configSearch[32] = "";
 constexpr std::uint8_t ConfigVisibleCap = 16;
 
-// trigger/rect tracking for close-on-outside-click
+
 ImVec2 configChipMin, configChipMax;
 ImVec2 unloadButtonMin, unloadButtonMax;
 ImVec2 searchButtonMin, searchButtonMax;
@@ -594,16 +594,16 @@ ImVec2 styleAnchorMin, styleAnchorMax;
     return ImGui::IsMouseClicked(0) && !ImGui::IsMouseHoveringRect(min, max);
 }
 
-// --- animation helpers (reference implementation) --------------------------------
 
-// Set once per frame in render(); motion() and the transforms read it instead of hitting the
-// config system on every call (motion() runs dozens of times per frame).
+
+
+
 bool g_reduceMotion = false;
 
 float motion(ImGuiID id, float target, float speed = 16.0f, float initial = -1.0f) noexcept
 {
     float* value = ImGui::GetStateStorage()->GetFloatRef(id, initial < 0.0f ? target : initial);
-    if (g_reduceMotion) { // accessibility: snap straight to the target, no easing
+    if (g_reduceMotion) { 
         *value = target;
         return target;
     }
@@ -613,11 +613,11 @@ float motion(ImGuiID id, float target, float speed = 16.0f, float initial = -1.0
     return *value;
 }
 
-// Animation slots MUST key on the row's control id, never on ImGui::GetItemID(): a row covered
-// by an open popup submits a Dummy (item id 0 - see hit()), and a GetItemID-keyed slot was then
-// SHARED by every covered row - while any dropdown was open, all covered sliders/toggles eased
-// toward each other's values through one storage float (visible drift) and snapped back when
-// the popup closed. The salt keeps the domains of different primitives disjoint.
+
+
+
+
+
 ImGuiID animKey(ImU32 salt, int id) noexcept
 {
     return ImHashData(&id, sizeof(id), salt);
@@ -640,8 +640,8 @@ void textY(ImDrawList* d, float x, float y, float h, ImU32 color, const char* va
     text(d, ImVec2(x, y + std::floor((h - textHeight) * 0.5f)), color, value, size, f);
 }
 
-// Horizontally AND vertically centered text inside a rect - pill labels (mode pills, unbind,
-// keybind buttons) read as labels, not sentences, so they sit centered like the value pills.
+
+
 void textYCentered(ImDrawList* d, float x, float w, float y, float h, ImU32 color, const char* value, float size, ImFont* font = nullptr) noexcept
 {
     ImFont* f = font ? font : ImGui::GetFont();
@@ -649,9 +649,9 @@ void textYCentered(ImDrawList* d, float x, float w, float y, float h, ImU32 colo
     textY(d, x + std::floor((w - textWidth) * 0.5f), y, h, color, value, size, f);
 }
 
-// Slider value pill text as one centered run: bright number + dimmed unit ("120 ms"). The
-// unit reads as metadata; the number is the payload (same two-level text hierarchy the
-// watermark chips use).
+
+
+
 void drawValuePillText(ImDrawList* d, float x, float w, float y, float h, const char* number, const char* suffix) noexcept
 {
     ImFont* f = ImGui::GetFont();
@@ -664,13 +664,13 @@ void drawValuePillText(ImDrawList* d, float x, float w, float y, float h, const 
         textY(d, startX + numberWidth, y, h, kTextFaint, suffix, kTextControl, nullptr);
 }
 
-// The toggle affordance everywhere: a SWITCH - pill track 1.6x wider than tall with a round
-// knob that slides between the dark resting track and the button accent, knob eases with `on`
-// (hover previews at ~48%). Track height is 85% of the passed footprint (boxSize = the old
-// checkbox chip size) - vertically centered on it, RIGHT edge aligned to the footprint's right
-// edge, extends LEFTWARD - so vertical row metrics and the right edge all callers aligned to
-// stay put. Returns the drawn track rect so callers can center halos/hit areas on the real
-// geometry.
+
+
+
+
+
+
+
 ImRect drawCheckboxChip(ImDrawList* d, ImVec2 p, float boxSize, float on) noexcept
 {
     const float trackHeight = boxSize * 0.85f;
@@ -681,7 +681,7 @@ ImRect drawCheckboxChip(ImDrawList* d, ImVec2 p, float boxSize, float on) noexce
     const float radius = trackHeight * 0.5f;
     d->AddRectFilled(trackMin, trackMax, mix(C(27, 27, 29), g_buttonAccent, on), radius);
     d->AddRect(trackMin, trackMax, mix(kHairlineSoft, g_buttonAccent, on), radius);
-    // knob: rides the track with a small inset, diameter = track height minus the inset
+    
     const float knob = trackHeight - s(3.5f);
     const float travel = trackWidth - knob - s(3.5f);
     const float knobX = trackMin.x + s(1.75f) + travel * ImSaturate(on);
@@ -690,24 +690,24 @@ ImRect drawCheckboxChip(ImDrawList* d, ImVec2 p, float boxSize, float on) noexce
     return ImRect(trackMin, trackMax);
 }
 
-// --- popup occlusion tracking -------------------------------------------------------------
-//
-// The hand-drawn popups all render into the same window with no ImGui occlusion between them,
-// so hit-testing is done by hand: every popup records the rect it drew (popupCur), the snapshot
-// is rotated into popupPrev at the end of the frame, and a hit() whose rect overlaps a recorded
-// popup submits NO interactive item at all (a Dummy). In imgui 1.91.7 the first-submitted item
-// under the mouse claims HoveredId - even a DISABLED one (ItemHoverable: SetHoveredID runs
-// before the ImGuiItemFlags_Disabled early-out; later items are rejected while HoveredId is
-// taken) - so a covered page control must not submit an InvisibleButton, or every popup row
-// drawn above it would be dead. Controls NOT covered by a popup stay fully live while one is
-// open: clicking one activates it AND dismisses the popup through the popup's own
-// click-outside check, so nothing ever needs a throwaway click first.
+
+
+
+
+
+
+
+
+
+
+
+
 
 enum PopupKind { PopupConfig, PopupProfile, PopupStyle, PopupDropdown, PopupMultiSelect, PopupColor, PopupFeatureBind, PopupKindCount };
 
 struct PopupRect { ImVec2 min, max; bool valid; };
-PopupRect popupPrev[PopupKindCount] = {}; // complete snapshot of last frame's popups
-PopupRect popupCur[PopupKindCount] = {};  // rebuilt by the popups as they render this frame
+PopupRect popupPrev[PopupKindCount] = {}; 
+PopupRect popupCur[PopupKindCount] = {};  
 
 bool coveredByPrevPopup(int exceptKind, ImVec2 min, ImVec2 max) noexcept
 {
@@ -729,58 +729,58 @@ bool hit(const char* id, ImVec2 p, ImVec2 size) noexcept
 {
     ImGui::SetCursorScreenPos(p);
     if (coveredByPrevPopup(-1, p, p + size)) {
-        // Covered by an open popup: submit a Dummy and NO interactive item. In imgui 1.91.7 even
-        // a DISABLED InvisibleButton claims HoveredId (ItemHoverable calls SetHoveredID before the
-        // ImGuiItemFlags_Disabled early-out), and any later item at that position is then rejected
-        // - which made every popup row drawn over a page control unclickable. A Dummy (id == 0)
-        // never claims HoveredId, so the popup's row above wins the hover/click instead.
+        
+        
+        
+        
+        
         ImGui::Dummy(size);
         return false;
     }
     return ImGui::InvisibleButton(id, size);
 }
 
-// Rows INSIDE a hand-drawn popup: never gated by the popup's own recorded rect, but still dodge
-// popups rendered above it (e.g. the RGBA picker or preset list hanging inside the profile
-// popover would otherwise lose their rows to the host rows underneath them).
+
+
+
 bool hitPopupRow(const char* id, ImVec2 p, ImVec2 size, int ownKind) noexcept
 {
     ImGui::SetCursorScreenPos(p);
     if (coveredByPrevPopup(ownKind, p, p + size)) {
-        ImGui::Dummy(size); // see hit(): a Dummy never claims HoveredId, the popup above wins
+        ImGui::Dummy(size); 
         return false;
     }
     return ImGui::InvisibleButton(id, size);
 }
 
-// For the leaf popups' own rows/strips (multi-select, RGBA picker, style presets): never gated,
-// they are the topmost content at their position.
+
+
 bool hitModal(const char* id, ImVec2 p, ImVec2 size) noexcept
 {
     ImGui::SetCursorScreenPos(p);
     return ImGui::InvisibleButton(id, size);
 }
 
-// 9-slice of the precomputed gaussian stamp (white, alpha = blur profile) tinted by `tint`:
-// used for the drop shadow (black tint) and the outer menu glow (accent/rainbow tint).
-// Returns false when the stamp has not been uploaded yet (caller falls back).
+
+
+
 bool drawStampSlice(ImDrawList* d, ImVec2 min, ImVec2 max, float margin, ImU32 tint) noexcept
 {
     if (const auto stamp = reinterpret_cast<ImTextureID>(VulkanHook::shadow_texture::query())) {
         using VulkanHook::shadow_texture::kMargin;
         using VulkanHook::shadow_texture::kStampSize;
         constexpr float inv = 1.0f / static_cast<float>(kStampSize);
-        const float edge = kMargin * inv;                          // uv where the box edge sits
+        const float edge = kMargin * inv;                          
         const float coreEnd = (kStampSize - kMargin) * inv;
-        const float m = margin;                                    // one blur band on screen
+        const float m = margin;                                    
 
         const ImVec2 a = min - ImVec2(m, m);
         const ImVec2 b = max + ImVec2(m, m);
-        // corners (m x m): the blur band around each rounded corner curve. The gaussian inside the
-        // stamp's corner square is still strong near the box edge (up to ~50% just outside the
-        // curve), which over a bright game scene reads as a square grey wedge hugging the corner -
-        // dim the corner pieces and fade each one's outer tip to zero so the corner falloff
-        // always looks round instead of a hard square patch.
+        
+        
+        
+        
+        
         const int cornerBase = d->VtxBuffer.Size;
         d->AddImage(stamp, a, min, ImVec2(0.0f, 0.0f), ImVec2(edge, edge), tint);
         d->AddImage(stamp, ImVec2(max.x, a.y), ImVec2(b.x, min.y), ImVec2(coreEnd, 0.0f), ImVec2(1.0f, edge), tint);
@@ -789,14 +789,14 @@ bool drawStampSlice(ImDrawList* d, ImVec2 min, ImVec2 max, float margin, ImU32 t
         for (int corner = 0; corner < 4; ++corner) {
             ImDrawVert* quad = &d->VtxBuffer[cornerBase + corner * 4];
             for (int v = 0; v < 4; ++v) {
-                // outer tip of the corner quad sits at quad vertex index == corner (TL=0, TR=1, BL=2, BR=3)
+                
                 const ImU32 alpha = (v == corner)
                     ? 0u
                     : ((quad[v].col >> IM_COL32_A_SHIFT) & 255u) * 55u / 100u;
                 quad[v].col = (quad[v].col & 0x00ffffffu) | (alpha << IM_COL32_A_SHIFT);
             }
         }
-        // edges (band strips): gaussian profile across, stretched along the length
+        
         d->AddImage(stamp, ImVec2(min.x, a.y), ImVec2(max.x, min.y), ImVec2(edge, 0.0f), ImVec2(coreEnd, edge), tint);
         d->AddImage(stamp, ImVec2(min.x, max.y), ImVec2(max.x, b.y), ImVec2(edge, coreEnd), ImVec2(coreEnd, 1.0f), tint);
         d->AddImage(stamp, ImVec2(a.x, min.y), ImVec2(min.x, max.y), ImVec2(0.0f, edge), ImVec2(edge, coreEnd), tint);
@@ -812,9 +812,9 @@ bool drawStampSlice(ImDrawList* d, ImVec2 min, ImVec2 max, float margin, ImU32 t
 
 void softShadow(ImDrawList* d, ImVec2 min, ImVec2 max, float rounding, float margin = 0.0f) noexcept
 {
-    // real gaussian falloff via the precomputed shadow stamp (shadow_texture in VulkanHook.h);
-    // the layered-rect fake runs until the stamp upload completes (first frames) or permanently
-    // if it failed.
+    
+    
+    
     drawStampSlice(d, min, max, margin > 0.0f ? margin : s(12.0f), C(0, 0, 0, 110));
 }
 
@@ -824,8 +824,8 @@ void chevron(ImDrawList* d, ImVec2 p, ImU32 color) noexcept
     d->AddLine(p + ImVec2(s(3), s(3)), p + ImVec2(s(0), s(6)), color, s(1.3f));
 }
 
-// Pulsing accent dot: soft breathing halo + bright core (the build-chip recipe, applied to
-// every header dot in the menu so they all breathe in sync).
+
+
 void pulsingDot(ImDrawList* d, ImVec2 center, float radius, ImU32 color, float speed = 2.2f) noexcept
 {
     const float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(ImGui::GetTime()) * speed);
@@ -833,9 +833,9 @@ void pulsingDot(ImDrawList* d, ImVec2 center, float radius, ImU32 color, float s
     d->AddCircleFilled(center, radius, (color & 0x00FFFFFFu) | (static_cast<ImU32>(150 + 90 * pulse) << IM_COL32_A_SHIFT));
 }
 
-// --- toasts ---------------------------------------------------------------------------
-// Small bottom-center feedback pills (config saved/switched/created, failures). Ring of 4,
-// newest at the bottom; drawn last so they sit above popups.
+
+
+
 
 struct Toast { char text[96]; double born; ImU32 tint; };
 Toast toasts[4] = {};
@@ -909,21 +909,21 @@ ImFont* iconFont() noexcept
     return fonts.Size > 2 ? fonts[2] : ImGui::GetFont();
 }
 
-// --- row layout -----------------------------------------------------------------
+
 
 struct CardContext {
-    ImVec2 origin; // first row's top-left on screen
+    ImVec2 origin; 
     float width = 0.0f;
-    float row = 0.0f; // fractional: cardDivider() consumes partial rows for sub-group captions
-    float labelReserve = 0.0f; // row's right-control reserve, set BEFORE beginRow (0 = widest s(158))
-    float lastLabelWidth = 0.0f; // DRAWN (possibly truncated) label width of the previous row
+    float row = 0.0f; 
+    float labelReserve = 0.0f; 
+    float lastLabelWidth = 0.0f; 
 };
 
 CardContext card;
 
-// Central label fitting: draws the label ellipsized to `maxWidth` when too long (UTF-8 aware),
-// returns the DRAWN width so followers (bind glyph etc.) can position after it. Before this,
-// long labels just ran under the right-hand controls; hueRow hand-rolled its own dodge.
+
+
+
 float drawLabelFit(ImDrawList* d, float x, float y, float h, ImU32 color, const char* label, float size, ImFont* font, float maxWidth) noexcept
 {
     font = font ? font : ImGui::GetFont();
@@ -959,18 +959,18 @@ void beginRow(ImDrawList* d, const char* label) noexcept
         searchIndex[searchIndexCount++] = {label, static_cast<Page>(searchIndexPageCursor), y - (shellBase.y + kToolbarHeight + s(24.0f)), searchGlowSubTab};
     if (card.row > 0.5f)
         d->AddLine(ImVec2(card.origin.x + s(12), y), ImVec2(card.origin.x + card.width - s(12), y), kHairline);
-    // label fitting: keep the text clear of the row's right-hand control. Rows set
-    // card.labelReserve = distance from the card's right edge to the control's left edge;
-    // 0 falls back to the widest control set (slider track + value pill ~s(158)).
+    
+    
+    
     const float reserve = card.labelReserve > 0.0f ? card.labelReserve : s(158.0f);
     card.labelReserve = 0.0f;
     card.lastLabelWidth = drawLabelFit(d, card.origin.x + s(13), y, kRowHeight, kTextBodyCol, label, kTextBody, nullptr, card.width - s(13) - reserve);
     card.row += 1.0f;
 }
 
-// In-card sub-group caption: a hairline + small caption consuming one row slot. Splits long
-// cards (e.g. the triggerbot) into scannable sections without a second card frame. The accent
-// tick before the caption distinguishes it from a real card header band at a glance.
+
+
+
 void cardDivider(const char* caption) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
@@ -979,8 +979,8 @@ void cardDivider(const char* caption) noexcept
         searchIndex[searchIndexCount++] = {caption, static_cast<Page>(searchIndexPageCursor), y - (shellBase.y + kToolbarHeight + s(24.0f)), searchGlowSubTab};
     if (card.row > 0.5f)
         d->AddLine(ImVec2(card.origin.x + s(12), y), ImVec2(card.origin.x + card.width - s(12), y), kHairline);
-    // ImVec2(card.origin + ImVec2(x, y)) would DOUBLE-add origin.y (y already includes it) -
-    // the accent tick used to drift down the page (the orphan purple marks of 2026-09-09).
+    
+    
     d->AddRectFilled(ImVec2(card.origin.x + s(13), y + rowCentered(s(10))), ImVec2(card.origin.x + s(13) + s(2.5f), y + rowCentered(s(10)) + s(10)),
         (g_accent & 0x00FFFFFFu) | (130u << IM_COL32_A_SHIFT), s(1.2f));
     textY(d, card.origin.x + s(21), y, kRowHeight, kTextFaint, caption, kTextCaption, nullptr);
@@ -993,12 +993,12 @@ void cardDivider(const char* caption) noexcept
     return ImVec2(card.origin.x + card.width - widthFromRight, y);
 }
 
-// --- row primitives ---------------------------------------------------------------
+
 
 bool toggle(const char* label, bool* value, int id, bool* rightClicked = nullptr) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
-    card.labelReserve = s(36.0f); // checkbox chip
+    card.labelReserve = s(36.0f); 
     beginRow(d, label);
 
     ImVec2 p = rowControlPos(s(36.0f));
@@ -1008,8 +1008,8 @@ bool toggle(const char* label, bool* value, int id, bool* rightClicked = nullptr
     const bool clicked = hit("##toggle", p - ImVec2(s(14), s(6)), ImVec2(s(38), s(32)));
     if (rightClicked)
         *rightClicked = ImGui::IsItemClicked(ImGuiMouseButton_Right);
-    // Hover preview, same as the popover checkboxes (Outer Glow etc.): hovering an OFF switch
-    // tints it halfway toward the accent - the fill then commits on click. ON switches stay lit.
+    
+    
     const float on = motion(animKey(0x55aa721u, id), *value ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f, 19.0f);
     const float hover = motion(animKey(0x118a0u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f, 20.0f);
     ImGui::PopID();
@@ -1017,7 +1017,7 @@ bool toggle(const char* label, bool* value, int id, bool* rightClicked = nullptr
         *value = !*value;
 
     const ImRect track = drawCheckboxChip(d, p, s(20), on);
-    // soft accent halo while the switch is ON - the knob feels "lit" instead of just colored
+    
     if (on > 0.05f) {
         d->AddRectFilled(track.Min - ImVec2(s(3), s(3)), track.Max + ImVec2(s(3), s(3)), (g_buttonAccent & 0x00FFFFFFu) | (static_cast<ImU32>(26 * on) << IM_COL32_A_SHIFT), s(10));
         d->AddRectFilled(track.Min - ImVec2(s(6), s(6)), track.Max + ImVec2(s(6), s(6)), (g_buttonAccent & 0x00FFFFFFu) | (static_cast<ImU32>(10 * on) << IM_COL32_A_SHIFT), s(13));
@@ -1027,19 +1027,19 @@ bool toggle(const char* label, bool* value, int id, bool* rightClicked = nullptr
 }
 
 bool selectList(const char* label, int* index, const char* const* options, int count, int id,
-    void (*apply)(int)) noexcept; // the unified dropdown popup (defined below)
+    void (*apply)(int)) noexcept; 
 
 bool select(const char* label, int* index, const char* const* options, int count, int id,
     void (*apply)(int) = nullptr) noexcept
 {
-    // UNIFIED DROPDOWN: every dropdown in the menu opens the same searchable, wheel-scrollable
-    // list popup (the old fixed 10-row dropdown is gone - one widget, one behavior).
+    
+    
     selectList(label, index, options, count, id, apply);
     return false;
 }
 
-// The one true dropdown popup - searchable, wheel-scrollable, scrollbar-draggable. Both the
-// select() alias and every list-style picker (presets, regions, kick reasons) route here.
+
+
 bool selectList(const char* label, int* index, const char* const* options, int count, int id,
     void (*apply)(int) = nullptr) noexcept
 {
@@ -1059,16 +1059,16 @@ bool selectList(const char* label, int* index, const char* const* options, int c
     if (click) {
         state.popup.open = !(state.popup.open && state.popup.owner == id);
         state.popup.owner = id;
-        state.popup.options = options; // the control reads its current value from this
+        state.popup.options = options; 
         state.popup.count = count;
         state.popup.apply = apply;
         state.popup.anchor = cp;
         state.popup.width = controlWidth;
         state.popup.openedFrame = ImGui::GetFrameCount();
         state.popup.paintKitMode = true;
-        // CLEAR every other popup mode's state first - the layer fields persist across popups,
-        // and a stale paintKitDefIndex/stringList from a previous picker would silently shadow
-        // this popup's option list (rows rendered from the wrong source).
+        
+        
+        
         state.popup.paintKitDefIndex = 0;
         state.popup.itemList = nullptr;
         state.popup.itemCount = 0;
@@ -1082,8 +1082,8 @@ bool selectList(const char* label, int* index, const char* const* options, int c
 
     d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(kPillBg, kPillBgHover, response), s(7));
     d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(kHairlineSoft, g_accent, response), s(7));
-    // Clip to the pill: option labels (player names, preset names) are routinely wider than
-    // the 134px control and used to spill over the neighboring rows.
+    
+    
     d->PushClipRect(cp + ImVec2(s(7), 0.0f), cp + ImVec2(controlWidth - s(14), s(23)), true);
     textY(d, cp.x + s(7), cp.y, s(23), (*index >= 0 && *index < count) ? C(200, 203, 212) : C(120, 124, 134), (*index >= 0 && *index < count) ? options[*index] : "Select", kTextControl, nullptr);
     d->PopClipRect();
@@ -1118,7 +1118,7 @@ bool sliderRow(const char* label, int* value, int min, int max, int id, const ch
 
         d->AddRectFilled(start, start + ImVec2(trackWidth, s(3)), C(33, 33, 36), s(2));
         d->AddRectFilled(start, start + ImVec2(trackWidth * shown, s(3)), g_sliderAccent, s(2));
-        // while dragging: accent ring around the thumb + a value bubble riding above it
+        
         if (dragging) {
             const ImVec2 thumb = start + ImVec2(trackWidth * shown, s(1.5f));
             d->AddCircle(thumb, s(7.5f), (g_sliderAccent & 0x00FFFFFFu) | (90u << IM_COL32_A_SHIFT), 0, s(1.2f));
@@ -1136,10 +1136,10 @@ bool sliderRow(const char* label, int* value, int min, int max, int id, const ch
         d->AddCircleFilled(start + ImVec2(trackWidth * shown, s(1.5f)), s(5.5f), C(247, 248, 252));
     }
 
-    // Value pill: click to type an exact value (editable sliders). The pill grows leftward to
-    // fit the text (big values like fog distance "3873.73" used to spill out of the fixed 42px)
-    // but is CAPPED below the slider track's start (rowControlPos(s(145))) - uncapped, huge
-    // values ("11800ms") grew into the track in EVERY tab that has a wide-range slider.
+    
+    
+    
+    
     char pillNumber[16];
     std::snprintf(pillNumber, sizeof(pillNumber), "%d", *value);
     const char* pillSuffix = suffix ? suffix : "";
@@ -1157,8 +1157,8 @@ bool sliderRow(const char* label, int* value, int min, int max, int id, const ch
         ImGui::PushStyleColor(ImGuiCol_Border, g_accent);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(4), s(2)));
         ImGui::PushItemWidth(pillWidth - s(8));
-        ImGui::SetKeyboardFocusHere(0); // focus on frame 1 - without this the not-yet-focused
-        ImGui::InputText("##edit", state.editBuffer, sizeof(state.editBuffer), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll); // input trips lostFocus instantly
+        ImGui::SetKeyboardFocusHere(0); 
+        ImGui::InputText("##edit", state.editBuffer, sizeof(state.editBuffer), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll); 
         const bool committed = ImGui::IsItemDeactivatedAfterEdit() || ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter);
         const bool lostFocus = ImGui::IsItemDeactivatedAfterEdit() || (!ImGui::IsItemActive() && !ImGui::IsItemFocused() && ImGui::IsMouseClicked(0) && !ImGui::IsItemHovered());
         ImGui::PopItemWidth();
@@ -1174,7 +1174,7 @@ bool sliderRow(const char* label, int* value, int min, int max, int id, const ch
             state.editingSlider = id;
             std::snprintf(state.editBuffer, sizeof(state.editBuffer), "%d", *value);
         }
-        // Clip to the pill: a capped pill must never paint its text over the track.
+        
         d->PushClipRect(pill, pill + ImVec2(pillWidth, s(21)), true);
         drawValuePillText(d, pill.x, pillWidth, pill.y, s(21), pillNumber, pillSuffix);
         d->PopClipRect();
@@ -1183,9 +1183,9 @@ bool sliderRow(const char* label, int* value, int min, int max, int id, const ch
     return *value != previousValue;
 }
 
-// Fractional-slider row: the same sliderRow visuals (track + thumb + drag ring + value bubble
-// + click-to-type pill) for float values. Shared widget - script float sliders (gui.*) and any
-// future native float row render through this, never a local variant.
+
+
+
 bool sliderRowFloat(const char* label, float* value, float min, float max, int id, const char* suffix) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
@@ -1272,18 +1272,18 @@ bool sliderRowFloat(const char* label, float* value, float min, float max, int i
     return *value != previousValue;
 }
 
-// Single-line text-input row: label on the left, pill-styled InputText on the right.
-// Shared widget - script text inputs (gui.*), the glitch generator and any future native text
-// row use this. extraFlags lets callers add ImGuiInputTextFlags_ReadOnly (preview fields).
-// fullWidth switches to the native template-row geometry (chatTemplateRow / DiscordRpc): the
-// field starts s(96) in and spans the rest of the card, instead of the compact right-aligned
-// script-item pill - same widget, same interaction, the card's own width scale.
-//
-// The InputText is the ONLY ImGui item in the pill: the old version submitted an
-// InvisibleButton first (hover tracking), but that button claimed the click's ActiveId and the
-// InputText could NEVER gain keyboard focus - "cannot type anything in the field". Pill hover
-// comes from a raw mouse-rect test instead, and hand-drawn popup occlusion is kept by
-// submitting a Dummy instead of the input while a popup covers the row.
+
+
+
+
+
+
+
+
+
+
+
+
 bool textInputRow(const char* label, char* buffer, int bufferSize, int id, ImGuiInputTextFlags extraFlags = 0, bool fullWidth = false) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
@@ -1304,7 +1304,7 @@ bool textInputRow(const char* label, char* buffer, int bufferSize, int id, ImGui
     ImGui::PushID(id + 700000);
     ImGui::SetCursorScreenPos(fp + ImVec2(s(6), s(2)));
     if (covered) {
-        ImGui::Dummy(ImVec2(fieldWidth - s(12), s(17))); // never claims hover (see hit())
+        ImGui::Dummy(ImVec2(fieldWidth - s(12), s(17))); 
         ImGui::PopID();
         return false;
     }
@@ -1320,8 +1320,8 @@ bool textInputRow(const char* label, char* buffer, int bufferSize, int id, ImGui
     return changed;
 }
 
-// Generic one-shot action row: label on the left, a centered-text pill button on the right
-// (the chatActionRow / laggerProbeRow / userinfoRestoreRow visual). Returns true on click.
+
+
 bool actionRow(const char* label, const char* buttonText, int id) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
@@ -1347,7 +1347,7 @@ bool actionRow(const char* label, const char* buttonText, int id) noexcept
 bool hueRow(const char* label, float* hue, int id) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
-    card.labelReserve = s(55.0f); // hue pill; the track dodges the label itself
+    card.labelReserve = s(55.0f); 
     beginRow(d, label);
 
     const float previousHue = *hue;
@@ -1355,9 +1355,9 @@ bool hueRow(const char* label, float* hue, int id) noexcept
     ImVec2 start = rowControlPos(s(175.0f));
     start.y += rowCentered(s(3.0f));
     float trackWidth = s(110.0f);
-    // Long labels (e.g. "FOV Circle Hue") would run into the fixed-position track - shift the
-    // track right past the label and shrink it instead of overlapping, keeping it clear of the
-    // value pill (which starts s(55) from the card's right edge).
+    
+    
+    
     const float labelEnd = card.origin.x + s(13.0f) + ImGui::GetFont()->CalcTextSizeA(kTextBody, FLT_MAX, 0.0f, label).x;
     const float trackRightEdge = card.origin.x + card.width - s(61.0f);
     if (start.x < labelEnd + s(8.0f))
@@ -1393,7 +1393,7 @@ bool hueRow(const char* label, float* hue, int id) noexcept
     return *hue != previousHue;
 }
 
-// --- multi-select combo (bitflag-style over bool config vars) ---------------------------
+
 
 template <typename Var>
 bool multiSelectGetter() noexcept
@@ -1463,8 +1463,8 @@ void multiSelectPopover(ImDrawList* d) noexcept
     const float width = s(160.0f);
     const float rowHeight = s(26.0f);
     const ImVec2 size(width, state.multiSelectCount * rowHeight + s(6.0f));
-    // flip above the anchor control when the popover would run past the clip bottom - the shell
-    // window clips its own draw list, so the clip rect (not the display) is the real bound
+    
+    
     const bool openAbove = state.multiSelectAnchor.y + s(23.0f) + s(4.0f) + size.y > d->GetClipRectMax().y;
     const ImVec2 p(state.multiSelectAnchor.x,
         openAbove ? state.multiSelectAnchor.y - size.y - s(4.0f) : state.multiSelectAnchor.y + s(23.0f) + s(4.0f));
@@ -1499,12 +1499,12 @@ void multiSelectPopover(ImDrawList* d) noexcept
         state.multiSelectOpen = false;
 }
 
-// --- player multi-select (CHEAT O METER scan targets) ------------------------------------
-// The same popover machinery as the static multi-select above, but the option rows are the
-// CURRENT players - refreshed every rendered frame from the player-list snapshot (steal-list
-// style), with the same live-reorder caveat - and the checkboxes read/write the analyzer's
-// cross-thread selection set (cheat_ometer) instead of config vars. Selection keys on the
-// 0-based player slot, so the analyzer and the ESP tags agree with the picker.
+
+
+
+
+
+
 struct AnalyzerSelRow {
     int slot = -1;
     char name[cheat_ometer::kMaxNameLen]{};
@@ -1584,13 +1584,13 @@ void analyzerMultiSelect(const char* label, int id) noexcept
     d->AddLine(cp + ImVec2(controlWidth - s(9), s(13)), cp + ImVec2(controlWidth - s(5), s(9)), C(139, 143, 154), 1.0f);
 }
 
-// --- feature-bind popup (right-click on a registered toggle) -----------------------------
-//
-// Context menu over the toggled row: capture a key (the shared State::Capture machine with a
-// dedicated owner id), pick Toggle/Hold mode, unbind. Edits go straight into the FeatureBinds
-// registry and persist to <configDir>/feature_binds.txt on every change (tiny file). Closes on
-// outside click / Escape - but never while a key capture is in flight (the user is pressing
-// keys somewhere, possibly outside the popup).
+
+
+
+
+
+
+
 
 void featureBindPopover(ImDrawList* d) noexcept
 {
@@ -1602,7 +1602,7 @@ void featureBindPopover(ImDrawList* d) noexcept
     }
     auto& entry = feature_binds::entries[state.featureBindIndex];
 
-    // Another popup took over - yield (the openers close us too; this is belt-and-braces).
+    
     if (state.popup.open || state.multiSelectOpen || state.colorPickerOpen || styleSelect.open)
         state.featureBindOpen = false;
 
@@ -1615,7 +1615,7 @@ void featureBindPopover(ImDrawList* d) noexcept
     const float headerH = s(30.0f);
     const float height = headerH + rowH + gap + rowH + gap + rowH + s(10.0f);
     ImVec2 p = state.featureBindAnchor;
-    // clamp inside the shell clip rect (same rule as the dropdown popover)
+    
     const ImVec2 clipMin = d->GetClipRectMin();
     const ImVec2 clipMax = d->GetClipRectMax();
     p.x = ImClamp(p.x, clipMin.x + s(10.0f), ImMax(clipMin.x + s(10.0f), clipMax.x - width - s(10.0f)));
@@ -1625,19 +1625,19 @@ void featureBindPopover(ImDrawList* d) noexcept
     recordPopupRect(PopupFeatureBind, p, p + size);
     softShadow(d, p, p + size, s(14.0f));
     d->AddRectFilled(p, p + size, (kInsetBg & 0x00FFFFFFu) | (248u << IM_COL32_A_SHIFT), s(12));
-    // the menu's card depth: wide top-light wash + inner highlight
+    
     d->AddRectFilledMultiColor(p + ImVec2(s(10), s(1)), p + ImVec2(width - s(10), s(26)), C(255, 255, 255, 12), C(255, 255, 255, 12), 0, 0);
     d->AddLine(p + ImVec2(s(8), s(0.75f)), p + ImVec2(width - s(8), s(0.75f)), C(255, 255, 255, 18), 1.0f);
     d->AddRect(p, p + size, C(56, 56, 62, 215), s(12));
 
-    // header band: accent dot + label + hairline divider
+    
     pulsingDot(d, p + ImVec2(s(15), headerH * 0.5f - s(1)), s(2.2f), g_accent);
     textY(d, p.x + s(23), p.y + s(6), s(16), C(196, 199, 208), entry.label ? entry.label : "Bind", kTextCaption, strongFont());
     d->AddLine(p + ImVec2(s(8), headerH - s(2)), p + ImVec2(width - s(8), headerH - s(2)), kHairline, 1.0f);
 
     float y = p.y + headerH + s(4);
 
-    // --- key pill (click to capture) ---
+    
     {
         ImGui::PushID(91001);
         const bool clicked = hitModal("##fb_key", ImVec2{p.x + s(10), y}, ImVec2{width - s(20), rowH});
@@ -1653,11 +1653,11 @@ void featureBindPopover(ImDrawList* d) noexcept
                 if (!gui_sdl::anyInputHeld())
                     state.capture = State::Capture::WaitingPress;
             } else if (state.capture == State::Capture::WaitingPress) {
-                if (gui_sdl::scancodeDown[76]) { // Delete clears
+                if (gui_sdl::scancodeDown[76]) { 
                     entry.key = Bind::kOff;
                     feature_binds::save();
                     state.capture = State::Capture::Inactive;
-                } else if (gui_sdl::scancodeDown[41]) { // Escape cancels
+                } else if (gui_sdl::scancodeDown[41]) { 
                     state.capture = State::Capture::Inactive;
                 } else {
                     const std::uint32_t mask = gui_sdl::liveMouseMask();
@@ -1678,8 +1678,8 @@ void featureBindPopover(ImDrawList* d) noexcept
                     }
                     if (bind != Bind::kOff) {
                         entry.key = bind;
-                        entry.lastKeyDown = true; // the captured key is down right now - do not let
-                                                  // the next apply() tick treat it as a fresh edge
+                        entry.lastKeyDown = true; 
+                                                  
                         feature_binds::save();
                         state.capture = State::Capture::Inactive;
                     }
@@ -1699,7 +1699,7 @@ void featureBindPopover(ImDrawList* d) noexcept
         y += rowH + gap;
     }
 
-    // --- mode pills: TOGGLE | HOLD ---
+    
     {
         const float pillWidth = (width - s(20) - gap) * 0.5f;
         for (int mode = 0; mode < 2; ++mode) {
@@ -1722,7 +1722,7 @@ void featureBindPopover(ImDrawList* d) noexcept
         y += rowH + gap;
     }
 
-    // --- unbind pill (only meaningful with a key) ---
+    
     if (entry.key != Bind::kOff) {
         ImGui::PushID(91020);
         const bool clicked = hitModal("##fb_unbind", ImVec2{p.x + s(10), y}, ImVec2{width - s(20), rowH});
@@ -1742,10 +1742,10 @@ void featureBindPopover(ImDrawList* d) noexcept
         state.featureBindOpen = false;
 }
 
-// --- RGBA color picker ------------------------------------------------------------------
-//
-// One RGBA config var (color::Rgba, 0xRRGGBBAA). The popover shows four channel strips
-// (gradient segments in the hueRow style); dragging a strip rewrites that channel.
+
+
+
+
 
 template <typename Var>
 color::Rgba colorPickerGetter() noexcept
@@ -1763,11 +1763,11 @@ template <typename Var>
 void colorVar(const char* label, int id) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
-    card.labelReserve = s(55.0f); // compact swatch
+    card.labelReserve = s(55.0f); 
     beginRow(d, label);
 
-    // Compact swatch control: a full-width pill around a small color square read as a big
-    // empty space - the swatch IS the control.
+    
+    
     const float controlWidth = s(42.0f);
     ImVec2 cp = rowControlPos(controlWidth + s(13.0f));
     cp.y += rowCentered(s(23.0f));
@@ -1797,17 +1797,17 @@ void colorVar(const char* label, int id) noexcept
     const auto color = ui_config::get<Var>();
     const ImVec2 swatch = cp + ImVec2(s(6), s(4));
     d->AddRectFilled(swatch, swatch + ImVec2(s(20), s(15)), C(color.r(), color.g(), color.b(), color.a()), s(3));
-    // hex readout lives in the picker popover now - the row just shows the swatch
+    
 }
 
-// Spread-circle color row: like colorVar, but alpha 0 means "follow the crosshair" - the pill
-// shows a "Crosshair" placeholder instead of a swatch, and setting alpha to 0 in the picker
-// resets to that state (an "unpick" path the plain colorVar rows don't have).
+
+
+
 void spreadCircleColorVar(const char* label, int id) noexcept
 {
     const auto color = ui_config::get<spread_circle_vars::SpreadCircleColor>();
     if (color.a() == 0) {
-        // not customized: render the pill with the placeholder text, still opens the picker
+        
         ImDrawList* d = ImGui::GetWindowDrawList();
         const float controlWidth = ImMin(s(134.0f), card.width * 0.48f);
         card.labelReserve = controlWidth + s(13.0f);
@@ -1844,7 +1844,7 @@ void spreadCircleColorVar(const char* label, int id) noexcept
 }
 
 
-// Discord-style picker: saturation/value square + hue bar + alpha bar + hex readout.
+
 void colorPickerPopover(ImDrawList* d) noexcept
 {
     if (!state.colorPickerOpen || !state.colorGet)
@@ -1852,18 +1852,18 @@ void colorPickerPopover(ImDrawList* d) noexcept
 
     const auto color = state.colorGet();
 
-    // HSV state per open: re-seed from the current color whenever a different picker opens
-    // (same statics shared by all colorVar rows - only one popover is ever open).
+    
+    
     static float hue = 0.0f, sat = 0.0f, val = 0.0f;
     static int seededOwner = -1;
-    static int dragRegion = 0; // 0 none, 1 sv, 2 hue, 3 alpha
+    static int dragRegion = 0; 
     if (seededOwner != state.colorPickerOwner) {
         seededOwner = state.colorPickerOwner;
         dragRegion = 0;
         float rgb[3] = {color.r() / 255.0f, color.g() / 255.0f, color.b() / 255.0f};
         ImGui::ColorConvertRGBtoHSV(rgb[0], rgb[1], rgb[2], hue, sat, val);
         if (sat <= 0.0f && val <= 0.0f)
-            hue = 0.0f; // grayscale keeps a usable square
+            hue = 0.0f; 
     }
 
     const float width = s(170.0f);
@@ -1871,11 +1871,11 @@ void colorPickerPopover(ImDrawList* d) noexcept
     const float barH = s(9.0f);
     const float gap = s(9.0f);
     const float height = s(10) + squareH + gap + barH + gap + barH + gap + s(18);
-    // flip above the anchor swatch when the popover would run past the clip bottom - the shell
-    // window clips its own draw list, so the clip rect (not the display) is the real bound
+    
+    
     const bool openAbove = state.colorPickerAnchor.y + s(23.0f) + s(4.0f) + height > d->GetClipRectMax().y;
-    // horizontal clamp: pills on the left side of a card used to push the picker past the
-    // window's right clip edge (half the SV square/hex readout cut off)
+    
+    
     float pickerX = state.colorPickerAnchor.x;
     const ImVec2 clipMin = d->GetClipRectMin();
     const float clipMaxX = d->GetClipRectMax().x;
@@ -1886,8 +1886,8 @@ void colorPickerPopover(ImDrawList* d) noexcept
     const ImVec2 size(width, height);
     recordPopupRect(PopupColor, p, p + size);
     softShadow(d, p, p + size, s(12.0f));
-    // opaque body: the gradient's corner caps are painted opaque too - at 245 the caps would
-    // show as mismatched lighter patches over the body (and whatever is behind the picker)
+    
+    
     d->AddRectFilled(p, p + size, kInsetBg, s(12));
     d->AddRect(p, p + size, kPopupBorder, s(12));
 
@@ -1897,10 +1897,10 @@ void colorPickerPopover(ImDrawList* d) noexcept
     const ImVec2 alphaPos = ImVec2(squarePos.x, huePos.y + barH + gap);
     const float barWidth = squareSize.x;
 
-    // --- interaction: raw mouse hit tests, NO ImGui items. The page rows behind the picker are
-    // submitted first and (in imgui 1.91.7) claim HoveredId for the rest of the frame - any
-    // InvisibleButton submitted by the picker loses them the click. Mouse-position hit testing
-    // cannot lose that race, and the covered rows stay Dummy-suppressed via the popup rect.
+    
+    
+    
+    
     const bool clickReady = ImGui::GetFrameCount() > state.colorPickerOpenedFrame;
     const ImVec2 mouse = ImGui::GetIO().MousePos;
     const auto inRect = [](const ImVec2& m, const ImVec2& min, const ImVec2& max) {
@@ -1924,9 +1924,9 @@ void colorPickerPopover(ImDrawList* d) noexcept
             static_cast<std::uint8_t>(bb * 255 + 0.5f), color.a()});
     };
 
-    // rounded-corner caps: paint the popover-bg "corner square minus quarter disc" piece over
-    // already-drawn content (AddRectFilledMultiColor cannot round itself). Star-shaped from the
-    // corner, so a small triangle fan is exact - no convexity limit.
+    
+    
+    
     const auto cornerCap = [&](ImVec2 k, ImVec2 cOffset, float amin, float amax, float r) {
         constexpr ImU32 bg = IM_COL32(18, 18, 20, 255);
         const ImVec2 c = k + cOffset;
@@ -1941,13 +1941,13 @@ void colorPickerPopover(ImDrawList* d) noexcept
         }
     };
     const auto roundRectCorners = [&](ImVec2 min, ImVec2 max, float r) {
-        cornerCap(min, ImVec2(r, r), IM_PI, IM_PI * 1.5f, r);                      // TL
-        cornerCap(ImVec2(max.x, min.y), ImVec2(-r, r), -IM_PI * 0.5f, 0.0f, r);    // TR
-        cornerCap(ImVec2(min.x, max.y), ImVec2(r, -r), IM_PI * 0.5f, IM_PI, r);    // BL
-        cornerCap(max, ImVec2(-r, -r), 0.0f, IM_PI * 0.5f, r);                     // BR
+        cornerCap(min, ImVec2(r, r), IM_PI, IM_PI * 1.5f, r);                      
+        cornerCap(ImVec2(max.x, min.y), ImVec2(-r, r), -IM_PI * 0.5f, 0.0f, r);    
+        cornerCap(ImVec2(min.x, max.y), ImVec2(r, -r), IM_PI * 0.5f, IM_PI, r);    
+        cornerCap(max, ImVec2(-r, -r), 0.0f, IM_PI * 0.5f, r);                     
     };
 
-    // --- SV square: white->hue horizontally, then a black vertical fade on top (imgui's trick) ---
+    
     float hr = 0.0f, hg = 0.0f, hb = 0.0f;
     ImGui::ColorConvertHSVtoRGB(hue, 1.0f, 1.0f, hr, hg, hb);
     const ImU32 hueColor = C(static_cast<int>(hr * 255), static_cast<int>(hg * 255), static_cast<int>(hb * 255));
@@ -1962,7 +1962,7 @@ void colorPickerPopover(ImDrawList* d) noexcept
     }
     d->AddCircle(ImVec2(squarePos.x + squareSize.x * sat, squarePos.y + squareSize.y * (1.0f - val)), s(4), C(255, 255, 255, 230), 0, s(1.5f));
 
-    // --- hue bar: one smooth rainbow fade (interpolated quads between the six stops) ---
+    
     constexpr ImU32 hueStops[6] = {C(255, 0, 0), C(255, 255, 0), C(0, 255, 0), C(0, 255, 255), C(0, 0, 255), C(255, 0, 255)};
     for (int i = 0; i < 5; ++i) {
         const float x0 = huePos.x + barWidth * static_cast<float>(i) / 5.0f;
@@ -1978,7 +1978,7 @@ void colorPickerPopover(ImDrawList* d) noexcept
     d->AddCircleFilled(ImVec2(huePos.x + barWidth * hue, huePos.y + barH * 0.5f), s(4.5f), C(247, 248, 252));
     d->AddCircle(ImVec2(huePos.x + barWidth * hue, huePos.y + barH * 0.5f), s(4.5f), C(0, 0, 0, 120), 0, s(1.2f));
 
-    // --- alpha bar: checkerboard under a transparent->color fade ---
+    
     for (int i = 0; i < 8; ++i)
         for (int j = 0; j < 2; ++j)
             d->AddRectFilled(ImVec2(alphaPos.x + barWidth / 8 * i, alphaPos.y + barH / 2 * j),
@@ -1994,24 +1994,24 @@ void colorPickerPopover(ImDrawList* d) noexcept
     d->AddCircleFilled(ImVec2(alphaPos.x + barWidth * (color.a() / 255.0f), alphaPos.y + barH * 0.5f), s(4.5f), C(247, 248, 252));
     d->AddCircle(ImVec2(alphaPos.x + barWidth * (color.a() / 255.0f), alphaPos.y + barH * 0.5f), s(4.5f), C(0, 0, 0, 120), 0, s(1.2f));
 
-    // hex readout
+    
     char hex[10];
     std::snprintf(hex, sizeof(hex), "#%02X%02X%02X%02X", color.r(), color.g(), color.b(), color.a());
     const float hexWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, hex).x;
     textY(d, squarePos.x + (width - s(18) - hexWidth) * 0.5f, alphaPos.y + barH + gap, s(14), C(170, 173, 184), hex, kTextControl, nullptr);
 
-    // click anywhere outside the picker (and its anchor swatch) closes it
+    
     if (ImGui::GetFrameCount() > state.colorPickerOpenedFrame
         && clickedOutside(p, p + size)
         && clickedOutside(state.colorPickerAnchor, state.colorPickerAnchor + ImVec2(s(72.0f), s(20.0f))))
         state.colorPickerOpen = false;
 }
 
-// --- RGBA color picker end ---------------------------------------------------------------
 
-// --- float slider (config var: InRange<float, min, max>) ---------------------------------
-// Same interaction model as the int sliderRow: drag the track or click the pill to type an
-// exact value. Values serialize as JSON numbers with 2 decimals.
+
+
+
+
 
 template <typename Var>
 void floatSliderVar(const char* label, int id, const char* suffix = "") noexcept
@@ -2045,8 +2045,8 @@ void floatSliderVar(const char* label, int id, const char* suffix = "") noexcept
         d->AddCircleFilled(start + ImVec2(trackWidth * shown, s(1.5f)), s(5.5f), C(247, 248, 252));
     }
 
-    // Value pill: click to type an exact value. Adaptive decimals + a pill that grows leftward
-    // keep big values (fog distance "3873.73") inside the pill.
+    
+    
     char pillNumber[24];
     if (value >= 100.0f || value <= -100.0f)
         std::snprintf(pillNumber, sizeof(pillNumber), "%.0f", static_cast<double>(value));
@@ -2096,7 +2096,7 @@ void floatSliderVar(const char* label, int id, const char* suffix = "") noexcept
 bool keybindRow(const char* label, int* bindValue, int id) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
-    card.labelReserve = s(133.0f); // key pill
+    card.labelReserve = s(133.0f); 
     beginRow(d, label);
 
     const float buttonWidth = s(120.0f);
@@ -2112,25 +2112,25 @@ bool keybindRow(const char* label, int* bindValue, int id) noexcept
             state.captureOwner = id;
             state.captureAge = 0.0f;
         } else if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && *bindValue != Bind::kOff) {
-            *bindValue = Bind::kOff; // right-click clears the bind
+            *bindValue = Bind::kOff; 
         }
     } else if (state.captureOwner == id) {
-        // 2026-10-05: WaitingRelease used to wait for EVERY key/button to be released via
-        // the event-fed scancodeDown array - one missed KEY-UP (alt-tab, focus loss, a
-        // game-side stall dropping events) stuck the capture at "RELEASE ALL" forever and
-        // the whole binds panel became unrebindable. Cap the phase at 2 seconds.
+        
+        
+        
+        
         if (state.capture == State::Capture::WaitingRelease) {
             state.captureAge += ImGui::GetIO().DeltaTime;
             if (!gui_sdl::anyInputHeld() || state.captureAge > 2.0f)
                 state.capture = State::Capture::WaitingPress;
         } else if (state.capture == State::Capture::WaitingPress) {
-            if (gui_sdl::scancodeDown[76]) { // Delete clears the bind
+            if (gui_sdl::scancodeDown[76]) { 
                 *bindValue = Bind::kOff;
                 state.capture = State::Capture::Inactive;
-            } else if (gui_sdl::scancodeDown[41]) { // Escape cancels
+            } else if (gui_sdl::scancodeDown[41]) { 
                 state.capture = State::Capture::Inactive;
             } else {
-                // mouse buttons first (thumb priority), then the lowest held scancode
+                
                 const std::uint32_t mask = gui_sdl::liveMouseMask();
                 const auto down = [mask](std::uint32_t button) { return (mask & (1u << (button - 1))) != 0; };
                 int bind = Bind::kOff;
@@ -2157,8 +2157,8 @@ bool keybindRow(const char* label, int* bindValue, int id) noexcept
     const float response = motion(animKey(0x9241u, id), ImGui::IsItemHovered() ? 1.0f : 0.0f);
     ImGui::PopID();
 
-    // The pill glows in the button accent while the bound key is physically held, so the binds
-    // panel (and every Hold Key row) doubles as a live input indicator.
+    
+    
     const bool held = *bindValue != Bind::kOff && Bind::isDown(*bindValue) && state.capture == State::Capture::Inactive;
     d->AddRectFilled(bp, bp + ImVec2(buttonWidth, s(23)), held ? g_buttonAccent : mix(kPillBg, kPillBgHover, response), s(7));
     d->AddRect(bp, bp + ImVec2(buttonWidth, s(23)), mix(kHairlineSoft, g_buttonAccent, response), s(7));
@@ -2169,10 +2169,10 @@ bool keybindRow(const char* label, int* bindValue, int id) noexcept
     return false;
 }
 
-// --- config-bound row helpers ------------------------------------------------------
-//
-// read config -> render primitive -> write back. Select commits arrive from the popup layer
-// through a static applier (no closures, no std::function).
+
+
+
+
 
 template <typename ConfigVar>
 void toggleVar(const char* label, int id) noexcept
@@ -2182,9 +2182,9 @@ void toggleVar(const char* label, int id) noexcept
     if (toggle(label, &value, id, &rightClicked))
         ui_config::set<ConfigVar>(typename ConfigVar::ValueType{value});
 
-    // Bind affordance: the right-click bind system is invisible otherwise - rows with a
-    // registered key show a small keyboard pill right after the label. Clicking the pill (or
-    // right-clicking the row) opens the bind popover.
+    
+    
+    
     bool openBindPopover = rightClicked;
     if (const auto* entry = feature_binds::entryFor<ConfigVar>(); entry && entry->key != Bind::kOff) {
         ImDrawList* d = ImGui::GetWindowDrawList();
@@ -2194,8 +2194,8 @@ void toggleVar(const char* label, int id) noexcept
         const float glyphWidth = iconFont()->CalcTextSizeA(kTextCaption, FLT_MAX, 0.0f, kIconKeyboard).x;
         const float keyWidth = ImGui::GetFont()->CalcTextSizeA(s(10), FLT_MAX, 0.0f, keyName).x;
         const float pillWidth = s(6) + glyphWidth + s(4) + keyWidth + s(6);
-        // never push into the row's control zone: labels that truncate down to the reserve
-        // leave no room for the pill - skip it rather than overlap the checkbox chip
+        
+        
         const float available = (card.origin.x + card.width - s(40.0f)) - pillX;
         if (pillWidth <= available) {
             d->AddRectFilled(ImVec2(pillX, pillY), ImVec2(pillX + pillWidth, pillY + s(18)), kPillBg, s(6));
@@ -2209,10 +2209,10 @@ void toggleVar(const char* label, int id) noexcept
         }
     }
 
-    // Feature-bind integration: right-click on the row (or a left-click on the bind pill)
-    // opens the bind popup. ANY toggle can be bound: if the var is not registered yet, a
-    // right-click registers it on the spot (the registry persists to feature_binds.txt and the
-    // binds HUD list picks it up immediately).
+    
+    
+    
+    
     if (openBindPopover) {
         auto* entry = feature_binds::entryFor<ConfigVar>();
         if (!entry) {
@@ -2246,9 +2246,9 @@ void selectVar(const char* label, const char* const* options, int count, int id)
     select(label, &index, options, count, id, &selectApply<ConfigVar>);
 }
 
-// Script dropdown (gui.dropdown): rendered with the same selectList popup as config vars, but
-// the value lives in lua::GuiItem and the deferred popup commit routes through static open-time
-// indices (the applier must be a plain static function - same pattern as paintKitApply).
+
+
+
 static int scriptDropdownOwnerScript = -1;
 static int scriptDropdownOwnerItem = -1;
 
@@ -2275,11 +2275,11 @@ void scriptDropdownRow(lua::Script& script, int scriptIndex, int itemIndex, int 
     selectList(item.label, &item.intValue, item.optionPtrs, item.optionCount, id, &scriptDropdownApply);
 }
 
-// Script color picker (gui.color): the same shared color-picker popover the config colorVar
-// rows use, but the value lives in lua::GuiItem. The popover reads/writes through static
-// getter/setter fn pointers, so the clicked row publishes its item pointer (stable while the
-// script stays loaded - Script slots are static storage) plus a name for the stale-picker
-// guard at the popover call site.
+
+
+
+
+
 static lua::GuiItem* scriptColorTarget = nullptr;
 static char scriptColorOwnerName[lua::kMaxScriptName] = {};
 
@@ -2298,7 +2298,7 @@ void scriptColorRow(lua::Script& script, int itemIndex, int id) noexcept
 {
     lua::GuiItem& item = script.guiItems[itemIndex];
     ImDrawList* d = ImGui::GetWindowDrawList();
-    card.labelReserve = s(55.0f); // compact swatch, same as colorVar
+    card.labelReserve = s(55.0f); 
     beginRow(d, item.label);
 
     const float controlWidth = s(42.0f);
@@ -2333,14 +2333,14 @@ void scriptColorRow(lua::Script& script, int itemIndex, int id) noexcept
     const ImVec2 swatch = cp + ImVec2(s(6), s(4));
     d->AddRectFilled(swatch, swatch + ImVec2(s(20), s(15)),
         C((packed >> 24) & 255, (packed >> 16) & 255, (packed >> 8) & 255, packed & 255), s(3));
-    // hex readout lives in the picker popover - the row just shows the swatch
+    
 }
 
-// Paint-kit row: same visual as select(), but the popup lists the weapon's PaintKitDatabase
-// finishes (searchable, scrollable) and commits a raw kit id into the config var (uint16, 0 =
-// None). The commit is deferred to a later frame via the popup layer, so both the config var
-// type and the defIndex must be encoded in static state: the applier is a static template
-// function, the defIndex/current value are copied into state.popup at open time.
+
+
+
+
+
 template <typename ConfigVar>
 void paintKitApply(int kitId) noexcept
 {
@@ -2380,7 +2380,7 @@ void paintKitRow(const char* label, std::uint16_t defIndex, int id) noexcept
         state.popup.paintKitDefIndex = defIndex;
         state.popup.itemList = nullptr;
         state.popup.itemCount = 0;
-        state.popup.stringList = nullptr; // clear other popup modes' state (stale-state shadowing)
+        state.popup.stringList = nullptr; 
         state.popup.stringCount = 0;
         state.popup.omitNone = false;
         state.popup.paintKitCurrentId = currentId;
@@ -2390,7 +2390,7 @@ void paintKitRow(const char* label, std::uint16_t defIndex, int id) noexcept
 
     d->AddRectFilled(cp, cp + ImVec2(controlWidth, s(23)), mix(kPillBg, kPillBgHover, response), s(7));
     d->AddRect(cp, cp + ImVec2(controlWidth, s(23)), mix(kHairlineSoft, g_accent, response), s(7));
-    // Clip to the pill: finish/agent names routinely exceed the 134px control.
+    
     d->PushClipRect(cp + ImVec2(s(7), 0.0f), cp + ImVec2(controlWidth - s(14), s(23)), true);
     textY(d, cp.x + s(7), cp.y, s(23), currentId == 0 ? C(120, 124, 134) : C(200, 203, 212), kit ? kit->name : currentId == 0 ? "None" : "?", kTextControl, nullptr);
     d->PopClipRect();
@@ -2398,8 +2398,8 @@ void paintKitRow(const char* label, std::uint16_t defIndex, int id) noexcept
     d->AddLine(cp + ImVec2(controlWidth - s(9), s(13)), cp + ImVec2(controlWidth - s(5), s(9)), C(139, 143, 154), 1.0f);
 }
 
-// Case/key picker row (Inventory page LOCAL ITEMS): same pill as paintKitRow, but the popup
-// lists an arbitrary ItemDefEntry table (cases / keys) and apply receives the raw def index.
+
+
 template <typename ConfigVar>
 void itemDefRow(const char* label, const cs2::ItemDefEntry* list, int count, int id) noexcept
 {
@@ -2433,7 +2433,7 @@ void itemDefRow(const char* label, const cs2::ItemDefEntry* list, int count, int
         state.popup.paintKitDefIndex = 0;
         state.popup.itemList = list;
         state.popup.itemCount = count;
-        state.popup.stringList = nullptr; // clear other popup modes' state (stale-state shadowing)
+        state.popup.stringList = nullptr; 
         state.popup.stringCount = 0;
         state.popup.omitNone = false;
         state.popup.paintKitCurrentId = currentId;
@@ -2450,8 +2450,8 @@ void itemDefRow(const char* label, const cs2::ItemDefEntry* list, int count, int
     d->AddLine(cp + ImVec2(controlWidth - s(9), s(13)), cp + ImVec2(controlWidth - s(5), s(9)), C(139, 143, 154), 1.0f);
 }
 
-// Wear row: the config var stores permille (0-1000 = 0.000-1.000 wear); the pill shows the
-// permille value (70 = 0.070).
+
+
 template <typename ConfigVar>
 void wearRow(const char* label, int id) noexcept
 {
@@ -2461,7 +2461,7 @@ void wearRow(const char* label, int id) noexcept
         ui_config::set<ConfigVar>(static_cast<typename ConfigVar::ValueType>(permille));
 }
 
-// Pattern seed row (0-1000, the engine's seed domain).
+
 template <typename ConfigVar>
 void seedRow(const char* label, int id) noexcept
 {
@@ -2471,8 +2471,8 @@ void seedRow(const char* label, int id) noexcept
         ui_config::set<ConfigVar>(static_cast<typename ConfigVar::ValueType>(seed));
 }
 
-// 'Enemies / All Players / Off': two bool vars (PlayerInfoInWorldDropdownSelectionChangeHandler
-// semantics; 'Off' leaves OnlyEnemies untouched).
+
+
 template <typename EnabledVar, typename OnlyEnemiesVar>
 void enemiesAllOffApply(int index) noexcept
 {
@@ -2536,16 +2536,16 @@ void keybindVar(const char* label, int id) noexcept
         ui_config::set<ConfigVar>(typename ConfigVar::ValueType{static_cast<typename ConfigVar::ValueType::ValueType>(bind)});
 }
 
-// --- select popup layer ------------------------------------------------------------
 
-// --- paint-kit picker (Inventory page) ----------------------------------------------
-//
-// Row control + popup for picking a paint kit from the weapon's PaintKitDatabase list. Unlike
-// the generic select() dropdown the list is searchable and wheel-scrollable: the big weapons
-// have 60+ finishes, so a plain dropdown would be twice the menu's height.
 
-// ASCII case-insensitive substring match - this TU keeps to a minimal libc surface, and the
-// finish names are ASCII (the localized weapon names may not be, but they aren't searched).
+
+
+
+
+
+
+
+
 bool containsCaseInsensitive(const char* haystack, const char* needle) noexcept
 {
     if (!*needle)
@@ -2582,18 +2582,18 @@ void paintKitPopupLayer(ImDrawList* d) noexcept
         return;
     }
 
-    // Virtual row 0 = "None", then the source list - an ItemDefEntry list (cases / keys,
-    // item-def picker mode) when itemList is set, otherwise the weapon's kits (or, in generic
-    // mode - paintKitDefIndex 0 with no itemList, used when no knife model is impersonated and
-    // the real equipped knife type is unknown - the SkinChangerData generic-knife set),
-    // filtered by the search text. The per-row ids and the filtered rows are plain
-    // zero-initialized statics (no dynamic init - this project links -nostdlib and
-    // function-local statics with guards fail the link).
-    constexpr int kMaxRows = 160; // the agent list is the largest (141 entries)
+    
+    
+    
+    
+    
+    
+    
+    constexpr int kMaxRows = 160; 
     static int rows[kMaxRows];
     int rowCount = 0;
     if (!state.popup.omitNone)
-        rows[rowCount++] = 0; // "None"
+        rows[rowCount++] = 0; 
     if (state.popup.itemList) {
         for (int i = 0; i < state.popup.itemCount && rowCount < kMaxRows; ++i) {
             const auto& entry = state.popup.itemList[i];
@@ -2612,7 +2612,7 @@ void paintKitPopupLayer(ImDrawList* d) noexcept
         for (int i = 0; i < state.popup.stringCount && rowCount < kMaxRows; ++i) {
             if (state.popup.paintKitSearch[0] == '\0'
                 || containsCaseInsensitive(state.popup.stringList[i], state.popup.paintKitSearch))
-                rows[rowCount++] = i; // the row id IS the option index - apply receives it
+                rows[rowCount++] = i; 
         }
     } else {
         for (const auto& kit : cs2::kPaintKits) {
@@ -2631,7 +2631,7 @@ void paintKitPopupLayer(ImDrawList* d) noexcept
     const float searchHeight = s(30.0f);
     const float listHeight = ImMin(rowCount, kMaxVisibleRows) * s(kRowHeight);
     const ImVec2 size(width, searchHeight + s(12.0f) + listHeight + s(8.0f));
-    // Drop DOWN from the control (a list this tall centered on the anchor would cover it).
+    
     ImVec2 p(state.popup.anchor.x - s(28.0f), state.popup.anchor.y + s(27.0f));
     const ImVec2 clipMin = d->GetClipRectMin();
     const ImVec2 clipMax = d->GetClipRectMax();
@@ -2645,7 +2645,7 @@ void paintKitPopupLayer(ImDrawList* d) noexcept
     d->AddRect(p, p + size, kPopupBorder, s(18));
     d->AddLine(p + ImVec2(s(16), s(1)), p + ImVec2(size.x - s(16), s(1)), C(255, 255, 255, 22));
 
-    // Search field (raw-mouse popover interior - see the color picker's InputText pattern).
+    
     {
         const ImVec2 sp(p.x + s(6), p.y + s(8));
         ImGui::PushID(9071);
@@ -2666,15 +2666,15 @@ void paintKitPopupLayer(ImDrawList* d) noexcept
     const float listTop = p.y + searchHeight + s(12.0f);
     const float fullListHeight = rowCount * s(kRowHeight);
     const float maxScroll = ImMax(0.0f, fullListHeight - listHeight);
-    // Wheel-scroll while the cursor is inside the list area - one ROW per notch (the old 48px
-    // = 1.5-row step made the list jump erratically and mis-aims feel like wrong selections).
+    
+    
     if (ImGui::IsMouseHoveringRect(ImVec2(p.x, listTop), ImVec2(p.x + size.x, listTop + listHeight)) && ImGui::GetIO().MouseWheel != 0.0f)
         state.popup.paintKitScroll = ImClamp(state.popup.paintKitScroll - ImGui::GetIO().MouseWheel * s(kRowHeight), 0.0f, maxScroll);
     else
         state.popup.paintKitScroll = ImClamp(state.popup.paintKitScroll, 0.0f, maxScroll);
 
-    // Popup scrollbar: thin thumb on the right edge of the list, visible while scrollable,
-    // draggable to scroll long lists (141 agents) without the wheel.
+    
+    
     {
         const float maxListScroll = ImMax(0.0f, rowCount * s(kRowHeight) - listHeight);
         if (maxListScroll > 1.0f) {
@@ -2720,17 +2720,17 @@ void paintKitPopupLayer(ImDrawList* d) noexcept
         } else
             label = cs2::paintKitById(kitId)->name;
         const ImVec2 rp(p.x + s(4), rowY);
-        // RAW-MOUSE hit testing (the color picker's lesson): popup rows never submit
-        // ImGui items, so nothing can claim/steal their hover or click regardless of what
-        // else is submitted this frame. One behavior for every dropdown in the menu.
+        
+        
+        
         const ImVec2 rowSize(size.x - s(8), s(kRowHeight));
         const bool hovered = ImGui::IsMouseHoveringRect(rp, rp + rowSize);
         const float hover = motion(animKey(0x9921u, 9200 + kitId), hovered ? 1.0f : 0.0f, 22.0f);
         if (hover > 0.001f)
             d->AddRectFilled(rp, rp + rowSize, (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(25 * hover) << IM_COL32_A_SHIFT), s(10));
         const bool selected = kitId == currentKit;
-        // Clip to the row: agent names especially ("'Medium Rare' Crasswater | Guerrilla
-        // Warfare") are far wider than the popup.
+        
+        
         d->PushClipRect(ImVec2(rp.x + s(12), rp.y - 2.0f), ImVec2(p.x + size.x - s(6), rp.y + s(kRowHeight) + 2.0f), true);
         textY(d, rp.x + s(12), rp.y, s(kRowHeight), selected ? g_accent : C(182, 185, 196), label, kTextControl, nullptr);
         d->PopClipRect();
@@ -2755,44 +2755,44 @@ void paintKitPopupLayer(ImDrawList* d) noexcept
 
 void popupLayer(ImDrawList* d) noexcept
 {
-    // ONE dropdown widget: every option popup renders through the unified searchable,
-    // wheel-scrollable layer (the old fixed 10-row dropdown branch is gone).
+    
+    
     if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
         state.popup.open = false;
     if (state.popup.paintKitMode)
         paintKitPopupLayer(d);
 }
 
-// --- option tables (static - the popup layer outlives the opening frame) -----------
+
 
 constexpr const char* const kPositionArrowColors[] = {"Player / Team Color", "Team Color"};
 constexpr const char* const kHealthTextColors[] = {"Health-based", "White"};
-// --- pages -----------------------------------------------------------------------
-//
-// Every page = section cards flowing into two balanced columns (scrollable). addCard assigns
-// columns from the min-max plan computed at resetContent (see cardColumnPlan), draws the card
-// frame and runs the row callbacks against the card context.
+
+
+
+
+
 
 float columnYs[2] = {};
 int controlId = 0;
 
-// Height-aware column balancing: LAST frame's measured card height (+ gap) per (page, card
-// index), and the column assignment for this frame computed once per page at resetContent by
-// an exact min-max two-column partition (subset-sum DP) over those heights. addCard just reads
-// the plan; cards beyond the planned count (first frame on a page / card count changed) fall
-// back to the greedy shortest-column pick. 1-frame-stale heights are invisible - layout is
-// stable frame-to-frame (same pattern as lastContentHeight / navContentEnd). Never updated
-// during the search-index ghost pass, so real and ghost layouts can't fight over the cache.
+
+
+
+
+
+
+
 constexpr int kCardSlotsPerPage = 48;
 constexpr int kMaxCardPages = 13;
 float cardHeights[kMaxCardPages * kCardSlotsPerPage] = {};
 int cardCountLast[kMaxCardPages] = {};
 int cardColumnPlan[kMaxCardPages * kCardSlotsPerPage] = {};
 
-// Exact partition: find the subset of card heights with the largest sum <= total/2 (subset-sum
-// DP with per-sum last-card tracking for reconstruction); that subset takes column 1, the rest
-// column 0. Bails to the greedy fallback (all plans -1) when the cache has a hole or the DP
-// range would overflow.
+
+
+
+
 void planPageColumns(int pageIdx) noexcept
 {
     for (int i = 0; i < kCardSlotsPerPage; ++i)
@@ -2805,7 +2805,7 @@ void planPageColumns(int pageIdx) noexcept
     for (int i = 0; i < count; ++i) {
         sums[i] = static_cast<int>(cardHeights[pageIdx * kCardSlotsPerPage + i] + 0.5f);
         if (sums[i] <= 0)
-            return; // no measurement for this card yet
+            return; 
         total += sums[i];
     }
     if (total >= 32768)
@@ -2844,8 +2844,8 @@ void planPageColumns(int pageIdx) noexcept
         cardColumnPlan[pageIdx * kCardSlotsPerPage + i] = inSecond[i] ? 1 : 0;
 }
 
-// Page-switch stagger: resetContent() detects the page change and arms the clock; each card
-// fades/rises in with a small incremental delay. Suppressed by Reduce Motion.
+
+
 double pageSwitchTime = 0.0;
 Page lastRenderedPage = Page::Rage;
 int pageCardIndex = 0;
@@ -2866,32 +2866,32 @@ void resetContent() noexcept
 void addCard(const char* title, int rowCount, void (*renderRows)()) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
-    // The ghost pass renders a DIFFERENT page than state.page - key the height cache by the
-    // page actually being laid out (same identity beginRow records into the search index).
+    
+    
     const int pageIdx = searchIndexing ? searchIndexPageCursor : static_cast<int>(state.page);
     const int cardSlot = pageIdx * kCardSlotsPerPage + ImMin(pageCardIndex, kCardSlotsPerPage - 1);
-    // Column choice: the min-max plan from LAST frame's measured heights; cards beyond the
-    // plan (first frame / count changed) use the old greedy shortest-column pick.
+    
+    
     const int planned = cardColumnPlan[cardSlot];
     const int column = planned >= 0 ? planned : (columnYs[1] < columnYs[0] ? 1 : 0);
     const float columnWidth = s(281.0f);
-    // Draw-list calls take screen-absolute positions: the demo could use canvas-local ones
-    // only because its window sat at (0,0); ours is centered.
+    
+    
     const float x = shellBase.x + kSidebarWidth + s(9.0f) + column * (columnWidth + s(10.0f));
     const float y = shellBase.y + kToolbarHeight + s(24.0f) + columnYs[column] - scrollOffset;
 
-    // Per-card entrance on page switches: 40ms stagger per card, fade + rise.
+    
     const float staggerDelay = 0.04f * pageCardIndex++;
     const float staggerT = g_reduceMotion ? 1.0f : ImSaturate(static_cast<float>((ImGui::GetTime() - pageSwitchTime - staggerDelay) / 0.30));
     const float stagger = 1.0f - std::pow(1.0f - staggerT, 3.0f);
     const float rise = (1.0f - stagger) * s(10.0f);
 
-    constexpr float kHeaderHeight = 32.0f; // design units: title band inside the card
+    constexpr float kHeaderHeight = 32.0f; 
 
-    // Self-healing card sizing: the rows render FIRST (channel 1), the frame afterwards
-    // (channel 0) using the height the rows ACTUALLY took. The channels keep the frame painted
-    // underneath the row content regardless of submission order. The declared rowCount becomes
-    // a floor - a stale hand-count can only make a card too TALL, never clip rows.
+    
+    
+    
+    
     const int vtxBegin = d->VtxBuffer.Size;
     d->ChannelsSplit(2);
     d->ChannelsSetCurrent(1);
@@ -2903,21 +2903,21 @@ void addCard(const char* title, int rowCount, void (*renderRows)()) noexcept
     const ImVec2 p(x, y + rise);
     softShadow(d, p, p + ImVec2(columnWidth, height), s(16.0f));
     d->AddRectFilled(p, p + ImVec2(columnWidth, height), kCardBg, s(16.0f));
-    // top-light: a soft white wash fading down the header area + a 1px inner highlight along
-    // the top edge (inset past the rounded corners) - reads as "machined" instead of flat. The
-    // highlight wraps around the rounded corners: the same rounded path stroked inside corner-
-    // local clips, tangent-joined to the straight line, so the light follows the rounding.
+    
+    
+    
+    
     d->AddRectFilledMultiColor(p + ImVec2(s(14), s(1)), p + ImVec2(columnWidth - s(14), s(30)), C(255, 255, 255, 9), C(255, 255, 255, 9), 0, 0);
     d->AddLine(p + ImVec2(s(12), s(0.75f)), p + ImVec2(columnWidth - s(12), s(0.75f)), C(255, 255, 255, 16), 1.0f);
     for (int corner = 0; corner < 2; ++corner) {
-        constexpr float arcSpan = 15.25f; // inset-path radius: where its arc meets the straight edge
+        constexpr float arcSpan = 15.25f; 
         const float x0 = corner == 0 ? 0.0f : columnWidth - s(arcSpan);
         d->PushClipRect(p + ImVec2(x0, 0.0f), p + ImVec2(x0 + s(arcSpan), s(17.0f)), true);
         d->AddRect(p + ImVec2(0.75f, 0.75f), p + ImVec2(columnWidth - 0.75f, height - 0.75f), C(255, 255, 255, 16), s(16.0f) - 0.75f, ImDrawFlags_RoundCornersTop);
         d->PopClipRect();
     }
 
-    // header band: accent dot + semibold title + hairline divider
+    
     pulsingDot(d, p + ImVec2(s(17), s(15)), s(2.2f), g_accent);
     text(d, p + ImVec2(s(25), s(9)), C(196, 199, 208), title, kTextSmall, strongFont());
     d->AddLine(p + ImVec2(s(12), s(31)), p + ImVec2(columnWidth - s(12), s(31)), kHairline, 1.0f);
@@ -2932,24 +2932,24 @@ void addCard(const char* title, int rowCount, void (*renderRows)()) noexcept
         }
     }
 
-    columnYs[column] += height + s(20.0f); // card + gap (the title band lives inside now)
+    columnYs[column] += height + s(20.0f); 
     if (!searchIndexing) {
-        cardHeights[cardSlot] = height + s(20.0f); // next frame's plan input
-        cardCountLast[pageIdx] = pageCardIndex;    // pageCardIndex now = cards so far this frame
+        cardHeights[cardSlot] = height + s(20.0f); 
+        cardCountLast[pageIdx] = pageCardIndex;    
     }
 }
 
-// --- page content (bindings 1:1 with the Panorama inventory) ------------------------
 
-// Sub-page pill tabs: the segmented control at the top of a page that splits its cards into
-// groups (the Glow page's two-tab control and the inventory's category pills, generalized).
-// Equal-width pills across the two-column card area; switching closes any open popup (rows
-// belong to a group). The caller tags search rows by setting searchSubTab before rendering a
-// group, so a search hit jumps to the right group (the ghost pass renders every group).
+
+
+
+
+
+
 void pageSubTabPills(ImDrawList* d, int& current, const char* const* labels, int count, int idBase) noexcept
 {
     const float gap = s(8.0f);
-    const float contentWidth = 2 * s(281.0f) + s(10.0f); // the two-column card area
+    const float contentWidth = 2 * s(281.0f) + s(10.0f); 
     const float pillWidth = (contentWidth - (count - 1) * gap) / count;
     const float pillHeight = s(30.0f);
     const float x = shellBase.x + kSidebarWidth + s(9.0f);
@@ -2964,7 +2964,7 @@ void pageSubTabPills(ImDrawList* d, int& current, const char* const* labels, int
         ImGui::PopID();
         if (clicked && !active) {
             current = i;
-            // popovers belong to the other group's rows - close them
+            
             state.popup.open = false;
             state.colorPickerOpen = false;
             state.multiSelectOpen = false;
@@ -2974,8 +2974,8 @@ void pageSubTabPills(ImDrawList* d, int& current, const char* const* labels, int
         d->AddRect(p, p + ImVec2(pillWidth, pillHeight), mix(kHairlineSoft, g_accent, r), pillHeight * 0.5f);
         textYCentered(d, p.x, pillWidth, p.y, pillHeight, mix(C(145, 149, 159), C(226, 228, 235), r), labels[i], kTextControl, nullptr);
     }
-    // +s(30) after the pills: card section captions are drawn s(16) above their card, so without
-    // extra clearance the caption text starts exactly at the pill's bottom edge
+    
+    
     columnYs[0] = columnYs[1] = s(4.0f) + pillHeight + s(30.0f);
 }
 
@@ -2996,12 +2996,15 @@ void pageRageAimbot() noexcept
         sliderVar<ExtrapolateTicks>("Lead Ticks", ++controlId);
         sliderVar<ForceShotWaitTicks>("Auto Shoot Wait", ++controlId);
     });
-    addCard("TARGETS", 2, [] {
+    addCard("TARGETS", 4, [] {
+        static constexpr const char* const modes[]{"Closest To Crosshair", "Nearest Distance", "Lowest Health"};
+        selectVar<TargetSelection>("Target Selection", modes, 3, ++controlId);
+        toggleVar<TargetLock>("Lock Target", ++controlId);
         toggleVar<SpreadCircleFov>("Spread FOV", ++controlId);
-        // The names array MUST have static lifetime: multiSelectVar stores the pointer for the
-        // popover to read on LATER frames, and a braced temporary bound to the reference parameter
-        // dies at the end of this call - the dangling array was read as garbage string pointers in
-        // the popover (strlen(NULL) -> SIGSEGV in libc on first click of the control).
+        
+        
+        
+        
         static constexpr const char* const kHitboxNames[]{ "Head", "Chest", "Stomach", "Arms", "Legs" };
         multiSelectVar<HitHead, HitChest, HitStomach, HitArms, HitLegs>("Hitboxes", ++controlId, kHitboxNames);
     });
@@ -3036,7 +3039,7 @@ void pageRage() noexcept
     if (!searchIndexing) {
         pageSubTabPills(ImGui::GetWindowDrawList(), rageSubTab, kRageSubTabs, 2, 9720);
         searchGlowSubTab = rageSubTab;
-        controlId += rageSubTab * 500; // per-sub-tab control-id ranges (popups/motion storage)
+        controlId += rageSubTab * 500; 
         if (rageSubTab == 0)
             pageRageAimbot();
         else
@@ -3044,8 +3047,8 @@ void pageRage() noexcept
         return;
     }
 
-    // ghost render for the search index: lay out BOTH groups, each exactly as it appears when
-    // active (so a search hit scrolls to the right offset after opening its group)
+    
+    
     for (int t = 0; t < 2; ++t) {
         pageSubTabPills(ImGui::GetWindowDrawList(), rageSubTab, kRageSubTabs, 2, 9720);
         searchGlowSubTab = t;
@@ -3061,14 +3064,20 @@ void pageRage() noexcept
 void pageLegitAim() noexcept
 {
     using namespace legit_aimbot_vars;
-    addCard("AIM ASSIST", 7, [] {
+    addCard("AIM ASSIST", 8, [] {
         toggleVar<Enabled>("Smooth Aim", ++controlId);
+        toggleVar<WallCheck>("Aim Visible", ++controlId);
         keybindVar<AimKey>("Hold Key", ++controlId);
         sliderVar<Fov>("Field Of View", ++controlId, " deg");
         sliderVar<Smooth>("Smoothing", ++controlId);
         toggleVar<DrawFov>("Draw FOV Circle", ++controlId);
         colorVar<FovCircleColor>("FOV Circle Color", ++controlId);
         toggleVar<SpreadCircleFov>("Spread Circle FOV", ++controlId);
+    });
+    addCard("TARGETS", 2, [] {
+        static constexpr const char* const modes[]{"Closest To Crosshair", "Nearest Distance", "Lowest Health"};
+        selectVar<TargetSelection>("Target Selection", modes, 3, ++controlId);
+        toggleVar<TargetLock>("Lock Target", ++controlId);
     });
     addCard("HITBOXES", 5, [] {
         toggleVar<HitHead>("Target Head", ++controlId);
@@ -3163,10 +3172,10 @@ void pagePlayerInfo() noexcept
     });
 }
 
-// --- glow page -------------------------------------------------------------------------
-//
-// One nav tab for both glow features: a segmented control at the top switches between the
-// Outline Glow and Model Glow sections (same card layout, separate config variables).
+
+
+
+
 
 void pageOutlineGlow() noexcept;
 void pageModelGlow() noexcept;
@@ -3178,14 +3187,14 @@ void glowSubTabPills(ImDrawList* d) noexcept
         const char* label;
     };
     static constexpr SubTab kSubTabs[] = {
-        {"\xEF\x81\xAE", "Outline Glow"}, // eye
-        {"\xEF\x87\xBC", "Model Glow"},   // paint-brush
+        {"\xEF\x81\xAE", "Outline Glow"}, 
+        {"\xEF\x87\xBC", "Model Glow"},   
     };
 
     const float pillWidth = s(172.0f);
     const float pillHeight = s(34.0f);
     const float gap = s(8.0f);
-    const float contentWidth = 2 * s(281.0f) + s(10.0f); // the two-column card area
+    const float contentWidth = 2 * s(281.0f) + s(10.0f); 
     const float x = shellBase.x + kSidebarWidth + s(9.0f) + (contentWidth - (2 * pillWidth + gap)) * 0.5f;
     const float y = shellBase.y + kToolbarHeight + s(24.0f) + s(4.0f) + columnYs[0] - scrollOffset;
 
@@ -3198,7 +3207,7 @@ void glowSubTabPills(ImDrawList* d) noexcept
         ImGui::PopID();
         if (clicked && !active) {
             glowSubTab = i;
-            // popovers belong to the other sub-tab's rows - close them
+            
             state.popup.open = false;
             state.colorPickerOpen = false;
             state.multiSelectOpen = false;
@@ -3209,8 +3218,8 @@ void glowSubTabPills(ImDrawList* d) noexcept
         textY(d, p.x + s(16), p.y, pillHeight, mix(C(137, 142, 153), g_accent, r), kSubTabs[i].icon, kTextIcon, iconFont());
         textY(d, p.x + s(38), p.y, pillHeight, mix(C(145, 149, 159), C(226, 228, 235), r), kSubTabs[i].label, kTextControl, nullptr);
     }
-    // +s(30) after the pills: card section captions are drawn s(16) above their card, so without
-    // extra clearance the caption text (e.g. "PLAYERS") starts exactly at the pill's bottom edge
+    
+    
     columnYs[0] = columnYs[1] = s(4.0f) + pillHeight + s(30.0f);
 }
 
@@ -3218,7 +3227,7 @@ void pageGlow() noexcept
 {
     if (!searchIndexing) {
         glowSubTabPills(ImGui::GetWindowDrawList());
-        controlId += glowSubTab * 500; // per-sub-tab control-id ranges (popups/motion storage)
+        controlId += glowSubTab * 500; 
         searchGlowSubTab = glowSubTab;
         if (glowSubTab == 0)
             pageOutlineGlow();
@@ -3227,8 +3236,8 @@ void pageGlow() noexcept
         return;
     }
 
-    // ghost render for the search index: lay out BOTH sub-tabs, each exactly as it appears when
-    // active (so a search hit scrolls to the right offset after opening its sub-tab)
+    
+    
     glowSubTabPills(ImGui::GetWindowDrawList());
     controlId += glowSubTab * 500;
     searchGlowSubTab = 0;
@@ -3321,7 +3330,7 @@ void pageViewmodel() noexcept
     });
 }
 
-// FrameworkCS2 port batch: hitmarker, third person, removals, world colors, player list.
+
 void pageEffects() noexcept
 {
     addCard("HITMARKER", 5, [] {
@@ -3422,11 +3431,11 @@ void pageHud() noexcept
     });
 }
 
-// VoiceDataFormat_t names (soundboard_vars::VoiceFormat; decoded from the embedded
-// netmessages.proto descriptor: STEAM=0, ENGINE=1, OPUS=2).
+
+
 constexpr const char* const kVoiceFormatNames[] = {"Steam", "Engine", "Opus"};
 
-// Clip dropdown applier: stores the scanned list index in the config var.
+
 void soundboardClipApply(int index) noexcept
 {
     if (index < 0)
@@ -3453,10 +3462,10 @@ void pageSound() noexcept
         toggleVar<WeaponScopeSoundVisualizationEnabled>("Weapon Scope Sound", ++controlId);
         toggleVar<WeaponReloadSoundVisualizationEnabled>("Weapon Reload Sound", ++controlId);
     });
-    // Sound board: in-process voice injection (Radio tab owns the Voice Key + Broadcast To
-    // Voice rows). Clips come from <configDir>/sounds/*.wav; the dropdown renders the scanned
-    // list (soundboard re-scans the folder once a second on the game thread; these statics are
-    // its output, read here on the present thread).
+    
+    
+    
+    
     addCard("SOUNDBOARD", 7, [] {
         toggleVar<radio_vars::AirhornEnabled>("Soundboard", ++controlId);
         toggleVar<radio_vars::AirhornFirstBlood>("First Blood", ++controlId);
@@ -3477,10 +3486,10 @@ void pageSound() noexcept
     });
 }
 
-// --- movement (dedicated tab): automation + the edge/speed suite ---------------------
 
-// USERINFO FLOOD restore pill: stages a one-shot restore the game thread consumes
-// (snapshots the flood took at engage go back through setinfo). Same geometry as chatActionRow.
+
+
+
 void userinfoRestoreRow(const char* label, const char* buttonText, int id) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
@@ -3505,18 +3514,18 @@ void userinfoRestoreRow(const char* label, const char* buttonText, int id) noexc
     textY(d, cp.x + (controlWidth - textWidth) * 0.5f, cp.y, s(23), mix(C(170, 173, 184), C(226, 228, 235), response), buttonText, kTextControl, nullptr);
 }
 
-// Server lagger payload content modes (index = server_lagger_vars::PayloadMode). Zeros compress
-// to ~nothing at the server relay = parse/decode-call storm; Random/Counter are incompressible =
-// real relay bandwidth amplification (and audible white noise for listeners). No constant-run
-// mode: the engine's voice parse validates audio content (all-0xFF failed the factory parse,
-// live-verified 2026-09-13).
+
+
+
+
+
 constexpr const char* const kLaggerPayloadNames[] = {"Zeros", "Rand7", "Count7", "Static (voice_data)", "Varint Mix"};
 
-// Lagger profile presets (the friend v2's mode dropdown, mirrored): index 0 = Custom, 1+
-// writes the three profile sliders. Mode 1 = the friend-source parse-storm profile (65x14,
-// ~1.5KB msgs); Mode 2 = the 6x119 relay amplifier (~16KB msgs); Mode 3 = the friend's
-// "extreme" (65x1000 - the engine's ~98KB/tick send buffer refuses past ~119 datagrams, so
-// the count just rides the backpressure ceiling while it saturates: WILL self-kick).
+
+
+
+
+
 constexpr const char* const kLaggerPresetNames[] = {"Custom", "Mode 1: 65x14", "Mode 2: 6x119", "Mode 3: 65x1000 (extreme)"};
 
 struct LaggerPresetProfile {
@@ -3525,9 +3534,9 @@ struct LaggerPresetProfile {
     unsigned batchesPerTick;
 };
 constexpr LaggerPresetProfile kLaggerPresets[] = {
-    {65, 1, 14},   // parse storm: max messages, small payloads - server parse/decode-call storm
-    {6, 15, 119},  // relay amplifier: max payloads - the server relays every voice byte
-    {65, 1, 2000}, // extreme: rides the backpressure ceiling (the friend's Mode 3)
+    {65, 1, 14},   
+    {6, 15, 119},  
+    {65, 1, 2000}, 
 };
 static_assert(sizeof(kLaggerPresets) / sizeof(kLaggerPresets[0]) == sizeof(kLaggerPresetNames) / sizeof(kLaggerPresetNames[0]) - 1);
 
@@ -3535,13 +3544,13 @@ int laggerPresetIndex = 0;
 
 void laggerPresetApply(int index) noexcept
 {
-    // ALWAYS commit the selection (including Custom = 0) - the per-frame sync re-reads the
-    // config var, so a click that only mutates the local index snaps back within a frame
-    // (the "cannot click Custom" bug).
+    
+    
+    
     using PresetType = server_lagger_vars::Preset::ValueType;
     static_cast<void>(ui_config::set<server_lagger_vars::Preset>(PresetType{static_cast<std::uint8_t>(index)}));
     if (index <= 0 || index > static_cast<int>(sizeof(kLaggerPresets) / sizeof(kLaggerPresets[0])))
-        return; // Custom: the sliders stay exactly as the user left them
+        return; 
     const auto& preset = kLaggerPresets[index - 1];
     using MsgsType = server_lagger_vars::MsgsPerBatch::ValueType;
     using KbType = server_lagger_vars::AudioKB::ValueType;
@@ -3551,8 +3560,8 @@ void laggerPresetApply(int index) noexcept
     static_cast<void>(ui_config::set<server_lagger_vars::Amount>(AmountType{static_cast<unsigned short>(preset.batchesPerTick)}));
 }
 
-// Probe button row: stages the request; the game thread answers with a [lagger] probe line
-// (works while the lagger is disabled - server_lagger::probeRequest).
+
+
 void laggerProbeRow(const char* label, const char* buttonText, int id) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
@@ -3662,12 +3671,12 @@ void pageMovement() noexcept
     });
 }
 
-// Discord RPC template row: an InputText into the feature's static template buffer, persisted
-// to <configDir>/discord_rpc.txt when the edit deactivates. Captureless so addCard can take it.
+
+
 void discordRpcTemplateRow(const char* label, bool details, int id) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
-    card.labelReserve = s(96.0f); // InputText starts at a fixed x
+    card.labelReserve = s(96.0f); 
     beginRow(d, label);
 
     char* buffer = nullptr;
@@ -3700,8 +3709,8 @@ void discordRpcTemplateRow(const char* label, bool details, int id) noexcept
         }));
 }
 
-// Kick reason picker: the searchable list popup with the full ENetworkDisconnectReason
-// table (ChatTools.h kKickReasonEntries); defIndex = the code the server receives.
+
+
 void kickReasonApply(int defIndex) noexcept
 {
     if (defIndex < 1 || defIndex > 255)
@@ -3739,7 +3748,7 @@ void kickReasonRow(const char* label, int id) noexcept
         state.popup.paintKitDefIndex = 0;
         state.popup.itemList = chat_tools::kKickReasonEntries;
         state.popup.itemCount = chat_tools::kKickReasonCount;
-        state.popup.stringList = nullptr; // clear other popup modes' state (stale-state shadowing)
+        state.popup.stringList = nullptr; 
         state.popup.stringCount = 0;
         state.popup.omitNone = true;
         state.popup.paintKitCurrentId = current;
@@ -3761,14 +3770,14 @@ void kickReasonRow(const char* label, int id) noexcept
     d->AddLine(cp + ImVec2(controlWidth - s(9), s(13)), cp + ImVec2(controlWidth - s(5), s(9)), C(139, 143, 154), 1.0f);
 }
 
-// Radio phrase picker: opens the searchable/scrollable list popup in itemList mode with the
 
-// Radio phrase picker: opens the searchable/scrollable list popup in itemList mode with the
-// chat-wheel phrase entries (ChatTools.h kWheelRadioEntries); the apply writes the phrase
-// index into the config. Selecting sets it for the Radio Spam loop instantly.
+
+
+
+
 void radioPhraseApply(int defIndex) noexcept
 {
-    // defIndex is 1-based (0 was the suppressed None row); the config stores it directly
+    
     if (defIndex < 1 || defIndex > chat_tools::kRadioPhraseCount)
         return;
     ui_config::set<chat_vars::RadioPhrase>(chat_vars::RadioPhrase::ValueType{static_cast<std::uint8_t>(defIndex)});
@@ -3808,9 +3817,9 @@ void radioPhraseRow(const char* label, int id) noexcept
         state.popup.paintKitDefIndex = 0;
         state.popup.itemList = chat_tools::kWheelRadioEntries;
         state.popup.itemCount = chat_tools::kRadioPhraseCount;
-        state.popup.stringList = nullptr; // clear other popup modes' state (stale-state shadowing)
+        state.popup.stringList = nullptr; 
         state.popup.stringCount = 0;
-        state.popup.omitNone = true; // the radio picker has no "none" - and entry 1-based
+        state.popup.omitNone = true; 
         state.popup.paintKitCurrentId = currentIndex + 1;
         state.popup.paintKitScroll = 0.0f;
         state.popup.paintKitSearch[0] = '\0';
@@ -3823,13 +3832,13 @@ void radioPhraseRow(const char* label, int id) noexcept
     d->AddLine(cp + ImVec2(controlWidth - s(9), s(13)), cp + ImVec2(controlWidth - s(5), s(9)), C(139, 143, 154), 1.0f);
 }
 
-// Chat tools sidecar template row
-// Chat tools sidecar template row: InputText over ChatTools' static buffer, flushed to
-// <configDir>/<sidecar> when the edit deactivates (DiscordRpc template pattern).
+
+
+
 void chatTemplateRow(const char* label, int kind, int id) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
-    card.labelReserve = s(96.0f); // InputText starts at a fixed x
+    card.labelReserve = s(96.0f); 
     beginRow(d, label);
 
     char* buffer = nullptr;
@@ -3870,12 +3879,12 @@ void chatTemplateRow(const char* label, int kind, int id) noexcept
         }));
 }
 
-// Name stealer (CHAT card): the dropdown lists the CURRENT players, refreshed from the
-// player-list snapshot every frame. Picking one stages the sanitized name through ChatTools'
-// apply pipeline - the same `name "<text>"` + Steam-persona path as APPLY NAME. Steam itself
-// rate-limits persona renames (see ChatTools setSteamPersonaName) - a rejected rename is
-// Steam's cooldown, not a broken feature. The option table is file-scope because select()'s
-// popover commits through the applier in a LATER frame.
+
+
+
+
+
+
 constexpr int kStealMax = player_list::kMaxRows;
 char stealNameBufs[kStealMax][40]{};
 const char* stealOptions[kStealMax]{};
@@ -3912,8 +3921,8 @@ void stolenNameApply(int index) noexcept
     chat_tools::pendingNameApply.store(1, std::memory_order_release);
 }
 
-// Chat tools one-shot action row: mode 0 = APPLY NAME (stage buffer + apply), 1 = clone the
-// top-fragger's name, 2 = ban theater. All publish request atomics; the game thread acts.
+
+
 void chatActionRow(const char* label, const char* buttonText, int id, int action) noexcept
 {
     ImDrawList* d = ImGui::GetWindowDrawList();
@@ -3931,7 +3940,7 @@ void chatActionRow(const char* label, const char* buttonText, int id, int action
 
     if (clicked) {
         if (action == 0) {
-            // stage the buffer text for the game thread (one-click path, no sidecar read needed)
+            
             static_cast<void>(ui_config::withContext([](auto&& hookContext) {
                 char* buffer = hookContext.template make<ChatTools>().buffer(chat_tools::kNameBuffer);
                 std::memcpy(chat_tools::pendingNameText, buffer, chat_tools::kBufferTextSize);
@@ -3950,14 +3959,14 @@ void chatActionRow(const char* label, const char* buttonText, int id, int action
     textY(d, cp.x + (controlWidth - textWidth) * 0.5f, cp.y, s(23), mix(C(170, 173, 184), C(226, 228, 235), response), buttonText, kTextControl, nullptr);
 }
 
-// Name animator modes (order = name_animator_vars::Mode values).
+
 constexpr const char* const kAnimatorModeNames[] = {"Typewriter", "Glitch", "Marquee", "Scramble", "Binary", "Flicker", "Backwards", "Mocking", "Pulse", "Strobe", "Wave", "Crawler", "Storm", "Nystagmus", "Emoji Strobe", "Flashbang", "Twitch", "Face Storm", "Super Wave", "RLO Flip", "Vaporwave", "Invisible Chaos", "Zalgo"};
-// Clan tag animator modes (order = chat_vars::ClanTagAnimateMode values; tuned for short tags).
+
 constexpr const char* const kClanTagModeNames[] = {"Typewriter", "Glitch", "Marquee", "Wave", "Strobe", "Pulse"};
 
 
-// Persona preset dropdown: commits the chosen recipe into the name buffer, stages it for the
-// game thread and fires the apply in one click. Session-static selection index.
+
+
 constexpr const char* const kPersonaPresetNames[] = {
     "cat Enjoyer", "s1mple", "Valve Employee", "VAC Live", "VAC Live (plain)", "Fake VAC Ban", "Invisible", "Fullwidth", "Reversed",
     "Server Restart", "Cooldown", "Vote Kick", "Admin Msg", "GOTV",
@@ -3970,8 +3979,8 @@ constexpr const char* const kPersonaPresetNames[] = {
 };
 int chatPresetIndex = -1;
 
-// Fake-kick reason names (order = chat_vars::KickReason; the codes live in
-// chat_tools::kKickReasonCodes)
+
+
 
 void chatPresetApply(int index) noexcept
 {
@@ -3988,12 +3997,12 @@ void chatPresetApply(int index) noexcept
     chat_tools::pendingNameApply.store(1, std::memory_order_release);
 }
 
-// --- glitch text generator (glyphy-style; Misc > GLITCH TEXT) ----------------------------
-// The user types a source text, picks a style + intensity and the GLITCHED result renders live
-// in an output field they can copy from (the COPY pill puts it on the REAL desktop clipboard via
-// the SDL clipboard bridge; Ctrl+C on a selection in the read-only field works too). The output
-// is meant to be pasted into the name feature (Fake Name / the animator's Animate Text), not
-// applied directly.
+
+
+
+
+
+
 constexpr const char* const kGlitchStyleNames[] = {"Zalgo", "Cursed", "Demon", "Alien", "Strike", "Random", "Heavy"};
 constexpr const char* const kCursedPresetNames[] = {
     "Off", "Bottom Whisper", "Top Sigh", "Dual Whisper", "Underdot", "Tremor", "Tremor Underdot",
@@ -4001,11 +4010,11 @@ constexpr const char* const kCursedPresetNames[] = {
     "Triple Abyss", "Cross Slash", "Strike Hex", "Wall x5", "Wall x8", "Wall x12", "Eldritch x15",
 };
 
-// Combining-mark pools. These render in CS2 names when attached to base letters (the Zalgo
-// Recipe lesson: a base letter between mark stacks is what renders; per-glyph stacks are fine).
-// 2-byte range U+0300-0x36F + the extended 3-byte ranges (U+1AB0 combining extended, U+20D0
-// marks-for-symbols, U+FE20 half marks) that give the HEAVY wall its glyph variety - some of the
-// extended glyphs render as boxes in CS2, which only adds to the wall.
+
+
+
+
+
 struct GlitchMarkRange { std::uint32_t lo, hi; };
 constexpr GlitchMarkRange kMarksUp[] = {{0x300, 0x306}, {0x309, 0x30F}, {0x311, 0x312}, {0x315, 0x315}, {0x31A, 0x31E}};
 constexpr GlitchMarkRange kMarksDown[] = {{0x316, 0x323}, {0x327, 0x329}, {0x32C, 0x32E}, {0x331, 0x335}};
@@ -4037,9 +4046,9 @@ inline std::uint32_t glitchGenSeed{0x9E3779B9u};
 }
 
 [[nodiscard]] std::uint32_t glitchMarkForStyle(int style) noexcept
-{    // 0 Zalgo: up+down, 1 Cursed: everything classic, 2 Demon: down+mid, 3 Alien: up only,
-    // 4 Strike: mid only, 5 Random: any family per mark,
-    // 6 HEAVY: classic up/down dominate, extended ranges layered in (the glyphy wall).
+{    
+    
+    
     std::uint32_t family;
     switch (style) {
     case 0: family = glitchGenRandom() % 2; break;
@@ -4063,9 +4072,9 @@ inline std::uint32_t glitchGenSeed{0x9E3779B9u};
     }
 }
 
-// Fixed cursed recipes (the symboldb generator's cards): one FIXED mark stack applied to every
-// glyph - deterministic, unlike the random Style path. All marks live in the 2-byte U+0300-0x36F
-// range. Index 0 of the dropdown = Off (Style/Intensity path instead).
+
+
+
 struct CursedPreset {
     const char* name;
     std::uint32_t marks[18];
@@ -4101,8 +4110,8 @@ static_assert(kCursedPresetCount - 1 <= 20, "kCursedPresetCount exceeds the Pres
 
 void generateGlitchText(const char* input, char* output, std::size_t outputCap) noexcept
 {
-    // The output feeds the name pipeline: strip what sanitizeInto would strip up front, so a
-    // copied result pastes into Fake Name / the animator unchanged.
+    
+    
     char safe[96];
     static_cast<void>(chat_tools::sanitizeInto(input, safe, sizeof(safe)));
 
@@ -4111,11 +4120,11 @@ void generateGlitchText(const char* input, char* output, std::size_t outputCap) 
     const int preset = static_cast<int>(ui_config::get<glitch_gen_vars::Preset>());
     const CursedPreset* fixedPreset = preset > 0 && preset < kCursedPresetCount ? &kCursedPresets[preset] : nullptr;
 
-    int maxMarks = 1 + intensity / 12; // 0% -> 1, 100% -> 9 marks per glyph
+    int maxMarks = 1 + intensity / 12; 
     if (!fixedPreset) {
-        if (style == 1)                    // Cursed: double the density
+        if (style == 1)                    
             maxMarks *= 2;
-        else if (style == 6)               // HEAVY: the glyphy wall - 10..60 marks per glyph
+        else if (style == 6)               
             maxMarks = 10 + intensity / 2;
     }
 
@@ -4125,11 +4134,11 @@ void generateGlitchText(const char* input, char* output, std::size_t outputCap) 
         int span = lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4;
         while (span > 1 && safe[i + span] == '\0')
             --span;
-        // base glyph first - marks only render when attached to a base letter
+        
         std::memcpy(output + o, safe + i, static_cast<std::size_t>(span));
         o += span;
         if (fixedPreset) {
-            // deterministic fixed stack - the same marks on every glyph, like the reference cards
+            
             for (int m = 0; m < fixedPreset->count && o + 5 < outputCap; ++m) {
                 const std::uint32_t cp = fixedPreset->marks[m];
                 output[o++] = static_cast<char>(0xC0 | (cp >> 6));
@@ -4156,13 +4165,13 @@ void generateGlitchText(const char* input, char* output, std::size_t outputCap) 
 
 char glitchGenInput[96] = "";
 char glitchGenOutput[4096] = "";
-char glitchGenLastInput[96] = {'\xFF', '\0'}; // forces the first generation
+char glitchGenLastInput[96] = {'\xFF', '\0'}; 
 int glitchGenLastStyle = -1;
 int glitchGenLastIntensity = -1;
 int glitchGenLastPreset = -1;
 
-// Regenerates whenever the inputs changed (live preview, no Enter needed); Reroll force-rolls
-// fresh noise. Returns true when a regeneration happened.
+
+
 bool refreshGlitchGenOutput() noexcept
 {
     const int style = static_cast<int>(ui_config::get<glitch_gen_vars::Style>());
@@ -4222,10 +4231,10 @@ void pageMiscGeneral() noexcept
 
 void pageMiscChat() noexcept
 {
-    // chat tools: everything here is NETWORKED (`say` / `playerchatwheel` / the `name`
-    // userinfo convar) - the server relays it to every player. Text lives in sidecar files
-    // (chat_name.txt / chat_spam.txt / chatwheel.txt / chat_names.txt next to the configs),
-    // edited in-place. {nl} in any text becomes a real line break in chat (U+2028).
+    
+    
+    
+    
     addCard("CHAT", 18, [] {
         chatTemplateRow("Fake Name", chat_tools::kNameBuffer, ++controlId);
         chatActionRow("Apply Name", "APPLY NAME", ++controlId, 0);
@@ -4235,8 +4244,8 @@ void pageMiscChat() noexcept
         static const char* const kStealPlaceholder[1] = {"no players - live match needed"};
         select("Steal Name", &stealSelected, stealRowCount > 0 ? stealOptions : kStealPlaceholder,
                stealRowCount > 0 ? stealRowCount : 1, ++controlId, &stolenNameApply);
-        // CS2 servers read the name at connect: with this on, a successful rename runs `retry`
-        // so the server picks the new name up immediately.
+        
+        
         toggleVar<chat_vars::NameForceReconnect>("Force Reconnect", ++controlId);
         toggleVar<chat_vars::NameCycleEnabled>("Name Cycle", ++controlId);
         sliderVar<chat_vars::NameCycleInterval>("Cycle Every", ++controlId, "s");
@@ -4246,11 +4255,11 @@ void pageMiscChat() noexcept
                                             static_cast<int>(sizeof(kAnimatorModeNames) / sizeof(kAnimatorModeNames[0])), ++controlId);
         sliderVar<name_animator_vars::Speed>("Animate Speed", ++controlId);
         toggleVar<name_animator_vars::DirectSend>("Direct Rename", ++controlId);
-        // Clan tag spoof (2026-09-23 update): local display rewrite of the controller's
-        // sanitized clan tag. The networked tag is Steam-clan/GC authoritative - this shows
-        // only on OUR screen (scoreboard, chat decoration, death notices). The animator
-        // drives the SAME rewrite frame by frame (no clan userinfo cvar exists in CS2, so
-        // there is no server-visible setinfo route).
+        
+        
+        
+        
+        
         toggleVar<chat_vars::ClanTagEnabled>("Clan Tag", ++controlId);
         chatTemplateRow("Clan Tag Text", chat_tools::kClanTagBuffer, ++controlId);
         toggleVar<chat_vars::ClanTagAnimateEnabled>("Animate Clan Tag", ++controlId);
@@ -4267,7 +4276,7 @@ void pageMiscChat() noexcept
                                           static_cast<int>(sizeof(kGlitchStyleNames) / sizeof(kGlitchStyleNames[0])), ++controlId);
         sliderVar<glitch_gen_vars::Intensity>("Intensity", ++controlId, "%");
         refreshGlitchGenOutput();
-        // read-only preview: selecting text in it + Ctrl+C copies through the REAL clipboard
+        
         textInputRow("Output", glitchGenOutput, sizeof(glitchGenOutput), ++controlId, ImGuiInputTextFlags_ReadOnly);
         if (actionRow("Copy", "COPY", ++controlId)) {
             if (gui_sdl::functions.setClipboardText)
@@ -4363,10 +4372,10 @@ void pageMisc() noexcept
     }
 }
 
-// --- inventory (skin changer) ---------------------------------------------------------
-// Six category pills over one per-category card. Every weapon row is a full skin triple:
-// a searchable PaintKitDatabase finish picker + wear + pattern seed. Only the active
-// category's rows exist per frame, so the ~100 rows never render at once.
+
+
+
+
 
 int inventoryCategory = 0;
 
@@ -4392,7 +4401,7 @@ void inventoryPills(ImDrawList* d) noexcept
         ImGui::PopID();
         if (clicked && !active) {
             inventoryCategory = i;
-            // popovers belong to the other category's rows - close them
+            
             state.popup.open = false;
             state.colorPickerOpen = false;
             state.multiSelectOpen = false;
@@ -4403,12 +4412,12 @@ void inventoryPills(ImDrawList* d) noexcept
         const float labelWidth = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, kNames[i]).x;
         textY(d, p.x + (pillWidth - labelWidth) * 0.5f, p.y, pillHeight, mix(C(145, 149, 159), C(226, 228, 235), r), kNames[i], kTextControl, nullptr);
     }
-    // clearance below the pills so the card caption does not touch them
+    
     columnYs[0] = columnYs[1] = s(4.0f) + pillHeight + s(30.0f);
 }
 
-// One weapon's skin triple: finish picker (raw paint kit id, validated against the weapon's
-// PaintKitDatabase list by the apply path too) + wear + pattern seed.
+
+
 template <typename SkinVar, typename WearVar, typename SeedVar>
 void weaponSkinRows(std::uint16_t defIndex) noexcept
 {
@@ -4423,11 +4432,11 @@ void pageInventoryCategory(int category) noexcept
     using namespace skin_changer_vars;
     switch (category) {
     case 0: {
-        // Knife finish ids are validated against the IMPERSONATED model's list (per-model
-        // finish kits exist). With no model selected only the generic-knife finishes are
-        // offered (defIndex 0 = the popup's generic mode), since the real equipped knife type
-        // is unknown at config time. addCard takes a plain function pointer, so the resolved
-        // def index goes through a static instead of a lambda capture.
+        
+        
+        
+        
+        
         const auto knifeModel = static_cast<KnifeModelSelection>(ui_config::get<KnifeModel>());
         static std::uint16_t knifeFinishDefIndex = 0;
         knifeFinishDefIndex = SkinChangerData::resolveKnifeModel(knifeModel).has_value()
@@ -4517,18 +4526,18 @@ void pageInventory() noexcept
 {
     if (!searchIndexing) {
         inventoryPills(ImGui::GetWindowDrawList());
-        // per-category control-id ranges: 6 categories * 150 + ~31 rows stay inside the
-        // page's own [page*1000, (page+1)*1000) id space (the old *500 leaked into Scripts')
+        
+        
         controlId += inventoryCategory * 150;
         pageInventoryCategory(inventoryCategory);
         pageInventoryAgent();
         return;
     }
 
-    // ghost render for the search index: lay out EVERY category exactly as it appears when
-    // active (so a search hit scrolls to the right offset after opening its category)
+    
+    
     for (int category = 0; category < 6; ++category) {
-        searchGlowSubTab = category; // reused as the generic sub-tab tag of the indexed row
+        searchGlowSubTab = category; 
         inventoryPills(ImGui::GetWindowDrawList());
         if (category)
             controlId += 150;
@@ -4538,17 +4547,17 @@ void pageInventory() noexcept
     }
 }
 
-// --- web radio (dedicated tab) -------------------------------------------------------
-//
-// TuneIn/RadioTime web radio, driven through RadioManager: the regional local-station list,
-// free-text station search, and click-to-play. Fetches and playback run asynchronously on the
-// HOST (steam-runtime-launch-client -> curl/mpv with ffplay fallback, see RadioManager.h);
-// this page only draws
-// state and fires actions. One full-width card instead of the two-column flow: a list needs the
-// room, and the row pool below is driven by the live result count.
 
-// URL-encodes a search query into one token (RadioManager passes it straight into the endpoint
-// URL, and the old Panorama side did the encoding - now that is this UI's job).
+
+
+
+
+
+
+
+
+
+
 void percentEncodeUrl(const char* src, char* dst, std::size_t cap) noexcept
 {
     constexpr char hex[] = "0123456789ABCDEF";
@@ -4571,8 +4580,8 @@ void percentEncodeUrl(const char* src, char* dst, std::size_t cap) noexcept
 template <typename Functor>
 void withRadio(Functor&& functor) noexcept
 {
-    // Returns false when the context is missing/shutting down - dropping the action then is the
-    // intended teardown behavior, so the result is explicitly discarded.
+    
+    
     static_cast<void>(ui_config::withContext([&functor](auto&& hookContext) {
         functor(hookContext.template make<RadioManager>());
     }));
@@ -4582,9 +4591,9 @@ void pageRadio() noexcept
 {
     withRadio([](auto&& radio) { radio.poll(); });
 
-    // First visit of the session: pull the regional local-station list so the tab is never
-    // empty on open. (Also fires once during the search-index ghost pass - a harmless extra
-    // fetch, results are shared static state.)
+    
+    
+    
     static bool initialBrowseFired = false;
     if (!initialBrowseFired) {
         initialBrowseFired = true;
@@ -4594,8 +4603,8 @@ void pageRadio() noexcept
     static char searchBuf[64] = "";
     char encodedQuery[200] = "";
 
-    // Snapshot state once (all of it lives in RadioManager's statics, so the pointers stay valid
-    // for the rest of the frame); the manager is only touched for actions afterwards.
+    
+    
     int stationCount = 0;
     const RadioStation* stations = nullptr;
     char headerText[160] = "Stations";
@@ -4604,14 +4613,14 @@ void pageRadio() noexcept
     const char* playingName = nullptr;
     int favCount = 0;
     int recCount = 0;
-    // Snapshot caps mirror RadioManager::kMaxFavorites / kMaxRecent (kept in sync by the loops).
+    
     constexpr int kFavSnap = 16;
     constexpr int kRecSnap = 8;
     const char* favIdSnap[kFavSnap] = {};
     const char* favNameSnap[kFavSnap] = {};
     const char* recIdSnap[kRecSnap] = {};
     const char* recNameSnap[kRecSnap] = {};
-    constexpr int kStationSnap = 40; // mirrors RadioManager::kMaxResults
+    constexpr int kStationSnap = 40; 
     bool stationFavSnap[kStationSnap] = {};
     withRadio([&](auto&& radio) {
         stationCount = radio.stationCount();
@@ -4636,9 +4645,9 @@ void pageRadio() noexcept
     });
 
     ImDrawList* d = ImGui::GetWindowDrawList();
-    constexpr int kFixedRows = 6; // search / now playing / volume / broadcast / voice key / results header
-    const int favRows = favCount > 0 ? favCount + 1 : 0; // + section header
-    const int recRows = recCount > 0 ? recCount + 1 : 0; // + section header
+    constexpr int kFixedRows = 6; 
+    const int favRows = favCount > 0 ? favCount + 1 : 0; 
+    const int recRows = recCount > 0 ? recCount + 1 : 0; 
     const int listRows = stationCount > 0 ? stationCount : 1;
     const float width = kShellWidth - kSidebarWidth - s(13.0f);
     const float height = (kFixedRows + favRows + recRows + listRows) * kRowHeight + s(12.0f);
@@ -4666,7 +4675,7 @@ void pageRadio() noexcept
         return clicked;
     };
 
-    // Row 0: search field (Enter submits) + LOCAL (back to the regional list).
+    
     beginRow(d, "Search");
     {
         const ImVec2 row = card.origin + ImVec2(0, 0 * kRowHeight);
@@ -4689,14 +4698,14 @@ void pageRadio() noexcept
             withRadio([](auto&& radio) { radio.startBrowseLocal(); });
     }
 
-    // Row 1: now playing + RESUME / STOP.
+    
     beginRow(d, "Now Playing");
     {
         const float rowY = card.origin.y + 1 * kRowHeight;
         const float stopX = p.x + width - s(13) - s(56);
         const float resumeX = stopX - s(64) - s(6);
-        const bool stopClicked = pillButton(++controlId, "\xEF\x81\x8D", ImVec2(stopX, rowY + rowCentered(s(23))), s(56), iconFont(), kTextIcon); // stop
-        const bool resumeClicked = pillButton(++controlId, "\xEF\x81\x8B", ImVec2(resumeX, rowY + rowCentered(s(23))), s(64), iconFont(), kTextIcon); // play
+        const bool stopClicked = pillButton(++controlId, "\xEF\x81\x8D", ImVec2(stopX, rowY + rowCentered(s(23))), s(56), iconFont(), kTextIcon); 
+        const bool resumeClicked = pillButton(++controlId, "\xEF\x81\x8B", ImVec2(resumeX, rowY + rowCentered(s(23))), s(64), iconFont(), kTextIcon); 
         if (stopClicked)
             withRadio([](auto&& radio) { radio.stop(); });
         if (resumeClicked)
@@ -4713,33 +4722,33 @@ void pageRadio() noexcept
         d->PopClipRect();
     }
 
-    // Row 2: volume (standard slider primitive; pushed live into mpv's IPC socket while a
-    // station plays - no re-press needed. ffplay fallback applies it at the next play).
+    
+    
     sliderVar<radio_vars::Volume>("Volume", ++controlId, "%");
 
-    // Row 3: mic broadcast - while a station plays, CS2's mic capture is switched to the radio
-    // (host-side virtual source fed by ffmpeg) and a SYNTHETIC push-to-talk press holds the
-    // voice gate open, so the whole team hears the station with zero setup: no Voice Key
-    // needed (one is auto-bound to F9 when yours is Off/mouse - unbound again on stop).
-    // Tip: Volume 0 keeps it team-only (you hear nothing, they hear everything).
-    // On stop/toggle-off the real mic comes back and PTT behavior is restored.
+    
+    
+    
+    
+    
+    
     toggleVar<radio_vars::MicBroadcast>("Broadcast To Voice", ++controlId);
 
-    // Voice key row: OPTIONAL manual override for the synthetic PTT press above (and the
-    // airhorn clips). Leave it Off (or on a mouse button) and broadcast auto-binds F9 for
-    // hands-free transmit; set it to your in-game keyboard voice key only if you prefer
-    // your own bind over the auto-key.
-    // The airhorn trigger toggles live on the SOUND tab; the mic routing machinery lives
-    // here with the broadcast.
+    
+    
+    
+    
+    
+    
     keybindVar<radio_vars::VoiceKeyBind>("Voice Key (optional)", ++controlId);
 
-    // NOW PLAYING HUD box: the bottom-left element mirroring this tab's playback (station +
-    // track via the host-side ICY burst probe). While nothing plays it can instead mirror the
-    // host desktop's media players (MPRIS via playerctl). Both draggable in game.
+    
+    
+    
     toggleVar<radio_vars::ShowNowPlaying>("Show Now Playing HUD", ++controlId);
     toggleVar<radio_vars::ShowMediaPlayers>("Show Desktop Players", ++controlId);
 
-    // Sections: persisted favorites (star toggles back off) and this session's recently played.
+    
     auto sectionHeader = [&](const char* title, const char* right) {
         const float rowY = card.origin.y + card.row * kRowHeight;
         if (card.row)
@@ -4756,7 +4765,7 @@ void pageRadio() noexcept
         const float rowY = card.origin.y + card.row * kRowHeight;
         d->AddLine(ImVec2(card.origin.x + s(12), rowY), ImVec2(card.origin.x + width - s(12), rowY), kHairline);
 
-        // star toggle at the right edge: on favorites rows it removes; on result rows it adds
+        
         const float starX = p.x + width - s(13) - s(22);
         ImGui::PushID(idSalt);
         const bool starClicked = hit("##radio_star", ImVec2(starX, rowY + rowCentered(s(22))), ImVec2(s(22), s(22))) && !searchIndexing;
@@ -4765,7 +4774,7 @@ void pageRadio() noexcept
         if (starClicked)
             withRadio([&](auto&& radio) { radio.toggleFavorite(id, name); });
 
-        // name area plays the station
+        
         ImGui::PushID(idSalt + 10000);
         const bool clicked = hit("##radio_saved", ImVec2(p.x + s(4), rowY), ImVec2(width - s(8) - s(26), kRowHeight));
         const float hover = motion(animKey(0xbe22u, idSalt + 10000), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
@@ -4773,7 +4782,7 @@ void pageRadio() noexcept
         if (hover > 0.001f)
             d->AddRectFilled(ImVec2(p.x + s(4), rowY), ImVec2(p.x + width - s(4) - s(26), rowY + kRowHeight), (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(14 * hover) << IM_COL32_A_SHIFT), s(6));
 
-        textY(d, p.x + s(13), rowY, kRowHeight, starred ? g_accent : mix(C(110, 114, 124), C(190, 194, 204), starHover), kIconStar, s(12.0f), iconFont()); // star
+        textY(d, p.x + s(13), rowY, kRowHeight, starred ? g_accent : mix(C(110, 114, 124), C(190, 194, 204), starHover), kIconStar, s(12.0f), iconFont()); 
         textY(d, p.x + s(38), rowY, kRowHeight, playing ? g_accent : kTextBodyCol, name, kTextControl, nullptr);
         return clicked;
     };
@@ -4801,7 +4810,7 @@ void pageRadio() noexcept
         }
     }
 
-    // Row 3: results header + count / loading state.
+    
     {
         const float rowY = card.origin.y + card.row * kRowHeight;
         if (card.row)
@@ -4821,7 +4830,7 @@ void pageRadio() noexcept
         ++card.row;
     }
 
-    // Station rows: click to play. The playing station gets the accent treatment.
+    
     if (stationCount == 0) {
         const float rowY = card.origin.y + card.row * kRowHeight;
         textY(d, card.origin.x + s(13), rowY, kRowHeight, C(110, 114, 124),
@@ -4841,7 +4850,7 @@ void pageRadio() noexcept
             if (hover > 0.001f)
                 d->AddRectFilled(ImVec2(p.x + s(4), rowY), ImVec2(p.x + width - s(4) - s(26), rowY + kRowHeight), (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(14 * hover) << IM_COL32_A_SHIFT), s(6));
 
-            // favorite star at the right edge of the row
+            
             {
                 const float starX = p.x + width - s(13) - s(22);
                 const bool fav = i < kStationSnap && stationFavSnap[i];
@@ -4853,16 +4862,16 @@ void pageRadio() noexcept
                     const RadioStation& stRef = stations[i];
                     withRadio([&](auto&& radio) { radio.toggleFavorite(stRef.id, stRef.text); });
                 }
-                textY(d, starX + s(5), rowY, kRowHeight, fav ? g_accent : mix(C(110, 114, 124), C(190, 194, 204), starHover), kIconStar, s(12.0f), iconFont()); // star
+                textY(d, starX + s(5), rowY, kRowHeight, fav ? g_accent : mix(C(110, 114, 124), C(190, 194, 204), starHover), kIconStar, s(12.0f), iconFont()); 
             }
 
             constexpr float iconX = 13.0f;
             constexpr float nameX = 38.0f;
-            textY(d, p.x + s(iconX), rowY, kRowHeight, playing ? g_accent : mix(C(120, 124, 134), C(226, 228, 235), hover), "\xEF\x81\x8B", s(11.0f), iconFont()); // play
+            textY(d, p.x + s(iconX), rowY, kRowHeight, playing ? g_accent : mix(C(120, 124, 134), C(226, 228, 235), hover), "\xEF\x81\x8B", s(11.0f), iconFont()); 
             textY(d, p.x + s(nameX), rowY, kRowHeight, playing ? g_accent : kTextBodyCol, st.text, kTextControl, nullptr);
 
             if (st.subtext[0] != '\0') {
-                const float subRight = card.origin.x + width - s(39); // clears the favorite star
+                const float subRight = card.origin.x + width - s(39); 
                 const float subRegionW = width - s(273.0f) - s(26.0f);
                 d->PushClipRect(ImVec2(card.origin.x + s(260.0f), rowY), ImVec2(subRight, rowY + kRowHeight), true);
                 const float subWidth = ImGui::GetFont()->CalcTextSizeA(kTextSmall, FLT_MAX, 0.0f, st.subtext).x;
@@ -4882,29 +4891,29 @@ void pageRadio() noexcept
     columnYs[1] = columnYs[0];
 }
 
-// --- scripts (Lua framework tab) -------------------------------------------------------
-// One full-width card: scripts directory listing with per-row LOAD/UNLOAD/EDIT/DELETE, a create
-// row, and the script editor as a separate RESIZABLE ImGui window (opened per script). Script
-// state lives in lua:: (Features/Lua/LuaManager.h); this page only drives it.
+
+
+
+
 
 struct ScriptEditor {
     bool open = false;
-    char name[lua::kMaxScriptName] = {};      // file being edited (with .lua)
-    char buffer[98 * 1024] = {};              // editor content (fits kMaxScriptBytes)
+    char name[lua::kMaxScriptName] = {};      
+    char buffer[98 * 1024] = {};              
     bool dirty = false;
-    char status[160] = {};                    // last save/load feedback
-    double statusTime = 0.0;                  // shown for a few seconds after a save/revert
+    char status[160] = {};                    
+    double statusTime = 0.0;                  
 };
 
 ScriptEditor scriptEditor;
 
-// Control-id base for script-owned gui.* items - far above the page*1000 controlId space and
-// the sliderRow id+500000 pills, so nothing collides.
+
+
 constexpr int kScriptGuiControlBase = 900000;
 
-// One script-owned gui.* row, shared by the Scripts-subtab cards (pageScriptControls) and the
-// native-page cards (renderScriptPageCardRows) so widget coverage can never drift between the
-// two. Every GuiItem::Type renders through a shared menu widget - never a local variant.
+
+
+
 void renderScriptGuiItem(lua::Script& script, int scriptSlot, int itemIndex, int id) noexcept
 {
     lua::GuiItem& item = script.guiItems[itemIndex];
@@ -4926,19 +4935,19 @@ void renderScriptGuiItem(lua::Script& script, int scriptSlot, int itemIndex, int
         sliderRow(item.label, &item.intValue, item.minValue, item.maxValue, id, "");
 }
 
-// --- script editor: undo/redo + Lua syntax highlighting --------------------------------
-//
-// The InputTextMultiline renders with INVISIBLE text (alpha 0) and we draw the same layout
-// ourselves on top: 1.91.7 multiline does not soft-wrap (one AddText per whole buffer, lines
-// advance by FontSize, horizontal chunk-scroll = InputTextState::Scroll.x, vertical scroll is
-// zero because the input is sized to its exact content height inside our own scroll child), so
-// per-line token drawing lands pixel-exact on the native layout. The native selection
-// background (semi-transparent) still renders above the highlight, and the native caret is
-// invisible with the text, so we draw our own.
 
-// Snapshot undo/redo (freestanding statics, no heap): the input runs with
-// ImGuiInputTextFlags_NoUndoRedo so ImGui's own per-character undo never fights ours. A
-// snapshot is taken on every edit burst (>0.5s gap), so Ctrl+Z rewinds in word-burst steps.
+
+
+
+
+
+
+
+
+
+
+
+
 constexpr int kEditorUndoDepth = 16;
 constexpr int kEditorRedoDepth = 8;
 
@@ -4949,11 +4958,11 @@ struct ScriptEditorUndo {
     char redo[kEditorRedoDepth][98 * 1024];
     int redoLengths[kEditorRedoDepth] = {};
     int redoCount = 0;
-    char preEdit[98 * 1024] = {}; // content as it was at the start of this frame
+    char preEdit[98 * 1024] = {}; 
     double lastEditTime = -100.0;
 };
 ScriptEditorUndo scriptEditorUndo;
-int scriptEditorPendingHistory = 0; // 1 = undo, 2 = redo - deferred one frame past ClearActiveID
+int scriptEditorPendingHistory = 0; 
 
 void scriptEditorPushUndo() noexcept
 {
@@ -4967,7 +4976,7 @@ void scriptEditorPushUndo() noexcept
     std::memcpy(u.undo[u.undoCount], u.preEdit, static_cast<std::size_t>(length) + 1);
     u.undoLengths[u.undoCount] = length;
     ++u.undoCount;
-    u.redoCount = 0; // a new edit branch invalidates redo
+    u.redoCount = 0; 
 }
 
 bool scriptEditorApplyHistory(ScriptEditor& editor, bool undoDir) noexcept
@@ -5012,7 +5021,7 @@ bool scriptEditorApplyHistory(ScriptEditor& editor, bool undoDir) noexcept
     ++dstCount;
     --srcCount;
     std::memcpy(editor.buffer, srcStack[srcCount], static_cast<std::size_t>(srcLengths[srcCount]) + 1);
-    // write the (possibly trimmed) counts back - src/dst alias different members, no overlap
+    
     if (undoDir) {
         u.undoCount = srcCount;
         u.redoCount = dstCount;
@@ -5026,7 +5035,7 @@ bool scriptEditorApplyHistory(ScriptEditor& editor, bool undoDir) noexcept
 int scriptEditorTabCallback(ImGuiInputTextCallbackData* data) noexcept
 {
     if (data->EventFlag == ImGuiInputTextFlags_CallbackCompletion)
-        data->InsertChars(data->CursorPos, "    "); // Tab indents instead of stealing focus
+        data->InsertChars(data->CursorPos, "    "); 
     return 0;
 }
 
@@ -5038,8 +5047,8 @@ int scriptEditorLineCount() noexcept
     return count;
 }
 
-// Lua tokenizer + renderer for one editor frame. Draws into the scroll child's draw list at
-// the input's exact text origin. Colors follow the menu palette.
+
+
 void drawScriptEditorHighlight(ImDrawList* d, const ImVec2& origin, const ImVec2& clipMin, const ImVec2& clipMax,
     float scrollX, const int* cursorByte) noexcept
 {
@@ -5065,7 +5074,7 @@ void drawScriptEditorHighlight(ImDrawList* d, const ImVec2& origin, const ImVec2
     ImFont* font = ImGui::GetIO().Fonts->Fonts[0];
     const float fontSize = font->FontSize;
     const double time = ImGui::GetTime();
-    const bool caretVisible = std::fmod(time, 1.2) < 0.8; // matches ConfigInputTextCursorBlink cadence
+    const bool caretVisible = std::fmod(time, 1.2) < 0.8; 
 
     d->PushClipRect(clipMin, clipMax, true);
     int lineIndex = 0;
@@ -5100,7 +5109,7 @@ void drawScriptEditorHighlight(ImDrawList* d, const ImVec2& origin, const ImVec2
                 } else if (p + 1 < lineEnd && p[0] == '-' && p[1] == '-') {
                     color = kComment;
                     if (p + 3 < lineEnd && p[2] == '[' && p[3] == '[')
-                        inBlockComment = true; // --[[ opens a block; the rest of the line is comment
+                        inBlockComment = true; 
                 } else if (*p == '"' || *p == '\'') {
                     color = kString;
                     const char quote = *p;
@@ -5139,7 +5148,7 @@ void drawScriptEditorHighlight(ImDrawList* d, const ImVec2& origin, const ImVec2
                             if (wordIs(p, c, api)) { color = kApi; break; }
                     runEnd = c;
                 } else {
-                    // punctuation / whitespace run
+                    
                     const char* c = p;
                     while (c < lineEnd && !identStart(static_cast<unsigned char>(*c)) && !digitChar(static_cast<unsigned char>(*c))
                         && *c != '"' && *c != '\'' && !(c + 1 < lineEnd && c[0] == '-' && c[1] == '-'))
@@ -5154,7 +5163,7 @@ void drawScriptEditorHighlight(ImDrawList* d, const ImVec2& origin, const ImVec2
                 x += font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, runStart, runEnd).x;
                 p = runEnd;
             }
-            // caret column (the native one is invisible along with the ghost text)
+            
             if (cursorByte && !caretFound && *cursorByte >= lineStartOffset && *cursorByte <= lineEndOffset) {
                 const int cursorInLine = (*cursorByte - lineStartOffset < lineEnd - lineStart) ? *cursorByte - lineStartOffset : static_cast<int>(lineEnd - lineStart);
                 caretX = origin.x - scrollX + font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, lineStart, lineStart + cursorInLine).x;
@@ -5184,22 +5193,22 @@ void drawScriptEditorWindow() noexcept
     ImGui::PushStyleColor(ImGuiCol_WindowBg, kInsetBg);
     ImGui::PushStyleColor(ImGuiCol_Border, C(30, 30, 33, 220));
     const ImGuiWindowFlags editorFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings
-        | ImGuiWindowFlags_NoScrollbar; // the input scrolls its own content
+        | ImGuiWindowFlags_NoScrollbar; 
 
-    // The window id IS the title string: it must never change between frames or ImGui treats
-    // this as a brand-new window - position resets to the default and keyboard focus (the
-    // InputText) dies. That was exactly the "backspace moves the window and drops the caret"
-    // bug when the dirty asterisk was part of the title; the marker renders in the caption
-    // row below instead.
+    
+    
+    
+    
+    
     char title[160];
     std::snprintf(title, sizeof(title), "%s##script_editor", scriptEditor.name);
     if (ImGui::Begin(title, &scriptEditor.open, editorFlags)) {
         ImDrawList* d = ImGui::GetWindowDrawList();
 
-        // glow: same nested rounded-ring pass as the shell (drawMenuGlow). It MUST render on the
-        // foreground draw list: the window's own draw list clips at the window rect, which made
-        // the in-window version invisible (only the shell's close-animation warp ever leaked
-        // vertices back inside the clip).
+        
+        
+        
+        
         if (ui_config::get<MenuGlowEnabled>()) {
             const auto glowColor = ui_config::get<MenuGlowColor>();
             const float glowSize = static_cast<float>(ui_config::get<MenuGlowSize>());
@@ -5230,7 +5239,7 @@ void drawScriptEditorWindow() noexcept
             }
         }
 
-        // caption: scripts folder ... + dirty/save status on the right
+        
         const bool showStatus = scriptEditor.status[0] != '\0' && ImGui::GetTime() - scriptEditor.statusTime < 3.0;
         const char* stateText = showStatus ? scriptEditor.status : (scriptEditor.dirty ? "unsaved changes" : "");
         if (stateText[0]) {
@@ -5239,8 +5248,8 @@ void drawScriptEditorWindow() noexcept
                 scriptEditor.dirty ? C(232, 180, 96) : C(140, 200, 120), stateText, kTextCaption, nullptr);
         }
 
-        // editor body: the input lives in OUR scroll child (content-sized input -> its internal
-        // scrolling stays at zero, so the highlight overlay always knows the exact offsets).
+        
+        
         const ImVec2 viewSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y - s(34));
         ImGui::PushStyleColor(ImGuiCol_ChildBg, C(19, 19, 21));
         ImGui::BeginChild("##editor_view", viewSize, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
@@ -5254,11 +5263,11 @@ void drawScriptEditorWindow() noexcept
         const int lineCount = scriptEditorLineCount();
         const float contentHeight = (lineCount + 1) * lineHeight + ImGui::GetStyle().FramePadding.y * 2.0f;
 
-        // snapshot the pre-edit content for the undo burst detection
+        
         std::memcpy(scriptEditorUndo.preEdit, scriptEditor.buffer, std::strlen(scriptEditor.buffer) + 1);
 
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, C(19, 19, 21, 0)); // input bg invisible, ours above
-        ImGui::PushStyleColor(ImGuiCol_Text, C(207, 209, 218, 0)); // ghost text: the highlight draws it
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, C(19, 19, 21, 0)); 
+        ImGui::PushStyleColor(ImGuiCol_Text, C(207, 209, 218, 0)); 
         ImGui::PushFont(editorFont);
         const bool edited = ImGui::InputTextMultiline("##script_source", scriptEditor.buffer, sizeof(scriptEditor.buffer),
             ImVec2(ImGui::GetContentRegionAvail().x, contentHeight),
@@ -5272,13 +5281,13 @@ void drawScriptEditorWindow() noexcept
             scriptEditor.dirty = true;
             const double now = ImGui::GetTime();
             if (now - scriptEditorUndo.lastEditTime > 0.5) {
-                scriptEditorPushUndo(); // burst start: snapshot the pre-edit content
+                scriptEditorPushUndo(); 
             }
             scriptEditorUndo.lastEditTime = now;
         }
 
-        // undo/redo: keyboard (input inactive -> apply now, active -> deactivate and apply on
-        // the next frame, after InputText's own deactivated-state reapply has settled)
+        
+        
         const bool editorFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
         bool wantUndo = editorFocused && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false);
         bool wantRedo = editorFocused && ImGui::GetIO().KeyCtrl && (ImGui::IsKeyPressed(ImGuiKey_Y, false) || (ImGui::IsKeyPressed(ImGuiKey_Z, false) && ImGui::GetIO().KeyShift));
@@ -5298,7 +5307,7 @@ void drawScriptEditorWindow() noexcept
             }
         }
 
-        // syntax highlight overlay: exact native layout (origin + per-line advance + Scroll.x)
+        
         {
             const ImVec2 itemMin = ImGui::GetItemRectMin();
             const ImGuiInputTextState* inputState = ImGui::GetInputTextState(inputId);
@@ -5307,11 +5316,11 @@ void drawScriptEditorWindow() noexcept
             drawScriptEditorHighlight(vd, ImVec2(itemMin.x + ImGui::GetStyle().FramePadding.x, itemMin.y + ImGui::GetStyle().FramePadding.y),
                 vMin, vMax, scrollX, inputState ? &cursorByte : nullptr);
 
-            // Caret-follow scroll: the input is content-sized inside THIS child, so nothing else
-            // ever scrolls it toward the caret. Without this, pressing Enter near the bottom
-            // (or Backspace at the top while scrolled) moves the caret line out of the visible
-            // area - typing keeps working but everything renders outside the clip, which felt
-            // like the editor "dying" until the next click re-anchored the view.
+            
+            
+            
+            
+            
             if (inputActive && inputState && cursorByte >= 0) {
                 int caretLine = 0;
                 for (int i = 0; i < cursorByte && scriptEditor.buffer[i] != '\0'; ++i)
@@ -5326,7 +5335,7 @@ void drawScriptEditorWindow() noexcept
             }
         }
 
-        // scroll thumb
+        
         const float scrollMaxY = ImGui::GetScrollMaxY();
         if (scrollMaxY > 0.0f) {
             const float viewH = vMax.y - vMin.y;
@@ -5337,7 +5346,7 @@ void drawScriptEditorWindow() noexcept
         ImGui::EndChild();
         ImGui::PopStyleColor();
 
-        // action row: UNDO + REDO (left), SAVE + REVERT + RUN (right)
+        
         const float y = ImGui::GetCursorScreenPos().y + s(4);
         const float saveWidth = s(64);
         const float revertWidth = s(96);
@@ -5366,7 +5375,7 @@ void drawScriptEditorWindow() noexcept
                 std::snprintf(scriptEditor.status, sizeof(scriptEditor.status), "saved");
                 scriptEditor.statusTime = ImGui::GetTime();
                 if (lua::loadedIndex(scriptEditor.name) >= 0)
-                    lua::load(scriptEditor.name); // live-reload: keep a loaded script in sync
+                    lua::load(scriptEditor.name); 
             } else {
                 std::snprintf(scriptEditor.status, sizeof(scriptEditor.status), "save failed");
                 scriptEditor.statusTime = ImGui::GetTime();
@@ -5397,12 +5406,12 @@ void drawScriptEditorWindow() noexcept
     ImGui::PopStyleVar(2);
 }
 
-// --- Scripts page sub-tabs ---------------------------------------------------------------
-// Tab 0 = MANAGE (the script file list). Every loaded script that created gui.* items gets its
-// own sub-tab (named by gui.tab(), default the file name), so one feature-packed lua organizes
-// all of its controls on a dedicated tab that lives INSIDE the Scripts page - between Scripts
-// and Misc in the nav rail, exactly where the page already sits.
-constexpr int kMaxScriptTabs = 12; // MANAGE + up to 11 script tabs
+
+
+
+
+
+constexpr int kMaxScriptTabs = 12; 
 static int scriptsSubTab = 0;
 static char scriptsTabLabels[kMaxScriptTabs][48];
 static const char* scriptsTabLabelPtrs[kMaxScriptTabs];
@@ -5419,13 +5428,13 @@ void buildScriptTabs() noexcept
         const lua::Script& script = lua::scripts[i];
         if (!script.L)
             continue;
-        // a script whose items ALL live on native pages (gui.page) needs no sub-tab here
+        
         bool hasSubtabItems = false;
         for (int k = 0; k < script.guiItemCount && !hasSubtabItems; ++k)
             hasSubtabItems = script.guiItems[k].page == static_cast<int>(lua::ScriptPage::Subtab);
         if (!hasSubtabItems)
             continue;
-        // label: gui.tab() wins, else the file name without ".lua", capped
+        
         if (script.tabLabel[0] != '\0')
             std::snprintf(scriptsTabLabels[scriptsTabCount], sizeof(scriptsTabLabels[0]), "%s", script.tabLabel);
         else {
@@ -5435,7 +5444,7 @@ void buildScriptTabs() noexcept
             std::memcpy(scriptsTabLabels[scriptsTabCount], script.name, copy);
             scriptsTabLabels[scriptsTabCount][copy] = '\0';
         }
-        // upper-case the label like the other sub-tab pills (nav style consistency)
+        
         for (char* c = scriptsTabLabels[scriptsTabCount]; *c != '\0'; ++c)
             *c = (*c >= 'a' && *c <= 'z') ? static_cast<char>(*c - 'a' + 'A') : *c;
         scriptsTabLabelPtrs[scriptsTabCount] = scriptsTabLabels[scriptsTabCount];
@@ -5443,11 +5452,11 @@ void buildScriptTabs() noexcept
     }
 
     if (scriptsSubTab >= scriptsTabCount)
-        scriptsSubTab = 0; // a script unloaded out from under the active tab
+        scriptsSubTab = 0; 
 }
 
-// The controls card of the listPosition-th (0-based) script that owns gui items. Rendered only
-// on that script's sub-tab.
+
+
 void pageScriptControls(int listPosition) noexcept
 {
     lua::Script* script = nullptr;
@@ -5455,8 +5464,8 @@ void pageScriptControls(int listPosition) noexcept
     int seen = 0;
     for (int i = 0; i < lua::kMaxScripts; ++i) {
         if (lua::scripts[i].L && lua::scripts[i].guiItemCount > 0) {
-            // only items that still live on the script's own sub-tab count here - items
-            // assigned to a native page via gui.page() render there instead
+            
+            
             bool hasSubtabItems = false;
             for (int k = 0; k < lua::scripts[i].guiItemCount && !hasSubtabItems; ++k)
                 hasSubtabItems = lua::scripts[i].guiItems[k].page == static_cast<int>(lua::ScriptPage::Subtab);
@@ -5473,7 +5482,7 @@ void pageScriptControls(int listPosition) noexcept
     if (!script)
         return;
 
-    // rows: sub-tab items only (+ the error row when the script is disabled)
+    
     int rowCount = script->errored ? 1 : 0;
     for (int i = 0; i < script->guiItemCount; ++i)
         if (script->guiItems[i].page == static_cast<int>(lua::ScriptPage::Subtab))
@@ -5495,7 +5504,7 @@ void pageScriptControls(int listPosition) noexcept
     card = CardContext{cp + ImVec2(0, s(6.0f)), width, 0};
 
     if (script->errored) {
-        // an errored script keeps its gui items but stops running - show why, in place
+        
         textY(d, card.origin.x + s(13), card.origin.y + card.row * kRowHeight, kRowHeight, C(232, 96, 96), script->lastError, kTextSmall, nullptr);
         ++card.row;
     }
@@ -5511,9 +5520,9 @@ void pageScriptControls(int listPosition) noexcept
     columnYs[1] = columnYs[0];
 }
 
-// --- script cards on NATIVE pages (gui.page) ----------------------------------------------
-// addCard takes captureless fn pointers, so the renderRows callback reads which script/page it
-// belongs to from these statics, set right before the addCard call.
+
+
+
 static int scriptPageCardScriptSlot = -1;
 static int scriptPageCardPage = -1;
 
@@ -5521,7 +5530,7 @@ void renderScriptPageCardRows() noexcept
 {
     lua::Script& script = lua::scripts[scriptPageCardScriptSlot];
     if (script.errored) {
-        // an errored script keeps its gui items but stops running - show why, in place
+        
         ImDrawList* rd = ImGui::GetWindowDrawList();
         textY(rd, card.origin.x + s(13), card.origin.y + card.row * kRowHeight, kRowHeight, C(232, 96, 96), script.lastError, kTextSmall, nullptr);
         ++card.row;
@@ -5535,9 +5544,9 @@ void renderScriptPageCardRows() noexcept
     }
 }
 
-// Appends one card per script that owns gui items on `page`, after the page's own content.
-// Runs in the REAL page render (interactive) and the search-index ghost pass (labels only -
-// beginRow records them, the ghost window's SkipItems makes every hit() inert).
+
+
+
 void renderScriptCardsForPage(Page page) noexcept
 {
     const int pageId = static_cast<int>(page);
@@ -5551,10 +5560,10 @@ void renderScriptCardsForPage(Page page) noexcept
                 ++pageItemCount;
         if (pageItemCount == 0)
             continue;
-        const int rowCount = pageItemCount + (script.errored ? 1 : 0); // + the error row
+        const int rowCount = pageItemCount + (script.errored ? 1 : 0); 
 
-        // card title: gui.tab() label wins, else the file name stem - upper-cased like the
-        // native card titles
+        
+        
         char title[64];
         if (script.tabLabel[0] != '\0')
             std::snprintf(title, sizeof(title), "%s", script.tabLabel);
@@ -5576,28 +5585,28 @@ void renderScriptCardsForPage(Page page) noexcept
 
 void pageScripts() noexcept
 {
-    // Snapshot the directory listing once per frame (cheap: opendir on a small dir).
+    
     constexpr int kMaxList = 32;
     lua::FileEntry entries[kMaxList];
     const int fileCount = lua::listFiles(entries, kMaxList);
 
-    // Tab selection lives in the NAV RAIL now (the Scripts row expands into its children, like
-    // the Visuals group) - buildScriptTabs() runs there each frame. No pills on the page.
+    
+    
     buildScriptTabs();
-    searchGlowSubTab = scriptsSubTab; // global search rows record their scripts subtab
+    searchGlowSubTab = scriptsSubTab; 
 
     if (scriptsSubTab > 0) {
         pageScriptControls(scriptsSubTab - 1);
         return;
     }
 
-    // --- MANAGE: the script file card ---
+    
     int loadedCount = 0;
     for (int i = 0; i < lua::kMaxScripts; ++i)
         loadedCount += lua::scripts[i].L ? 1 : 0;
 
     const int listRows = fileCount > 0 ? fileCount : 1;
-    constexpr int kFixedRows = 3; // header / create / hint
+    constexpr int kFixedRows = 3; 
     const float width = kShellWidth - kSidebarWidth - s(13.0f);
     const float height = (kFixedRows + listRows) * kRowHeight + s(12.0f);
 
@@ -5625,7 +5634,7 @@ void pageScripts() noexcept
         return clicked;
     };
 
-    // Row 0: header - folder path + loaded count.
+    
     {
         const float rowY = card.origin.y + 0 * kRowHeight;
         textY(d, card.origin.x + s(13), rowY, kRowHeight, C(89, 94, 106), lua::scriptsDirPath[0] ? lua::scriptsDirPath : "(scripts folder unavailable)", kTextCaption, nullptr);
@@ -5636,7 +5645,7 @@ void pageScripts() noexcept
         ++card.row;
     }
 
-    // Row 1: create-new (name + CREATE button).
+    
     static char newScriptName[96] = "";
     {
         beginRow(d, "New Script");
@@ -5672,15 +5681,15 @@ void pageScripts() noexcept
                 newScriptName[0] = '\0';
             }
         }
-        // beginRow already advanced card.row - the extra increment here used to shift every row
-        // below down by one, putting the "Scripts" hint label on top of the first file row.
+        
+        
     }
 
-    // Row 2: hint.
+    
     beginRow(d, "Scripts");
 
 
-    // Rows 3+: one row per .lua file in the scripts folder.
+    
     for (int i = 0; i < fileCount; ++i) {
         const float rowY = card.origin.y + (3 + i) * kRowHeight;
         d->AddLine(ImVec2(card.origin.x + s(12), rowY), ImVec2(card.origin.x + width - s(12), rowY), kHairline);
@@ -5688,7 +5697,7 @@ void pageScripts() noexcept
         const int loaded = lua::loadedIndex(entries[i].name);
         const lua::Script* scriptState = loaded >= 0 ? &lua::scripts[loaded] : nullptr;
 
-        // buttons at the right edge: EDIT | RELOAD/LOAD | UNLOAD
+        
         const float unloadX = p.x + width - s(13) - s(64);
         const float loadX = unloadX - s(72) - s(6);
         const float editX = loadX - s(52) - s(6);
@@ -5709,9 +5718,9 @@ void pageScripts() noexcept
             scriptEditor.open = true;
         }
 
-        // file icon + indented name (radio-row style) so the names don't sit flush against the
-        // left edge where they read as one blob with the "Scripts" label above them.
-        textY(d, card.origin.x + s(16), rowY, kRowHeight, scriptState ? g_accent : C(120, 124, 134), "\xEF\x84\xA1", s(12.0f), iconFont()); // code
+        
+        
+        textY(d, card.origin.x + s(16), rowY, kRowHeight, scriptState ? g_accent : C(120, 124, 134), "\xEF\x84\xA1", s(12.0f), iconFont()); 
         textY(d, card.origin.x + s(38), rowY, kRowHeight, scriptState ? g_accent : kTextBodyCol, entries[i].name, kTextControl, nullptr);
         if (scriptState && scriptState->errored) {
             d->PushClipRect(ImVec2(card.origin.x + s(220), rowY), ImVec2(editX - s(8), rowY + kRowHeight), true);
@@ -5736,13 +5745,13 @@ void pageScripts() noexcept
     columnYs[1] = columnYs[0];
 }
 
-// --- global search: index build + overlay --------------------------------------------
-//
-// Ghost-rendering one page per frame into an offscreen window: SkipItems short-circuits every
-// ImGui widget (no input side effects), while our own layout code (beginRow) still runs and
-// records the rows. The throwaway window's draw list is discarded by ImGui (fully clipped).
 
-bool changePage(Page next) noexcept; // defined in the sidebar section below
+
+
+
+
+
+bool changePage(Page next) noexcept; 
 
 void indexNextSearchPage() noexcept
 {
@@ -5757,9 +5766,9 @@ void indexNextSearchPage() noexcept
         | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse
         | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoBackground;
 
-    // NOTE: Begin() returns false for fully-clipped windows - but that is exactly the state we
-    // want: SkipItems short-circuits every ImGui widget (no input side effects) while OUR
-    // layout code below still runs and records rows. So no `if (Begin())` guard here.
+    
+    
+    
     ImGui::Begin("##search_index", nullptr, flags);
     {
         const ImVec2 savedShellBase = shellBase;
@@ -5784,7 +5793,7 @@ void indexNextSearchPage() noexcept
         case Page::Scripts: pageScripts(); break;
         case Page::Misc: pageMisc(); break;
         }
-        renderScriptCardsForPage(static_cast<Page>(searchIndexPageCursor)); // labels enter the search index too
+        renderScriptCardsForPage(static_cast<Page>(searchIndexPageCursor)); 
         searchIndexing = false;
 
         shellBase = savedShellBase;
@@ -5807,7 +5816,7 @@ void searchOverlay(ImDrawList* d, ImVec2 b) noexcept
     const ImVec2 contentMax(b.x + kShellWidth - s(4), b.y + kShellHeight - s(6));
     d->AddRectFilled(contentMin, contentMax, kShellBg, s(14));
 
-    // input field (autofocused on the open frame)
+    
     ImGui::SetCursorScreenPos(contentMin + ImVec2(s(16), s(16)));
     ImGui::PushItemWidth(contentMax.x - contentMin.x - s(32));
     ImGui::PushStyleColor(ImGuiCol_FrameBg, kInsetBg);
@@ -5820,10 +5829,10 @@ void searchOverlay(ImDrawList* d, ImVec2 b) noexcept
     ImGui::PopStyleColor(2);
     ImGui::PopItemWidth();
 
-    // Input diagnostics: the field once filled with '?' - log the raw UTF-8 bytes we receive
-    // on change, so a layout/encoding problem is visible in the log instead of guessable only
-    // from rendered glyphs. (SDL text input is deliberately NOT used by this backend - text
-    // comes from scancode synthesis, see SdlImGuiBackend.h - so there is no SDL state to probe.)
+    
+    
+    
+    
     static char lastLoggedQuery[sizeof(searchQuery)] = "";
     if (std::strcmp(searchQuery, lastLoggedQuery) != 0) {
         std::memcpy(lastLoggedQuery, searchQuery, sizeof(lastLoggedQuery));
@@ -5842,7 +5851,7 @@ void searchOverlay(ImDrawList* d, ImVec2 b) noexcept
         return;
     }
 
-    // results: collect matches first so keyboard selection has a stable list
+    
     const float rowHeight = s(30.0f);
     const float listTop = contentMin.y + s(56.0f);
     constexpr int kMaxShown = 9;
@@ -5853,7 +5862,7 @@ void searchOverlay(ImDrawList* d, ImVec2 b) noexcept
             matches[matchCount++] = i;
     }
 
-    // reset the selection when the query changes
+    
     static char lastSelectedQuery[sizeof(searchQuery)] = "";
     if (std::strcmp(searchQuery, lastSelectedQuery) != 0) {
         std::memcpy(lastSelectedQuery, searchQuery, sizeof(lastSelectedQuery));
@@ -5876,7 +5885,7 @@ void searchOverlay(ImDrawList* d, ImVec2 b) noexcept
         if (entry.page == Page::Glow)
             glowSubTab = entry.subTab;
         else if (entry.page == Page::Inventory)
-            inventoryCategory = entry.subTab; // subTab doubles as the category tag
+            inventoryCategory = entry.subTab; 
         else if (entry.page == Page::Rage)
             rageSubTab = entry.subTab;
         else if (entry.page == Page::Legit)
@@ -5891,7 +5900,7 @@ void searchOverlay(ImDrawList* d, ImVec2 b) noexcept
         if (visualsPage)
             state.visualsExpanded = true;
         scrollOffset = ImMax(0.0f, entry.contentY - s(60.0f));
-        scrollTarget = scrollOffset; // search jumps snap, no glide
+        scrollTarget = scrollOffset; 
         searchOpen = false;
     };
 
@@ -5909,7 +5918,7 @@ void searchOverlay(ImDrawList* d, ImVec2 b) noexcept
         if (selected)
             d->AddRectFilled(rp, rp + ImVec2(s(2.5f), rowHeight), g_accent, s(1.5f));
 
-        // label with the matched substring highlighted in the accent color
+        
         const char* label = searchIndex[i].label;
         const char* matchPos = searchMatchPosition(label, searchQuery);
         const float textHeight = ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, label).y;
@@ -5937,7 +5946,7 @@ void searchOverlay(ImDrawList* d, ImVec2 b) noexcept
     if (matchCount == 0)
         textY(d, contentMin.x + s(16), listTop, rowHeight, C(110, 114, 124), "no matches", kTextSmall, nullptr);
 
-    // enter jumps to the selected match (up/down move the selection above)
+    
     if ((ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) && matchCount > 0)
         activateSearchMatch(searchSelected);
 
@@ -5947,12 +5956,12 @@ void searchOverlay(ImDrawList* d, ImVec2 b) noexcept
 
 
 
-float y_nav = 64.0f; // sidebar layout cursor, advanced while drawing the rail
+float y_nav = 64.0f; 
 
 ImFont* loadFontFromMemory(const unsigned char* begin, const unsigned char* end, float sizePixels, const ImWchar* glyphRanges) noexcept
 {
-    // The objcopy data lives in .rodata and outlives everything; stb only reads it, so the
-    // atlas can reference it directly (FontDataOwnedByAtlas=false -> ImGui never frees it).
+    
+    
     const auto sizeBytes = static_cast<std::size_t>(end - begin);
     ImFontConfig config{};
     config.FontData = const_cast<unsigned char*>(begin);
@@ -5967,8 +5976,8 @@ void openStylePresetPopup(int& preset, ImVec2 anchor, float width) noexcept
 {
     styleSelect.open = !styleSelect.open;
     styleSelect.anchor = anchor;
-    // Fit the popup to the widest preset label (plus dot and padding) instead of reusing the
-    // chip's 72-unit width - the list was cramped and clipped its names.
+    
+    
     float widest = 0.0f;
     for (int i = 0; i < static_cast<int>(sizeof(kStylePresets) / sizeof(kStylePresets[0])); ++i)
         widest = ImMax(widest, ImGui::GetFont()->CalcTextSizeA(kTextControl, FLT_MAX, 0.0f, kStylePresets[i].name).x);
@@ -5986,7 +5995,7 @@ bool changePage(Page next) noexcept
     scrollOffset = 0.0f;
     scrollTarget = 0.0f;
     state.popup.open = false;
-    // re-arm the content slide-in animation
+    
     *ImGui::GetStateStorage()->GetFloatRef(ImGui::GetID("##page_mix"), 1.0f) = 0.0f;
     return true;
 }
@@ -5998,8 +6007,8 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
     d->AddLine(base + ImVec2(kSidebarWidth, 0), base + ImVec2(kSidebarWidth, kShellHeight), C(30, 33, 43));
 
     d->AddRectFilled(base + ImVec2(s(15), s(11)), base + ImVec2(s(45), s(43)), C(22, 22, 25), s(7));
-    // brand chip: the HQ swirl (same uploaded texture the account chip falls back to), aspect-fit
-    // in the s(30)x s(32) square; the "NS" monogram only shows while the texture is uploading.
+    
+    
     if (const ImTextureID chipTex = reinterpret_cast<ImTextureID>(VulkanHook::logo_texture::query())) {
         const float chipW = s(30.0f) * 0.86f;
         const float chipH = chipW * static_cast<float>(logo_asset::kHeight) / static_cast<float>(logo_asset::kWidth);
@@ -6014,7 +6023,7 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
         text(d, base + ImVec2(s(53), s(14)), C(228, 230, 236), brandTitle, kTextTitle, strongFont());
     }
     text(d, base + ImVec2(s(53), s(33)), kTextFaint, "Counter-Strike 2", s(8));
-    // build/status chip: pulsing green dot + compile date
+    
     {
         const float pulse = 0.65f + 0.35f * std::sin(static_cast<float>(ImGui::GetTime()) * 2.4f);
         d->AddCircleFilled(base + ImVec2(s(21), s(50)), s(4.2f), C(84, 214, 120, static_cast<int>(26 * pulse)));
@@ -6035,15 +6044,15 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
         ImGui::PushID(++id);
         const bool clicked = hit("##nav", p, ImVec2(s(140.0f - indent), s(30.0f)));
         const bool selected = state.page == target;
-        // The background box follows the MOUSE only; the selected page is marked by the accent
-        // rail + accent text. (A full background on the selected row made non-hovered nav rows
-        // read as "hovered without the mouse".) The explicit rect check hardens against a stuck
-        // ActiveId/hover reporting a row as hovered while the mouse sits anywhere else.
+        
+        
+        
+        
         const bool hovered = ImGui::IsItemHovered() && ImGui::IsMouseHoveringRect(p, p + ImVec2(s(140.0f - indent), s(30.0f)));
-        // Slot keys must be STABLE per row (see the animKey note above): the ++id counter is
-        // positional and shifts whenever a collapsible sub-list below/above changes size, which
-        // made rows inherit the frozen hover/selection slots of rows that disappeared (ghost
-        // accent bar on Misc, hover box on Radio after collapsing the Visuals sub-list).
+        
+        
+        
+        
         const int slot = 0x3000 + static_cast<int>(target);
         const float r = motion(animKey(0x7771u, slot), (!selected && hovered) ? 0.48f : 0.0f);
         const float sel = motion(animKey(0x7773u, slot), selected ? 1.0f : 0.0f);
@@ -6052,7 +6061,7 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
             changePage(target);
         if (r > 0.001f)
             d->AddRectFilled(p, p + ImVec2(s(140.0f - indent), s(30.0f)), mix(C(0, 0, 0, 0), kRowHover, r), s(6));
-        // selected-page accent rail on the row's left edge
+        
         if (sel > 0.001f)
             d->AddRectFilled(p, p + ImVec2(s(2.5f), s(30.0f)), (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(255 * sel) << IM_COL32_A_SHIFT), s(1.5f));
         textY(d, p.x + s(10), p.y, s(30), mix(C(137, 142, 153), g_accent, ImMax(r, sel)), icon, kTextIcon, iconFont());
@@ -6060,18 +6069,18 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
         y_nav += s(32.0f);
     };
 
-    // The expanded Visuals sub-list (8 pages) can outgrow the rail space between the logo and
-    // the account bar - clamp the nav content with a clip rect and wheel-scroll it instead of
-    // letting Misc slide behind the Neversnooze chip.
+    
+    
+    
     const float expand = motion(ImGui::GetID("##visual_expand"), state.visualsExpanded ? 1.0f : 0.0f, 18.0f);
     const float navTop = base.y + s(58.0f);
     const float navBottom = base.y + kShellHeight - s(45.0f) - s(4.0f);
     float navMaxScroll = 0.0f;
     {
-        // Measured from LAST frame's laid-out nav content (navContentEnd, recorded after the
-        // items below). The old hand-counted estimate drifted every time a nav item was added
-        // (it assumed 2 rows in COMBAT / 3 in OTHER) and could never scroll the last items
-        // into view once the adaptive shell shrunk the rail.
+        
+        
+        
+        
         navMaxScroll = navContentEnd > navBottom ? navContentEnd - navBottom : 0.0f;
         if (navMaxScroll > 0.0f && ImGui::IsMouseHoveringRect(ImVec2(base.x, navTop), ImVec2(base.x + kSidebarWidth, navBottom)))
             navScroll -= ImGui::GetIO().MouseWheel * s(24.0f);
@@ -6083,20 +6092,20 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
     y_nav = s(64.0f) - navScroll;
     d->PushClipRect(ImVec2(base.x, navTop), ImVec2(base.x + kSidebarWidth, navBottom), true);
     eyebrow("COMBAT");
-    nav("\xEF\x81\x9B", "Rage", Page::Rage);   // crosshairs
-    nav("\xEF\xA3\x8C", "Legit", Page::Legit); // mouse
-    nav("\xEF\x9C\x8C", "Movement", Page::Movement); // person-running
+    nav("\xEF\x81\x9B", "Rage", Page::Rage);   
+    nav("\xEF\xA3\x8C", "Legit", Page::Legit); 
+    nav("\xEF\x9C\x8C", "Movement", Page::Movement); 
     y_nav += 2.0f;
 
     eyebrow("FEATURES");
-    // The group parent navigates to Player Info and toggles the sub-list.
+    
     {
         const ImVec2 p = base + ImVec2(s(7), y_nav);
         ImGui::PushID(++id);
         const bool clicked = hit("##nav", p, ImVec2(s(140), s(30)));
         const bool visuals = state.page >= Page::PlayerInfo && state.page <= Page::Sound;
-        // background = hover only (rect-checked, same hardening as the nav rows); a visuals page
-        // being active shows as accent TEXT, not a permanently lit row
+        
+        
         const float r = motion(animKey(0x7772u, 0x3200), (ImGui::IsItemHovered() && ImGui::IsMouseHoveringRect(p, p + ImVec2(s(140), s(30)))) ? 0.48f : 0.0f);
         const float sel = motion(animKey(0x7775u, 0x3200), visuals ? 1.0f : 0.0f);
         ImGui::PopID();
@@ -6107,7 +6116,7 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
         }
         if (r > 0.001f)
             d->AddRectFilled(p, p + ImVec2(s(140), s(30)), mix(C(0, 0, 0, 0), kRowHover, r), s(6));
-        textY(d, p.x + s(10), p.y, s(30), mix(C(137, 142, 153), g_accent, ImMax(r, sel)), "\xEF\x80\xBE", kTextIcon, iconFont()); // image
+        textY(d, p.x + s(10), p.y, s(30), mix(C(137, 142, 153), g_accent, ImMax(r, sel)), "\xEF\x80\xBE", kTextIcon, iconFont()); 
         textY(d, p.x + s(31), p.y, s(30), mix(C(145, 149, 159), C(226, 228, 235), ImMax(r, sel * 0.8f)), "Visuals", kTextBody, nullptr);
         chevron(d, p + ImVec2(s(state.visualsExpanded ? 126.0f : 131.0f), s(12)), C(150, 154, 165));
         y_nav += s(32.0f);
@@ -6115,12 +6124,12 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
     if (expand > 0.02f) {
         const int first = d->VtxBuffer.Size;
         const float startY = y_nav;
-        nav("\xEF\x80\x87", "Player Info", Page::PlayerInfo, 14);   // user
-        nav("\xEF\x81\xAE", "Glow", Page::Glow, 14);                // eye (outline + model glow share the tab)
-        nav("\xEF\x80\xBD", "Viewmodel", Page::Viewmodel, 14);      // video
-        nav("\xEF\x83\x90", "Effects", Page::Effects, 14);         // magic
-        nav("\xEF\x84\x88", "Hud", Page::Hud, 14);                  // desktop
-        nav("\xEF\x80\xA8", "Sound", Page::Sound, 14);              // volume-up
+        nav("\xEF\x80\x87", "Player Info", Page::PlayerInfo, 14);   
+        nav("\xEF\x81\xAE", "Glow", Page::Glow, 14);                
+        nav("\xEF\x80\xBD", "Viewmodel", Page::Viewmodel, 14);      
+        nav("\xEF\x83\x90", "Effects", Page::Effects, 14);         
+        nav("\xEF\x84\x88", "Hud", Page::Hud, 14);                  
+        nav("\xEF\x80\xA8", "Sound", Page::Sound, 14);              
         for (int i = first; i < d->VtxBuffer.Size; ++i) {
             ImDrawVert& v = d->VtxBuffer[i];
             const ImU32 a = (v.col >> IM_COL32_A_SHIFT) & 255u;
@@ -6131,15 +6140,15 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
     y_nav += s(2.0f);
 
     eyebrow("OTHER");
-    nav("\xEF\x9B\x8B", "Inventory", Page::Inventory); // dagger
-    nav("\xEF\x94\x99", "Radio", Page::Radio);         // broadcast-tower
+    nav("\xEF\x9B\x8B", "Inventory", Page::Inventory); 
+    nav("\xEF\x94\x99", "Radio", Page::Radio);         
 
-    // Scripts = a group parent like Visuals: the row navigates to the Scripts page and toggles
-    // the child list - MANAGE + one entry per script tab (gui.tab()). Children set
-    // scriptsSubTab directly, so each big lua is its own destination exactly like the Visuals
-    // children are.
+    
+    
+    
+    
     {
-        // the tab labels are built from the live framework state - refresh before rendering
+        
         buildScriptTabs();
 
         const ImVec2 p = base + ImVec2(s(7), y_nav);
@@ -6156,7 +6165,7 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
         }
         if (r > 0.001f)
             d->AddRectFilled(p, p + ImVec2(s(140), s(30)), mix(C(0, 0, 0, 0), kRowHover, r), s(6));
-        textY(d, p.x + s(10), p.y, s(30), mix(C(137, 142, 153), g_accent, ImMax(r, sel)), "\xEF\x84\xA1", kTextIcon, iconFont()); // code
+        textY(d, p.x + s(10), p.y, s(30), mix(C(137, 142, 153), g_accent, ImMax(r, sel)), "\xEF\x84\xA1", kTextIcon, iconFont()); 
         textY(d, p.x + s(31), p.y, s(30), mix(C(145, 149, 159), C(226, 228, 235), ImMax(r, sel * 0.8f)), "Scripts", kTextBody, nullptr);
         chevron(d, p + ImVec2(s(state.scriptsExpanded ? 126.0f : 131.0f), s(12)), C(150, 154, 165));
         y_nav += s(32.0f);
@@ -6187,7 +6196,7 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
                 textY(d, p.x + s(10), p.y, s(30), mix(C(145, 149, 159), g_accent, ImMax(r, sel * 0.8f)), label, kTextBody, nullptr);
                 y_nav += s(32.0f);
             };
-            const int children = ImMin(scriptsTabCount, 8); // rail space guard; the rest stay reachable by scrolling
+            const int children = ImMin(scriptsTabCount, 8); 
             for (int i = 0; i < children; ++i)
                 scriptNav(scriptsTabLabelPtrs[i], i);
             for (int i = first; i < d->VtxBuffer.Size; ++i) {
@@ -6199,16 +6208,16 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
         }
     }
 
-    nav("\xEF\x80\x93", "Misc", Page::Misc);           // cog
+    nav("\xEF\x80\x93", "Misc", Page::Misc);           
     d->PopClipRect();
 
-    // record the true laid-out nav bottom for next frame's rail scroll clamp - see the
-    // navMaxScroll block above. y_nav is laid out ALREADY SHIFTED by -navScroll, so the scroll
-    // offset must be added back or the measurement shrinks as the user scrolls (the clamp then
-    // pulls the rail back up and caps the scroll at half the real overflow).
+    
+    
+    
+    
     navContentEnd = base.y + y_nav + navScroll + s(6.0f);
 
-    // Scroll affordance for the rail: bottom fade + thin thumb whenever the sub-list overflows.
+    
     if (navMaxScroll > 1.0f) {
         const ImU32 bgFade = kSidebarBg;
         const ImU32 clear = bgFade & 0x00FFFFFFu;
@@ -6224,19 +6233,19 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
     }
 }
 
-// --- shell: toolbar (config chip + unload) -------------------------------------------
+
 
 void toolbar(ImDrawList* d, ImVec2 base) noexcept
 {
-    // Translucent again (the opaque extension of 2026-09-09 read as a solid slab and broke the
-    // shell's rounded top-right corner). Scrolled content is kept out by the CONTENT CLIP
-    // instead: contentMin.y now sits at the toolbar hairline, so rows disappear cleanly under
-    // the toolbar exactly like they clip at the bottom edge.
+    
+    
+    
+    
     d->AddRectFilled(base + ImVec2(kSidebarWidth, 0), base + ImVec2(kShellWidth, kToolbarHeight), kToolbarBg, s(17.0f), ImDrawFlags_RoundCornersTopRight);
     d->AddLine(base + ImVec2(kSidebarWidth, kToolbarHeight), base + ImVec2(kShellWidth, kToolbarHeight), C(26, 26, 29));
 
-    // Toolbar background doubles as the drag handle. Buttons are excluded so their clicks never
-    // start a drag; the drag updates the persistent offset the window is placed at next frame.
+    
+    
     const ImVec2 tbMin = base + ImVec2(kSidebarWidth, 0);
     const ImVec2 tbMax = base + ImVec2(kShellWidth, kToolbarHeight);
     if (ImGui::IsMouseClicked(0) && ImGui::IsMouseHoveringRect(tbMin, tbMax)
@@ -6252,7 +6261,7 @@ void toolbar(ImDrawList* d, ImVec2 base) noexcept
             const ImVec2 display = ImGui::GetIO().DisplaySize;
             const ImVec2 defaultPos((display.x - kShellWidth) * 0.5f, (display.y - shellHeightBase) * 0.5f);
             menuOffset = dragStartOffset + (ImGui::GetIO().MousePos - dragStartMouse);
-            // keep the shell on screen
+            
             menuOffset.x = ImClamp(menuOffset.x, -defaultPos.x + s(8), display.x - kShellWidth - defaultPos.x + s(8));
             menuOffset.y = ImClamp(menuOffset.y, -defaultPos.y + s(8), display.y - kShellHeight - defaultPos.y + s(8));
         } else {
@@ -6260,7 +6269,7 @@ void toolbar(ImDrawList* d, ImVec2 base) noexcept
         }
     }
 
-    // Active-config chip: opens the config popover (right of the scaled sidebar).
+    
     const ImVec2 profile = base + ImVec2(kSidebarWidth + s(11), s(14));
     configChipMin = profile;
     configChipMax = profile + ImVec2(s(180), s(30));
@@ -6274,17 +6283,17 @@ void toolbar(ImDrawList* d, ImVec2 base) noexcept
     }
     d->AddRectFilled(profile, configChipMax, mix(kInsetBg, kPillBg, response), s(8));
     d->AddRect(profile, configChipMax, mix(kHairline, g_accent, response), s(8));
-    textY(d, profile.x + s(12), profile.y, s(30), g_accent, "\xEF\x83\x87", kTextIcon, iconFont()); // save
+    textY(d, profile.x + s(12), profile.y, s(30), g_accent, "\xEF\x83\x87", kTextIcon, iconFont()); 
     textY(d, profile.x + s(34), profile.y, s(30), C(184, 187, 197), ui_config::activeConfigNameForDisplay(), kTextControl, nullptr);
-    // unsaved-changes dot: ui_config::set() bumps changeEpoch; the clean epoch is armed by
-    // save/switch/restore in the config popover
+    
+    
     if (ui_config::changeEpoch.load(std::memory_order_relaxed) != lastCleanConfigEpoch) {
         const float pulse = 0.65f + 0.35f * std::sin(static_cast<float>(ImGui::GetTime()) * 3.2f);
         d->AddCircleFilled(profile + ImVec2(s(170), s(15)), s(2.4f), (g_accent & 0x00FFFFFFu) | (static_cast<ImU32>(90 + 130 * pulse) << IM_COL32_A_SHIFT));
     }
     chevron(d, profile + ImVec2(s(160), s(11)), C(130, 135, 146));
 
-    // Global search button, left of Unload.
+    
     const ImVec2 searchBtn = base + ImVec2(kShellWidth - s(78) - s(42), s(14));
     const ImVec2 searchSize = ImVec2(s(34), s(30));
     searchButtonMin = searchBtn;
@@ -6305,7 +6314,7 @@ void toolbar(ImDrawList* d, ImVec2 base) noexcept
     const float searchIconWidth = iconFont()->CalcTextSizeA(kTextIcon, FLT_MAX, 0.0f, searchIcon).x;
     textY(d, searchBtn.x + (searchSize.x - searchIconWidth) * 0.5f, searchBtn.y, searchSize.y, mix(C(170, 173, 184), C(226, 228, 235), searchHover), searchIcon, kTextIcon, iconFont());
 
-    // Unload button, text centered.
+    
     const ImVec2 unload = base + ImVec2(kShellWidth - s(78), s(14));
     const ImVec2 unloadSize = ImVec2(s(64), s(30));
     unloadButtonMin = unload;
@@ -6340,12 +6349,12 @@ void accountBar(ImDrawList* d, ImVec2 base) noexcept
     if (r > 0.001f)
         d->AddRectFilled(account, account + ImVec2(barWidth, s(38)), (kRowHover & 0x00FFFFFFu) | (static_cast<ImU32>(235 * r) << IM_COL32_A_SHIFT), s(6));
 
-    // avatar: user image from <config dir>/avatar.png first, then the steam persona fetch
-    // (ns_steam_avatar.png in the exchange root from SteamPersona.h), NS monogram until either
-    // is staged.
+    
+    
+    
     const ImVec2 avatar = account + ImVec2(s(7), s(5));
     const float avatarRadius = s(14);
-    static bool logoStaged = false; // present thread only
+    static bool logoStaged = false; 
     if (!logoStaged) {
         logoStaged = true;
         auto* pixels = static_cast<std::uint8_t*>(std::malloc(logo_asset::kPixelBytes));
@@ -6359,7 +6368,7 @@ void accountBar(ImDrawList* d, ImVec2 base) noexcept
     if (avatarTex) {
         d->AddImageRounded(avatarTex, avatar, avatar + ImVec2(avatarRadius * 2.0f, avatarRadius * 2.0f), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), C(255, 255, 255, 255), avatarRadius);
     } else if (logoTex) {
-        // the swirl is wider than tall - aspect-fit it inside the circle, slightly inset
+        
         const float drawW = avatarRadius * 2.0f * 0.92f;
         const float drawH = drawW * static_cast<float>(logo_asset::kHeight) / static_cast<float>(logo_asset::kWidth);
         d->AddImage(logoTex, avatar + ImVec2(avatarRadius - drawW * 0.5f, avatarRadius - drawH * 0.5f),
@@ -6368,8 +6377,8 @@ void accountBar(ImDrawList* d, ImVec2 base) noexcept
         d->AddCircleFilled(avatar + ImVec2(avatarRadius, avatarRadius), avatarRadius, C(22, 22, 25));
         textY(d, avatar.x + s(5), avatar.y, s(28), g_accent, "NS", kTextControl, strongFont());
     }
-    // profile glow: nested accent rings fading out (drawMenuGlow's smoothstep falloff, scaled
-    // for the chip) instead of the hard classic circle outline.
+    
+    
     {
         const ImVec2 center = avatar + ImVec2(avatarRadius, avatarRadius);
         constexpr int rings = 7;
@@ -6402,9 +6411,9 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
 
     const float width = s(210.0f);
     const float rowHeight = s(30.0f);
-    // 12 rows (scale label, style, 3 theme colors, 7 glow rows) + the scale slider block
-    // (s(24)+s(2)) + s(8) top/bottom pads - the old count assumed 14 rows from a removed
-    // "style rainbow / about" pair and left a dead band at the popover's bottom.
+    
+    
+    
     const float height = rowHeight * 12.0f + s(26.0f) + s(16.0f);
     const ImVec2 p = base + ImVec2(s(7.0f), kShellHeight - s(45.0f) - height * open - s(6.0f));
     const ImVec2 size(width, height);
@@ -6419,21 +6428,21 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
 
     float y = p.y + s(8.0f);
 
-    // Menu Scale: label row (% pill - CLICK TO TYPE an exact value, like the page sliders),
-    // slider underneath.
+    
+    
     textY(d, p.x + s(14), y, rowHeight, C(185, 188, 198), "Menu Scale", kTextControl, nullptr);
 
-    // Slider geometry (shared by the interaction below and the drawing further down) and the
-    // interaction itself run BEFORE the pill so the preview value can drive the pill label.
-    constexpr float sliderRowHeight = 24.0f; // design units
+    
+    
+    constexpr float sliderRowHeight = 24.0f; 
     const float sliderY = y + rowHeight;
     const ImVec2 sliderStart(p.x + s(16.0f), sliderY + (s(sliderRowHeight) - s(6.0f)) * 0.5f);
     const float sliderTrackWidth = width - s(32.0f);
 
-    // The drag only PREVIEWS - menuScale + applyMetrics used to update live here, which
-    // rescaled the whole menu (track included) under the cursor mid-drag: the same mouse X
-    // then mapped to a bigger t, and a fast 75->100 drag ran away to 200. The mapping below
-    // now runs against frozen (drag-start scale) geometry; metrics + fonts commit on release.
+    
+    
+    
+    
     float previewScale = state.scalePreview;
     ImGui::PushID(8801);
     hitPopupRow("##scale", sliderStart - ImVec2(s(4), s(6)), ImVec2(sliderTrackWidth + s(8), s(18)), PopupProfile);
@@ -6450,7 +6459,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
         menuScale = previewScale;
         applyMetrics();
         pendingMenuScale = menuScale;
-        fontReloadPending = true; // fonts reload outside this frame (processDeferred)
+        fontReloadPending = true; 
     }
 
     {
@@ -6465,7 +6474,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
             ImGui::PushStyleColor(ImGuiCol_Border, g_accent);
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(4), s(2)));
             ImGui::PushItemWidth(s(44) - s(8));
-            ImGui::SetKeyboardFocusHere(0); // focus on frame 1
+            ImGui::SetKeyboardFocusHere(0); 
             ImGui::InputText("##scale_edit", state.editBuffer, sizeof(state.editBuffer), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
             const bool committed = ImGui::IsItemDeactivatedAfterEdit() || ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter);
             const bool lostFocus = ImGui::IsItemDeactivatedAfterEdit() || (!ImGui::IsItemActive() && !ImGui::IsItemFocused() && ImGui::IsMouseClicked(0) && !ImGui::IsItemHovered());
@@ -6475,7 +6484,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
             if (committed || lostFocus) {
                 pendingMenuScale = ImClamp(std::atoi(state.editBuffer), 75, 200) / 100.0f;
                 state.scalePreview = pendingMenuScale;
-                fontReloadPending = true; // fonts reload outside this frame (processDeferred)
+                fontReloadPending = true; 
                 state.editingSlider = -1;
             }
         } else {
@@ -6492,11 +6501,11 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
     }
     y += rowHeight;
     {
-        // Fill/label preview the drag value; the menu itself keeps the committed scale until
-        // release (see the interaction block above).
-        // animKey on the control id, never GetItemID: when the RGBA picker (Glow Color row)
-        // overlaps this row, hitPopupRow submits a Dummy (item id 0) and the slot would be
-        // shared - the 2026-09-07 dropdown-drift class. This was the last GetItemID-keyed site.
+        
+        
+        
+        
+        
         const float shown = motion(animKey(0x5ca1eu, kScaleEditId), (previewScale - 0.75f) / 1.25f, 16.0f, (menuScale - 0.75f) / 1.25f);
         d->AddRectFilled(sliderStart, sliderStart + ImVec2(sliderTrackWidth, s(6)), C(44, 44, 47), s(3));
         d->AddRect(sliderStart, sliderStart + ImVec2(sliderTrackWidth, s(6)), C(66, 66, 72), s(3));
@@ -6505,7 +6514,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
     }
     y += s(24.0f) + s(2.0f);
 
-    // Style: label + preset chip (opens the accent mini-popup).
+    
     {
         textY(d, p.x + s(14), y, rowHeight, C(185, 188, 198), "Style", kTextControl, nullptr);
         int preset = -1;
@@ -6517,7 +6526,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
         if (hitPopupRow("##style", sp, ImVec2(s(72.0f), s(20.0f)), PopupProfile)) {
             state.colorPickerOpen = false;
             state.multiSelectOpen = false;
-            openStylePresetPopup(preset, sp, s(72.0f)); // int& param; -1 (custom) is fine, popup highlights index 0
+            openStylePresetPopup(preset, sp, s(72.0f)); 
         }
         const float hover = motion(animKey(0x57e1u, 8802), ImGui::IsItemHovered() ? 1.0f : 0.0f);
         ImGui::PopID();
@@ -6527,13 +6536,13 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
     }
     y += rowHeight;
 
-    // Theme colors: Accent (primary) + Buttons/Sliders (secondary controls). Each opens the
-    // same RGBA channel popover the feature color pickers use; values persist via config and
-    // refreshMenuTheme() applies them next frame.
+    
+    
+    
     {
-        // one helper for all three rows: label + swatch pill that opens the RGBA popover.
-        // colorGet/colorSet are bound INSIDE the click branch - all three rows run every
-        // frame, so a bind-outside-the-click would leave the last row's pointers in state.
+        
+        
+        
         auto themeColorRow = [&](const char* label, int id, ImU32 current, color::Rgba (*getter)(), void (*setter)(color::Rgba)) {
             textY(d, p.x + s(14), y, rowHeight, C(185, 188, 198), label, kTextControl, nullptr);
             const ImVec2 sp(p.x + width - s(84.0f), y + rowCentered(s(20.0f)));
@@ -6545,7 +6554,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
             const ImVec2 swatch = sp + ImVec2(s(5), s(4));
             d->AddRectFilled(swatch, swatch + ImVec2(s(16), s(12)), current, s(3));
             char hex[8];
-            std::snprintf(hex, sizeof(hex), "%02X%02X%02X", current & 0xFF, current >> 8 & 0xFF, current >> 16 & 0xFF); // ImU32 = 0xAABBGGRR -> print RRGGBB
+            std::snprintf(hex, sizeof(hex), "%02X%02X%02X", current & 0xFF, current >> 8 & 0xFF, current >> 16 & 0xFF); 
             textY(d, sp.x + s(30), sp.y, s(20.0f), C(170, 173, 184), hex, kTextSmall, nullptr);
             if (clicked) {
                 const bool open = state.colorPickerOpen && state.colorPickerOwner == id;
@@ -6566,7 +6575,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
         themeColorRow("Sliders", 8712, g_sliderAccent, &colorPickerGetter<MenuSliderColor>, &colorPickerSetter<MenuSliderColor>);
         y += rowHeight;
 
-        // Outer glow: on/off, color (or rainbow fade driven by speed)
+        
         {
             const bool glowOn = ui_config::get<MenuGlowEnabled>();
             textY(d, p.x + s(14), y, rowHeight, C(185, 188, 198), "Outer Glow", kTextControl, nullptr);
@@ -6598,8 +6607,8 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
         }
         y += rowHeight;
 
-        // Fading-RGB style: the accent/button/slider colors cycle with the same clock as the
-        // glow rainbow (see refreshMenuTheme).
+        
+        
         {
             const bool styleRainbow = ui_config::get<MenuStyleRainbow>();
             textY(d, p.x + s(14), y, rowHeight, C(185, 188, 198), "Fading RGB Style", kTextControl, nullptr);
@@ -6614,9 +6623,9 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
         }
         y += rowHeight;
 
-        // Glow speed: compact slider (rainbow cycle rate). Right-aligned track sized to clear
-        // the longest row label (~s(84) at any scale) and vertically centered in the row, like
-        // the color chips / toggles on the other rows.
+        
+        
+        
         {
             textY(d, p.x + s(14), y, rowHeight, C(185, 188, 198), "RGB Speed", kTextControl, nullptr);
             const float min = MenuGlowSpeed::ValueType::kMin;
@@ -6639,7 +6648,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
         }
         y += rowHeight;
 
-        // Glow size: how far the glow band reaches around the shell (same geometry as RGB Speed)
+        
         {
             textY(d, p.x + s(14), y, rowHeight, C(185, 188, 198), "Glow Size", kTextControl, nullptr);
             const float min = MenuGlowSize::ValueType::kMin;
@@ -6662,7 +6671,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
         }
         y += rowHeight;
 
-        // Debug probes for the glow's 9-slice pieces
+        
         {
             const bool debug = ui_config::get<MenuGlowDebug>();
             textY(d, p.x + s(14), y, rowHeight, C(150, 154, 165), "Glow Debug", kTextControl, nullptr);
@@ -6678,7 +6687,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
         y += rowHeight;
     }
 
-    // (the dead "ESP Scale / Soon" placeholder row was removed - visible stubs read as unfinished)
+    
 
     const float eased = g_reduceMotion ? 1.0f : 1.0f - std::pow(1.0f - open, 3.0f);
     const ImVec2 pivot(p.x + size.x * 0.5f, p.y + size.y);
@@ -6689,11 +6698,11 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
         v.col = (v.col & 0x00ffffffu) | ((ImU32)(a * eased) << IM_COL32_A_SHIFT);
     }
 
-    // The popover's child popups (RGBA picker, style preset list) render above it - clicks on
-    // them must count as INSIDE, or the popover would close mid-interaction and orphan them.
-    // Use the rects they actually drew last frame (already accounts for the picker's
-    // flip-above placement); a picker left open from the page keeps the popover alive too,
-    // which is fine - the picker owns those clicks anyway.
+    
+    
+    
+    
+    
     ImVec2 keepMin = p - ImVec2(s(4), s(2));
     ImVec2 keepMax = p + size + ImVec2(s(4), s(7));
     if (popupPrev[PopupColor].valid) {
@@ -6710,7 +6719,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
         && clickedOutside(accountBarMin, accountBarMax)) {
         state.profileOpen = false;
         if (state.editingSlider == kScaleEditId)
-            state.editingSlider = -1; // drop a half-typed scale edit with the popover
+            state.editingSlider = -1; 
     }
 }
 
@@ -6723,7 +6732,7 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
     const std::uint8_t count = ui_config::listedConfigCount();
     const float width = s(200.0f);
 
-    // visible rows after the search filter
+    
     std::uint8_t visible[ConfigVisibleCap];
     std::uint8_t visibleCount = 0;
     for (std::uint8_t i = 0; i < count && visibleCount < ConfigVisibleCap; ++i) {
@@ -6733,7 +6742,7 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
 
     const float searchHeight = s(30.0f);
     const float listHeight = visibleCount * s(28.0f) + s(6.0f);
-    const float actionHeight = s(134.0f); // SAVE + DUPLICATE + RESTORE + NEW/RENAME row, all inside the panel
+    const float actionHeight = s(134.0f); 
     const ImVec2 p = base + ImVec2(kSidebarWidth + s(11), kToolbarHeight + s(4));
     const ImVec2 size(width, searchHeight + listHeight + actionHeight);
     recordPopupRect(PopupConfig, p, p + size);
@@ -6743,7 +6752,7 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
     d->AddRect(p, p + size, kPopupBorder, s(18));
     d->AddLine(p + ImVec2(s(12), searchHeight), p + ImVec2(size.x - s(12), searchHeight), C(38, 38, 42));
 
-    // search input (inside the panel, top row)
+    
     ImGui::SetCursorScreenPos(p + ImVec2(s(8), s(4)));
     ImGui::PushItemWidth(width - s(16.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(6), s(4)));
@@ -6751,7 +6760,7 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
     ImGui::PopStyleVar();
     ImGui::PopItemWidth();
 
-    // config rows (active is protected from deletion - autosave owns that file)
+    
     const int activeIndex = ui_config::activeConfigIndex();
     for (std::uint8_t v = 0; v < visibleCount; ++v) {
         const std::uint8_t i = visible[v];
@@ -6775,8 +6784,8 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
         }
 
         if (!active) {
-            // visual circle stays s(18); the hit box is s(26) centered on it - an 18px target
-            // sitting between two rows was a mis-click magnet
+            
+            
             const ImVec2 xc = rp + ImVec2(width - s(17.0f), s(16.0f));
             ImGui::PushID(9300 + i);
             const bool deleted = hitPopupRow("##cfg_del", xc - ImVec2(s(13), s(13)), ImVec2(s(26), s(26)), PopupConfig);
@@ -6798,7 +6807,7 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
         }
     }
 
-    // actions: SAVE / RESTORE DEFAULTS
+    
     float ay = p.y + searchHeight + listHeight + s(4.0f);
     auto actionButton = [&](int id, const char* label) {
         const ImVec2 bp = p + ImVec2(s(8), ay - p.y);
@@ -6829,7 +6838,7 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
         pushToast("Defaults restored", g_accent);
     }
 
-    // NEW / RENAME: text input + buttons acting on the typed name (stock InputText, our theme)
+    
     const ImVec2 inputPos = p + ImVec2(s(8), ay - p.y + s(2.0f));
     ImGui::SetCursorScreenPos(inputPos);
     ImGui::PushItemWidth(width - s(140.0f));
@@ -6854,7 +6863,7 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
         } else
             pushToast("Rename failed", C(229, 72, 77));
     }
-    ImGui::SetCursorScreenPos(ImVec2(0.0f, 0.0f)); // park the cursor; nothing flow-laid-out follows
+    ImGui::SetCursorScreenPos(ImVec2(0.0f, 0.0f)); 
 
     const float eased = g_reduceMotion ? 1.0f : 1.0f - std::pow(1.0f - open, 3.0f);
     const ImVec2 pivot(p.x + size.x * 0.5f, p.y);
@@ -6871,16 +6880,16 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
         configPopoverOpen = false;
 }
 
-} // namespace
+} 
 
-// --- public API ----------------------------------------------------------------------
+
 
 void neverlose::render() noexcept
 {
-    // One-shot icon atlas sanity check: a codepoint missing from the atlas renders as the
-    // FALLBACK (the last range glyph - e.g. the mouse), which historically masqueraded as a
-    // wrong icon choice (see the menu-icon-atlas memory). This makes a stale/partial atlas
-    // visible in the anomaly log instead of a mystery glyph.
+    
+    
+    
+    
     static bool iconAtlasChecked = false;
     if (!iconAtlasChecked && ImGui::GetIO().Fonts->Fonts.Size > 2) {
         iconAtlasChecked = true;
@@ -6898,18 +6907,18 @@ void neverlose::render() noexcept
 
     g_reduceMotion = ui_config::get<MenuReduceMotion>();
 
-    // Adaptive shell height: fit the shell to the page's content so light pages don't leave
-    // dead space and heavy pages scroll less. The target uses LAST frame's content height
-    // (layout is stable frame-to-frame), clamped so the nav rail + account bar always fit and
-    // the shell never exceeds ~90% of the screen. Content layout does not depend on the shell
-    // height, so there is no feedback loop.
+    
+    
+    
+    
+    
     {
         const float chrome = kToolbarHeight + s(24.0f) + s(6.0f) + s(6.0f);
         const float minH = ImMin(500.0f * menuScale, display.y * 0.9f);
         const float maxH = ImMin(700.0f * menuScale, display.y * 0.9f);
         const float target = lastContentHeight > 0.0f
             ? ImClamp(lastContentHeight + chrome, minH, maxH)
-            : shellHeightBase; // first frame: design default until content was measured
+            : shellHeightBase; 
         if (g_reduceMotion)
             kShellHeight = target;
         else {
@@ -6935,14 +6944,14 @@ void neverlose::render() noexcept
 
         const int shellFirst = d->VtxBuffer.Size;
 
-        // hit() gates page controls against the popups recorded LAST frame (see the popup
-        // occlusion tracking block) - covered controls are inert, uncovered ones stay live.
+        
+        
 
         softShadow(d, b, b + ImVec2(kShellWidth, kShellHeight), s(17.0f), s(16.0f));
 
         d->AddRectFilled(b, b + ImVec2(kShellWidth, kShellHeight), kShellBg, s(17.0f));
         d->AddRect(b, b + ImVec2(kShellWidth, kShellHeight), kHairlineSoft, s(17.0f));
-        // faint outer highlight lets the shell read as a floating pane over the game
+        
         d->AddRect(b - ImVec2(1.0f, 1.0f), b + ImVec2(kShellWidth, kShellHeight) + ImVec2(1.0f, 1.0f), C(255, 255, 255, 14), s(18.0f));
 
         sidebar(d, b);
@@ -6950,10 +6959,10 @@ void neverlose::render() noexcept
         accountBar(d, b);
         const int contentFirst = d->VtxBuffer.Size;
 
-        // content region: clip + manual scroll. The clip top sits AT the toolbar hairline (was
-        // +s(24)): the 24px gutter below the toolbar used to be UNCLIPPED, so scrolled card
-        // rows rendered there - the half-cut "Now Playing" row. Card captions drawn at y-s(16)
-        // still land in the gutter at rest and stay visible; on scroll they clip at the line.
+        
+        
+        
+        
         const ImVec2 contentMin(b.x + kSidebarWidth + s(2), b.y + kToolbarHeight);
         const ImVec2 contentMax(b.x + kShellWidth - s(4), b.y + kShellHeight - s(6));
         d->PushClipRect(contentMin, contentMax, true);
@@ -6974,33 +6983,33 @@ void neverlose::render() noexcept
         case Page::Scripts: pageScripts(); break;
         case Page::Misc: pageMisc(); break;
         }
-        renderScriptCardsForPage(state.page); // script gui.page(...) cards at the page bottom
+        renderScriptCardsForPage(state.page); 
 
         const float contentHeight = ImMax(columnYs[0], columnYs[1]);
-        lastContentHeight = contentHeight; // adaptive shell height target (read next frame)
+        lastContentHeight = contentHeight; 
         const float visibleHeight = contentMax.y - contentMin.y;
         const float previousScrollOffset = scrollOffset;
         maxScroll = ImMax(0.0f, contentHeight - visibleHeight);
         if (ImGui::IsMouseHoveringRect(contentMin, contentMax) && ImGui::GetIO().MouseWheel != 0.0f
-            // While ANY dropdown/picker popup is open the wheel belongs to its list (they all
-            // scroll) - page scroll would move the page out from under the open popup (it also
-            // used to close kit-mode popups as a stale anchor). The other modals (multi-select,
-            // color picker) lock the page wheel too - one rule everywhere.
+            
+            
+            
+            
             && !(state.popup.open && state.popup.paintKitMode)
             && !state.multiSelectOpen
             && !state.colorPickerOpen)
             scrollTarget = ImClamp(scrollTarget - ImGui::GetIO().MouseWheel * 40.0f, 0.0f, maxScroll);
         if (scrollTarget > maxScroll)
             scrollTarget = maxScroll;
-        // ease toward the target; settle exactly once close enough (avoids endless subpixel
-        // text shimmer from a decaying-but-never-exact lerp)
+        
+        
         scrollOffset = ImLerp(scrollOffset, scrollTarget, 1.0f - std::exp(-14.0f * ImGui::GetIO().DeltaTime));
         if (std::fabs(scrollTarget - scrollOffset) < 0.3f)
             scrollOffset = scrollTarget;
-        // the hand-drawn popups anchor to screen positions of the rows that opened them - when
-        // the content scrolls, MOVE the open popups with their rows instead of closing them
-        // (the popup layers re-clamp into the shell every frame, so a scrolled-away row leaves
-        // the popup docked at the edge rather than gone)
+        
+        
+        
+        
         {
             const float scrollDelta = scrollOffset - previousScrollOffset;
             if (std::fabs(scrollDelta) > 0.001f) {
@@ -7011,8 +7020,8 @@ void neverlose::render() noexcept
             }
         }
 
-        // page transition: slide + fade the content in. Suppressed while the reveal is still
-        // animating - the two transforms compound on the same vertices (glitchy overlap).
+        
+        
         const float pageMix = reveal < 0.999f ? 1.0f : motion(ImGui::GetID("##page_mix"), 1.0f, 15.0f, 0.0f);
         const float eased = 1.0f - std::pow(1.0f - pageMix, 3.0f);
         if (eased < 0.999f) {
@@ -7025,9 +7034,9 @@ void neverlose::render() noexcept
         }
         d->PopClipRect();
 
-        // Scroll affordances for the content region (drawn unclipped, before the popups): an
-        // edge fade wherever more content hides beyond the edge, plus a DRAGGABLE position
-        // scrollbar on the right edge while the page overflows.
+        
+        
+        
         {
             const ImU32 bgFade = kShellBg;
             const ImU32 clear = bgFade & 0x00FFFFFFu;
@@ -7041,9 +7050,9 @@ void neverlose::render() noexcept
                 const float thumbHeight = ImClamp(visibleHeight * visibleHeight / contentHeight, s(30.0f), track);
                 const float t = maxScroll > 0.0f ? scrollOffset / maxScroll : 0.0f;
                 float thumbY = contentMin.y + s(4.0f) + t * (track - thumbHeight);
-                // Thin thumb tucked into the region's right padding: AUTO-HIDDEN unless the
-                // cursor is near it or a drag is active - a permanently visible bar overlapped
-                // the row pills on the right column.
+                
+                
+                
                 const ImVec2 trackMin(contentMax.x - s(9.0f), contentMin.y);
                 const ImVec2 trackMax(contentMax.x, contentMax.y);
                 static bool dragging = false;
@@ -7069,10 +7078,12 @@ void neverlose::render() noexcept
             }
         }
 
-        // Escape dismisses every open modal layer in one go - previously only the dropdown,
-        // feature-bind popover and search overlay reacted to it (each with its own handler).
-        // Keybind capture and slider text-edit take precedence: Escape cancels those first.
-        // The search overlay and the feature-bind popover keep their own capture-aware Escape.
+        
+        
+        
+        
+        const bool hadLayerOpen = state.popup.open || state.multiSelectOpen || state.colorPickerOpen
+            || styleSelect.open || configPopoverOpen || state.profileOpen;
         if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)
             && state.capture == State::Capture::Inactive
             && state.editingSlider < 0) {
@@ -7084,46 +7095,62 @@ void neverlose::render() noexcept
             state.profileOpen = false;
         }
 
-        // Modal popup stack: while any hand-drawn popup is open, clicks are swallowed for
-        // everything drawn BEFORE it (the popovers render in z-order; without this, a click on
-        // the top popup also lands on the popover rows underneath). The modal popups' own rows
-        // use hitModal() and keep working.
+        
+        
+        
+        
+        if (!ImGui::GetIO().WantTextInput
+            && state.capture == State::Capture::Inactive
+            && state.editingSlider < 0
+            && ImGui::IsKeyPressed(ImGuiKey_Escape, false)
+            && !hadLayerOpen) {
+            GUI::hideMenuNow();
+        } else if (!ImGui::GetIO().WantTextInput
+            && state.capture == State::Capture::Inactive
+            && ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+            GUI::hideMenuNow();
+        }
+
+        
+        
+        
+        
         configPopover(d, b);
         profilePopover(d, b);
 
-        // global search: one ghost page indexed per frame while the overlay is open, so the
-        // full index is ready ~11 frames (tens of ms) after the first open
+        
+        
         if (searchOpen)
             indexNextSearchPage();
         searchOverlay(d, b);
 
-        // The script editor is its own top-level window on top of the shell - rendered here so
-        // it stays up regardless of which nav tab is active (it self-gates on open + menu open).
+        
+        
         drawScriptEditorWindow();
 
-        // Script-owned ImGui windows (imgui.* from the "menu" callback): rendered after the
-        // shell + editor so they float above the menu, dispatched menu-open only (inside the
-        // frame; without a live menu the game owns the mouse). Errors are contained in the
-        // manager like every other callback; leaked windows are force-closed there too.
+        
+        
+        
+        
         lua::dispatchMenuWindows();
 
-        // reveal: scale + fade the whole shell - forward from the open moment, reversed while
-        // the menu dismisses (GUI.cpp keeps render() alive past the alpha fade until this
-        // lands). The transform is symmetric in reveal, so the same vertex pass serves both.
+        
+        
+        
         {
             if (dismissActive) {
-                // Snappy dismissal (~120ms): the slow exp(-9) ease made INSERT-close feel
-                // broken - the shell visibly lingered for ~0.5s while opening felt instant.
+                
+                
                 reveal = ImLerp(reveal, 0.0f, 1.0f - std::exp(-20.0f * ImGui::GetIO().DeltaTime));
                 if (reveal < 0.05f) {
                     reveal = 0.0f;
-                    dismissActive = false; // shell fully gone - stop reserving render time
+                    dismissActive = false; 
                 }
             } else {
                 reveal = ImLerp(reveal, 1.0f, 1.0f - std::exp(-5.0f * ImGui::GetIO().DeltaTime));
             }
             if (!(reveal >= 0.0f && reveal <= 1.0f))
-                reveal = dismissActive ? 0.0f : 1.0f; // NaN/inf guard: one bad frame must not garble the vertex buffer
+                reveal = dismissActive ? 0.0f : 1.0f; 
             if (reveal < 0.999f) {
                 const float e = 1.0f - std::pow(1.0f - reveal, 4.0f);
                 const float scale = ImLerp(0.92f, 1.0f, e);
@@ -7137,13 +7164,13 @@ void neverlose::render() noexcept
             }
         }
 
-        // style preset mini-popup
+        
         if (styleSelect.open) {
             const int count = static_cast<int>(sizeof(kStylePresets) / sizeof(kStylePresets[0]));
             const ImVec2 size(styleSelect.width, count * s(28.0f) + s(10.0f));
             ImVec2 sp = styleSelect.anchor + ImVec2(0.0f, s(22));
-            // clamp inside the shell's clip rect, not the display (this draw list clips at the
-            // shell edge - display-based clamping still lets the list clip in half)
+            
+            
             sp.x = ImClamp(sp.x, d->GetClipRectMin().x + s(10.0f), d->GetClipRectMax().x - size.x - s(10.0f));
             sp.y = ImClamp(sp.y, d->GetClipRectMin().y + s(10.0f), d->GetClipRectMax().y - size.y - s(10.0f));
             const bool accepts = ImGui::GetFrameCount() > styleSelect.openedFrame;
@@ -7161,7 +7188,7 @@ void neverlose::render() noexcept
                 d->AddCircleFilled(rp + ImVec2(s(16), s(14)), s(5), kStylePresets[i].color);
                 textY(d, rp.x + s(32), rp.y, s(28), C(182, 185, 196), kStylePresets[i].name, kTextControl, nullptr);
                 if (accepts && clicked) {
-                    // IM_COL32 packs 0xAABBGGRR (little-endian ImU32): low byte = red
+                    
                     const auto presetRgba = color::Rgba{static_cast<std::uint8_t>(kStylePresets[i].color & 0xFF), static_cast<std::uint8_t>(kStylePresets[i].color >> 8 & 0xFF), static_cast<std::uint8_t>(kStylePresets[i].color >> 16 & 0xFF), static_cast<std::uint8_t>(kStylePresets[i].color >> 24 & 0xFF)};
                     ui_config::set<MenuAccentColor>(presetRgba);
                     ui_config::set<MenuButtonColor>(presetRgba);
@@ -7177,10 +7204,10 @@ void neverlose::render() noexcept
 
         popupLayer(d);
         multiSelectPopover(d);
-        // A script color row publishes a raw GuiItem pointer into the shared picker. An unload
-        // (or slot reuse by another script) between click and popover would retarget the picker
-        // at a dead/foreign item - force-close instead. Native pickers (owner id outside the
-        // script control range) never trip this.
+        
+        
+        
+        
         if (state.colorPickerOpen && scriptColorTarget) {
             const int owner = state.colorPickerOwner;
             const bool scriptOwned = owner >= kScriptGuiControlBase
@@ -7202,38 +7229,38 @@ void neverlose::render() noexcept
         colorPickerPopover(d);
         featureBindPopover(d);
 
-        // rotate the popup rect snapshot: what the popups drew THIS frame gates page controls
-        // NEXT frame (popupPrev holds the complete last-frame set; popupCur starts empty again)
+        
+        
         for (int i = 0; i < PopupKindCount; ++i) {
             popupPrev[i] = popupCur[i];
             popupCur[i].valid = false;
         }
 
-        drawToasts(d, b); // topmost layer inside the shell
+        drawToasts(d, b); 
     }
     ImGui::End();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
 }
 
-// Game-anchored overlay pass: runs EVERY frame from GUI::render (independent of menu alpha),
-// because the hitmarker and the player list are gameplay HUD, not menu.
-void drawPlayerListWindow() noexcept; // defined below
-    float drawBindsListWindow(float extraYOffset) noexcept; // defined below; returns window height (0 = not drawn)
-    void drawSpectatorListWindow(float& yOffsetForBindsList) noexcept; // defined below
-    float drawCheatOMeterWindow(float extraYOffset) noexcept; // defined below; returns window height (0 = not drawn)
-    float drawLagOMeterWindow(float extraYOffset) noexcept; // defined below; returns window height (0 = not drawn)
-    float drawCombatCountersWindow() noexcept; // defined below; bottom-left, returns window height (0 = not drawn)
-    float drawHitFeedWindow() noexcept; // defined below; top-left, returns window height (0 = not drawn)
-    float drawStatusChipsWindow() noexcept; // defined below; bottom-left, returns window height (0 = not drawn)
-void drawLiveBadge() noexcept;
-void drawNowPlayingWindow(float combatListHeight) noexcept; // defined below; bottom-left, above COMBAT
 
-// Outer menu glow, drawn on the FOREGROUND draw list: the menu window clips its own draw list to
-// the shell rect, which is why the in-window version was invisible (only leaked out during the
-// close animation when the reveal warp pulled vertices back inside the clip). The band sits
-// OUTSIDE the shell rect so the foreground list never covers menu content. `menuAlpha` ties the
-// glow to the shell's open/close fade.
+
+void drawPlayerListWindow() noexcept; 
+    float drawBindsListWindow(float extraYOffset) noexcept; 
+    void drawSpectatorListWindow(float& yOffsetForBindsList) noexcept; 
+    float drawCheatOMeterWindow(float extraYOffset) noexcept; 
+    float drawLagOMeterWindow(float extraYOffset) noexcept; 
+    float drawCombatCountersWindow() noexcept; 
+    float drawHitFeedWindow() noexcept; 
+    float drawStatusChipsWindow() noexcept; 
+void drawLiveBadge() noexcept;
+void drawNowPlayingWindow(float combatListHeight) noexcept; 
+
+
+
+
+
+
 void neverlose::drawMenuGlow(float menuAlpha) noexcept
 {
     if (!ui_config::get<MenuGlowEnabled>() || menuAlpha <= 0.0f)
@@ -7259,21 +7286,21 @@ void neverlose::drawMenuGlow(float menuAlpha) noexcept
     const ImVec2 shellPos((display.x - kShellWidth) * 0.5f + menuOffset.x, (display.y - shellHeightBase) * 0.5f + menuOffset.y);
     const ImVec2 shellEnd = shellPos + ImVec2(kShellWidth, kShellHeight);
 
-    // Nested rounded-rect rings around the shell: every ring keeps the shell's own corner
-    // rounding (an offset rounded rect stays parallel to the original curve), so the glow hugs
-    // the corners at ANY size - the 9-slice stamp could not (its corner fade left a square
-    // notch, and its left/right edge pieces were zero-height anyway). Painted outside-in so the
-    // brighter inner rings draw over the outer falloff.
+    
+    
+    
+    
+    
     const int rings = ImClamp(static_cast<int>(size / 2.5f), 8, 24);
-    const float thickness = size / rings + 2.0f; // +1.5 overlap so the rings fuse into one band
+    const float thickness = size / rings + 2.0f; 
     for (int i = rings; i >= 1; --i) {
-        // the ring band covers [offset(i-1), offset(i)]; its center sits at the band midpoint,
-        // with +1px bias inward so the innermost ring's inner edge touches the shell exactly
+        
+        
         const float outer = size * static_cast<float>(i) / static_cast<float>(rings);
         const float inner = size * static_cast<float>(i - 1) / static_cast<float>(rings);
         const float offset = (outer + inner) * 0.5f - 0.5f;
         const float fade = 1.0f - static_cast<float>(i) / static_cast<float>(rings);
-        const float ringAlpha = static_cast<float>(aC) * (fade * fade * (3.0f - 2.0f * fade)); // smoothstep falloff
+        const float ringAlpha = static_cast<float>(aC) * (fade * fade * (3.0f - 2.0f * fade)); 
         if (ringAlpha < 1.0f)
             continue;
         fg->AddRect(ImVec2(shellPos.x - offset, shellPos.y - offset),
@@ -7281,8 +7308,8 @@ void neverlose::drawMenuGlow(float menuAlpha) noexcept
                     C(rC, gC, bC, static_cast<int>(ringAlpha)), s(17.0f) + offset, 0, thickness + 1.0f);
     }
 
-    // DEBUG (Menu > account popover > Glow Debug): white outline = shell rect, cyan outline =
-    // the glow's outer edge.
+    
+    
     if (ui_config::get<MenuGlowDebug>()) {
         fg->AddRect(shellPos, shellEnd, IM_COL32(255, 255, 255, 255), 0.0f, 0, 2.0f);
         fg->AddRect(ImVec2(shellPos.x - size, shellPos.y - size),
@@ -7290,10 +7317,10 @@ void neverlose::drawMenuGlow(float menuAlpha) noexcept
     }
 }
 
-// Feature binds: the curated list of bindable toggles (right-click in the menu opens the bind
-// popup) registered once per session, then the binds applied every rendered frame - menu closed
-// or not. Registration happens on the present thread like everything else bind-related (see
-// FeatureBinds.h: no locking needed, the registry never leaves this thread).
+
+
+
+
 void registerFeatureBinds() noexcept
 {
     static bool done = false;
@@ -7314,8 +7341,9 @@ void registerFeatureBinds() noexcept
     using namespace watermark_vars;
     using namespace binds_list_vars;
 
-    // --- rage ---
+    
     feature_binds::registerToggle<aimbot_vars::Enabled>("Silent Aim");
+    feature_binds::registerToggle<aimbot_vars::TargetLock>("Rage Target Lock");
     feature_binds::registerToggle<aimbot_vars::BodyAim>("Force Body Aim");
     feature_binds::registerToggle<aimbot_vars::Multipoint>("Multipoint");
     feature_binds::registerToggle<aimbot_vars::DynamicPointscale>("Dynamic Point Scale");
@@ -7331,8 +7359,10 @@ void registerFeatureBinds() noexcept
     feature_binds::registerToggle<aimbot_vars::SpreadCircleFov>("Rage Spread FOV");
     feature_binds::registerToggle<aimbot_vars::Extrapolate>("Lead Targets");
 
-    // --- legit / triggerbot ---
+    
     feature_binds::registerToggle<legit_aimbot_vars::Enabled>("Smooth Aim");
+    feature_binds::registerToggle<legit_aimbot_vars::TargetLock>("Legit Target Lock");
+    feature_binds::registerToggle<legit_aimbot_vars::WallCheck>("Legit Aim Visible");
     feature_binds::registerToggle<legit_aimbot_vars::DrawFov>("Draw FOV Circle");
     feature_binds::registerToggle<legit_aimbot_vars::SpreadCircleFov>("Legit Spread Circle FOV");
     feature_binds::registerToggle<aimbot_vars::HitHead>("Target Head");
@@ -7350,7 +7380,7 @@ void registerFeatureBinds() noexcept
     feature_binds::registerToggle<no_scope_inaccuracy_vis_vars::Enabled>("No-scope Inaccuracy Vis");
     feature_binds::registerToggle<spread_circle_vars::Enabled>("Draw Weapon Spread");
 
-    // --- visuals ---
+    
     feature_binds::registerToggle<outline_glow_vars::Enabled>("Outline Glow");
     feature_binds::registerToggle<model_glow_vars::Enabled>("Model Glow");
     feature_binds::registerToggle<viewmodel_mod_vars::ModifyFov>("Modify Viewmodel Fov");
@@ -7396,16 +7426,16 @@ void neverlose::renderGameOverlay() noexcept
 
     refreshMenuTheme();
 
-    // Mic broadcast follows the radio's play state every frame (not only while the Radio tab is
-    // open), so stopping a station always hands the microphone back - wherever the user is.
+    
+    
     withRadio([](auto&& radio) { radio.updateMicBroadcast(); });
 
-    // Now playing (HUD box): live volume push + throttled title/MPRIS polls. Same reasoning -
-    // the element tracks playback wherever the user is, Radio tab open or not.
+    
+    
     withRadio([](auto&& radio) { radio.updateNowPlaying(); });
 
-    // Discord Rich Presence: 1Hz throttled inside, cheap gates outside; runs with the menu open
-    // or closed so the presence tracks the match.
+    
+    
     static_cast<void>(ui_config::withContext([](auto&& hookContext) {
         hookContext.template make<DiscordRpc>().update();
     }));
@@ -7413,8 +7443,8 @@ void neverlose::renderGameOverlay() noexcept
     const auto snapshot = overlay_layer::snapshot();
     ImDrawList* fg = ImGui::GetForegroundDrawList();
 
-    // FrameworkCS2-port hitmarker: four lines around the crosshair, pixel dimensions
-    // straight from the snapshot (alpha already faded by the feature side).
+    
+    
     if (snapshot.hasHitmarker) {
         const float gap = snapshot.hitmarker.gap;
         const float length = snapshot.hitmarker.length;
@@ -7430,8 +7460,8 @@ void neverlose::renderGameOverlay() noexcept
         fg->AddLine(center + diagFlip, center + diagFlip + dirFlip, color, 1.6f);
     }
 
-    // World-anchored smoke/molotov burn timers: percent coordinates -> centered pixel text with a
-    // 1px shadow for readability over bright smoke/fire particles.
+    
+    
     if (snapshot.timerCount > 0) {
         const auto& io = ImGui::GetIO();
         if (ImFont* font = io.Fonts->Fonts[0]) {
@@ -7454,31 +7484,31 @@ void neverlose::renderGameOverlay() noexcept
     drawPlayerListWindow();
     float bindsListOffset = 0.0f;
     drawSpectatorListWindow(bindsListOffset);
-    // the right-hand HUD column stacks: spectators -> keybinds -> cheat o meter -> lag-o-meter
+    
     const float bindsListHeight = drawBindsListWindow(bindsListOffset);
     const float cheatOMeterHeight = drawCheatOMeterWindow(bindsListOffset);
     drawLagOMeterWindow(bindsListOffset + bindsListHeight + cheatOMeterHeight);
-    // bottom-left / top-left boxes (the old Panorama meters, now on the same visual language)
+    
     const float combatListHeight = drawCombatCountersWindow();
     drawStatusChipsWindow();
     drawNowPlayingWindow(combatListHeight);
     drawHitFeedWindow();
     drawLiveBadge();
 
-    // Lua scripts last: their paint callbacks draw on top of everything else. Each call is
-    // pcall'd and instruction-budgeted inside the manager - a bad script errors, never crashes.
+    
+    
     lua::dispatchPaint(ImGui::GetForegroundDrawList());
 }
 
-// --- spectator list (in-game HUD overlay) ------------------------------------------------
-// The friend-client port: boxed list of who is watching the POV - ours when alive, the
-// spectated player's when dead. Names come from SpectatorSnapshot (game thread collects,
-// this pass draws); hidden while nobody is spectating.
 
-// LIVE badge: local-only by physics (an overlay lives in OUR process - spectators render
-// their own game and can never see it; the networked half is ChatTools' spectator-joined
-// say). Drawn as a streamer-style pill so the user knows when they are being watched and
-// can play into it / screenshot it.
+
+
+
+
+
+
+
+
 void drawLiveBadge() noexcept
 {
     if (!ui_config::get<chat_vars::LiveBadgeEnabled>())
@@ -7529,7 +7559,7 @@ void drawSpectatorListWindow(float& yOffsetForBindsList) noexcept
 
     const float displayWidth = ImGui::GetIO().DisplaySize.x;
     const float windowWidth = s(170.0f);
-    // top-right, under the watermark (above the keybind list, which shifts down while we render)
+    
     ImGui::SetNextWindowPos(ImVec2(displayWidth - windowWidth - s(12.0f), s(44.0f)), ImGuiCond_FirstUseEver);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(10.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
@@ -7558,15 +7588,15 @@ void drawSpectatorListWindow(float& yOffsetForBindsList) noexcept
     ImGui::PopStyleVar(3);
 }
 
-// --- keybind list (in-game HUD overlay) -------------------------------------------------
-// Player-list-style panel listing every bind with its key; the key pill glows in the button
-// accent while the key is physically held, so it doubles as a live input indicator. Rendered
-// every frame from the game-anchored pass, independent of the menu; interactive only while the
-// menu is open (drag to reposition).
+
+
+
+
+
 
 struct BindListEntry {
     const char* label;
-    int value; // Bind encoding (Bind.h)
+    int value; 
 };
 
 float drawBindsListWindow(float extraYOffset) noexcept
@@ -7586,7 +7616,7 @@ float drawBindsListWindow(float extraYOffset) noexcept
         {"Last Tick Defuse", static_cast<int>(static_cast<last_tick_vars::DefuseKey::ValueType::ValueType>(ui_config::get<last_tick_vars::DefuseKey>()))},
     };
 
-    // collect the rows that HAVE a key - Off/none entries never make the list
+    
     BindRowEntry rows[24];
     int rowCount = 0;
     for (const auto& e : entries)
@@ -7601,8 +7631,8 @@ float drawBindsListWindow(float extraYOffset) noexcept
     constexpr ImGuiWindowFlags menuClosedFlags = ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove
         | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse
         | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing;
-    // NoMove: the position is pinned from the config every frame, so ImGui's own mover is
-    // disabled and the drag below writes the position back through the config offsets instead.
+    
+    
     constexpr ImGuiWindowFlags menuOpenFlags = (ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav
         | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing
         | ImGuiWindowFlags_NoMove);
@@ -7613,12 +7643,12 @@ float drawBindsListWindow(float extraYOffset) noexcept
     const float rowHeight = s(30.0f);
     const float listHeight = headerHeight + static_cast<float>(rowCount) * rowHeight + s(8.0f);
 
-    // empty list (no bound keys at all) = no window at all
+    
     if (rowCount == 0)
         return 0.0f;
 
-    // top-right below the watermark band; the saved offsets shift the window left/down from
-    // that anchor (mouse drag / the position is persisted in the config)
+    
+    
     const float offX = static_cast<float>(ui_config::get<binds_list_vars::OffsetX>());
     const float offY = static_cast<float>(ui_config::get<binds_list_vars::OffsetY>());
     ImGui::SetNextWindowPos(ImVec2(displayWidth - windowWidth - s(12.0f) - offX, s(52.0f) + extraYOffset + offY), ImGuiCond_Always);
@@ -7630,9 +7660,9 @@ float drawBindsListWindow(float extraYOffset) noexcept
     ImGui::PushStyleColor(ImGuiCol_Border, C(52, 52, 58, 220));
 
     if (ImGui::Begin("Keybind list", nullptr, GUI::isMenuOpen() ? menuOpenFlags : menuClosedFlags)) {
-        // Drag to reposition: the window body is pure draw-list content (no items), so hover
-        // anywhere on it. The drag writes the offsets the pinned position is derived from -
-        // config autosave persists them across sessions.
+        
+        
+        
         if (GUI::isMenuOpen()) {
             static bool dragging = false;
             static ImVec2 dragStartMouse{};
@@ -7649,7 +7679,7 @@ float drawBindsListWindow(float extraYOffset) noexcept
                     dragging = false;
                 } else {
                     using Range = binds_list_vars::OffsetX::ValueType;
-                    // positive X offset = LEFT of the anchor, positive Y offset = DOWN from it
+                    
                     const float newX = ImClamp(startOffX - (ImGui::GetIO().MousePos.x - dragStartMouse.x), Range::kMin, Range::kMax);
                     const float newY = ImClamp(startOffY + (ImGui::GetIO().MousePos.y - dragStartMouse.y), Range::kMin, Range::kMax);
                     static_cast<void>(ui_config::set<binds_list_vars::OffsetX>(Range{newX}));
@@ -7663,12 +7693,12 @@ float drawBindsListWindow(float extraYOffset) noexcept
         const float winWidth = ImGui::GetWindowWidth();
         const float winHeight = ImGui::GetWindowHeight();
 
-        // the menu's card depth: WIDE top-light wash fading down + 1px inner highlight
+        
         d->PushClipRect(winPos, winPos + ImVec2(winWidth, winHeight), true);
         d->AddRectFilledMultiColor(winPos + ImVec2(s(14), s(1)), winPos + ImVec2(winWidth - s(14), s(42)), C(255, 255, 255, 18), C(255, 255, 255, 18), 0, 0);
         d->AddLine(winPos + ImVec2(s(12), s(0.75f)), winPos + ImVec2(winWidth - s(12), s(0.75f)), C(255, 255, 255, 22), 1.0f);
 
-        // header band: accent dot + semibold caption + hairline divider
+        
         pulsingDot(d, winPos + ImVec2(s(17), s(17)), s(2.4f), g_accent);
         textY(d, winPos.x + s(25), winPos.y + s(10), s(14), C(196, 199, 208), "KEYBINDS", kTextCaption, strongFont());
         d->AddLine(winPos + ImVec2(s(12), headerHeight - s(2)), winPos + ImVec2(winWidth - s(12), headerHeight - s(2)), kHairline, 1.0f);
@@ -7683,7 +7713,7 @@ float drawBindsListWindow(float extraYOffset) noexcept
             const float pillWidth = s(76.0f);
             const float pillHeight = s(21.0f);
             const ImVec2 pill(winPos.x + winWidth - s(13) - pillWidth, y + (rowHeight - pillHeight) * 0.5f);
-            // soft accent halo while the key is held (the menu's lit-toggle recipe)
+            
             if (held) {
                 d->AddRectFilled(pill - ImVec2(s(3), s(3)), pill + ImVec2(pillWidth + s(3), pillHeight + s(3)), (g_buttonAccent & 0x00FFFFFFu) | (26u << IM_COL32_A_SHIFT), s(12));
                 d->AddRectFilled(pill - ImVec2(s(6), s(6)), pill + ImVec2(pillWidth + s(6), pillHeight + s(6)), (g_buttonAccent & 0x00FFFFFFu) | (10u << IM_COL32_A_SHIFT), s(15));
@@ -7706,14 +7736,14 @@ float drawBindsListWindow(float extraYOffset) noexcept
     return listHeight;
 }
 
-// --- cheat o meter (in-game HUD overlay) -------------------------------------------------
-// Binds-list-styled panel fed by the analyzer's game-thread snapshot: one row per scanned
-// player - score pill (green/amber/red), name, and the raw columns behind the score (peak aim
-// speed, snaps/min, accuracy, headshot rate, scan duration). This panel (with the keybind
-// list) is the HUD's REFERENCE look - the combat counters/status chips/hit feed windows below
-// share its chrome. Shows while the analyzer is
-// enabled AND at least one target is selected ("waiting for data..." keeps picked-but-silent
-// distinguishable from not-picked).
+
+
+
+
+
+
+
+
 [[nodiscard]] static ImU32 cheatOMeterScoreColor(int score) noexcept
 {
     if (score >= 70)
@@ -7746,7 +7776,7 @@ float drawCheatOMeterWindow(float extraYOffset) noexcept
     const int rowsDrawn = snap.count > 0 ? snap.count : 1;
     const float listHeight = headerHeight + static_cast<float>(rowsDrawn) * rowHeight + s(6.0f);
 
-    // top-right, stacked under the keybind list
+    
     ImGui::SetNextWindowPos(ImVec2(displayWidth - windowWidth - s(12.0f), s(52.0f) + extraYOffset), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(windowWidth, listHeight), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(10.0f));
@@ -7765,8 +7795,8 @@ float drawCheatOMeterWindow(float extraYOffset) noexcept
         d->AddRectFilledMultiColor(winPos + ImVec2(s(14), s(1)), winPos + ImVec2(winWidth - s(14), s(42)), C(255, 255, 255, 18), C(255, 255, 255, 18), 0, 0);
         d->AddLine(winPos + ImVec2(s(12), s(0.75f)), winPos + ImVec2(winWidth - s(12), s(0.75f)), C(255, 255, 255, 22), 1.0f);
 
-        // centered title, per the panel's design - with the keybind list's pulsing accent dot
-        // riding left of it so the "live scanner" reads at a glance
+        
+        
         const char* const title = "CHEAT O METER";
         const float titleWidth = ImGui::GetFont()->CalcTextSizeA(kTextCaption, FLT_MAX, 0.0f, title).x;
         const float titleX = winPos.x + (winWidth - titleWidth) * 0.5f;
@@ -7782,7 +7812,7 @@ float drawCheatOMeterWindow(float extraYOffset) noexcept
             const auto& row = snap.rows[i];
             d->AddLine(ImVec2(winPos.x + s(12), y), ImVec2(winPos.x + winWidth - s(12), y), kHairline, 1.0f);
 
-            // score pill
+            
             const float pillRadius = s(12.0f);
             const ImVec2 pillCenter(winPos.x + s(24), y + rowHeight * 0.5f);
             const ImU32 scoreCol = cheatOMeterScoreColor(row.score);
@@ -7790,18 +7820,18 @@ float drawCheatOMeterWindow(float extraYOffset) noexcept
             d->AddCircle(pillCenter, pillRadius, scoreCol, 0, s(1.6f));
             char scoreText[8];
             std::snprintf(scoreText, sizeof(scoreText), "%d", row.score);
-            // centered on the measured GLYPH RUN, not the font line box - the line box rides
-            // high inside a tight circle
+            
+            
             const ImVec2 scoreTs = ImGui::GetFont()->CalcTextSizeA(kTextSmall, FLT_MAX, 0.0f, scoreText);
             text(d, pillCenter - scoreTs * 0.5f, scoreCol, scoreText, kTextSmall, nullptr);
 
-            // name (line 1) + muted stat columns (line 2)
+            
             const float nameX = winPos.x + s(44);
             textY(d, nameX, y + s(4), s(16), kTextBodyCol, row.name, kTextControl, nullptr);
 
             char statsLine[96];
             if (row.sensitivity > 0.0f) {
-                // the fitted sensitivity doubles as the vector's confidence readout
+                
                 std::snprintf(statsLine, sizeof(statsLine), "sens %.2f%s  snap %d/min%s",
                               row.sensitivity,
                               row.aimStrikes > 0 ? " OFF-GRID" : "",
@@ -7821,7 +7851,7 @@ float drawCheatOMeterWindow(float extraYOffset) noexcept
             const bool aimFlagged = row.aimStrikes > 0;
             textY(d, nameX, y + s(21), s(14), aimFlagged ? cheatOMeterScoreColor(70) : row.voiceStrikes > 0 ? cheatOMeterScoreColor(40) : C(137, 142, 153), statsLine, kTextSmall, nullptr);
 
-            // right column: peak aim speed (line 1) + scan duration (line 2)
+            
             char speedText[24];
             std::snprintf(speedText, sizeof(speedText), "%d deg/s", row.peakSpeed);
             const float speedW = ImGui::GetFont()->CalcTextSizeA(kTextSmall, FLT_MAX, 0.0f, speedText).x;
@@ -7842,12 +7872,12 @@ float drawCheatOMeterWindow(float extraYOffset) noexcept
     return listHeight;
 }
 
-// --- lag-o-meter (in-game HUD overlay) ---------------------------------------------------
-// The SERVER LAGGER card's live flood readout as a keybind-list-style window: offered KB/s and
-// refused batches per second, read from the game thread's relaxed-atomic counters with
-// present-thread 1s window snapshots (the row never writes back - no cross-thread state).
-// Refused batches tint amber while the channel is saturated. Draggable with the mouse (menu
-// open), position persisted through MeterOffsetX/Y like the keybind list.
+
+
+
+
+
+
 float drawLagOMeterWindow(float extraYOffset) noexcept
 {
     if (!ui_config::get<server_lagger_vars::MeterEnabled>())
@@ -7856,8 +7886,8 @@ float drawLagOMeterWindow(float extraYOffset) noexcept
     constexpr ImGuiWindowFlags menuClosedFlags = ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove
         | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse
         | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing;
-    // NoMove: the position is pinned from the config every frame; the drag below writes the
-    // offsets the pin is derived from.
+    
+    
     constexpr ImGuiWindowFlags menuOpenFlags = (ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav
         | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing
         | ImGuiWindowFlags_NoMove);
@@ -7873,13 +7903,13 @@ float drawLagOMeterWindow(float extraYOffset) noexcept
     const std::uint64_t refused = server_lagger::statsRefusedEvents.load(std::memory_order_relaxed);
     const std::uint64_t tx = server_lagger::statsTxBytes.load(std::memory_order_relaxed);
 
-    // time since the connection's tick counter last advanced (server freeze indicator: a
-    // server choking on the flood stops sending snapshots - the gap grows)
+    
+    
     const long long tickGapMs = server_lagger::lastSeenTick.load(std::memory_order_relaxed) < 0
         ? -1
         : server_lagger::monotonicMs() - server_lagger::lastTickAdvanceMs.load(std::memory_order_relaxed);
 
-    // present-thread-only window state (single caller per frame)
+    
     static double windowStart = 0.0;
     static std::uint64_t windowOffered = 0, windowRefused = 0, windowTx = 0;
     static double bytesPerSec = 0.0;
@@ -7915,12 +7945,12 @@ float drawLagOMeterWindow(float extraYOffset) noexcept
         std::snprintf(tickGapText, sizeof(tickGapText), "no server");
     else
         std::snprintf(tickGapText, sizeof(tickGapText), "%.1fs", tickGapMs / 1000.0);
-    // >= 0.5s without a server tick = the connection is choking (the freeze indicator)
+    
     const bool tickStalled = tickGapMs >= 500;
 
-    // top-right, pinned to the SCREEN corner + the user's drag offsets (player-list model:
-    // position truth lives in the config, never in a stacking chain - the cheat o meter's
-    // auto-fit height changing used to drag this window around on every row change)
+    
+    
+    
     const float offX = static_cast<float>(ui_config::get<server_lagger_vars::MeterOffsetX>());
     const float offY = static_cast<float>(ui_config::get<server_lagger_vars::MeterOffsetY>());
     ImGui::SetNextWindowPos(ImVec2(displayWidth - windowWidth - s(12.0f) - offX, s(52.0f) + offY), ImGuiCond_Always);
@@ -7932,8 +7962,8 @@ float drawLagOMeterWindow(float extraYOffset) noexcept
     ImGui::PushStyleColor(ImGuiCol_Border, C(52, 52, 58, 220));
 
     if (ImGui::Begin("Lag-O-Meter", nullptr, GUI::isMenuOpen() ? menuOpenFlags : menuClosedFlags)) {
-        // drag to reposition: the window body is pure draw-list content (no items), so hover
-        // anywhere on it; the drag writes the offsets the pinned position is derived from.
+        
+        
         if (GUI::isMenuOpen()) {
             static bool dragging = false;
             static ImVec2 dragStartMouse{};
@@ -7950,7 +7980,7 @@ float drawLagOMeterWindow(float extraYOffset) noexcept
                     dragging = false;
                 } else {
                     using Range = server_lagger_vars::MeterOffsetX::ValueType;
-                    // positive X offset = LEFT of the anchor, positive Y offset = DOWN from it
+                    
                     const float newX = ImClamp(startOffX - (ImGui::GetIO().MousePos.x - dragStartMouse.x), Range::kMin, Range::kMax);
                     const float newY = ImClamp(startOffY + (ImGui::GetIO().MousePos.y - dragStartMouse.y), Range::kMin, Range::kMax);
                     static_cast<void>(ui_config::set<server_lagger_vars::MeterOffsetX>(Range{newX}));
@@ -7964,8 +7994,8 @@ float drawLagOMeterWindow(float extraYOffset) noexcept
         const float winWidth = ImGui::GetWindowWidth();
         const float winHeight = ImGui::GetWindowHeight();
 
-        // the menu's card depth: WIDE top-light wash fading down + 1px inner highlight, header
-        // band with accent dot + caption + hairline divider (the keybind list recipe)
+        
+        
         d->PushClipRect(winPos, winPos + ImVec2(winWidth, winHeight), true);
         d->AddRectFilledMultiColor(winPos + ImVec2(s(14), s(1)), winPos + ImVec2(winWidth - s(14), s(42)), C(255, 255, 255, 18), C(255, 255, 255, 18), 0, 0);
         d->AddLine(winPos + ImVec2(s(12), s(0.75f)), winPos + ImVec2(winWidth - s(12), s(0.75f)), C(255, 255, 255, 22), 1.0f);
@@ -8002,14 +8032,14 @@ float drawLagOMeterWindow(float extraYOffset) noexcept
     return listHeight;
 }
 
-// --- combat hud (hit counters / status chips / hit feed) ----------------------------------
-// The old Panorama meter boxes, ported onto the ImGui HUD windows' ONE visual language (the
-// keybinds list / cheat o meter look): same box chrome (top-light wash, pulsing accent dot,
-// caption title, hairline dividers), same value-pill recipe, same drag model. Counters + feed
-// draw the CombatStats game-thread snapshot (CombatStatsHudState.h); the status chips are
-// computed right here - config vars + Bind/SDL polls are safe on this thread (the keybind
-// list already does the same). Each box's drag writes the SAME offsets the Hud-page sliders
-// hold (single position truth, autosave persists them).
+
+
+
+
+
+
+
+
 
 [[nodiscard]] static double hudMonotonicSeconds() noexcept
 {
@@ -8024,8 +8054,8 @@ float drawLagOMeterWindow(float extraYOffset) noexcept
     return (color & 0x00FFFFFFu) | (ImClamp(a, 0, 255) << IM_COL32_A_SHIFT);
 }
 
-// The binds-list box chrome: wide top-light wash + 1px inner highlight, centered caption title
-// with the pulsing accent dot riding left of it, hairline divider under the header band.
+
+
 static void drawHudBoxHeader(ImDrawList* d, const ImVec2& winPos, float winWidth, float headerHeight, const char* title) noexcept
 {
     d->AddRectFilledMultiColor(winPos + ImVec2(s(14), s(1)), winPos + ImVec2(winWidth - s(14), s(42)), C(255, 255, 255, 18), C(255, 255, 255, 18), 0, 0);
@@ -8045,10 +8075,10 @@ struct HudWindowDragState {
     float startOffY{0.0f};
 };
 
-// Shared drag: the window position is pinned from the config offsets every frame (ImGui's own
-// mover is disabled), so the drag converts cursor deltas back into the SAME offsets the Hud
-// sliders write. kFromBottom boxes anchor on the screen's bottom edge - dragging UP grows the
-// offset. A hairline accent outline marks the hovered/dragged box so it reads as grabbable.
+
+
+
+
 template <typename OffsetXVar, typename OffsetYVar, bool kFromBottom>
 static void dragHudWindow(HudWindowDragState& st, float offX, float offY, ImDrawList* d, const ImVec2& winPos, float winWidth, float winHeight) noexcept
 {
@@ -8088,9 +8118,9 @@ constexpr ImGuiWindowFlags kHudBoxMenuOpenFlags = (ImGuiWindowFlags_NoDecoration
     | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing
     | ImGuiWindowFlags_NoMove);
 
-// One value pill inside a box: dark fill + hairline border, muted label + colored value - the
-// keybind list's key-pill recipe with the feed's two-level text hierarchy. Returns the pill's
-// width so callers can lay out rows and size the window from the same measurement.
+
+
+
 static float drawHudValuePill(ImDrawList* d, float x, float y, float pillHeight, const char* label, const char* value, ImU32 valueColor) noexcept
 {
     const float labelWidth = ImGui::GetFont()->CalcTextSizeA(kTextSmall, FLT_MAX, 0.0f, label).x;
@@ -8105,12 +8135,12 @@ static float drawHudValuePill(ImDrawList* d, float x, float y, float pillHeight,
     return pillWidth;
 }
 
-// --- now playing (in-game HUD overlay) ---------------------------------------------------
-// Bottom-left box in the same visual family as COMBAT/STATUS. While a web-radio station plays
-// it shows the station + current track (host-side ICY burst probe via RadioManager); while
-// nothing plays it mirrors the host desktop's MPRIS media players (playerctl burst) instead,
-// so the element is never dead weight. Hidden entirely when the toggle is off or nothing is
-// playing anywhere. Interactive only while the menu is open (drag to reposition).
+
+
+
+
+
+
 
 static void copyCapped(char* dst, const char* src, std::size_t cap) noexcept
 {
@@ -8120,8 +8150,8 @@ static void copyCapped(char* dst, const char* src, std::size_t cap) noexcept
     dst[i] = '\0';
 }
 
-// Copies `text` into `buf`, cutting it down to maxWidth HUD pixels (kTextControl font) with a
-// trailing "..." - station and track names regularly overflow the 232px box.
+
+
 void truncateToWidth(char* buf, std::size_t cap, const char* text, float maxWidth) noexcept
 {
     std::size_t len = 0;
@@ -8144,98 +8174,105 @@ void truncateToWidth(char* buf, std::size_t cap, const char* text, float maxWidt
     }
 }
 
+[[nodiscard]] bool stageTextureFromFile(const char* path, bool music) noexcept;
+
 void drawNowPlayingWindow(float combatListHeight) noexcept
 {
+    static_cast<void>(combatListHeight);
     if (!ui_config::get<radio_vars::ShowNowPlaying>())
         return;
 
-    bool playing = false;
-    bool paused = false;
-    const char* stationName = nullptr;
-    const char* track = nullptr;
-    const char* playerName = nullptr;
-    const char* playerTitle = nullptr;
-    const char* playerArtist = nullptr;
+    bool playing = false, paused = false;
+    const char *stationName = nullptr, *track = nullptr, *playerTitle = nullptr, *playerArtist = nullptr;
+    const char *artworkUrl = nullptr, *artworkFile = nullptr;
     withRadio([&](auto&& radio) {
         playing = radio.isPlaying();
         stationName = radio.lastPlayedName();
         track = radio.nowPlayingTrack();
-        playerName = radio.mprisPlayerName();
         playerTitle = radio.mprisTrack();
         playerArtist = radio.mprisArtist();
         paused = radio.mprisIsPaused();
+        artworkUrl = radio.mprisArtwork();
+        artworkFile = radio.mprisArtworkFile();
     });
 
-    char line1[160];
-    char line2[224];
-    line1[0] = '\0';
-    line2[0] = '\0';
-    if (playing) {
-        copyCapped(line1, stationName && stationName[0] != '\0' ? stationName : "radio", sizeof(line1));
-        if (track && track[0] != '\0')
-            copyCapped(line2, track, sizeof(line2));
-    } else if (playerName && playerName[0] != '\0' && playerTitle && playerTitle[0] != '\0') {
-        copyCapped(line1, playerName, sizeof(line1));
-        StringBuilderStorage<256> storage;
-        auto builder = storage.builder();
-        builder.put(playerTitle);
-        if (playerArtist && playerArtist[0] != '\0')
-            builder.put(" - ", playerArtist);
-        if (paused)
-            builder.put("  (paused)");
-        copyCapped(line2, builder.cstring(), sizeof(line2));
+    char title[160]{}, artist[160]{};
+    const bool useMpris = playerTitle && playerTitle[0] && (!playing || !paused);
+    if (useMpris) {
+        copyCapped(title, playerTitle, sizeof(title));
+        if (playerArtist)
+            copyCapped(artist, playerArtist, sizeof(artist));
+    } else if (playing) {
+        paused = false;
+        copyCapped(title, track && track[0] ? track : (stationName && stationName[0] ? stationName : "Live radio"), sizeof(title));
+        if (track && track[0] && stationName)
+            copyCapped(artist, stationName, sizeof(artist));
     } else {
-        return; // nothing playing anywhere - no window at all
+        return;
     }
 
-    const float displayHeight = ImGui::GetIO().DisplaySize.y;
-    const float windowWidth = s(232.0f);
-    const float headerHeight = s(38.0f);
-    const float rowHeight = s(30.0f);
-    const int rowCount = line2[0] != '\0' ? 2 : 1;
-    const float listHeight = headerHeight + static_cast<float>(rowCount) * rowHeight + s(12.0f);
+    static char previousArtwork[512]{};
+    static bool artworkStaged = false;
+    const char* artwork = useMpris && artworkUrl ? artworkUrl : "";
+    if (std::strcmp(previousArtwork, artwork) != 0) {
+        VulkanHook::music_texture::release();
+        copyCapped(previousArtwork, artwork, sizeof(previousArtwork));
+        artworkStaged = false;
+    }
+    if (!artworkStaged && artwork[0] && artworkFile) {
+        static_cast<void>(stageTextureFromFile(artworkFile, true));
+        artworkStaged = true; // Unsupported artwork is attempted once, not every frame.
+    }
 
+    const auto display = ImGui::GetIO().DisplaySize;
+    const float width = s(280.0f), height = s(56.0f), tile = s(36.0f);
     static HudWindowDragState dragState;
     const float offX = static_cast<float>(ui_config::get<radio_vars::NowPlayingOffsetX>());
     const float offY = static_cast<float>(ui_config::get<radio_vars::NowPlayingOffsetY>());
-    // bottom-left anchor above the COMBAT box (422); when combat isn't drawn take its slot
-    const float baseOffset = 422.0f + (combatListHeight > 0.0f ? combatListHeight + 6.0f : 0.0f);
-    ImGui::SetNextWindowPos(ImVec2(s(10.0f) + offX, displayHeight - s(baseOffset) - offY - listHeight), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(windowWidth, listHeight), ImGuiCond_Always);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(10.0f));
+    ImGui::SetNextWindowPos(ImVec2(ImClamp(s(16) + offX, 0.0f, ImMax(0.0f, display.x - width)),
+        ImClamp(display.y - s(16) - offY - height, 0.0f, ImMax(0.0f, display.y - height))), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(width, height), ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(8));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, kSidebarBg);
-    ImGui::PushStyleColor(ImGuiCol_Border, C(52, 52, 58, 220));
-
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, C(18, 19, 24, 220));
+    ImGui::PushStyleColor(ImGuiCol_Border, C(255, 255, 255, 20));
     if (ImGui::Begin("Now playing", nullptr, GUI::isMenuOpen() ? kHudBoxMenuOpenFlags : kHudBoxMenuClosedFlags)) {
-        ImDrawList* d = ImGui::GetWindowDrawList();
-        const ImVec2 winPos = ImGui::GetWindowPos();
-        const float winWidth = ImGui::GetWindowWidth();
-
-        drawHudBoxHeader(d, winPos, winWidth, headerHeight, "NOW PLAYING");
-
-        const ImU32 primary = paused ? hudWithAlpha(g_accent, 0.55f) : g_accent;
-        const ImU32 secondary = paused ? C(96, 100, 108) : C(150, 154, 165);
-
-        truncateToWidth(line1, sizeof(line1), line1, winWidth - s(44));
-        d->AddCircleFilled(winPos + ImVec2(s(18), headerHeight + rowHeight * 0.5f), s(3), primary);
-        textY(d, winPos.x + s(30), winPos.y + headerHeight + s(5), rowHeight, primary, line1, kTextControl, nullptr);
-
-        if (line2[0] != '\0') {
-            char line2Fit[sizeof(line2)];
-            truncateToWidth(line2Fit, sizeof(line2Fit), line2, winWidth - s(26));
-            textY(d, winPos.x + s(13), winPos.y + headerHeight + rowHeight + s(5), rowHeight, secondary, line2Fit, kTextControl, nullptr);
+        auto* d = ImGui::GetWindowDrawList();
+        const auto pos = ImGui::GetWindowPos();
+        const auto icon = pos + ImVec2(s(10), s(10));
+        const auto texture = useMpris ? reinterpret_cast<ImTextureID>(VulkanHook::music_texture::query()) : ImTextureID{};
+        if (texture) {
+            d->AddImageRounded(texture, icon, icon + ImVec2(tile, tile), ImVec2(0, 0), ImVec2(1, 1), C(255, 255, 255), s(5));
+        } else {
+            d->AddRectFilled(icon, icon + ImVec2(tile, tile), C(255, 255, 255, 8), s(5));
+            // Draw the music note directly so it never depends on an icon font.
+            const auto ink = paused ? C(125, 128, 140) : g_accent;
+            d->AddLine(icon + ImVec2(s(15), s(24)), icon + ImVec2(s(15), s(11)), ink, s(2));
+            d->AddLine(icon + ImVec2(s(15), s(11)), icon + ImVec2(s(25), s(9)), ink, s(2));
+            d->AddLine(icon + ImVec2(s(25), s(9)), icon + ImVec2(s(25), s(22)), ink, s(2));
+            d->AddEllipseFilled(icon + ImVec2(s(12), s(25)), ImVec2(s(4), s(3)), ink);
+            d->AddEllipseFilled(icon + ImVec2(s(22), s(23)), ImVec2(s(4), s(3)), ink);
         }
-
-        dragHudWindow<radio_vars::NowPlayingOffsetX, radio_vars::NowPlayingOffsetY, true>(dragState, offX, offY, d, winPos, winWidth, listHeight);
+        const float x = pos.x + s(56), textWidth = width - s(paused ? 82 : 68);
+        truncateToWidth(title, sizeof(title), title, textWidth);
+        truncateToWidth(artist, sizeof(artist), artist, textWidth);
+        textY(d, x, pos.y + s(artist[0] ? 8 : 18), s(20), C(235, 237, 242), title, kTextControl, nullptr);
+        if (artist[0])
+            textY(d, x, pos.y + s(29), s(16), C(145, 148, 160), artist, kTextSmall, nullptr);
+        if (paused) {
+            const auto p = pos + ImVec2(width - s(20), s(23));
+            d->AddRectFilled(p, p + ImVec2(s(2), s(10)), C(145, 148, 160), s(1));
+            d->AddRectFilled(p + ImVec2(s(5), 0), p + ImVec2(s(7), s(10)), C(145, 148, 160), s(1));
+        }
+        dragHudWindow<radio_vars::NowPlayingOffsetX, radio_vars::NowPlayingOffsetY, true>(dragState, offX, offY, d, pos, width, height);
     }
     ImGui::End();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(3);
 }
 
-// Bottom-left HITS / MISS / ACC counters, above the status chips box.
+
 float drawCombatCountersWindow() noexcept
 {
     if (!combat_stats_hud::hudLive.load(std::memory_order_relaxed))
@@ -8248,7 +8285,7 @@ float drawCombatCountersWindow() noexcept
     std::snprintf(missText, sizeof(missText), "%u", snap.shotsFired >= snap.hitsLanded ? snap.shotsFired - snap.hitsLanded : 0u);
     char accText[16];
     if (snap.shotsFired == 0)
-        std::snprintf(accText, sizeof(accText), "--");   // never reads as 0% skill
+        std::snprintf(accText, sizeof(accText), "--");   
     else
         std::snprintf(accText, sizeof(accText), "%u%%", static_cast<unsigned>((static_cast<std::uint64_t>(snap.hitsLanded) * 100) / snap.shotsFired));
 
@@ -8270,13 +8307,13 @@ float drawCombatCountersWindow() noexcept
         const float valueWidth = ImGui::GetFont()->CalcTextSizeA(kTextSmall, FLT_MAX, 0.0f, pill.value).x;
         windowWidth += labelWidth + s(4) + valueWidth + s(16) + s(6);
     }
-    windowWidth -= s(6); // no trailing gap after the last pill
+    windowWidth -= s(6); 
 
     static HudWindowDragState dragState;
     const float offX = static_cast<float>(ui_config::get<combat_stats_vars::CountersOffsetX>());
     const float offY = static_cast<float>(ui_config::get<combat_stats_vars::CountersOffsetY>());
     const float displayHeight = ImGui::GetIO().DisplaySize.y;
-    // bottom-left anchor, parked above the STATUS box (its anchor + box height + gap)
+    
     ImGui::SetNextWindowPos(ImVec2(s(10.0f) + offX, displayHeight - s(422.0f) - offY - listHeight), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(windowWidth, listHeight), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(10.0f));
@@ -8306,10 +8343,10 @@ float drawCombatCountersWindow() noexcept
     return listHeight;
 }
 
-// Bottom-left STATUS chips: AIM (legit aim assist), TRIG (triggerbot), BLOCK (blockbot) - the
-// "why is nothing happening?" answer at a glance. Bright green = enabled AND its key is held,
-// dim green = enabled but idle, gray = disabled; the held state gets the keybind list's
-// lit-toggle halo in green.
+
+
+
+
 float drawStatusChipsWindow() noexcept
 {
     if (!combat_stats_hud::hudLive.load(std::memory_order_relaxed))
@@ -8343,7 +8380,7 @@ float drawStatusChipsWindow() noexcept
     const float offX = static_cast<float>(ui_config::get<status_panel_vars::OffsetX>());
     const float offY = static_cast<float>(ui_config::get<status_panel_vars::OffsetY>());
     const float displayHeight = ImGui::GetIO().DisplaySize.y;
-    // bottom-left anchor, just above the vanilla money HUD + chat feed
+    
     ImGui::SetNextWindowPos(ImVec2(s(10.0f) + offX, displayHeight - s(330.0f) - offY - listHeight), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(windowWidth, listHeight), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(10.0f));
@@ -8369,7 +8406,7 @@ float drawStatusChipsWindow() noexcept
             const ImVec2 pillMin{x, pillY};
             const ImVec2 pillMax{x + pillWidth, pillY + pillHeight};
             if (chip.enabled && chip.held) {
-                // soft green halo while the feature is actively working (the lit-toggle recipe)
+                
                 d->AddRectFilled(pillMin - ImVec2(s(3), s(3)), pillMax + ImVec2(s(3), s(3)), (kHeldGreen & 0x00FFFFFFu) | (26u << IM_COL32_A_SHIFT), pillHeight * 0.5f + s(3));
                 d->AddRectFilled(pillMin - ImVec2(s(6), s(6)), pillMax + ImVec2(s(6), s(6)), (kHeldGreen & 0x00FFFFFFu) | (10u << IM_COL32_A_SHIFT), pillHeight * 0.5f + s(6));
             }
@@ -8387,13 +8424,13 @@ float drawStatusChipsWindow() noexcept
     return listHeight;
 }
 
-// Top-left hit feed under the radar: one row per event ("hit <name> for <dmg> in head" /
-// "killed <name>" / "missed xN"), faint verbs + accent names/damage, each row sliding/fading
-// in on spawn and expiring after the configured lifetime. Hidden while there is nothing to
-// show (the keybind list's "no rows = no window" rule).
 
-// Composes one feed row's colored segments (into `storage`, since the texts are built, not
-// referenced); returns the segment count.
+
+
+
+
+
+
 struct FeedSegmentDraft {
     const char* text;
     bool accent;
@@ -8426,7 +8463,7 @@ static int feedSegments(const combat_stats_hud::FeedEntry& entry, FeedSegmentDra
         segments[count++] = {put("killed"), false};
         segments[count++] = {put(entry.name), true};
         break;
-    default: // 'm'
+    default: 
         {
             segments[count++] = {put("missed"), false};
             char streak[16];
@@ -8448,8 +8485,8 @@ float drawHitFeedWindow() noexcept
 
     struct FeedRow {
         const combat_stats_hud::FeedEntry* entry;
-        float alpha; // entrance ease * expiry fade
-        float slide; // px offset the row still has to travel up
+        float alpha; 
+        float slide; 
     };
     FeedRow rows[combat_stats_hud::kFeedLines];
     int rowCount = 0;
@@ -8491,7 +8528,7 @@ float drawHitFeedWindow() noexcept
     static HudWindowDragState dragState;
     const float offX = static_cast<float>(ui_config::get<combat_stats_vars::FeedOffsetX>());
     const float offY = static_cast<float>(ui_config::get<combat_stats_vars::FeedOffsetY>());
-    // top-left anchor, under the radar
+    
     ImGui::SetNextWindowPos(ImVec2(s(10.0f) + offX, s(330.0f) + offY), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(windowWidth, listHeight), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(10.0f));
@@ -8534,37 +8571,37 @@ float drawHitFeedWindow() noexcept
 }
 
 
-// --- player list (FrameworkCS2 port) -----------------------------------------------------
-// Present-thread ImGui table fed by PlayerList's game-thread snapshot. Interactive only while
-// the menu is open; otherwise a click-through always-on-back display.
+
+
+
 
 void drawPlayerListWindow() noexcept
 {
     if (!ui_config::get<PlayerListEnabled>())
         return;
 
-    // ALWAYS auto-resize: the window fits its rows every frame - growing with the player count
-    // and shrinking back - while the width stays pinned by the SetNextWindowSize below (a 0
-    // height with Cond_Always is the auto-fit-height trick). The config stores the position:
-    // seeded on first use, written back while the menu drag moves the window (no ini file in
-    // the embedded ImGui, so the config is the only persistence).
+    
+    
+    
+    
+    
     constexpr ImGuiWindowFlags menuClosedFlags = ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove
         | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse
         | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing
         | ImGuiWindowFlags_AlwaysAutoResize;
     constexpr ImGuiWindowFlags menuOpenFlags = menuClosedFlags | ImGuiWindowFlags_NoMove;
 
-    // Pinned to the offsets every frame (the watermark's model): position truth lives in the
-    // two sliders/config, never in a drag. Offset 0 = the window is FLUSH with the screen
-    // border (older builds baked a hidden 10/64px margin into the base - that read as "offset 0
-    // is not at the border").
+    
+    
+    
+    
     const float posX = static_cast<float>(ui_config::get<PlayerListOffsetX>());
     const float posY = static_cast<float>(ui_config::get<PlayerListOffsetY>());
     ImGui::SetNextWindowPos(ImVec2(posX, posY), ImGuiCond_Always);
 
-    // Same shell palette as the menu: dark rounded panel, theme accent, muted text. The window
-    // auto-fits BOTH axes and the table uses content-fit columns, so long names/teams widen the
-    // window instead of truncating ("Te...", "Mo..." cells).
+    
+    
+    
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(12.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(s(8), s(6)));
@@ -8580,7 +8617,7 @@ void drawPlayerListWindow() noexcept
     if (ImGui::Begin("Player list", nullptr, GUI::isMenuOpen() ? menuOpenFlags : menuClosedFlags)) {
         const auto snap = player_list::snapshot();
 
-        // Muted header text; a theme-accent underline sits under the header row.
+        
         ImGui::PushStyleColor(ImGuiCol_Text, C(137, 142, 153));
         if (ImGui::BeginTable("##player_list_rows", 8,
                 ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
@@ -8595,8 +8632,8 @@ void drawPlayerListWindow() noexcept
             ImGui::TableHeadersRow();
             ImGui::PopStyleColor();
 
-            // theme-accent hairline under the header row, spanning the full table width
-            // (window-relative: after TableHeadersRow the cursor sits right below the header)
+            
+            
             {
                 ImDrawList* d = ImGui::GetWindowDrawList();
                 const ImVec2 winPos = ImGui::GetWindowPos();
@@ -8635,7 +8672,7 @@ void drawPlayerListWindow() noexcept
                 else
                     ImGui::TextDisabled("-");
                 ImGui::TableNextColumn();
-                // health: red -> green as it fills up (same green as the shell's success accents)
+                
                 const float healthFraction = row.maxHealth > 0 ? ImSaturate(static_cast<float>(row.health) / row.maxHealth) : 0.0f;
                 const ImVec4 healthColor = ImGui::ColorConvertU32ToFloat4(mix(C(235, 87, 87), C(81, 192, 124), healthFraction));
                 ImGui::TextColored(healthColor, "%d/%d", row.health, row.maxHealth > 0 ? row.maxHealth : 100);
@@ -8646,7 +8683,7 @@ void drawPlayerListWindow() noexcept
                 ImGui::TableNextColumn();
                 if (row.rank > 0) {
                     if (row.rankType == 0xb)
-                        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(g_accent), "%d", row.rank); // premier rating
+                        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(g_accent), "%d", row.rank); 
                     else
                         ImGui::Text("#%d", row.rank);
                 } else {
@@ -8673,22 +8710,22 @@ void drawPlayerListWindow() noexcept
     if (!GUI::isMenuOpen())
         ImGui::BringWindowToDisplayBack(ImGui::GetCurrentWindow());
     ImGui::End();
-    // 7 window-level colors remain (the 2 Text pushes were popped at their use sites);
-    // all 4 vars are still on the stack.
+    
+    
     ImGui::PopStyleColor(7);
     ImGui::PopStyleVar(4);
 }
 
-// --- avatar (account-bar image) -------------------------------------------------------
-// The user drops avatar.png (or .jpg) into the config folder; it is decoded once on the present
-// thread and handed to the Vulkan hook for upload (avatar_texture in VulkanHook.h). Anything
-// missing or undecodable simply keeps the NS monogram fallback.
+
+
+
+
 
 bool avatarLoadAttempted = false;
 
-// Reads an image file, decodes it and stages it as the account-bar avatar texture.
-// Returns true when a texture was staged (stop retrying then).
-[[nodiscard]] bool stageAvatarFromFile(const char* path) noexcept
+
+
+[[nodiscard]] bool stageTextureFromFile(const char* path, bool music) noexcept
 {
     const int fd = LinuxPlatformApi::open(path, O_RDONLY);
     if (fd < 0)
@@ -8718,18 +8755,31 @@ bool avatarLoadAttempted = false;
     }
 
     int width = 0, height = 0;
+    if (!stbi_info_from_memory(fileData, static_cast<int>(totalRead), &width, &height, nullptr)
+        || width <= 0 || height <= 0 || (music && (width > 2048 || height > 2048))) {
+        std::free(fileData);
+        return false;
+    }
     unsigned char* pixels = stbi_load_from_memory(fileData, static_cast<int>(totalRead), &width, &height, nullptr, 4);
     std::free(fileData);
     if (!pixels)
         return false;
 
     gui_log::write("avatar staged: %s (%dx%d)", path, width, height);
-    VulkanHook::avatar_texture::request(pixels, width, height); // takes ownership
+    if (music)
+        VulkanHook::music_texture::request(pixels, width, height);
+    else
+        VulkanHook::avatar_texture::request(pixels, width, height); 
     return true;
 }
 
-// Priority: user avatar in the config dir, then the steam persona fetch in the exchange root
-// (Source/Features/Hud/SteamPersona.h). Returns true when a texture was staged.
+
+
+[[nodiscard]] bool stageAvatarFromFile(const char* path) noexcept
+{
+    return stageTextureFromFile(path, false);
+}
+
 [[nodiscard]] bool loadAvatar() noexcept
 {
     bool staged = false;
@@ -8753,26 +8803,26 @@ void neverlose::processDeferred() noexcept
         fontReloadPending = false;
         menuScale = pendingMenuScale;
         if (ImGui::GetCurrentContext()) {
-            // Menu submits are unchained (no semaphore waits), so their in-flight depth is NOT
-            // bounded by the swapchain - a draw submitted frames ago can still be sampling the
-            // current font texture. Letting the backend free it unsynced is the amdgpu
-            // page-fault -> ring-timeout -> VK_ERROR_DEVICE_LOST recipe (2026-08-29 crash,
-            // menu-scale slider release). Drain first; the atlas rebuild below dwarfs the wait.
+            
+            
+            
+            
+            
             VulkanHook::waitUntilDeviceIdle();
-            // Drop the uploaded font texture so the backend re-runs CreateFontsTexture (which
-            // builds the re-scaled atlas) on the next ImGui_ImplVulkan_NewFrame. Must happen
-            // OUTSIDE a frame.
+            
+            
+            
             ImGui_ImplVulkan_DestroyFontsTexture();
             loadFonts();
         }
     }
 
-    // Steam persona (name + avatar for the account bar): keep the host fetch spawned (rate-limited
-    // retries until the name lands - a single failed spawn used to mean the fallback label for the
-    // whole session), and stage the avatar every few seconds until it succeeds (a user avatar.png
-    // in the config dir wins whenever it exists).
+    
+    
+    
+    
     steam_persona::ensureFetchStarted();
-    static float nextAvatarTry = 0.0f; // present thread only
+    static float nextAvatarTry = 0.0f; 
     if (!avatarLoadAttempted && ImGui::GetTime() >= nextAvatarTry) {
         nextAvatarTry = ImGui::GetTime() + 4.0f;
         if (loadAvatar())
@@ -8788,14 +8838,14 @@ void neverlose::cancelKeybindCapture() noexcept
 
 void neverlose::beginReveal() noexcept
 {
-    dismissActive = false; // reopening mid-dismissal: the open animation takes over
+    dismissActive = false; 
     reveal = 0.0f;
 }
 
 void neverlose::beginDismiss() noexcept
 {
-    // Keep the current reveal progress: closing mid-open-animation reverses from wherever the
-    // shell actually is instead of popping it back to the fully shown state first.
+    
+    
     dismissActive = true;
 }
 
@@ -8808,7 +8858,7 @@ void neverlose::loadFonts() noexcept
 {
     if (!menuScaleInitialized) {
         menuScaleInitialized = true;
-        // Sensible default: design size at 1080p, proportionally larger on denser displays.
+        
         float displayHeight = 1080.0f;
         if (gui_sdl::functions.getDisplayForWindow && gui_sdl::functions.getCurrentDisplayMode && gui_sdl::window) {
             const auto* mode = gui_sdl::functions.getCurrentDisplayMode(gui_sdl::functions.getDisplayForWindow(gui_sdl::window));
@@ -8822,10 +8872,10 @@ void neverlose::loadFonts() noexcept
     auto& fonts = ImGui::GetIO().Fonts;
     fonts->Clear();
 
-    // Merged glyph ranges for text fonts: Latin (default) + simplified Chinese common (~2500
-    // curated glyphs) so skin names like "\xE9\xBE\x8D\xE7\x8E\x8B (Dragon King)" render.
-    // MUST be static storage: the atlas reads the ranges later, when it is built (first
-    // ImGui_ImplVulkan_NewFrame), long after this stack frame is gone.
+    
+    
+    
+    
     static ImWchar textRanges[4096];
     static bool textRangesBuilt = false;
     if (!textRangesBuilt) {
@@ -8840,7 +8890,7 @@ void neverlose::loadFonts() noexcept
         textRanges[n] = 0;
     }
 
-    // Compact icon glyph range: only the codepoints this UI uses. Static for the same reason.
+    
     static ImWchar iconRanges[64];
     {
         int n = 0;
@@ -8854,16 +8904,16 @@ void neverlose::loadFonts() noexcept
     ImFont* body = loadFontFromMemory(_binary_Inter_Medium_ttf_start, _binary_Inter_Medium_ttf_end, kTextBody, textRanges);
     if (!body)
         body = fonts->AddFontDefault();
-    // CJK fallback, merged into each TEXT font. AddFont with MergeMode merges into the MOST
-    // RECENTLY ADDED font, so each merge must run immediately after its base font - doing them
-    // in a loop after the icon font was added would land BOTH merges on the icon font.
+    
+    
+    
     {
         ImFontConfig cjk{};
         cjk.FontData = const_cast<unsigned char*>(_binary_NotoCJK_subset_ttf_start);
         cjk.FontDataSize = static_cast<int>(_binary_NotoCJK_subset_ttf_end - _binary_NotoCJK_subset_ttf_start);
         cjk.FontDataOwnedByAtlas = false;
         cjk.SizePixels = kTextBody;
-        cjk.GlyphRanges = textRanges; // the subset simply has no glyphs for anything else
+        cjk.GlyphRanges = textRanges; 
         cjk.MergeMode = true;
         fonts->AddFont(&cjk);
     }

@@ -1,277 +1,277 @@
 #pragma once
 
-// Script-facing Lua API.
-//
-// INCLUDED INSIDE namespace lua (from LuaManager.h) - do not include headers here and do not
-// open a namespace: everything this file needs (lua.h, imgui.h, VerifyConsole,
-// LinuxDynamicLibrary, the state structs and helpers) is already visible at the include point.
-//
-// API surface v2:
-//   client.set_event_callback(name, fn)   - events: "paint" (present thread, every frame,
-//                                           renderer valid inside), "createmove" (game thread,
-//                                           once per input tick - cmd.* valid inside), "menu"
-//                                           (present thread, every frame while the menu is
-//                                           open - imgui.* valid inside), "unload" (fired once
-//                                           when the script unloads, no dispatch thread -
-//                                           game-thread-only bindings refuse inside it), plus
-//                                           any game event name (e.g. "player_hurt",
-//                                           "weapon_fire", "bomb_planted"). Known events
-//                                           pass an `event` table to the callback:
-//                                           player_hurt (userid/attacker 0-based player slots,
-//                                           65535 = nobody, dmg_health, health, armor,
-//                                           dmg_armor, hitgroup, weapon string), player_death
-//                                           (userid/attacker/assister/headshot/dominated,
-//                                           weapon string), weapon_fire (userid, weapon
-//                                           string), item_purchase (userid, team, weapon
-//                                           string), bullet_impact + *_detonate (userid,
-//                                           x/y/z floats). Other events pass no arguments.
-//   client.log(message)                   - engine console (VerifyConsole, throttled)
-//   client.exec(command)                  - run a console command through the engine's client
-//                                           command buffer (game-thread callbacks only) - chat
-//                                           ("say ..."), radio ("playerchatwheel ..."), cvars,
-//                                           "pause" on sv_pausable servers, anything console-able
-//   client.play_sound(path)               - play a game sound by path ("buttons/bell1.wav") -
-//                                           thin wrapper over exec("play <path>")
-//   client.delay_call(seconds, fn, ...)   - call fn(args) on a later dispatch (>= seconds from
-//                                           now); max 32 pending per script, 1h max delay
-//   client.notify(text [, r, g, b])       - on-screen toast (drawn by the framework, top center)
-//   client.clipboard_get() / clipboard_set(text) - the system clipboard through the ImGui backend
-//   client.get_mouse_pos()                - x, y of the cursor
-//   client.is_mouse_down([button])        - 0 = left (default), 1 = right, 2 = middle
-//   client.is_bind_down(bind)             - true while a gui.keybind value is physically held
-//   client.get_time()                     - steady-clock seconds since module load; the only
-//                                           timing source (os.clock is sandboxed away)
-//   client.get_screen_size()              - width, height
-//   client.is_menu_open()
-//   client.trace_line(x1, y1, z1, x2, y2, z2 [, skipLocal])
-//                                         - world ray (game-thread callbacks only): fraction,
-//                                           endX, endY, endZ, didHit. skipLocal (default true)
-//                                           excludes the local pawn. Fails closed (fraction 1,
-//                                           didHit false) when the trace manager is unavailable.
-//   client.trace_damage(x1..z2, damageAtPoint, penetrationPower [, skipLocal])
-//                                         - autowall: the damage that survives the walls between
-//                                           the two points given the weapon's raw damage at the
-//                                           impact point and penetration power, or nil when the
-//                                           shot cannot reach (game-thread callbacks only).
-//   cvar.get_int(name) / cvar.get_float(name) - read a runtime convar (nil = absent/wrong type)
-//   cvar.set_float(name, value) / cvar.set_bool(name, value) - write through the convar's
-//                                           resolved value pointer (same force* path C++
-//                                           features use). false = not found / wrong type.
-//   renderer.text(x, y, text, r, g, b, a [, size [, outline [, bold]]]) - bold = the
-//   menu semibold face
-//                                         - size defaults to 14 (6-96), outline draws a dark
-//                                           halo so text stays readable over the world
-//   renderer.text_size(text [, size [, bold]])      - width, height at the given size
-//   renderer.line(x1, y1, x2, y2, r, g, b, a [, thickness])
-//   renderer.rect(x, y, w, h, r, g, b, a [, thickness])
-//   renderer.filled_rect(x, y, w, h, r, g, b, a)
-//   renderer.circle(x, y, radius, r, g, b, a [, segments [, thickness]])
-//   renderer.circle_filled(x, y, radius, r, g, b, a [, segments])
-//   renderer.image(id, x, y, w, h, r, g, b, a)
-//                                         - draw a texture created by renderer.load_image (only
-//                                           inside "paint"; silently skipped until the GPU
-//                                           upload finishes - poll renderer.image_ready)
-//   renderer.load_image(binaryData)       - decode PNG/JPEG/GIF/BMP bytes and stage a texture;
-//                                           returns a texture id (1-based) or nil. 8 slots per
-//                                           script; released when the script unloads.
-//   renderer.load_rgba(w, h, binaryData)  - stage ALREADY-DECODED RGBA8 bytes (w*h*4) - the path
-//                                           for raw pixel data (e.g. steam.avatar_rgba)
-//   renderer.image_ready(id) / renderer.image_size(id)
-//   renderer.world_to_screen(x, y, z)     - screen px, py, or nil when behind the camera /
-//                                           matrix unavailable (drawn coords, y grows down)
-//   memory.module_base(module)            - load base of a loaded module ("libclient.so", ...)
-//   memory.pattern_scan(module, pattern)  - IDA-style "48 8B 05 ?? ?? ??" scan of .text,
-//                                           returns the match address as lightuserdata or nil
-//   http.get(url, callback)               - async GET; callback(bodyOrNil) fires on a later frame
-//   http.request(method, url [, options,] callback)
-//                                         - async with options = { headers = {"K: V", ...},
-//                                           body = "..." }; callback(bodyOrNil). Method is one
-//                                           of GET/POST/PUT/DELETE/HEAD (max 16 headers,
-//                                           64KB body).
-//   database.read(key) / database.write(key, value)
-//                                         - persistent per-script KV store (strings/numbers/
-//                                           booleans; sidecar <script>.db, survives reloads)
-//   entity.get_local_player()             - local CONTROLLER entity index, or nil when not
-//                                           in a game (schema/entity data not ready)
-//   entity.get_players()                  - table of controller entity indices (players with
-//                                           an active pawn; bots included)
-//   entity.get_player_pawn(controllerIdx) - pawn entity index for a controller index, or nil
-//   entity.get_all(className)             - table of entity indices of a networkable class
-//                                           ("C_PlantedC4", "C_Inferno", "C_WeaponTaser",
-//                                           "C_Knife", ...), or nil when the class is unknown
-//   entity.get_spectators()               - table of controller entity indices of players
-//                                           ACTIVELY spectating the local pawn, or nil when
-//                                           unavailable / not in a game
-//   entity.get_origin(index)              - world origin x, y, z of an entity (game scene node
-//                                           path; C_BaseEntity has no plain origin field), nil
-//                                           when unavailable
-//   entity.get_prop(index, class, field)  - schema-driven read; declaring class required (the
-//                                           schema iterator does not walk parents). Int variant,
-//   entity.get_prop_float(...)            - float variant,
-//   entity.get_prop_string(...)           - string variant for fixed char arrays (printable
-//                                           check; nil when the bytes are not a clean string)
-//   entity.get_prop_vector(...)           - x, y, z
-//   entity.get_class(index)               - most-derived schema class name ("C_CSPlayerPawn"),
-//                                           nil when invalid/unavailable
-//   entity.find_prop(index, field, {classes}) - try each declaring class in order; returns
-//                                           value + matched class, or nil. Float/string/vector
-//   entity.find_prop_float/string/vector  - variants exist (string returns value + class too;
-//                                           vector returns x, y, z + class)
-//   entity.set_prop(index, class, field, value)      - int32 WRITE (game-thread callbacks only)
-//   entity.set_prop_float(index, class, field, value) - float32 WRITE (game-thread callbacks only)
-//   entity.set_prop_string(index, class, field, value) - fixed char-array WRITE (game-thread
-//                                           callbacks only; truncated + NUL-terminated)
-//   entity.set_prop_vector(index, class, field, x, y, z) - 12-byte WRITE (game-thread only)
-//   gui.tab(label)                        - name this script's own subtab on the Scripts page
-//                                           (default: the file name); one tab per script
-//   gui.page([name])                      - render every gui item created AFTER this call in a
-//                                           card at the bottom of the named menu page instead
-//                                           of the script subtab: "Rage", "Legit", "Movement",
-//                                           "Player Info", "Visuals"/"Glow", "Viewmodel",
-//                                           "Effects", "Hud", "Sound", "Inventory", "Radio",
-//                                           "Scripts", "Misc" (case-insensitive). No argument =
-//                                           back to the script subtab. Values persist as usual.
-//   gui.checkbox(label [, default])       - menu checkbox in the script's section; 1-based id
-//   gui.slider(label, min, max [, default]) - menu slider; 1-based id
-//   gui.dropdown(label, options [, defaultIndex]) - menu dropdown (searchable popup when the
-//                                           option list is long); gui.get returns the INDEX
-//   gui.color(label [, r, g, b [, a]])     - RGBA picker row (shared color-picker popover);
-//                                           gui.get returns r, g, b, a (0-255)
-//   gui.keybind(label [, default])         - key-capture row (0 = off, 1-248 SDL scancodes,
-//                                           249-253 mouse); pair with client.is_bind_down
-//   gui.float_slider(label, min, max [, default]) - fractional slider; gui.get returns a number
-//   gui.text_input(label [, default])      - single-line text row; gui.get returns the string
-//   gui.divider(label)                    - visual separator row in the script's section
-//   gui.get(id)                           - current value (boolean / integer / number / string;
-//                                           colors return r, g, b, a)
-//   gui.set(id, value [, g, b, a])        - set from the script (colors take 4 components);
-//                                           values persist per script
-//                                           (sidecar <scriptsDir>/<name>.gui, applied by label
-//                                           on load, written on unload)
-//   imgui.* - REAL ImGui windows for scripts; only valid inside a "menu" callback
-//           (client.set_event_callback("menu", fn), fires every frame while the menu is open):
-//     imgui.begin(title [, open, width, height]) -> visible, open
-//                                           - open a movable/resizable window (its X button
-//                                           updates `open`; call end_window() unconditionally)
-//     imgui.end_window()                    - close the window begun by imgui.begin
-//     imgui.set_next_window_pos(x, y)       - first-use placement for the next imgui.begin
-//     imgui.text(text) / imgui.text_colored(text, r, g, b, a)
-//     imgui.checkbox(label, value) -> value, changed
-//     imgui.slider_float(label, value, min, max) -> value, edited
-//     imgui.slider_int(label, value, min, max) -> value, edited
-//     imgui.input_text(label, text) -> text - input state lives in per-frame slots, matched by
-//                                           call order: keep the call sequence stable per frame.
-//                                           Seeded from the sidecar on first use and saved on
-//                                           unload (persistable labels only - see gui labels)
-//     imgui.input_int(label, value) -> value
-//     imgui.button(label [, w, h]) -> pressed
-//     imgui.combo(label, index, {"a","b"} | "a", "b", ...) -> newIndex (1-based)
-//     imgui.color_edit(label, r, g, b, a) -> r, g, b, a (0-255 floats; omit the colors to keep;
-//                                           first-use sidecar seeding like input_text)
-//     imgui.separator() / imgui.same_line()
-//   renderer.polygon(points, r, g, b, a [, filled [, thickness]])
-//                                         - {{x,y},...} or flat {x1,y1,...}; filled=true needs
-//                                           a CONVEX polygon (ImGui limitation), max 64 points
-//   renderer.arc(x, y, radius, startDeg, endDeg, r, g, b, a [, thickness, segments])
-//   renderer.gradient_rect(x, y, w, h, r1, g1, b1, a1, r2, g2, b2, a2 [, vertical])
-//   renderer.rounded_rect(x, y, w, h, radius, r, g, b, a [, thickness [, filled]])
-//   renderer.push_clip(x, y, w, h) / renderer.pop_clip()
-//                                         - manual clip nesting; unbalanced pops error, the
-//                                           framework unwinds leftovers at frame end
-//   buttons                               - IN_ button bit constants for cmd.*:
-//                                           attack, jump, duck, forward, back, use, moveleft,
-//                                           moveright, attack2, bullrush, speed, walk, reload
-//   cmd.set_buttons(mask, pressed) / cmd.press_buttons(mask) / cmd.get_buttons()
-//                                         - button words of the current tick's command (only
-//                                           inside "createmove"; press_buttons ORs, set_buttons
-//                                           forces both banks on and off)
-//   cmd.is_button_down(mask) / cmd.get_view_angles() / cmd.set_view_angles(pitch, yaw)
-//   cmd.get_forward_move() / cmd.set_forward_move(v) - normalized -1..1 (same for left_move)
-//   cmd.get_left_move() / cmd.set_left_move(v)
-//   cmd.press_shot([mask])                - real-click press into BOTH button banks + buttons_pb
-//                                           (the copy the server reads); false = buttons_pb
-//                                           unreachable, nothing written. Default mask = attack.
-//                                           The shot primitive; press_buttons is for movement.
-//   cmd.press_bank2(mask)                 - OR into bank 2 (the triggerbot bank); same false
-//                                           contract as press_shot
-//   cmd.suppress_shot([mask])             - take a shot back off the command (both banks +
-//                                           buttons_pb, attack history reset). The spread gate.
-//   cmd.get_mouse_dx()                    - raw horizontal mouse delta, or nil
-//   cmd.get_random_seed() / cmd.set_random_seed(seed) - per-command RNG seed (unset reads nil)
-//   cmd.get_history_size()                - input-history entry count, or nil
-//   cmd.set_attack_index(i) / cmd.force_attack_index(i) - point the attack marker at entry i;
-//                                           set_ refuses when the game wrote it (a real click),
-//                                           force_ overwrites (rage silent-aim write)
-//   config.get(path)                      - live native config read ("Combat.Triggerbot.Enabled");
-//                                           bool/int/number, or r, g, b, a for colors; nil when
-//                                           unknown/unavailable
-//   config.set(path, value [, g, b, a])   - live write (range-clamped, autosaved; same
-//                                           semantics as loading a .cfg - change handlers do
-//                                           NOT run). Colors take r, g, b [, a]. Unknown paths
-//                                           error; returns false without the bridge.
-//   config.list()                         - every addressable path as { path, type } entries
-//   config.save()                         - flush the active config to disk now
-//   net.server()                          - fd, ip, port of the game server as observed from the
-//                                           datagram hook, or nil when not connected
-//   net.send_raw(data [, count])          - send `count` copies (default 1, max 256) of a
-//                                           binary-safe string (max 1400 bytes) to the game
-//                                           server through the original sendto - bypasses the
-//                                           C++ net-lag hook entirely. Returns packets sent,
-//                                           nil when not connected.
-//   net.stats()                           - the hook's counters: sends/passed/dropped/duped/
-//                                           flooded/connless/raw/blips/delayed/flushed/overflow/
-//                                           region_blocked
-//   net.set_delay(ms)                     - script send-side delay hold, 0-500ms (0 = off):
-//                                           outgoing game datagrams wait `ms` before leaving,
-//                                           which is what raises YOUR server-measured ping
-//                                           (scoreboard m_iPing is server-side transport RTT -
-//                                           it cannot be spoofed, only earned with real delay).
-//                                           Gated on Movement > NET LAG > Enabled (turning the
-//                                           card off stops script delay too); shares the ring
-//                                           and delayed/flushed/overflow counters with the card.
-//                                           Cleared on hook unload. Callable from any callback.
-//   net.get_delay()                       - the currently published script delay ms (0 = off)
-//   net.set_blocked_ips(table)            - publish a block list of IPv4 strings ("1.2.3.4",
-//                                           optional "/prefix" length); datagrams to these
-//                                           addresses are silently swallowed in the send hook
-//                                           EXCEPT datagrams to the currently-connected game
-//                                           server. Capped at 512 entries. Returns entries kept.
-//   net.clear_blocked_ips()               - drop the block list (traffic resumes untouched)
-//   steam.get_steamid()                   - own SteamID64 as a STRING (ids exceed 2^53, a number
-//                                           round-trip corrupts them)
-//   steam.get_lobby()                     - SteamID64 string of the current Steam lobby, or nil
-//                                           when none is open (host a CS2 lobby from the PLAY
-//                                           menu first; CS2 publishes it as rich presence)
-//   steam.get_friends()                   - table of friend SteamID64 strings (immediate friends)
-//   steam.get_friend_name(sid)            - current persona name, or nil
-//   steam.get_friend_state(sid)           - EPersonaState int (6 = Looking To Play), or nil
-//   steam.get_friend_game(sid)            - { appid = int, lobby = sid-or-nil }, or nil when the
-//                                           friend is not in a game (also works on your own id)
-//   steam.get_friend_presence(sid)        - friend rich presence table { key = value } (empty
-//                                           until cached - pair with request_friend_presence)
-//   steam.request_friend_presence(sid)    - refresh a friend's rich presence (async)
-//   steam.invite(sid)                     - direct ISteamMatchmaking::InviteUserToLobby on the
-//                                           CURRENT lobby - never touches the CS2 party UI or its
-//                                           invite cooldown; returns false with no open lobby
-//   steam.lobby_members()                 - table of SteamID64 strings in the current lobby
-//   steam.lobby_owner()                   - lobby owner's SteamID64 string, or nil
-//   steam.request_friend_info(sid)        - async persona+avatar request (works for non-friends,
-//                                           e.g. any in-game player); poll get_friend_avatar
-//   steam.get_friend_avatar(sid)          - image handle (int) once the avatar is cached, nil
-//                                           until then (retry after request_friend_info)
-//   steam.avatar_size(handle) / steam.avatar_rgba(handle)
-//                                         - width, height / raw RGBA8 bytes of a cached avatar -
-//                                           feed straight into renderer.load_rgba
-//
-// FFI is available as a global (ffi.cast / ffi.C / ffi.load, LuaJIT GC64 build) for raw memory
-// work; memory.module_base + memory.pattern_scan give scripts the same anchors our C++ uses.
-// Files in <scriptsDir>/lib/*.lua execute before every script body with their globals shared
-// (json, base64, vector (vec3 + angle), easing are vendored there) - a require replacement for
-// the sandbox. The lib's returned table becomes a global named by the file stem.
 
-// ---- helpers ----
 
-// Every client/http binding carries its script's slot index as closure upvalue 1.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 inline Script& selfScript(lua_State* L)
 {
     return scripts[static_cast<int>(lua_tointeger(L, lua_upvalueindex(1)))];
@@ -291,48 +291,48 @@ inline ImU32 checkColor(lua_State* L, int index)
 inline ImDrawList* requirePaintList(lua_State* L)
 {
     if (!paintDrawList) {
-        luaL_error(L, "renderer is only available inside the 'paint' callback"); // longjmps
-        return nullptr; // unreachable
+        luaL_error(L, "renderer is only available inside the 'paint' callback"); 
+        return nullptr; 
     }
     return paintDrawList;
 }
 
-// ---- callback registry (per-state registry key "__ns_callbacks": { [event] = {fn, ...} }) ----
+
 
 inline void registerEventCallback(lua_State* L, const char* eventName)
 {
     lua_pushliteral(L, "__ns_callbacks");
-    lua_rawget(L, LUA_REGISTRYINDEX); // [callbacks?]
+    lua_rawget(L, LUA_REGISTRYINDEX); 
     if (!lua_istable(L, -1)) {
         lua_pop(L, 1);
-        lua_newtable(L);                            // [callbacks]
-        lua_pushliteral(L, "__ns_callbacks");       // [callbacks, key]
-        lua_pushvalue(L, -2);                       // [callbacks, key, callbacks]
-        lua_rawset(L, LUA_REGISTRYINDEX);           // registry[key] = callbacks
+        lua_newtable(L);                            
+        lua_pushliteral(L, "__ns_callbacks");       
+        lua_pushvalue(L, -2);                       
+        lua_rawset(L, LUA_REGISTRYINDEX);           
     }
-    lua_pushstring(L, eventName);                   // [callbacks, event]
-    lua_rawget(L, -2);                              // [callbacks, array?]
+    lua_pushstring(L, eventName);                   
+    lua_rawget(L, -2);                              
     if (!lua_istable(L, -1)) {
-        lua_pop(L, 1);                              // [callbacks]
-        lua_newtable(L);                            // [callbacks, array]
-        lua_pushstring(L, eventName);               // [callbacks, array, key]
-        lua_pushvalue(L, -2);                       // [callbacks, array, key, array]
-        lua_rawset(L, -4);                          // callbacks[key] = array
+        lua_pop(L, 1);                              
+        lua_newtable(L);                            
+        lua_pushstring(L, eventName);               
+        lua_pushvalue(L, -2);                       
+        lua_rawset(L, -4);                          
     }
     const int count = static_cast<int>(lua_objlen(L, -1));
-    lua_pushvalue(L, 2); // the callback function - set_event_callback's 2nd argument
+    lua_pushvalue(L, 2); 
     lua_rawseti(L, -2, count + 1);
-    lua_pop(L, 2); // array + callbacks
+    lua_pop(L, 2); 
 }
 
-// Keybind value encoding, mirroring GameClient/Bind.h (the canonical definition - kept as
-// plain constants here so the Lua core does not link the bind capture machinery): 0 = off,
-// 1..248 = SDL scancodes, 249..253 = mouse buttons (MOUSE4, MOUSE5, MOUSE3, MOUSE1, MOUSE2).
+
+
+
 inline constexpr int kBindOff = 0;
 inline constexpr int kBindLast = 253;
 inline constexpr int kBindMaxScancode = 248;
 
-// ---- client ----
+
 
 inline int l_setEventCallback(lua_State* L)
 {
@@ -348,7 +348,7 @@ inline int l_setEventCallback(lua_State* L)
     else if (std::strcmp(eventName, "menu") == 0)
         script.hasMenu = true;
     else if (std::strcmp(eventName, "unload") == 0)
-        script.hasUnload = true; // fired once from unloadScriptLocked, no dispatch thread
+        script.hasUnload = true; 
     return 0;
 }
 
@@ -373,10 +373,10 @@ inline int l_isMenuOpen(lua_State* L)
     return 1;
 }
 
-// Steady-clock seconds since boot - the sandbox strips os.clock, so scripts time their cadences
-// (chat bursts, snitch cooldowns) through this instead. Direct clock_gettime (the project-wide
-// monotonicSeconds pattern): std::chrono::steady_clock::now is an out-of-line libstdc++ symbol
-// and the release target links -nostdlib.
+
+
+
+
 inline double luaNow() noexcept
 {
     timespec ts{};
@@ -390,10 +390,10 @@ inline int l_getTime(lua_State* L)
     return 1;
 }
 
-// client.get_map_name() -> "de_mirage"-style name, or nil when no game_newmap has fired since
-// injection (main menu, first launch). The name is captured on the game thread by the event hook
-// (see lua::setCurrentMapName / game_events::stringForKey) and copied out under its mutex, so it
-// is safe to read from tick AND paint dispatches.
+
+
+
+
 inline int l_getMapName(lua_State* L)
 {
     char name[64];
@@ -404,7 +404,7 @@ inline int l_getMapName(lua_State* L)
     return 1;
 }
 
-// ---- cvar (runtime convar reads/writes through the CvarSystem bridges) ----
+
 
 inline int l_cvarGetInt(lua_State* L)
 {
@@ -442,9 +442,9 @@ inline int l_cvarSetBool(lua_State* L)
     return 1;
 }
 
-// Runs a console command through the engine's client command buffer - the same path ChatTools /
-// RadioManager use for say / chatwheel / cvars. Game-thread callbacks only: the engine command
-// buffer is not thread-safe, so calling from a paint callback errors instead of racing it.
+
+
+
 inline int l_clientExec(lua_State* L)
 {
     if (dispatchThreadKind.load(std::memory_order_relaxed) != 1)
@@ -461,7 +461,7 @@ inline int l_clientExec(lua_State* L)
     return 0;
 }
 
-// client.play_sound(path) - a thin, validated wrapper over exec("play <path>").
+
 inline int l_playSound(lua_State* L)
 {
     if (dispatchThreadKind.load(std::memory_order_relaxed) != 1)
@@ -482,9 +482,9 @@ inline int l_playSound(lua_State* L)
     return 0;
 }
 
-// client.delay_call(seconds, fn, ...) - queue fn(args...) on a later dispatch. The queue lives in
-// the Script (survives until the script unloads), drained by the paint/tick dispatch loops under
-// the framework mutex.
+
+
+
 inline int l_delayCall(lua_State* L)
 {
     const double seconds = luaL_checknumber(L, 1);
@@ -498,7 +498,7 @@ inline int l_delayCall(lua_State* L)
     PendingCall& call = script.pendingCalls[script.pendingCallCount];
     call = PendingCall{};
     call.when = luaNow() + seconds;
-    lua_pushvalue(L, 2); // copy of fn on top
+    lua_pushvalue(L, 2); 
     call.functionRef = luaL_ref(L, LUA_REGISTRYINDEX);
 
     const int argCount = lua_gettop(L) - 2;
@@ -515,9 +515,9 @@ inline int l_delayCall(lua_State* L)
     return 0;
 }
 
-// client.notify(text [, r, g, b]) - queue a toast; dispatchPaint draws the queue after the
-// script callbacks. Control characters are stripped (the text lands in ImGui draw calls only).
-// The color is the 3-component text color (alpha is managed by the fade).
+
+
+
 inline int l_notify(lua_State* L)
 {
     const char* text = luaL_checkstring(L, 1);
@@ -568,7 +568,7 @@ inline int l_getMousePos(lua_State* L)
     return 2;
 }
 
-// client.is_mouse_down([button]) - button 0 = left (default), 1 = right, 2 = middle.
+
 inline int l_isMouseDown(lua_State* L)
 {
     const int button = lua_isnoneornil(L, 1) ? 0 : static_cast<int>(luaL_checkinteger(L, 1));
@@ -583,14 +583,14 @@ inline int l_isMouseDown(lua_State* L)
     return 1;
 }
 
-// Forward declaration: defined beside the gui.keybind row further down; declared here so the
-// client.is_bind_down binding above can use it (single-header ordering, no semantics change).
+
+
 inline int checkBindValue(lua_State* L, int index);
 
-// client.is_bind_down(bind) - the gui.keybind companion: true while the bound key/button is
-// physically held. Scancodes (1..248) read the menu's keyboard state; mouse binds map to the
-// ImGui buttons (MOUSE4/5 = X1/X2, MOUSE3 = middle, MOUSE1/2 = left/right - the same
-// identities GameClient/Bind.h captures). Safe from any callback.
+
+
+
+
 inline int l_isBindDown(lua_State* L)
 {
     const int bind = checkBindValue(L, 1);
@@ -598,9 +598,9 @@ inline int l_isBindDown(lua_State* L)
     if (bind >= 1 && bind <= kBindMaxScancode)
         down = KeyboardState::isKeyDown(bind);
     else if (bind == 249)
-        down = ImGui::IsMouseDown(3); // MOUSE4 = X1
+        down = ImGui::IsMouseDown(3); 
     else if (bind == 250)
-        down = ImGui::IsMouseDown(4); // MOUSE5 = X2
+        down = ImGui::IsMouseDown(4); 
     else if (bind == 251)
         down = ImGui::IsMouseDown(ImGuiMouseButton_Middle);
     else if (bind == 252)
@@ -611,9 +611,9 @@ inline int l_isBindDown(lua_State* L)
     return 1;
 }
 
-// ---- tracing (game-thread callbacks only: TraceShape touches the live collision world) ----
 
-// The local pawn's C_BaseEntity*, or nullptr - used as the trace filter's skip entity.
+
+
 inline void* localPawnEntity()
 {
     const int controller = localPlayerIndexQuery ? localPlayerIndexQuery() : 0;
@@ -628,14 +628,14 @@ inline void* localPawnEntity()
     return nullptr;
 }
 
-// Requires the game-thread dispatch context; errors otherwise.
+
 inline void requireGameThread(lua_State* L, const char* api)
 {
     if (dispatchThreadKind.load(std::memory_order_relaxed) != 1)
         luaL_error(L, "%s is only available inside createmove / game event callbacks", api);
 }
 
-// Reads six floats (x1, y1, z1, x2, y2, z2) starting at `index` into two cs2::Vector points.
+
 inline void checkTracePoints(lua_State* L, int index, cs2::Vector& start, cs2::Vector& end)
 {
     start.x = static_cast<float>(luaL_checknumber(L, index));
@@ -646,8 +646,8 @@ inline void checkTracePoints(lua_State* L, int index, cs2::Vector& start, cs2::V
     end.z = static_cast<float>(luaL_checknumber(L, index + 5));
 }
 
-// client.trace_line(x1, y1, z1, x2, y2, z2 [, skipLocal]) -> fraction, endX, endY, endZ, didHit.
-// Fails closed like the C++ primitive: an unavailable trace manager reads as a clear ray.
+
+
 inline int l_traceLine(lua_State* L)
 {
     requireGameThread(L, "client.trace_line");
@@ -666,9 +666,9 @@ inline int l_traceLine(lua_State* L)
     return 5;
 }
 
-// client.trace_damage(x1..z2, damageAtPoint, penetrationPower [, skipLocal]) -> damage or nil.
-// The autowall primitive: how much of `damageAtPoint` (the weapon's raw, unarmored damage at the
-// impact point) survives the wall layers between the two points.
+
+
+
 inline int l_traceDamage(lua_State* L)
 {
     requireGameThread(L, "client.trace_damage");
@@ -684,15 +684,15 @@ inline int l_traceDamage(lua_State* L)
         lua_pushnumber(L, damage.value());
         return 1;
     }
-    return 0; // nil - not reachable through walls
+    return 0; 
 }
 
-// ---- renderer (foreground draw list; only valid inside a "paint" callback) ----
+
 
 inline constexpr float kScriptFontSize = 14.0f;
 
-// The menu's UI scale - HUD scripts multiply their metrics by it so script-drawn panels match
-// the native panels (the keybind list at scale 1.4 draws its caption at ~15px, not 11).
+
+
 inline int l_renderScale(lua_State* L)
 {
     lua_pushnumber(L, static_cast<double>(neverlose::uiScale()));
@@ -713,8 +713,8 @@ inline int l_renderText(lua_State* L)
             return luaL_error(L, "renderer.text: size must be 6-96");
     }
     const bool outline = lua_toboolean(L, 9) != 0;
-    // bold = arg 10: the menu's semibold face (Fonts[1]) - the same font the native HUD
-    // headers use. Falls back to the regular face when the bold atlas is missing.
+    
+    
     const bool bold = lua_toboolean(L, 10) != 0;
     ImFont* font = ImGui::GetIO().Fonts->Fonts[0];
     if (bold) {
@@ -745,7 +745,7 @@ inline int l_renderTextSize(lua_State* L)
         if (!(size >= 6.0f) || size > 96.0f)
             return luaL_error(L, "renderer.text_size: size must be 6-96");
     }
-    const bool bold = lua_toboolean(L, 3) != 0; // matches renderer.text's bold flag
+    const bool bold = lua_toboolean(L, 3) != 0; 
     ImFont* font = ImGui::GetIO().Fonts->Fonts[0];
     if (bold) {
         auto& fonts = ImGui::GetIO().Fonts->Fonts;
@@ -828,9 +828,9 @@ inline int l_renderCircleFilled(lua_State* L)
     return 0;
 }
 
-// World point -> screen pixels, or nil when the point is behind the camera or the view-projection
-// matrix is not available this frame. The bridge returns NDC (-1..1, y up); this converts to
-// drawn coordinates (y grows down) using the ImGui display size.
+
+
+
 inline int l_worldToScreen(lua_State* L)
 {
     float ndcX = 0.0f;
@@ -838,18 +838,18 @@ inline int l_worldToScreen(lua_State* L)
     if (!worldToScreenQuery
         || !worldToScreenQuery(static_cast<float>(luaL_checknumber(L, 1)), static_cast<float>(luaL_checknumber(L, 2)),
             static_cast<float>(luaL_checknumber(L, 3)), &ndcX, &ndcY))
-        return 0; // nil
+        return 0; 
     const ImVec2 display = ImGui::GetIO().DisplaySize;
     lua_pushnumber(L, (ndcX + 1.0f) * 0.5f * display.x);
     lua_pushnumber(L, (1.0f - ndcY) * 0.5f * display.y);
     return 2;
 }
 
-// ---- renderer v2: polygon / arc / gradient / rounded / clip ----
 
-// renderer.polygon(points, r, g, b, a [, filled [, thickness]]) - points is a Lua table, either
-// {{x,y}, ...} or a flat {x1, y1, x2, y2, ...}. filled=true uses the CONVEX fill (non-convex
-// outlines must stay unfilled); default is an outline.
+
+
+
+
 inline int l_renderPolygon(lua_State* L)
 {
     ImDrawList* const drawList = requirePaintList(L);
@@ -876,7 +876,7 @@ inline int l_renderPolygon(lua_State* L)
             lua_rawgeti(L, 1, i + 1);
             points[count].y = static_cast<float>(luaL_checknumber(L, -1));
             ++count;
-            ++i; // consumed the pair
+            ++i; 
         }
         lua_pop(L, 1);
     }
@@ -889,8 +889,8 @@ inline int l_renderPolygon(lua_State* L)
     return 0;
 }
 
-// renderer.arc(x, y, radius, startDeg, endDeg, r, g, b, a [, thickness, segments]) - stroke of a
-// circular arc, angles in degrees, 0 = right, counter-clockwise positive (screen coords).
+
+
 inline int l_renderArc(lua_State* L)
 {
     ImDrawList* const drawList = requirePaintList(L);
@@ -909,7 +909,7 @@ inline int l_renderArc(lua_State* L)
     return 0;
 }
 
-// renderer.gradient_rect(x, y, w, h, r1, g1, b1, a1, r2, g2, b2, a2 [, vertical])
+
 inline int l_renderGradientRect(lua_State* L)
 {
     ImDrawList* const drawList = requirePaintList(L);
@@ -927,7 +927,7 @@ inline int l_renderGradientRect(lua_State* L)
     return 0;
 }
 
-// renderer.rounded_rect(x, y, w, h, radius, r, g, b, a [, thickness [, filled]])
+
 inline int l_renderRoundedRect(lua_State* L)
 {
     ImDrawList* const drawList = requirePaintList(L);
@@ -945,9 +945,9 @@ inline int l_renderRoundedRect(lua_State* L)
     return 0;
 }
 
-// renderer.push_clip(x, y, w, h) / renderer.pop_clip() - manual clip nesting for paint drawing.
-// Unbalanced calls are caught: popping with an empty stack errors instead of tripping ImGui's
-// clip-rect assertions, and dispatchPaint resets the depth at every frame boundary.
+
+
+
 inline int l_renderPushClip(lua_State* L)
 {
     ImDrawList* const drawList = requirePaintList(L);
@@ -972,7 +972,7 @@ inline int l_renderPopClip(lua_State* L)
     return 0;
 }
 
-// ---- memory ----
+
 
 inline int l_moduleBase(lua_State* L)
 {
@@ -980,7 +980,7 @@ inline int l_moduleBase(lua_State* L)
     const LinuxDynamicLibrary library{moduleName};
     const link_map* const map = library.getLinkMap();
     if (!map || !map->l_addr)
-        return 0; // nil - module not loaded
+        return 0; 
     lua_pushlightuserdata(L, reinterpret_cast<void*>(map->l_addr));
     return 1;
 }
@@ -990,8 +990,8 @@ int l_patternScan(lua_State* L)
     const char* moduleName = luaL_checkstring(L, 1);
     const char* pattern = luaL_checkstring(L, 2);
 
-    // Parse FIRST: invalid patterns error out before any module lookup, so bad input from a
-    // script never depends on the module being loaded.
+    
+    
     PatternByte bytes[kMaxPatternBytes];
     const int byteCount = parseIdaPattern(pattern, bytes, kMaxPatternBytes);
     if (byteCount == 0)
@@ -999,19 +999,19 @@ int l_patternScan(lua_State* L)
 
     const LinuxDynamicLibrary library{moduleName};
     if (!library)
-        return 0; // nil - module not loaded
+        return 0; 
     const MemorySection code = library.getCodeSection();
     if (const unsigned char* match = scanMemoryPattern(reinterpret_cast<const unsigned char*>(code.raw().data()), code.raw().size(), bytes, byteCount)) {
         lua_pushlightuserdata(L, const_cast<unsigned char*>(match));
         return 1;
     }
-    return 0; // nil - not found
+    return 0; 
 }
 
-// ---- http ----
 
-// Common acquisition of a free http slot for http.get / http.request. The callback is consumed
-// from the top of the stack (luaL_ref).
+
+
+
 inline HttpSlot* acquireHttpSlot(lua_State* L)
 {
     HttpSlot* slot = nullptr;
@@ -1031,12 +1031,12 @@ inline HttpSlot* acquireHttpSlot(lua_State* L)
     slot->processDone = false;
     slot->pid = 0;
     slot->scriptIndex = static_cast<int>(lua_tointeger(L, lua_upvalueindex(1)));
-    lua_pushvalue(L, -1); // the callback function (top of stack)
+    lua_pushvalue(L, -1); 
     slot->callbackRef = luaL_ref(L, LUA_REGISTRYINDEX);
     return slot;
 }
 
-// Appends `value` to a curl config file, escaped for the -K config format (backslash and quote).
+
 static void appendConfigValue(int fd, const char* value) noexcept
 {
     for (const char* p = value; *p != '\0'; ++p) {
@@ -1047,9 +1047,9 @@ static void appendConfigValue(int fd, const char* value) noexcept
     }
 }
 
-// Writes the curl -K config for a request. Everything script-controlled (url, headers, body
-// reference) goes through the CONFIG FILE, never the shell command line, so the command stays a
-// fixed string and injection is impossible by construction.
+
+
+
 static bool writeCurlConfig(const char* configPath, const char* method, const char* url,
     const char* const* headers, int headerCount, const char* bodyPath) noexcept
 {
@@ -1078,19 +1078,19 @@ inline int l_httpGet(lua_State* L)
     const char* url = luaL_checkstring(L, 1);
     luaL_checktype(L, 2, LUA_TFUNCTION);
 
-    // The URL lands inside the curl config file (single-quoted) - forbid everything that could
-    // break out of it (scripts receive arbitrary text from anywhere they fetch from, but the URL
-    // itself is script-controlled; still, fail closed).
+    
+    
+    
     for (const char* p = url; *p != '\0'; ++p) {
         if (*p == '\'' || *p == '"' || *p == '`' || *p == '\n' || *p == '\r' || *p == '\\' || static_cast<unsigned char>(*p) < 0x20)
             return luaL_error(L, "http.get: url contains a forbidden character");
     }
 
-    // The callback is ALREADY on top at entry ([url, callback]) - acquireHttpSlot refs it
-    // directly (pushvalue(-1) + luaL_ref, net zero). NOTE: do NOT push a copy here before
-    // acquireHttpSlot - the copy used to leak (never popped on the success path), and that
-    // one leaked stack value under the armed count hook wedged the VM's C-call frame
-    // resolution into an underflow (frozen re-dispatch loop + stack-base corruption, 2026-09-11/12).
+    
+    
+    
+    
+    
     HttpSlot* slot = acquireHttpSlot(L);
     if (!slot) {
         return luaL_error(L, "http.get: too many concurrent requests");
@@ -1115,8 +1115,8 @@ inline int l_httpGet(lua_State* L)
     return 0;
 }
 
-// http.request(method, url [, options,] callback) - the full-featured async request.
-// options = { headers = {"Key: value", ...}, body = "..." }.
+
+
 inline int l_httpRequest(lua_State* L)
 {
     const char* method = luaL_checkstring(L, 1);
@@ -1174,8 +1174,8 @@ inline int l_httpRequest(lua_State* L)
     }
     luaL_checktype(L, callbackIndex, LUA_TFUNCTION);
 
-    // Same no-leak contract as http.get: the callback is on top, acquireHttpSlot refs it
-    // directly. (The old pushed copy leaked on the success path - see the http.get note.)
+    
+    
     HttpSlot* slot = acquireHttpSlot(L);
     if (!slot) {
         return luaL_error(L, "http.request: too many concurrent requests");
@@ -1222,7 +1222,7 @@ inline int l_httpRequest(lua_State* L)
     return 0;
 }
 
-// ---- gui (script-owned menu items; values live in Script::guiItems) ----
+
 
 inline const char* checkGuiLabel(lua_State* L, int index)
 {
@@ -1260,7 +1260,7 @@ inline int l_guiCheckbox(lua_State* L)
     std::strncpy(item.label, label, kMaxGuiLabel - 1);
     item.boolValue = defaultValue;
     if (const auto* saved = findPendingGuiDefault(script.name, label, 'c'))
-        item.boolValue = saved->boolValue; // sidecar value wins over the script default
+        item.boolValue = saved->boolValue; 
     lua_pushinteger(L, script.guiItemCount);
     return 1;
 }
@@ -1292,10 +1292,10 @@ inline int l_guiSlider(lua_State* L)
     return 1;
 }
 
-// gui.dropdown(label, options [, defaultIndex]) - a select row in the script's menu section.
-// Options are copied into the GuiItem (both the char storage and a pointer table, so the popup
-// layer can render across frames); gui.get returns the selected INDEX. The saved sidecar value
-// is applied by label like every other gui item.
+
+
+
+
 inline int l_guiDropdown(lua_State* L)
 {
     Script& script = selfScript(L);
@@ -1353,7 +1353,7 @@ inline int l_guiGet(lua_State* L)
         lua_pushstring(L, item.textValue);
         return 1;
     }
-    lua_pushinteger(L, item.intValue); // slider, dropdown, keybind
+    lua_pushinteger(L, item.intValue); 
     return 1;
 }
 
@@ -1363,7 +1363,7 @@ inline int l_guiSet(lua_State* L)
     if (item.type == GuiItem::Type::Checkbox) {
         item.boolValue = lua_toboolean(L, 2) != 0;
     } else if (item.type == GuiItem::Type::Dropdown) {
-        // Dropdowns index 0..optionCount-1 (NOT the slider min/max range, which stays 0/0).
+        
         const int value = static_cast<int>(luaL_checkinteger(L, 2));
         item.intValue = value < 0 ? 0 : (value >= item.optionCount ? item.optionCount - 1 : value);
     } else if (item.type == GuiItem::Type::Keybind) {
@@ -1409,8 +1409,8 @@ inline int checkBindValue(lua_State* L, int index)
     return value;
 }
 
-// gui.color(label [, r, g, b [, a]]) - an RGBA picker row (the menu's shared color-picker
-// popover); gui.get returns r, g, b, a. Values persist in the sidecar like every gui item.
+
+
 inline int l_guiColor(lua_State* L)
 {
     Script& script = selfScript(L);
@@ -1436,8 +1436,8 @@ inline int l_guiColor(lua_State* L)
     return 1;
 }
 
-// gui.keybind(label [, default]) - a key-capture row (the menu's shared keybind pill);
-// gui.get returns the Bind int (0 = off). Pair with client.is_bind_down to read it.
+
+
 inline int l_guiKeybind(lua_State* L)
 {
     Script& script = selfScript(L);
@@ -1459,8 +1459,8 @@ inline int l_guiKeybind(lua_State* L)
     return 1;
 }
 
-// gui.float_slider(label, min, max [, default]) - a fractional slider row (the menu's shared
-// slider visuals with a decimal pill); gui.get returns a number.
+
+
 inline int l_guiFloatSlider(lua_State* L)
 {
     Script& script = selfScript(L);
@@ -1493,7 +1493,7 @@ inline int l_guiFloatSlider(lua_State* L)
     return 1;
 }
 
-// gui.text_input(label [, default]) - a single-line text row; gui.get returns the string.
+
 inline int l_guiTextInput(lua_State* L)
 {
     Script& script = selfScript(L);
@@ -1522,11 +1522,11 @@ inline int l_guiTextInput(lua_State* L)
     return 1;
 }
 
-// ---- entity (schema-driven reads through the EntryPoints-installed bridges) ----
 
-inline constexpr int kMaxEntityIndex = 0x7FFE;    // cs2::kMaxValidEntityIndex
-inline constexpr int kMaxSchemaFieldOffset = 0x100000; // 1 MiB sanity cap on schema offsets
-inline constexpr int kMaxEntityStringBytes = 128; // m_iszPlayerName-scale fixed char arrays
+
+inline constexpr int kMaxEntityIndex = 0x7FFE;    
+inline constexpr int kMaxSchemaFieldOffset = 0x100000; 
+inline constexpr int kMaxEntityStringBytes = 128; 
 
 inline bool entityBridgesAvailable()
 {
@@ -1579,9 +1579,9 @@ inline int l_getPlayerPawn(lua_State* L)
     return 1;
 }
 
-// Non-arg-reading core shared by the explicit-class and candidate-list (find_*) readers:
-// validates and resolves (entityIndex, className, fieldName). Returns false with nil pushed
-// (when L != nullptr) for unavailable data; errors through L on malformed arguments.
+
+
+
 inline bool resolveEntityPropIn(int entityIndex, const char* className, const char* fieldName,
     const std::byte** outEntity, int* outOffset, lua_State* L)
 {
@@ -1608,9 +1608,9 @@ inline bool resolveEntityPropIn(int entityIndex, const char* className, const ch
     return true;
 }
 
-// Validates the common arguments and resolves the schema offset + entity pointer for
-// (entityIndex, className, fieldName). Returns false with nil pushed when the entity/schema
-// data is unavailable (not in a game, unknown field); errors on malformed arguments.
+
+
+
 inline bool resolveEntityProp(lua_State* L, const std::byte** outEntity, int* outOffset)
 {
     const int entityIndex = static_cast<int>(luaL_checkinteger(L, 1));
@@ -1650,11 +1650,11 @@ inline int l_getPropString(lua_State* L)
     if (!resolveEntityProp(L, &entity, &offset))
         return 1;
     char buffer[kMaxEntityStringBytes + 1] = {};
-    std::memcpy(buffer, entity + offset, kMaxEntityStringBytes); // fixed in-object char array
+    std::memcpy(buffer, entity + offset, kMaxEntityStringBytes); 
     std::size_t length = 0;
     while (length < kMaxEntityStringBytes && buffer[length] != '\0') {
         if (static_cast<unsigned char>(buffer[length]) < 0x20) {
-            length = 0; // control byte - not a clean string, refuse rather than guess
+            length = 0; 
             break;
         }
         ++length;
@@ -1667,8 +1667,8 @@ inline int l_getPropString(lua_State* L)
     return 1;
 }
 
-// Vector prop read: returns x, y, z as three numbers (or nil when the entity/schema data is
-// unavailable). Same read-only rules as get_prop - callable from any callback.
+
+
 inline int l_getPropVector(lua_State* L)
 {
     const std::byte* entity = nullptr;
@@ -1683,9 +1683,9 @@ inline int l_getPropVector(lua_State* L)
     return 3;
 }
 
-// entity.get_class(index) - the entity's most-derived schema class name ("C_CSPlayerPawn"
-// etc.) through the game's own entity-class map. Nil when invalid/unavailable. Use it to
-// discover which declaring class a field lives on before calling get_prop.
+
+
+
 inline int l_getEntityClass(lua_State* L)
 {
     const int entityIndex = static_cast<int>(luaL_checkinteger(L, 1));
@@ -1697,10 +1697,10 @@ inline int l_getEntityClass(lua_State* L)
     return 1;
 }
 
-// Candidate-list readers: entity.find_prop(index, field, {"C_CSPlayerPawn", "C_BasePlayerPawn",
-// "C_BaseEntity"}) tries each declaring class in order and returns the value plus the class
-// that matched (value, className), or nil when no candidate has the field. Same read-only
-// rules as get_prop - callable from any callback.
+
+
+
+
 static char findPropWinnerClass[96] = {};
 
 inline bool resolveEntityPropAny(lua_State* L, const std::byte** outEntity, int* outOffset)
@@ -1802,8 +1802,8 @@ inline int l_findPropVector(lua_State* L)
     return 3;
 }
 
-// Raw keyboard poll: SDL scancode -> held?. Read-only (the same state the menu's bind system
-// polls), safe from any callback. Scripts pair it with a dropdown of scancode names.
+
+
 inline int l_isKeyDown(lua_State* L)
 {
     const int scancode = static_cast<int>(luaL_checkinteger(L, 1));
@@ -1811,9 +1811,9 @@ inline int l_isKeyDown(lua_State* L)
     return 1;
 }
 
-// The write counterparts to get_prop/get_prop_float - same 4-byte poke, same schema-verified
-// offset. Writes land in live game memory, so they are enforced to the game thread only (the
-// same rule client.exec follows); reads stay callable from any callback.
+
+
+
 inline int l_setProp(lua_State* L)
 {
     if (dispatchThreadKind.load(std::memory_order_relaxed) != 1)
@@ -1840,9 +1840,9 @@ inline int l_setPropFloat(lua_State* L)
     return 0;
 }
 
-// entity.set_prop_string(index, class, field, value) - fixed char-array WRITE (game-thread
-// callbacks only). The value is truncated to fit and always NUL-terminated; the tail of the
-// field is zeroed so no stale bytes survive a shorter write.
+
+
+
 inline int l_setPropString(lua_State* L)
 {
     if (dispatchThreadKind.load(std::memory_order_relaxed) != 1)
@@ -1861,8 +1861,8 @@ inline int l_setPropString(lua_State* L)
     return 0;
 }
 
-// entity.set_prop_vector(index, class, field, x, y, z) - 12-byte vector WRITE (game-thread
-// callbacks only).
+
+
 inline int l_setPropVector(lua_State* L)
 {
     if (dispatchThreadKind.load(std::memory_order_relaxed) != 1)
@@ -1880,7 +1880,7 @@ inline int l_setPropVector(lua_State* L)
     return 0;
 }
 
-// ---- net (game-server endpoint + raw datagram send through the original sendto) ----
+
 
 inline int l_netServer(lua_State* L)
 {
@@ -1888,7 +1888,7 @@ inline int l_netServer(lua_State* L)
     sockaddr_storage addr{};
     socklen_t addrLen = 0;
     if (!netlag_hook::getServerEndpoint(&fd, &addr, &addrLen))
-        return 0; // nil - no endpoint captured (not connected)
+        return 0; 
 
     char ip[INET6_ADDRSTRLEN] = {};
     int port = 0;
@@ -1923,13 +1923,13 @@ inline int l_netSendRaw(lua_State* L)
     sockaddr_storage addr{};
     socklen_t addrLen = 0;
     if (!netlag_hook::getServerEndpoint(&fd, &addr, &addrLen))
-        return 0; // nil - not connected
+        return 0; 
     lua_pushinteger(L, netlag_hook::sendRawToServer(reinterpret_cast<const unsigned char*>(data), length, static_cast<std::uint32_t>(count)));
     return 1;
 }
 
-// Parses "a.b.c.d" or "a.b.c.d/prefix" into a host-byte-order IPv4 (host bits masked off).
-// Returns false on anything else - malformed input just does not join the block list.
+
+
 inline bool parseIpv4Cidr(const char* text, std::uint32_t* out) noexcept
 {
     unsigned parts[4] = {};
@@ -1969,9 +1969,9 @@ inline bool parseIpv4Cidr(const char* text, std::uint32_t* out) noexcept
     return true;
 }
 
-// net.set_blocked_ips({"155.133.248.36", ...}) - publish the region-filter block list. String
-// table entries are parsed (deduped, sorted) into the seqlock-protected list the send hook
-// consults; see NetLag.h net_region. Returns the number of entries kept.
+
+
+
 inline int l_netSetBlockedIps(lua_State* L)
 {
     luaL_checktype(L, 1, LUA_TTABLE);
@@ -2022,10 +2022,10 @@ inline int l_netStats(lua_State* L)
     return 1;
 }
 
-// net.set_delay(ms) - publish a script-driven send-side delay hold (0 = off, max 500ms).
-// Lock-free atomic publish like the rest of the net bridge; the send hook applies
-// max(menu card ms, script ms) while the NET LAG master switch is on (see NetLag.h
-// isScriptDelayActive). Callable from any callback - no game-thread state is touched.
+
+
+
+
 inline int l_netSetDelay(lua_State* L)
 {
     const int ms = static_cast<int>(luaL_checkinteger(L, 1));
@@ -2041,27 +2041,27 @@ inline int l_netGetDelay(lua_State* L)
     return 1;
 }
 
-// ---- steam (Steamworks through the game's own libsteam_api.so) ----
-//
-// Script-level equivalent of the CSGO "gamesense/steamworks" require - enough to port the
-// invite-cooldown-bypass luas: invites are issued with direct
-// ISteamMatchmaking::InviteUserToLobby calls, so the CS2 party UI (which owns the client-side
-// invite cooldown) is bypassed by construction - no Panorama ActionInviteFriend hook needed.
-//
-// No CS2 code is hooked: everything goes through the FLAT C-ABI accessors this libsteam_api
-// exports (SteamAPI_SteamUser_v023 / SteamAPI_SteamFriends_v018 / SteamAPI_SteamMatchmaking_v009
-// return the singletons; SteamAPI_ISteam*_* are the methods), so no vtable slot or interface
-// version string has to be guessed. The library is located by scanning our own /proc/self/maps -
-// the same proven pattern ChatTools.h uses (plain dlopen-by-soname is not reliable here).
-// ChatTools resolves the same file for the persona feature; the scan is duplicated here on
-// purpose so the Lua core stays self-contained.
-//
-// CSteamIDs cross the boundary as STRINGS (formatSteamId64/parseSteamId64 in Lua.cpp).
 
-inline constexpr unsigned long long kSteamFriendFlagImmediate = 4; // k_EFriendFlagImmediate
-inline constexpr unsigned long long kSteamFriendFlagAll = 0xFFFF;  // k_EFriendFlagAll
 
-// FriendGameInfo_t (Steamworks SDK layout - CGameID, IP, ports, CSteamID lobby).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+inline constexpr unsigned long long kSteamFriendFlagImmediate = 4; 
+inline constexpr unsigned long long kSteamFriendFlagAll = 0xFFFF;  
+
+
 struct FriendGameInfo {
     std::uint64_t gameId = 0;
     std::uint32_t ip = 0;
@@ -2073,43 +2073,43 @@ struct FriendGameInfo {
 struct SteamApi {
     bool resolved = false;
     bool ok = false;
-    double lastAttempt = 0.0; // failure retries are throttled
-    char lastError[160] = {}; // the resolve failure reason, shown by steam.status()
+    double lastAttempt = 0.0; 
+    char lastError[160] = {}; 
 
-    void* user = nullptr;         // ISteamUser023
-    void* friends = nullptr;      // ISteamFriends018
-    void* matchmaking = nullptr;  // ISteamMatchmaking009
+    void* user = nullptr;         
+    void* friends = nullptr;      
+    void* matchmaking = nullptr;  
 
-    std::uint64_t (*getSteamId)(void*) = nullptr;                          // ISteamUser::GetSteamID
-    const char* (*getPersonaName)(void*) = nullptr;                        // ISteamFriends::GetPersonaName (sanity)
-    int (*getFriendCount)(void*, int) = nullptr;                           // GetFriendCount
-    std::uint64_t (*getFriendByIndex)(void*, int, int) = nullptr;          // GetFriendByIndex
-    const char* (*getFriendName)(void*, std::uint64_t) = nullptr;          // GetFriendPersonaName
-    int (*getFriendState)(void*, std::uint64_t) = nullptr;                 // GetFriendPersonaState
-    bool (*getFriendGame)(void*, std::uint64_t, FriendGameInfo*) = nullptr; // GetFriendGamePlayed
-    const char* (*getRichPresence)(void*, std::uint64_t, const char*) = nullptr; // GetFriendRichPresence
-    int (*getRichPresenceKeyCount)(void*) = nullptr;                       // GetFriendRichPresenceKeyCount
-    const char* (*getRichPresenceKey)(void*, int) = nullptr;               // GetFriendRichPresenceKeyByIndex
-    void (*requestRichPresence)(void*, std::uint64_t) = nullptr;           // RequestFriendRichPresence
-    bool (*inviteToLobby)(void*, std::uint64_t, std::uint64_t) = nullptr;  // InviteUserToLobby
-    int (*getLobbyMemberCount)(void*, std::uint64_t) = nullptr;            // GetNumLobbyMembers
-    std::uint64_t (*getLobbyMember)(void*, std::uint64_t, int) = nullptr;  // GetLobbyMemberByIndex
-    std::uint64_t (*getLobbyOwner)(void*, std::uint64_t) = nullptr;        // GetLobbyOwner
+    std::uint64_t (*getSteamId)(void*) = nullptr;                          
+    const char* (*getPersonaName)(void*) = nullptr;                        
+    int (*getFriendCount)(void*, int) = nullptr;                           
+    std::uint64_t (*getFriendByIndex)(void*, int, int) = nullptr;          
+    const char* (*getFriendName)(void*, std::uint64_t) = nullptr;          
+    int (*getFriendState)(void*, std::uint64_t) = nullptr;                 
+    bool (*getFriendGame)(void*, std::uint64_t, FriendGameInfo*) = nullptr; 
+    const char* (*getRichPresence)(void*, std::uint64_t, const char*) = nullptr; 
+    int (*getRichPresenceKeyCount)(void*) = nullptr;                       
+    const char* (*getRichPresenceKey)(void*, int) = nullptr;               
+    void (*requestRichPresence)(void*, std::uint64_t) = nullptr;           
+    bool (*inviteToLobby)(void*, std::uint64_t, std::uint64_t) = nullptr;  
+    int (*getLobbyMemberCount)(void*, std::uint64_t) = nullptr;            
+    std::uint64_t (*getLobbyMember)(void*, std::uint64_t, int) = nullptr;  
+    std::uint64_t (*getLobbyOwner)(void*, std::uint64_t) = nullptr;        
 
-    // Avatar surface (OPTIONAL members - resolved when the exports exist; never part of the
-    // hard-missing check, so one absent export cannot kill every steam.* binding for a session).
-    int (*getLargeAvatar)(void*, std::uint64_t) = nullptr;           // GetLargeFriendAvatar (184x184)
-    int (*getMediumAvatar)(void*, std::uint64_t) = nullptr;          // GetMediumFriendAvatar (64x64)
-    bool (*requestUserInfo)(void*, std::uint64_t, bool) = nullptr;   // RequestUserInformation
-    void* utils = nullptr;                                           // ISteamUtils (image accessors)
-    bool (*getImageSize)(void*, int, unsigned int*, unsigned int*) = nullptr;  // GetImageSize
-    bool (*getImageRgba)(void*, int, unsigned char*, int) = nullptr;           // GetImageRGBA
+    
+    
+    int (*getLargeAvatar)(void*, std::uint64_t) = nullptr;           
+    int (*getMediumAvatar)(void*, std::uint64_t) = nullptr;          
+    bool (*requestUserInfo)(void*, std::uint64_t, bool) = nullptr;   
+    void* utils = nullptr;                                           
+    bool (*getImageSize)(void*, int, unsigned int*, unsigned int*) = nullptr;  
+    bool (*getImageRgba)(void*, int, unsigned char*, int) = nullptr;           
 };
 
 static SteamApi steamApi;
 
-// Anomaly-log line for the steam resolve (plain posix append to /tmp/gamesense_gui.log - the
-// same contract as gui_log, but without pulling the platform-API mock surface into the tests).
+
+
 static void luaSteamLog(const char* fmt, ...) noexcept
 {
     char steamLogPath[ns_paths::kMaxPath];
@@ -2129,15 +2129,15 @@ static void luaSteamLog(const char* fmt, ...) noexcept
     ::close(fd);
 }
 
-// Resolves the whole steam API on first use. The ACTUAL loaded libsteam_api.so path is found by
-// scanning /proc/self/maps (chunked pread with a carry-over line buffer - the same proven pattern
-// ChatTools.h uses, including the "steam library paths contain spaces" trap).
+
+
+
 static bool resolveSteamApi() noexcept
 {
     if (steamApi.ok)
         return true;
-    // Failures retry (throttled): the resolve can legitimately fail during early startup before
-    // SteamAPI_Init, and a permanent cache would kill steam.* for the whole session.
+    
+    
     if (steamApi.resolved && luaNow() - steamApi.lastAttempt < 5.0)
         return false;
     steamApi.resolved = true;
@@ -2145,7 +2145,7 @@ static bool resolveSteamApi() noexcept
 
     char steamApiPath[512] = "";
     {
-        // Lua.cpp does its file IO with plain posix calls (see the gui sidecar path) - same here.
+        
         const int fd = ::open("/proc/self/maps", O_RDONLY);
         if (fd >= 0) {
             constexpr std::size_t kCarry = 1024;
@@ -2176,8 +2176,8 @@ static bool resolveSteamApi() noexcept
                     line[lineLength] = '\0';
                     carryLength = 0;
 
-                    // path = the first '/' in the line - the numeric fields before it never
-                    // contain slashes, and Steam library paths contain spaces
+                    
+                    
                     const char* path = line;
                     for (std::size_t j = 0; j < lineLength; ++j) {
                         if (line[j] == '/') {
@@ -2196,14 +2196,14 @@ static bool resolveSteamApi() noexcept
 
                 if (found)
                     break;
-                // carry the trailing partial line into the next chunk
+                
                 carryLength = 0;
                 const std::size_t remaining = static_cast<std::size_t>(got) - lineBegin;
                 if (remaining > 0 && remaining < kCarry) {
                     std::memcpy(carry, chunk + lineBegin, remaining);
                     carryLength = remaining;
                 } else if (remaining >= kCarry) {
-                    carryLength = 0; // pathological line - skip it rather than overflow
+                    carryLength = 0; 
                 }
             }
             ::close(fd);
@@ -2216,9 +2216,9 @@ static bool resolveSteamApi() noexcept
         return false;
     }
 
-    // dlopen by full path (RTLD_NOLOAD - it is already loaded and kept alive by the game's own
-    // refcount, so the addresses stay valid after the balanced dlclose in the dtor, the same
-    // lifetime assumption memory.pattern_scan makes).
+    
+    
+    
     const LinuxDynamicLibrary steamLib{steamApiPath};
     if (!steamLib) {
         std::snprintf(steamApi.lastError, sizeof(steamApi.lastError), "could not dlopen %s (NOLOAD miss)", steamApiPath);
@@ -2252,8 +2252,8 @@ static bool resolveSteamApi() noexcept
     steamApi.getLobbyMember = method("SteamAPI_ISteamMatchmaking_GetLobbyMemberByIndex").as<std::uint64_t (*)(void*, std::uint64_t, int)>();
     steamApi.getLobbyOwner = method("SteamAPI_ISteamMatchmaking_GetLobbyOwner").as<std::uint64_t (*)(void*, std::uint64_t)>();
 
-    // Optional avatar surface - resolved only when these exports exist (they do in the game's
-    // own libsteam_api.so; older runtimes ship the same flat names).
+    
+    
     steamApi.getLargeAvatar = method("SteamAPI_ISteamFriends_GetLargeFriendAvatar").as<int (*)(void*, std::uint64_t)>();
     steamApi.getMediumAvatar = method("SteamAPI_ISteamFriends_GetMediumFriendAvatar").as<int (*)(void*, std::uint64_t)>();
     steamApi.requestUserInfo = method("SteamAPI_ISteamFriends_RequestUserInformation").as<bool (*)(void*, std::uint64_t, bool)>();
@@ -2285,13 +2285,13 @@ static bool resolveSteamApi() noexcept
         return false;
     }
 
-    // Sanity: the user interface must return a real SteamID64 (the universe+account-type bits
-    // 0x0110000100000000 = 0x011000010 << 32 in the high half) and the friends interface the
-    // live persona name - protects against an accessor/ABI surprise before any script sends an
-    // invite.
+    
+    
+    
+    
     const std::uint64_t ownId = steamApi.getSteamId(steamApi.user);
     const char* persona = steamApi.getPersonaName(steamApi.friends);
-    constexpr std::uint64_t kSteamId64HighBits = 0x0110000100000000ULL >> 32; // universe+type
+    constexpr std::uint64_t kSteamId64HighBits = 0x0110000100000000ULL >> 32; 
     if (ownId == 0 || (ownId >> 32) != kSteamId64HighBits || !persona || persona[0] == '\0') {
         std::snprintf(steamApi.lastError, sizeof(steamApi.lastError), "interface sanity check failed (id %llu)", static_cast<unsigned long long>(ownId));
         VerifyConsole::write(1.0f, "lua", "steam: %s", steamApi.lastError);
@@ -2305,7 +2305,7 @@ static bool resolveSteamApi() noexcept
     return true;
 }
 
-// steam.status() -> diagnostic string: "ok", or why the steam API is unavailable.
+
 inline int l_steamStatus(lua_State* L)
 {
     if (resolveSteamApi()) {
@@ -2316,10 +2316,10 @@ inline int l_steamStatus(lua_State* L)
     return 1;
 }
 
-// Friend enumeration with a flag fallback: k_EFriendFlagImmediate returned 0 in the CS2 steam
-// context in-game (the persona/lobby calls on the SAME interface work), so retry with the All
-// mask before giving up. `activeFlag` remembers which mask answered for the paired
-// GetFriendByIndex calls.
+
+
+
+
 static int steamFriendCount(int* activeFlag) noexcept
 {
     int count = steamApi.getFriendCount(steamApi.friends, static_cast<int>(kSteamFriendFlagImmediate));
@@ -2340,8 +2340,8 @@ static int steamFriendCount(int* activeFlag) noexcept
     return count;
 }
 
-// True when `ownId` is a member of `lobby` (the lobby data of lobbies we are a member of is
-// local, so this is a cheap check; an invalid/foreign lobby answers with 0 members).
+
+
 static std::uint64_t lobbyIfMember(std::uint64_t lobby, std::uint64_t ownId) noexcept
 {
     if (lobby == 0)
@@ -2354,7 +2354,7 @@ static std::uint64_t lobbyIfMember(std::uint64_t lobby, std::uint64_t ownId) noe
     return 0;
 }
 
-// Extracts a plausible lobby id (a 15-20 digit run) from a rich presence string.
+
 static std::uint64_t parseLobbyCandidate(const char* text) noexcept
 {
     if (!text)
@@ -2374,22 +2374,22 @@ static std::uint64_t parseLobbyCandidate(const char* text) noexcept
             best = value;
             break;
         }
-        // skip the digit run (safe: the loop below re-finds a valid starting digit)
+        
         while (*p >= '0' && *p <= '9')
             ++p;
-        --p; // compensate the outer ++p
+        --p; 
     }
     return best;
 }
 
-// Current Steam lobby id. Three sources, in order (CS2 only fills the friend-game lobby field
-// once a server is joined - in the main menu the party lobby needs the fallbacks):
-//   1. GetFriendGamePlayed on OUR OWN id (works in-game; the party lobby rides rich presence)
-//   2. our rich presence strings ("connect"/"status"/"game") - a digit run validated by
-//      checking we are actually a member of that lobby
-//   3. a friends scan - a friend sitting in our party publishes the shared lobby id through
-//      their own game info; membership check confirms it is ours
-// The successful method is logged once for diagnosis.
+
+
+
+
+
+
+
+
 static std::uint64_t currentLobbyId() noexcept
 {
     if (!steamApi.ok || !steamApi.user || !steamApi.friends)
@@ -2400,7 +2400,7 @@ static std::uint64_t currentLobbyId() noexcept
     if (steamApi.getFriendGame(steamApi.friends, ownId, &info) && info.lobby != 0)
         return info.lobby;
 
-    // Fallback 2: rich presence. CS2 puts the connect info into these keys in the menu.
+    
     static const char* const kKeys[] = { "connect", "status", "game", "steam_player_group" };
     for (const char* key : kKeys) {
         const char* value = steamApi.getRichPresence(steamApi.friends, ownId, key);
@@ -2416,7 +2416,7 @@ static std::uint64_t currentLobbyId() noexcept
         }
     }
 
-    // Fallback 3: a friend in our own party publishes the shared lobby id in their game info.
+    
     int scanFlag = 0;
     const int count = steamFriendCount(&scanFlag);
     for (int i = 0; i < count; ++i) {
@@ -2443,8 +2443,8 @@ inline void pushSteamId(lua_State* L, std::uint64_t sid)
     lua_pushstring(L, buffer);
 }
 
-// Accepts a SteamID64 as a string (the transport every other binding returns) or as a Lua
-// integer (convenience for hand-built test ids).
+
+
 inline bool checkSteamIdArg(lua_State* L, int index, std::uint64_t* out)
 {
     const int type = lua_type(L, index);
@@ -2526,9 +2526,9 @@ inline int l_steamGetFriendGame(lua_State* L)
     return 1;
 }
 
-// steam.get_friend_presence(sid) -> { key = value, ... } - the friend's current rich presence.
-// Empty table when nothing is cached; pair with steam.request_friend_presence (the data lands
-// on a later Steam callback, so the NEXT rescan sees it).
+
+
+
 inline int l_steamGetFriendPresence(lua_State* L)
 {
     std::uint64_t sid = 0;
@@ -2548,8 +2548,8 @@ inline int l_steamGetFriendPresence(lua_State* L)
     return 1;
 }
 
-// steam.request_friend_presence(sid) - ask Steam to refresh a friend's rich presence (the
-// response arrives asynchronously; read it on a later rescan).
+
+
 inline int l_steamRequestFriendPresence(lua_State* L)
 {
     std::uint64_t sid = 0;
@@ -2559,8 +2559,8 @@ inline int l_steamRequestFriendPresence(lua_State* L)
     return 0;
 }
 
-// The bypass primitive: a direct Steam lobby invite. Deliberately no CS2 party/panorama code in
-// the path - that is the whole point (whatever cooldown the CS2 UI enforces never runs).
+
+
 inline int l_steamInvite(lua_State* L)
 {
     std::uint64_t sid = 0;
@@ -2568,7 +2568,7 @@ inline int l_steamInvite(lua_State* L)
         return 0;
     const std::uint64_t lobby = currentLobbyId();
     if (lobby == 0)
-        return 0; // nil/false-ish: no open lobby to invite into
+        return 0; 
     lua_pushboolean(L, steamApi.inviteToLobby(steamApi.matchmaking, lobby, sid) ? 1 : 0);
     return 1;
 }
@@ -2598,14 +2598,14 @@ inline int l_steamLobbyOwner(lua_State* L)
     return 1;
 }
 
-// ---- steam avatars (GetLarge/MediumFriendAvatar + the ISteamUtils image accessors) ----
-//
-// The avatar handle is only valid after Steam cached the user's persona data; for non-friends
-// (any in-game player) call steam.request_friend_info(sid) once and the data lands a few frames
-// later. RGBA bytes out of GetImageRGBA are top-down RGBA8 - exactly what renderer.load_rgba
-// wants, so no re-encoding step exists anywhere in the path.
 
-// steam.request_friend_info(sid) -> true when the async persona+avatar request was issued.
+
+
+
+
+
+
+
 inline int l_steamRequestFriendInfo(lua_State* L)
 {
     std::uint64_t sid = 0;
@@ -2615,8 +2615,8 @@ inline int l_steamRequestFriendInfo(lua_State* L)
     return 1;
 }
 
-// steam.get_friend_avatar(sid) -> image handle (int) or nil while the avatar is not cached.
-// Prefers the 184x184 handle, falls back to 64x64.
+
+
 inline int l_steamGetFriendAvatar(lua_State* L)
 {
     std::uint64_t sid = 0;
@@ -2635,7 +2635,7 @@ inline int l_steamGetFriendAvatar(lua_State* L)
     return 1;
 }
 
-// steam.avatar_size(imageHandle) -> width, height, or nil.
+
 inline int l_steamAvatarSize(lua_State* L)
 {
     const int handle = static_cast<int>(luaL_checkinteger(L, 1));
@@ -2650,7 +2650,7 @@ inline int l_steamAvatarSize(lua_State* L)
     return 2;
 }
 
-// steam.avatar_rgba(imageHandle) -> raw RGBA8 bytes (width*height*4), or nil.
+
 inline int l_steamAvatarRgba(lua_State* L)
 {
     const int handle = static_cast<int>(luaL_checkinteger(L, 1));
@@ -2674,18 +2674,18 @@ inline int l_steamAvatarRgba(lua_State* L)
     return 1;
 }
 
-// ---- images (renderer.load_image; stb decode + the generic Vulkan texture pool) ----
 
-inline constexpr int kMaxLuaTextures = 8; // VulkanHook::lua_texture::kMaxTextures (bridge, kept in sync)
+
+inline constexpr int kMaxLuaTextures = 8; 
 
 struct LuaTexture {
-    int scriptIndex = -1; // owning script slot, -1 = free
+    int scriptIndex = -1; 
     int width = 0;
     int height = 0;
 };
 static LuaTexture luaTextures[kMaxLuaTextures];
 
-// Releases every texture owned by a script (unloadScript path, mutex held).
+
 inline void releaseScriptTextures(int scriptIndex) noexcept
 {
     for (int i = 0; i < kMaxLuaTextures; ++i) {
@@ -2699,9 +2699,9 @@ inline void releaseScriptTextures(int scriptIndex) noexcept
         scripts[scriptIndex].textureSlots[i] = 0;
 }
 
-// Finds a free per-script slot + pool slot and stages `pixels` (RGBA8; ownership passes to the
-// Vulkan uploader, which free()s it) into the Vulkan texture pool. Returns the 1-based texture
-// id, -1 when the script slots are full, -2 when the pool is exhausted, -3 without a bridge.
+
+
+
 inline int stageLuaTexture(Script& script, int scriptIndex, unsigned char* pixels, int width, int height)
 {
     int scriptSlot = -1;
@@ -2726,12 +2726,12 @@ inline int stageLuaTexture(Script& script, int scriptIndex, unsigned char* pixel
 
     luaTextureRequest(poolIndex, pixels, width, height);
     luaTextures[poolIndex] = LuaTexture{scriptIndex, width, height};
-    script.textureSlots[scriptSlot] = poolIndex + 1; // 1-based id
+    script.textureSlots[scriptSlot] = poolIndex + 1; 
     return poolIndex + 1;
 }
 
-// renderer.load_image(data) -> texture id or nil. Decodes PNG/JPEG/GIF/BMP bytes synchronously
-// (one-time cost at script load; the GPU upload is async and rideable via image_ready).
+
+
 inline int l_loadImage(lua_State* L)
 {
     std::size_t length = 0;
@@ -2741,13 +2741,13 @@ inline int l_loadImage(lua_State* L)
 
     int width = 0;
     int height = 0;
-    // stb decodes with the C allocator - the Vulkan uploader takes ownership (free()s it).
+    
     unsigned char* pixels = stbi_load_from_memory(reinterpret_cast<const unsigned char*>(data),
         static_cast<int>(length), &width, &height, nullptr, 4);
     if (!pixels || width <= 0 || height <= 0 || width > 8192 || height > 8192) {
         if (pixels)
             std::free(pixels);
-        return 0; // nil - undecodable
+        return 0; 
     }
     if (!luaTextureRequest) {
         std::free(pixels);
@@ -2764,9 +2764,9 @@ inline int l_loadImage(lua_State* L)
     return 1;
 }
 
-// renderer.load_rgba(width, height, data) -> texture id or nil. Stages ALREADY-DECODED RGBA8
-// bytes (width*height*4) - the path for images we hold in raw form, e.g. Steam avatars via
-// steam.avatar_rgba (the stb decode of load_image only accepts encoded formats).
+
+
+
 inline int l_loadImageRgba(lua_State* L)
 {
     const int width = static_cast<int>(luaL_checkinteger(L, 1));
@@ -2780,8 +2780,8 @@ inline int l_loadImageRgba(lua_State* L)
     if (!luaTextureRequest)
         return luaL_error(L, "renderer.load_rgba: texture bridge not installed");
 
-    // The Vulkan uploader owns (and free()s) the buffer, so hand it a private copy of the Lua
-    // string bytes.
+    
+    
     unsigned char* pixels = static_cast<unsigned char*>(std::malloc(length));
     if (!pixels)
         return 0;
@@ -2841,7 +2841,7 @@ inline int l_renderImage(lua_State* L)
     return 0;
 }
 
-// ---- cmd (the tick's user command; createmove callbacks only) ----
+
 
 inline constexpr std::uint64_t kInAttack = 1ull << 0;
 inline constexpr std::uint64_t kInJump = 1ull << 1;
@@ -2857,7 +2857,7 @@ inline constexpr std::uint64_t kInSpeed = 1ull << 17;
 inline constexpr std::uint64_t kInWalk = 1ull << 18;
 inline constexpr std::uint64_t kInBullrush = 1ull << 22;
 
-// The current tick's command, or null outside the game-thread cmd context.
+
 inline UserCmd currentCmd()
 {
     return UserCmd{static_cast<cs2::CUserCmd*>(tickUserCmd)};
@@ -2961,11 +2961,11 @@ inline int l_cmdSetLeftMove(lua_State* L)
     return 0;
 }
 
-// cmd.press_shot([mask]) - press buttons the way a real click does: the mask lands in BOTH
-// button banks of the raw command AND of buttons_pb (the copy the server reads). Returns
-// false when buttons_pb is unreachable (nothing was written - do not count a shot).
-// Default mask = attack. This is the shot primitive; press_buttons (bank 1 only) is for
-// movement keys.
+
+
+
+
+
 inline int l_cmdPressShot(lua_State* L)
 {
     requireGameThread(L, "cmd.press_shot");
@@ -2975,8 +2975,8 @@ inline int l_cmdPressShot(lua_State* L)
     return 1;
 }
 
-// cmd.press_bank2(mask) - OR the mask into button bank 2 (raw word + buttons_pb), the bank
-// the reference triggerbot uses for attack. Returns false when buttons_pb is unreachable.
+
+
 inline int l_cmdPressBank2(lua_State* L)
 {
     requireGameThread(L, "cmd.press_bank2");
@@ -2985,9 +2985,9 @@ inline int l_cmdPressBank2(lua_State* L)
     return 1;
 }
 
-// cmd.suppress_shot([mask]) - take a shot AWAY from a command the game (or a real click)
-// already put one on: clears the mask from both raw banks AND both buttons_pb banks and
-// resets attack1_start_history_index to "no attack". The spread-gate primitive. Default = attack.
+
+
+
 inline int l_cmdSuppressShot(lua_State* L)
 {
     requireGameThread(L, "cmd.suppress_shot");
@@ -2997,7 +2997,7 @@ inline int l_cmdSuppressShot(lua_State* L)
     return 0;
 }
 
-// cmd.get_mouse_dx() - the tick's raw horizontal mouse delta, or nil when unavailable.
+
 inline int l_cmdGetMouseDx(lua_State* L)
 {
     requireGameThread(L, "cmd.get_mouse_dx");
@@ -3008,8 +3008,8 @@ inline int l_cmdGetMouseDx(lua_State* L)
     return 1;
 }
 
-// cmd.get_random_seed() / cmd.set_random_seed(seed) - the per-command RNG seed the server
-// rewinds against. Unset reads as nil (distinct from seed 0).
+
+
 inline int l_cmdGetRandomSeed(lua_State* L)
 {
     requireGameThread(L, "cmd.get_random_seed");
@@ -3027,11 +3027,11 @@ inline int l_cmdSetRandomSeed(lua_State* L)
     return 0;
 }
 
-// cmd.get_history_size() - how many input-history entries this command carries (nil when
-// unavailable); cmd.set_attack_index(i) - point attack1_start_history_index at entry i.
-// Refuses when the game already wrote the field (a real click owns it) - use
-// cmd.force_attack_index(i) to overwrite anyway (the rage silent-aim write: without it the
-// server resolves the shot along the crosshair entry, ignoring redirected angles).
+
+
+
+
+
 inline int l_cmdGetHistorySize(lua_State* L)
 {
     requireGameThread(L, "cmd.get_history_size");
@@ -3056,7 +3056,7 @@ inline int l_cmdForceAttackIndex(lua_State* L)
     return 1;
 }
 
-// ---- config (live read/write of the native menu config vars by dotted path) ----
+
 
 inline const char* configKindName(ConfigValueKind kind) noexcept
 {
@@ -3069,9 +3069,9 @@ inline const char* configKindName(ConfigValueKind kind) noexcept
     return "unknown";
 }
 
-// config.get(path) - reads "Combat.Triggerbot.Enabled"-style paths (see config.list()).
-// Returns a boolean / integer / number, or r, g, b, a (0-255) for colors; nil when the path
-// is unknown or the bridge is unavailable (unit tests).
+
+
+
 inline int l_configGet(lua_State* L)
 {
     const char* path = luaL_checkstring(L, 1);
@@ -3098,10 +3098,10 @@ inline int l_configGet(lua_State* L)
     return 0;
 }
 
-// config.set(path, value [, g, b, a]) - writes through the same schema the .cfg save/load
-// uses (range-clamped, autosaved; change handlers do NOT run - identical to loading a file).
-// Colors take r, g, b [, a] (default 255); bools accept booleans or 0/1. Unknown paths error;
-// an unavailable bridge returns false.
+
+
+
+
 inline int l_configSet(lua_State* L)
 {
     const char* path = luaL_checkstring(L, 1);
@@ -3158,8 +3158,8 @@ inline int l_configSet(lua_State* L)
     return 1;
 }
 
-// config.list() - every addressable path as an array of { path = "...", type = "bool"/... }.
-// Empty table without the bridge.
+
+
 inline int l_configList(lua_State* L)
 {
     lua_newtable(L);
@@ -3182,8 +3182,8 @@ inline int l_configList(lua_State* L)
     return 1;
 }
 
-// config.save() - flush the active config to disk now (the navbar SAVE pipeline; every
-// config.set already schedules an autosave, this just forces it immediately).
+
+
 inline int l_configSave(lua_State* L)
 {
     (void)L;
@@ -3192,9 +3192,9 @@ inline int l_configSave(lua_State* L)
     return 0;
 }
 
-// ---- database (persistent per-script KV sidecar) ----
 
-// "<scriptsDir>/<name>.db"; line format "key\t<type>\t<value>" (s = string, n = number, b = bool).
+
+
 inline void databasePath(char* out, std::size_t outSize, const char* scriptName) noexcept
 {
     const std::size_t dirLength = std::strlen(scriptsDirPath);
@@ -3209,7 +3209,7 @@ inline void databasePath(char* out, std::size_t outSize, const char* scriptName)
     std::memcpy(out + dirLength + 1 + nameLength, ".db", sizeof(".db"));
 }
 
-// Read-modify-write of the sidecar: the file is tiny, so a full rewrite keeps the format trivial.
+
 inline int l_databaseWrite(lua_State* L)
 {
     const char* key = luaL_checkstring(L, 1);
@@ -3237,7 +3237,7 @@ inline int l_databaseWrite(lua_State* L)
         for (std::size_t i = 0; i < length && out < sizeof(valueLine) - 2; ++i) {
             const unsigned char c = static_cast<unsigned char>(value[i]);
             if (c < 0x20 || c == '\x7F')
-                continue; // strings persist as printable text - strip the rest
+                continue; 
             valueLine[out++] = static_cast<char>(c);
         }
         valueLine[out] = '\0';
@@ -3251,7 +3251,7 @@ inline int l_databaseWrite(lua_State* L)
     if (!path[0])
         return luaL_error(L, "database.write: scripts directory unavailable");
 
-    // Read the existing sidecar, drop the key's line, keep the rest.
+    
     char contents[4096] = {};
     std::size_t contentsLength = 0;
     if (const int fd = ::open(path, O_RDONLY); fd >= 0) {
@@ -3264,7 +3264,7 @@ inline int l_databaseWrite(lua_State* L)
 
     char kept[4096] = {};
     std::size_t keptLength = 0;
-    const auto keyPrefixLength = keyLength + 1; // key + '\t'
+    const auto keyPrefixLength = keyLength + 1; 
     for (char* line = contents; line && *line != '\0';) {
         char* next = std::strchr(line, '\n');
         const bool matches = std::strlen(line) > keyPrefixLength
@@ -3331,7 +3331,7 @@ inline int l_databaseRead(lua_State* L)
             *next = '\0';
         if (std::strlen(line) > keyLength + 2 && std::memcmp(line, key, keyLength) == 0 && line[keyLength] == '\t') {
             const char* type = line + keyLength + 1;
-            const char* value = type + 2; // skip the type char and its tab
+            const char* value = type + 2; 
             if (type[0] == 's' && type[1] == '\t') {
                 lua_pushstring(L, value);
                 return 1;
@@ -3347,11 +3347,11 @@ inline int l_databaseRead(lua_State* L)
         }
         line = next ? next + 1 : nullptr;
     }
-    lua_pushnil(L); // absent - MUST be a real nil: returning zero values makes
-    return 1;       // tonumber(database.read(k)) a ZERO-ARG tonumber ("value expected" error)
+    lua_pushnil(L); 
+    return 1;       
 }
 
-// ---- entity.get_all / entity.get_origin ----
+
 
 inline int l_getAllEntities(lua_State* L)
 {
@@ -3372,8 +3372,8 @@ inline int l_getAllEntities(lua_State* L)
     return 1;
 }
 
-// entity.get_origin(index) -> x, y, z or nil - world origin through the game scene node (the
-// only reliable path; C_BaseEntity's schema has no plain origin field on this build).
+
+
 inline int l_getEntityOrigin(lua_State* L)
 {
     const int index = static_cast<int>(luaL_checkinteger(L, 1));
@@ -3386,10 +3386,10 @@ inline int l_getEntityOrigin(lua_State* L)
     return 3;
 }
 
-// entity.get_spectators() -> table of controller entity indices of players ACTIVELY spectating
-// the local pawn (observer mode != 0 and m_hObserverTarget == local pawn), or nil when the
-// bridges are unavailable / not in a game. The m_pObserverServices chain is a pointer field, so
-// the walk lives behind spectatorListQuery (installed in EntryPoints finishInit).
+
+
+
+
 inline int l_getSpectators(lua_State* L)
 {
     if (!spectatorListQuery || !localPlayerIndexQuery || !playerListQuery)
@@ -3418,10 +3418,10 @@ inline int l_getSpectators(lua_State* L)
     return 1;
 }
 
-// ---- gui.tab / gui.divider ----
 
-// Names this script's own subtab on the Scripts page (one tab per script; default label = the
-// file name without ".lua"). Purely cosmetic - the label is re-read every menu frame.
+
+
+
 inline int l_guiTab(lua_State* L)
 {
     Script& script = selfScript(L);
@@ -3446,14 +3446,14 @@ inline int l_guiDivider(lua_State* L)
     return 1;
 }
 
-// gui.page(name) - render every gui item created AFTER this call in a card at the bottom of
-// the named menu page (Rage, Legit, Movement, Player Info, Glow/Visuals, Viewmodel, Effects,
-// Hud, Sound, Inventory, Radio, Scripts, Misc - case-insensitive) instead of the script's own
-// Scripts-page sub-tab. Call gui.page() with no argument to go back to the sub-tab.
+
+
+
+
 inline int l_guiPage(lua_State* L)
 {
     if (lua_isnoneornil(L, 1)) {
-        pendingItemPage = static_cast<int>(ScriptPage::Subtab); // back to the script sub-tab
+        pendingItemPage = static_cast<int>(ScriptPage::Subtab); 
         return 0;
     }
     const char* name = luaL_checkstring(L, 1);
@@ -3465,29 +3465,29 @@ inline int l_guiPage(lua_State* L)
     return 0;
 }
 
-// ---- imgui (script-owned real ImGui windows; "menu" callback only) ----
-//
-// The full native widget surface: a script opens a movable ImGui window in its "menu" callback
-// and fills it with real ImGui widgets. Windows render (and take input) while the MENU IS OPEN
-// - with the menu closed the game owns the mouse (relative mode + grab), so script windows
-// simply do not render, exactly like the rest of the menu shell. Contracts:
-//  * call imgui.end_window() once per imgui.begin(), even when begin returned false
-//  * keep the widget call order stable across frames (input_text/color_edit state is matched
-//    to slots by call order - the same contract ImGui itself uses for item ids)
-//  * widget calls outside a window (before begin / after end) are errors - without this they
-//    would render into the menu shell's own window at its cursor position
+
+
+
+
+
+
+
+
+
+
+
 
 inline void requireMenuDispatch(lua_State* L)
 {
     if (!imguiMenuActive)
-        luaL_error(L, "imgui is only available inside the 'menu' callback"); // longjmps
+        luaL_error(L, "imgui is only available inside the 'menu' callback"); 
 }
 
 inline void requireImguiWindow(lua_State* L)
 {
     requireMenuDispatch(L);
     if (imguiWindowDepth <= 0)
-        luaL_error(L, "imgui widget called outside imgui.begin()"); // longjmps
+        luaL_error(L, "imgui widget called outside imgui.begin()"); 
 }
 
 inline ImguiWidgetState* nextImguiWidgetState(lua_State* L)
@@ -3498,9 +3498,9 @@ inline ImguiWidgetState* nextImguiWidgetState(lua_State* L)
     return &script.imguiWidgets[script.imguiWidgetCount++];
 }
 
-// Sidecar persistence only round-trips labels that fit the gui label rules (no control
-// characters/= that would break the tab-separated sidecar lines). Anything else still works
-// in-session, it just does not persist.
+
+
+
 inline bool imguiLabelPersistable(const char* label) noexcept
 {
     const std::size_t length = std::strlen(label);
@@ -3514,10 +3514,10 @@ inline bool imguiLabelPersistable(const char* label) noexcept
     return true;
 }
 
-// First-use seeding for stateful imgui widgets (input_text/color_edit). Slots are matched by
-// call order, so a slot is fresh when its stored label/kind differs from this call. Fresh
-// slots adopt the sidecar value (same label+kind scheme as gui.*, written back by
-// saveGuiState on unload) and report true; the caller then skips its default-value seeding.
+
+
+
+
 inline bool initImguiWidgetPersistence(lua_State* L, ImguiWidgetState& widget, const char* label, char kind) noexcept
 {
     const bool fresh = widget.kind != kind || std::strcmp(widget.label, label) != 0;
@@ -3550,12 +3550,12 @@ inline int l_imguiBegin(lua_State* L)
     const char* title = luaL_checkstring(L, 1);
     if (title[0] == '\0' || std::strlen(title) >= kMaxImguiTitle)
         luaL_error(L, "imgui.begin: title must be 1-%d characters", static_cast<int>(kMaxImguiTitle) - 1);
-    bool open = lua_toboolean(L, 2) != 0; // default: open
+    bool open = lua_toboolean(L, 2) != 0; 
     const float width = lua_isnoneornil(L, 3) ? 340.0f : static_cast<float>(luaL_checknumber(L, 3));
     const float height = lua_isnoneornil(L, 4) ? 0.0f : static_cast<float>(luaL_checknumber(L, 4));
     if (!open) {
-        lua_pushboolean(L, 0); // not visible
-        lua_pushboolean(L, 0); // not open
+        lua_pushboolean(L, 0); 
+        lua_pushboolean(L, 0); 
         return 2;
     }
     if (width > 0.0f)
@@ -3567,7 +3567,7 @@ inline int l_imguiBegin(lua_State* L)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
     const bool visible = ImGui::Begin(title, &open, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse);
     lua_pushboolean(L, visible ? 1 : 0);
-    lua_pushboolean(L, open ? 1 : 0); // the X button may have closed it
+    lua_pushboolean(L, open ? 1 : 0); 
     return 2;
 }
 
@@ -3670,13 +3670,13 @@ inline int l_imguiButton(lua_State* L)
     return 1;
 }
 
-// imgui.combo(label, index, options...) - options as a table {"a","b"} or varargs strings.
-// `index` is 1-based in Lua (0 = nothing selected); returns the new 1-based index.
+
+
 inline int l_imguiCombo(lua_State* L)
 {
     requireImguiWindow(L);
     const char* label = luaL_checkstring(L, 1);
-    int selected = static_cast<int>(luaL_checkinteger(L, 2)) - 1; // lua 1-based -> imgui 0-based
+    int selected = static_cast<int>(luaL_checkinteger(L, 2)) - 1; 
     constexpr int kMaxComboOptions = 64;
     const char* items[kMaxComboOptions];
     int count = 0;
@@ -3736,7 +3736,7 @@ inline int l_imguiColorEdit(lua_State* L)
     return 4;
 }
 
-// imgui.set_next_window_pos(x, y) - first-use placement for the NEXT imgui.begin().
+
 inline int l_imguiSetNextWindowPos(lua_State* L)
 {
     requireMenuDispatch(L);
@@ -3746,7 +3746,7 @@ inline int l_imguiSetNextWindowPos(lua_State* L)
     return 0;
 }
 
-// ---- registration ----
+
 
 inline void registerApi(lua_State* L, int scriptIndex)
 {

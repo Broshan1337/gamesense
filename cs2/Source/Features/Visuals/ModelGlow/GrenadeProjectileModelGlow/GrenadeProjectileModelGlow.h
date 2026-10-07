@@ -37,7 +37,7 @@ public:
         }
     }
 
-    [[nodiscard]] cs2::Color color(EntityTypeInfo entityTypeInfo, auto&& /* entity */) const noexcept
+    [[nodiscard]] cs2::Color color(EntityTypeInfo entityTypeInfo, auto&& ) const noexcept
     {
         switch (entityTypeInfo.typeIndex) {
         case EntityTypeInfo::indexOf<cs2::C_FlashbangProjectile>(): { const auto c = GET_CONFIG_VAR(model_glow_vars::FlashbangColor); return cs2::Color{c.r(), c.g(), c.b(), c.a()}; }

@@ -9,23 +9,23 @@
 #include <Utils/NsPaths.h>
 #include <Utils/NsStr.h>
 
-// Append-only diagnostics file for the ImGui UI bootstrap (same pattern as
-// LinuxSelfUnload::log): <exchangeRoot>/logs/gamesense_gui.log. The engine console is not
-// always ready when
-// the early menu/Vulkan-hook stages run, and StatusReport only dumps once - this file answers
-// "how far did the chain get" from outside the game. Best-effort: open+write+close per line,
-// failures ignored. Temporary verification scaffolding for the UI migration.
-//
-// Lines carry [unix-time.ms] [P<pid>:T<tid>] prefixes (multi-thread init debugging: the Vulkan
-// hook, the menu and the game-side features all log here from different threads). The previous
-// session's log is rotated to <exchangeRoot>/logs/gamesense_gui.log.old on the first write of a
-// session, so a crash's last lines survive the next injection.
+
+
+
+
+
+
+
+
+
+
+
 namespace gui_log
 {
 
 inline bool rotated{false};
 
-// Resolved per call into a stack buffer (write frequency is low; no shared state to race on).
+
 inline void write(const char* fmt, ...) noexcept
 {
     if (!rotated) {
@@ -37,7 +37,7 @@ inline void write(const char* fmt, ...) noexcept
             (void)LinuxPlatformApi::rename(rotFrom, rotTo);
     }
 
-    // O_WRONLY | O_APPEND | O_CREAT, 0644 - numeric because fcntl flags under -nostdlib.
+    
     char logPath[ns_paths::kMaxPath];
     if (!ns_paths::joinLog(logPath, sizeof(logPath), "gamesense_gui.log"))
         return;

@@ -1,7 +1,4 @@
-/*
-** C data management.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #include "lj_obj.h"
 
@@ -14,9 +11,9 @@
 #include "lj_cconv.h"
 #include "lj_cdata.h"
 
-/* -- C data allocation --------------------------------------------------- */
 
-/* Allocate a new C data object holding a reference to another object. */
+
+
 GCcdata *lj_cdata_newref(CTState *cts, const void *p, CTypeID id)
 {
   CTypeID refid = lj_ctype_intern(cts, CTINFO_REF(id), CTSIZE_PTR);
@@ -25,7 +22,7 @@ GCcdata *lj_cdata_newref(CTState *cts, const void *p, CTypeID id)
   return cd;
 }
 
-/* Allocate variable-sized or specially aligned C data object. */
+
 GCcdata *lj_cdata_newv(lua_State *L, CTypeID id, CTSize sz, CTSize align)
 {
   global_State *g;
@@ -49,7 +46,7 @@ GCcdata *lj_cdata_newv(lua_State *L, CTypeID id, CTSize sz, CTSize align)
   return cd;
 }
 
-/* Allocate arbitrary C data object. */
+
 GCcdata *lj_cdata_newx(CTState *cts, CTypeID id, CTSize sz, CTInfo info)
 {
   if (!(info & CTF_VLA) && ctype_align(info) <= CT_MEMALIGN)
@@ -58,7 +55,7 @@ GCcdata *lj_cdata_newx(CTState *cts, CTypeID id, CTSize sz, CTInfo info)
     return lj_cdata_newv(cts->L, id, sz, ctype_align(info));
 }
 
-/* Free a C data object. */
+
 void LJ_FASTCALL lj_cdata_free(global_State *g, GCcdata *cd)
 {
   if (LJ_UNLIKELY(cd->marked & LJ_GC_CDATA_FIN)) {
@@ -88,7 +85,7 @@ void lj_cdata_setfin(lua_State *L, GCcdata *cd, GCobj *obj, uint32_t it)
 {
   GCtab *t = tabref(G(L)->gcroot[GCROOT_FFI_FIN]);
   if (gcref(t->metatable)) {
-    /* Add cdata to finalizer table, if still enabled. */
+    
     TValue *tv, tmp;
     setcdataV(L, &tmp, cd);
     lj_gc_anybarriert(L, t);
@@ -103,9 +100,9 @@ void lj_cdata_setfin(lua_State *L, GCcdata *cd, GCobj *obj, uint32_t it)
   }
 }
 
-/* -- C data indexing ----------------------------------------------------- */
 
-/* Index C data by a TValue. Return CType and pointer. */
+
+
 CType *lj_cdata_index(CTState *cts, GCcdata *cd, cTValue *key, uint8_t **pp,
 		      CTInfo *qual)
 {
@@ -113,7 +110,7 @@ CType *lj_cdata_index(CTState *cts, GCcdata *cd, cTValue *key, uint8_t **pp,
   CType *ct = ctype_get(cts, cd->ctypeid);
   ptrdiff_t idx;
 
-  /* Resolve reference for cdata object. */
+  
   if (ctype_isref(ct->info)) {
     lj_assertCTS(ct->size == CTSIZE_PTR, "ref is not pointer-sized");
     p = *(uint8_t **)p;
@@ -121,34 +118,34 @@ CType *lj_cdata_index(CTState *cts, GCcdata *cd, cTValue *key, uint8_t **pp,
   }
 
 collect_attrib:
-  /* Skip attributes and collect qualifiers. */
+  
   while (ctype_isattrib(ct->info)) {
     if (ctype_attrib(ct->info) == CTA_QUAL) *qual |= ct->size;
     ct = ctype_child(cts, ct);
   }
-  /* Interning rejects refs to refs. */
+  
   lj_assertCTS(!ctype_isref(ct->info), "bad ref of ref");
 
   if (tvisint(key)) {
     idx = (ptrdiff_t)intV(key);
     goto integer_key;
-  } else if (tvisnum(key)) {  /* Numeric key. */
+  } else if (tvisnum(key)) {  
     idx = lj_num2int_type(numV(key), ptrdiff_t);
   integer_key:
     if (ctype_ispointer(ct->info)) {
-      CTSize sz = lj_ctype_size(cts, ctype_cid(ct->info));  /* Element size. */
+      CTSize sz = lj_ctype_size(cts, ctype_cid(ct->info));  
       if (sz == CTSIZE_INVALID)
 	lj_err_caller(cts->L, LJ_ERR_FFI_INVSIZE);
       if (ctype_isptr(ct->info)) {
 	p = (uint8_t *)cdata_getptr(p, ct->size);
       } else if ((ct->info & (CTF_VECTOR|CTF_COMPLEX))) {
 	if ((ct->info & CTF_COMPLEX)) idx &= 1;
-	*qual |= CTF_CONST;  /* Valarray elements are constant. */
+	*qual |= CTF_CONST;  
       }
       *pp = p + idx*(int32_t)sz;
       return ct;
     }
-  } else if (tviscdata(key)) {  /* Integer cdata key. */
+  } else if (tviscdata(key)) {  
     GCcdata *cdk = cdataV(key);
     CType *ctk = ctype_raw(cts, cdk->ctypeid);
     if (ctype_isenum(ctk->info)) ctk = ctype_child(cts, ctk);
@@ -157,7 +154,7 @@ collect_attrib:
 		     (uint8_t *)&idx, cdataptr(cdk), 0);
       goto integer_key;
     }
-  } else if (tvisstr(key)) {  /* String key. */
+  } else if (tvisstr(key)) {  
     GCstr *name = strV(key);
     if (ctype_isstruct(ct->info)) {
       CTSize ofs;
@@ -168,7 +165,7 @@ collect_attrib:
       }
     } else if (ctype_iscomplex(ct->info)) {
       if (name->len == 2) {
-	*qual |= CTF_CONST;  /* Complex fields are constant. */
+	*qual |= CTF_CONST;  
 	if (strdata(name)[0] == 'r' && strdata(name)[1] == 'e') {
 	  *pp = p;
 	  return ct;
@@ -178,7 +175,7 @@ collect_attrib:
 	}
       }
     } else if (cd->ctypeid == CTID_CTYPEID) {
-      /* Allow indexing a (pointer to) struct constructor to get constants. */
+      
       CType *sct = ctype_raw(cts, *(CTypeID *)p);
       if (ctype_isptr(sct->info))
 	sct = ctype_rawchild(cts, sct);
@@ -188,54 +185,54 @@ collect_attrib:
 	if (fct && ctype_isconstval(fct->info))
 	  return fct;
       }
-      ct = sct;  /* Allow resolving metamethods for constructors, too. */
+      ct = sct;  
     }
   }
-  if (ctype_isptr(ct->info)) {  /* Automatically perform '->'. */
+  if (ctype_isptr(ct->info)) {  
     if (ctype_isstruct(ctype_rawchild(cts, ct)->info)) {
       p = (uint8_t *)cdata_getptr(p, ct->size);
       ct = ctype_child(cts, ct);
       goto collect_attrib;
     }
   }
-  *qual |= 1;  /* Lookup failed. */
-  return ct;  /* But return the resolved raw type. */
+  *qual |= 1;  
+  return ct;  
 }
 
-/* -- C data getters ------------------------------------------------------ */
 
-/* Get constant value and convert to TValue. */
+
+
 static void cdata_getconst(CTState *cts, TValue *o, CType *ct)
 {
   CType *ctt = ctype_child(cts, ct);
   lj_assertCTS(ctype_isinteger(ctt->info) && ctt->size <= 4,
-	       "only 32 bit const supported");  /* NYI */
-  /* Constants are already zero-extended/sign-extended to 32 bits. */
+	       "only 32 bit const supported");  
+  
   if ((ctt->info & CTF_UNSIGNED) && (int32_t)ct->size < 0)
     setnumV(o, (lua_Number)(uint32_t)ct->size);
   else
     setintV(o, (int32_t)ct->size);
 }
 
-/* Get C data value and convert to TValue. */
+
 int lj_cdata_get(CTState *cts, CType *s, TValue *o, uint8_t *sp)
 {
   CTypeID sid;
 
   if (ctype_isconstval(s->info)) {
     cdata_getconst(cts, o, s);
-    return 0;  /* No GC step needed. */
+    return 0;  
   } else if (ctype_isbitfield(s->info)) {
     return lj_cconv_tv_bf(cts, s, o, sp);
   }
 
-  /* Get child type of pointer/array/field. */
+  
   lj_assertCTS(ctype_ispointer(s->info) || ctype_isfield(s->info),
 	       "pointer or field expected");
   sid = ctype_cid(s->info);
   s = ctype_get(cts, sid);
 
-  /* Resolve reference for field. */
+  
   if (ctype_isref(s->info)) {
     lj_assertCTS(s->size == CTSIZE_PTR, "ref is not pointer-sized");
     sp = *(uint8_t **)sp;
@@ -243,16 +240,16 @@ int lj_cdata_get(CTState *cts, CType *s, TValue *o, uint8_t *sp)
     s = ctype_get(cts, sid);
   }
 
-  /* Skip attributes. */
+  
   while (ctype_isattrib(s->info))
     s = ctype_child(cts, s);
 
   return lj_cconv_tv_ct(cts, s, sid, o, sp);
 }
 
-/* -- C data setters ------------------------------------------------------ */
 
-/* Convert TValue and set C data value. */
+
+
 void lj_cdata_set(CTState *cts, CType *d, uint8_t *dp, TValue *o, CTInfo qual)
 {
   if (ctype_isconstval(d->info)) {
@@ -263,19 +260,19 @@ void lj_cdata_set(CTState *cts, CType *d, uint8_t *dp, TValue *o, CTInfo qual)
     return;
   }
 
-  /* Get child type of pointer/array/field. */
+  
   lj_assertCTS(ctype_ispointer(d->info) || ctype_isfield(d->info),
 	       "pointer or field expected");
   d = ctype_child(cts, d);
 
-  /* Resolve reference for field. */
+  
   if (ctype_isref(d->info)) {
     lj_assertCTS(d->size == CTSIZE_PTR, "ref is not pointer-sized");
     dp = *(uint8_t **)dp;
     d = ctype_child(cts, d);
   }
 
-  /* Skip attributes and collect qualifiers. */
+  
   for (;;) {
     if (ctype_isattrib(d->info)) {
       if (ctype_attrib(d->info) == CTA_QUAL) qual |= d->size;

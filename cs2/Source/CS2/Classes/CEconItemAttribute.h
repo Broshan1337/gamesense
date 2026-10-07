@@ -5,9 +5,9 @@
 namespace cs2
 {
 
-// Fake attribute entries written into a weapon's CAttributeList::m_Attributes to drive
-// the live gun-skin render path. Layout reverse engineered (independently, matching
-// between our own RE and a public reference implementation - see project memory).
+
+
+
 struct CEconItemAttribute {
     void* vtable;
     void* owner;

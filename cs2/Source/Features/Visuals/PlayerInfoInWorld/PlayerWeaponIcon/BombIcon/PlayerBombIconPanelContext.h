@@ -14,6 +14,10 @@ public:
 
     [[nodiscard]] bool shouldShowOnPlayer(auto&& playerPawn) const noexcept
     {
+        // Deathmatch has no bomb objective, even on a defuse map.
+        if (hookContext.cvarSystem().readIntConVar("game_type") == 1
+            && hookContext.cvarSystem().readIntConVar("game_mode") == 2)
+            return false;
         if (GET_CONFIG_VAR(player_info_vars::BombCarrierIconEnabled))
             return playerPawn.isCarryingC4();
         if (GET_CONFIG_VAR(player_info_vars::BombPlantIconEnabled))

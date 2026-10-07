@@ -5,11 +5,11 @@
 
 #include <GameClient/InputHistory.h>
 
-// The input_history field wrapper against crafted memory that mirrors the wire layout the game
-// produces: field object at cmd+40 (arena/current/total/rep) and a Rep whose allocated count
-// lives at rep+0 with the element array at rep+8. Everything here is real memcpy-shaped state -
-// no mocks - so these tests prove the validation gates and the reference-branch arithmetic on
-// exactly the byte layouts they will meet in-process.
+
+
+
+
+
 
 namespace {
 
@@ -52,8 +52,8 @@ void writeArena(FakeCmd& cmd, void* arena)
 
 void writeRep(FakeCmd& cmd, FakeCmd& owner, int current, int allocated)
 {
-    // Owned memory covers [0..allocated); spares inside [current..allocated) hold real pointers
-    // in real protobuf memory, which is what makes the conserving swap observable below.
+    
+    
     for (int i = 0; i < allocated; ++i) {
         void* pointer = reinterpret_cast<std::byte*>(owner.entry(static_cast<std::size_t>(i)));
         std::memcpy(cmd.slot(static_cast<std::size_t>(i)), &pointer, sizeof(pointer));
@@ -70,7 +70,7 @@ void writeRep(FakeCmd& cmd, FakeCmd& owner, int current, int allocated)
 FakeCmd makeValidField(int current, int total, int allocated)
 {
     FakeCmd cmd;
-    writeArena(cmd, nullptr); // heap-owned children allowed
+    writeArena(cmd, nullptr); 
     writeCounts(cmd, current, total);
     writeRep(cmd, cmd, current, allocated);
     return cmd;
@@ -92,7 +92,7 @@ struct RecordingAllocator {
     explicit operator bool() const noexcept { return true; }
 };
 
-} // namespace
+} 
 
 TEST(InputHistoryTest, NullCommandIsInvalidAndCountless)
 {
@@ -111,32 +111,32 @@ TEST(InputHistoryTest, GameShapedFieldValidates)
     ASSERT_TRUE(history.looksValid());
     EXPECT_EQ(history.currentSize(), 3);
     EXPECT_EQ(history.freeSlots(), cs2::CUserCmd::kMaxInputHistoryEntries - 3);
-    EXPECT_EQ(history.spareSlots(), 2); // allocated - current, never anything involving total
+    EXPECT_EQ(history.spareSlots(), 2); 
     EXPECT_NE(history.entryAt(2), nullptr);
     EXPECT_EQ(history.entryAt(3), nullptr);
 }
 
 TEST(InputHistoryTest, ProtobufInvariantsAreEnforced)
 {
-    // current > total
+    
     FakeCmd inverted = makeValidField(5, 4, 5);
     EXPECT_FALSE(InputHistory{asCmd(inverted)}.looksValid());
 
-    // allocated below current: visible entries are not all owned
+    
     FakeCmd underOwned = makeValidField(3, 32, 2);
     EXPECT_FALSE(InputHistory{asCmd(underOwned)}.looksValid());
 
-    // absurd totals mean drifted layout
+    
     FakeCmd oversize = makeValidField(1, 100000, 1);
     EXPECT_FALSE(InputHistory{asCmd(oversize)}.looksValid());
 
-    // null rep
+    
     FakeCmd noRep = makeValidField(1, 32, 1);
     std::byte* nullRep = nullptr;
     std::memcpy(noRep.bytes + 56, &nullRep, sizeof(nullRep));
     EXPECT_FALSE(InputHistory{asCmd(noRep)}.looksValid());
 
-    // misaligned rep
+    
     FakeCmd skewed = makeValidField(1, 32, 1);
     std::byte* skewedRep = skewed.rep + 3;
     std::memcpy(skewed.bytes + 56, &skewedRep, sizeof(skewedRep));
@@ -155,7 +155,7 @@ TEST(InputHistoryTest, FastPathPublishesWithConservingSwap)
     const auto result = history.publish(reinterpret_cast<std::byte*>(&freshEntry), allocator);
     ASSERT_EQ(result, InputHistory::PublishResult::PublishedFastPath);
 
-    // Counts advanced by one; our entry became visible at the old `current` index...
+    
     Entry* republished{};
     std::memcpy(&republished, cmd.slot(1), sizeof(republished));
     EXPECT_EQ(republished, &freshEntry);
@@ -165,7 +165,7 @@ TEST(InputHistoryTest, FastPathPublishesWithConservingSwap)
     std::memcpy(&newAllocated, cmd.rep + cs2::CUserCmd::InputHistory::kRepAllocatedSizeOffset, sizeof(newAllocated));
     EXPECT_EQ(newAllocated, 4);
 
-    // ...and the previously-visible element was conserved to slot `old allocated`, not lost.
+    
     Entry* preserved{};
     std::memcpy(&preserved, cmd.slot(3), sizeof(preserved));
     EXPECT_EQ(preserved, &cmd.entries[1]);
@@ -173,10 +173,10 @@ TEST(InputHistoryTest, FastPathPublishesWithConservingSwap)
 
 TEST(InputHistoryTest, RecycleBranchOverwritesOnlyOnArenalessFields)
 {
-    // Reference Branch C requires allocated == total AND an arena-less field. Note the subtlety
-    // this pins down: spareSlots() counts ownership headroom, but Branch B is additionally gated
-    // on allocated != total - so this shape routes to RECYCLE even though owned-looking spares
-    // exist, matching the decompiled branch order.
+    
+    
+    
+    
     FakeCmd cmd = makeValidField(2, 4, 4);
     InputHistory history{asCmd(cmd)};
     ASSERT_TRUE(history.looksValid());
@@ -193,14 +193,14 @@ TEST(InputHistoryTest, RecycleBranchOverwritesOnlyOnArenalessFields)
 
     int newAllocated{};
     std::memcpy(&newAllocated, cmd.rep + cs2::CUserCmd::InputHistory::kRepAllocatedSizeOffset, sizeof(newAllocated));
-    EXPECT_EQ(newAllocated, 4); // recycle does NOT grow ownership
+    EXPECT_EQ(newAllocated, 4); 
     EXPECT_EQ(allocator.calls, 0);
 }
 
 TEST(InputHistoryTest, ExhaustedArenaBackedRepGoesThroughTheGameHelper)
 {
-    // Reference Branch A: rep fully consumed AND arena-owned -> never touched by hand,
-    // only the game's reserve+append proceeds (post-checked).
+    
+    
     FakeCmd cmd = makeValidField(4, 4, 4);
     writeArena(cmd, reinterpret_cast<void*>(static_cast<std::uintptr_t>(0x10000)));
     InputHistory history{asCmd(cmd)};
@@ -232,9 +232,9 @@ TEST(InputHistoryTest, SilentGameHelperIsRefusedNotTrusted)
 
 TEST(InputHistoryTest, VirginFieldIsValidAndGrowsThroughTheGameHelper)
 {
-    // The state slot 6 leaves behind: current = total = 0, rep = null. This is a growable
-    // field, not an invalid one - the game's own AddAllocated handles it, which is exactly the
-    // path the WriteMoveCrc-side publisher rides.
+    
+    
+    
     alignas(8) std::byte bytes[256]{};
     InputHistory history{reinterpret_cast<cs2::CUserCmd*>(bytes)};
     ASSERT_TRUE(history.looksValid());

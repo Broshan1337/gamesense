@@ -39,7 +39,7 @@ public:
 
     [[nodiscard]] auto isCulledByFirstPersonView() const noexcept
     {
-        // set when camera is inside the upper body e.g. when spectating in first person
+        
         return (renderableFlags() & cs2::SCENEOBJECTFLAG_PIPELINE_SPECIFIC_2).notEqual(0);
     }
 

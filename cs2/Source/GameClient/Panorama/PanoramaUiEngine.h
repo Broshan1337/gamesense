@@ -14,8 +14,8 @@ public:
 
     void runScript(cs2::CUIPanel* contextPanel, const char* scriptSource) noexcept
     {
-        // Game update on 3 October 2024 added panorama script caching (panorama_script_cache_enabled convar)
-        // By setting 'line' to non-zero value we disable caching so we don't have to specify different file path for different scripts
+        
+        
         constexpr auto originFile{'\0'};
         constexpr auto line{1};
         if (hookContext.patternSearchResults().template get<RunScriptFunctionPointer>() && thisptr())

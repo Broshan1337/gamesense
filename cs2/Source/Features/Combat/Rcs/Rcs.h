@@ -1,22 +1,10 @@
 #pragma once
 
 #include <CS2/Classes/CUserCmd.h>
-#include <Features/Combat/MovementFix.h>
 #include <Features/Combat/Rcs/RcsConfigVariables.h>
-#include <GameClient/UserCmd.h>
+#include <Features/Combat/Rcs/RecoilCompensation.h>
 #include <HookContext/HookContextMacros.h>
-#include <Utils/Trig.h>
 
-// Standalone recoil control (RCS). During a spray, CS2 kicks the aim punch, which offsets the shot from
-// where the crosshair points. This pulls the real view against that kick each tick so bullets keep
-// landing on target - the same idea velocity-cs2's standalone RCS uses. It moves the ACTUAL view (unlike
-// the Rage aimbot's silent recoil compensation, which corrects only the shot's input_history angle), so
-// it also visually holds the crosshair down for the player.
-//
-// Mechanics (mirrors velocity): only active once a spray is underway (m_iShotsFired > 1). Each tick it
-// applies the DELTA of the scaled aim punch since last tick - as the punch grows, (old - new) is a
-// downward nudge that exactly tracks the climb; storing the scaled punch as `oldPunch` makes the next
-// tick's delta correct. Reset to zero whenever RCS is not running so the next spray starts clean.
 template <typename HookContext>
 class Rcs {
 public:
@@ -27,65 +15,42 @@ public:
 
     void onCreateMove(cs2::CUserCmd* cmd) const noexcept
     {
-        if (!GET_CONFIG_VAR(rcs_vars::Enabled)) {
-            reset();
+        if (!GET_CONFIG_VAR(rcs_vars::Enabled) || !UserCmd{cmd}) {
+            state.reset();
             return;
         }
-
-        UserCmd userCmd{cmd};
-        if (!userCmd)
-            return;
-
         auto&& localPawn = hookContext.activeLocalPlayerPawn();
         if (!localPawn || localPawn.isAlive() != true) {
-            reset();
+            state.reset();
+            activePawn = nullptr;
             return;
         }
-
-        // Only during a spray - the first shot has no accumulated punch to fight, and gating here keeps
-        // the view still while not firing.
+        auto* pawn = static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity());
+        if (pawn != activePawn) {
+            state.reset();
+            activePawn = pawn;
+        }
         const auto shots = localPawn.shotsFired();
-        if (!shots.hasValue() || shots.value() <= 1) {
-            reset();
+        if (!shots.hasValue() || (shots.value() < 1 && !state.active()))
             return;
-        }
-
         const auto punch = localPawn.aimPunchAngle();
-        const auto currentPitch = userCmd.viewPitch();
-        const auto currentYaw = userCmd.viewYaw();
-        if (!punch.hasValue() || !currentPitch.hasValue() || !currentYaw.hasValue())
+        if (!punch.hasValue() || !__builtin_isfinite(punch.value().x) || !__builtin_isfinite(punch.value().y))
             return;
 
-        const auto scale = static_cast<float>(GET_CONFIG_VAR(rcs_vars::Strength)) / 100.0f;
-        const auto scaledPitch = punch.value().x * scale;
-        const auto scaledYaw = punch.value().y * scale;
-
-        // Apply only the change since last tick, so the compensation tracks the punch as it grows
-        // instead of yanking the whole accumulated amount every tick.
-        const auto newPitch = currentPitch.value() + (oldPunchPitch - scaledPitch);
-        const auto newYaw = trig::normalizeDegrees(currentYaw.value() + (oldPunchYaw - scaledYaw));
-
-        // The punch nudge rotates the view the movement components were computed against -
-        // with the fix on, the analog pair is re-projected so strafing keeps its world direction.
-        movement_fix::setViewAngles(userCmd, newPitch, newYaw);
-
-        oldPunchPitch = scaledPitch;
-        oldPunchYaw = scaledYaw;
+        int sequence{};
+        std::memcpy(&sequence, reinterpret_cast<const std::byte*>(cmd) + cs2::CUserCmd::kCommandNumberOffset, sizeof(sequence));
+        const float scale = static_cast<float>(GET_CONFIG_VAR(rcs_vars::Strength)) / 100.0f;
+        const auto delta = state.correction(sequence, punch.value().x * scale, punch.value().y * scale);
+        // The camera carries earlier commands' compensation. Only the change in kick
+        // belongs in this command; adding the full kick again drives the pitch down.
+        recoil_compensation::apply(cmd, delta.pitch, delta.yaw);
+        // Keep tracking through recoil recovery so the last correction is unwound.
+        if (shots.value() < 1 && punch.value().x == 0.0f && punch.value().y == 0.0f)
+            state.reset();
     }
 
 private:
-    // Forgets the accumulated punch so the next spray's first RCS tick applies the full (from-zero)
-    // delta rather than a stale one left over from a previous spray.
-    static void reset() noexcept
-    {
-        oldPunchPitch = 0.0f;
-        oldPunchYaw = 0.0f;
-    }
-
-    // The scaled punch we compensated last tick (static because the feature object is rebuilt each hook
-    // call; there is one local player, so one shared value is correct).
-    inline static float oldPunchPitch{0.0f};
-    inline static float oldPunchYaw{0.0f};
-
+    inline static recoil_compensation::CommandState state{};
+    inline static cs2::C_BaseEntity* activePawn{};
     HookContext& hookContext;
 };

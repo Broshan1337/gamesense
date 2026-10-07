@@ -1,10 +1,4 @@
-/*
-** Metamethod handling.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-**
-** Portions taken verbatim or adapted from the Lua interpreter.
-** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
-*/
+
 
 #define lj_meta_c
 #define LUA_CORE
@@ -28,9 +22,9 @@
 #include "lj_carith.h"
 #endif
 
-/* -- Metamethod handling ------------------------------------------------- */
 
-/* String interning of metamethod names for fast indexing. */
+
+
 void lj_meta_init(lua_State *L)
 {
 #define MMNAME(name)	"__" #name
@@ -43,24 +37,24 @@ void lj_meta_init(lua_State *L)
     GCstr *s;
     for (q = p+2; *q && *q != '_'; q++) ;
     s = lj_str_new(L, p, (size_t)(q-p));
-    /* NOBARRIER: g->gcroot[] is a GC root. */
+    
     setgcref(g->gcroot[GCROOT_MMNAME+mm], obj2gco(s));
   }
 }
 
-/* Negative caching of a few fast metamethods. See the lj_meta_fast() macro. */
+
 cTValue *lj_meta_cache(GCtab *mt, MMS mm, GCstr *name)
 {
   cTValue *mo = lj_tab_getstr(mt, name);
   lj_assertX(mm <= MM_FAST, "bad metamethod %d", mm);
-  if (!mo || tvisnil(mo)) {  /* No metamethod? */
-    mt->nomm |= (uint8_t)(1u<<mm);  /* Set negative cache flag. */
+  if (!mo || tvisnil(mo)) {  
+    mt->nomm |= (uint8_t)(1u<<mm);  
     return NULL;
   }
   return mo;
 }
 
-/* Lookup metamethod for object. */
+
 cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
 {
   GCtab *mt;
@@ -79,64 +73,46 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
 }
 
 #if LJ_HASFFI
-/* Tailcall from C function. */
+
 int lj_meta_tailcall(lua_State *L, cTValue *tv)
 {
   TValue *base = L->base;
   TValue *top = L->top;
-  const BCIns *pc = frame_pc(base-1);  /* Preserve old PC from frame. */
-  copyTV(L, base-1-LJ_FR2, tv);  /* Replace frame with new object. */
+  const BCIns *pc = frame_pc(base-1);  
+  copyTV(L, base-1-LJ_FR2, tv);  
   if (LJ_FR2)
     (top++)->u64 = LJ_CONT_TAILCALL;
   else
     top->u32.lo = LJ_CONT_TAILCALL;
   setframe_pc(top++, pc);
-  setframe_gc(top, obj2gco(L), LJ_TTHREAD);  /* Dummy frame object. */
+  setframe_gc(top, obj2gco(L), LJ_TTHREAD);  
   if (LJ_FR2) top++;
   setframe_ftsz(top, ((char *)(top+1) - (char *)base) + FRAME_CONT);
   L->base = L->top = top+1;
-  /*
-  ** before:   [old_mo|PC]    [... ...]
-  **                         ^base     ^top
-  ** after:    [new_mo|itype] [... ...] [NULL|PC] [dummy|delta]
-  **                                                           ^base/top
-  ** tailcall: [new_mo|PC]    [... ...]
-  **                         ^base     ^top
-  */
+  
   return 0;
 }
 #endif
 
-/* Setup call to metamethod to be run by Assembler VM. */
+
 static TValue *mmcall(lua_State *L, ASMFunction cont, cTValue *mo,
 		    cTValue *a, cTValue *b)
 {
-  /*
-  **           |-- framesize -> top       top+1       top+2 top+3
-  ** before:   [func slots ...]
-  ** mm setup: [func slots ...] [cont|?]  [mo|tmtype] [a]   [b]
-  ** in asm:   [func slots ...] [cont|PC] [mo|delta]  [a]   [b]
-  **           ^-- func base                          ^-- mm base
-  ** after mm: [func slots ...]           [result]
-  **                ^-- copy to base[PC_RA] --/     for lj_cont_ra
-  **                          istruecond + branch   for lj_cont_cond*
-  **                                       ignore   for lj_cont_nop
-  ** next PC:  [func slots ...]
-  */
+  
   TValue *top = L->top;
   if (curr_funcisL(L)) top = curr_topL(L);
-  setcont(top++, cont);  /* Assembler VM stores PC in upper word or FR2. */
+  setcont(top++, cont);  
   if (LJ_FR2) setnilV(top++);
-  copyTV(L, top++, mo);  /* Store metamethod and two arguments. */
+  copyTV(L, top++, mo);  
   if (LJ_FR2) setnilV(top++);
   copyTV(L, top, a);
   copyTV(L, top+1, b);
-  return top;  /* Return new base. */
+  return top;  
 }
 
-/* -- C helpers for some instructions, called from assembler VM ----------- */
 
-/* Helper for TGET*. __index chain and metamethod. */
+
+
 cTValue *lj_meta_tget(lua_State *L, cTValue *o, cTValue *k)
 {
   int loop;
@@ -150,19 +126,19 @@ cTValue *lj_meta_tget(lua_State *L, cTValue *o, cTValue *k)
 	return tv;
     } else if (tvisnil(mo = lj_meta_lookup(L, o, MM_index))) {
       lj_err_optype(L, o, LJ_ERR_OPINDEX);
-      return NULL;  /* unreachable */
+      return NULL;  
     }
     if (tvisfunc(mo)) {
       L->top = mmcall(L, lj_cont_ra, mo, o, k);
-      return NULL;  /* Trigger metamethod call. */
+      return NULL;  
     }
     o = mo;
   }
   lj_err_msg(L, LJ_ERR_GETLOOP);
-  return NULL;  /* unreachable */
+  return NULL;  
 }
 
-/* Helper for TSET*. __newindex chain and metamethod. */
+
 TValue *lj_meta_tset(lua_State *L, cTValue *o, cTValue *k)
 {
   TValue tmp;
@@ -173,11 +149,11 @@ TValue *lj_meta_tset(lua_State *L, cTValue *o, cTValue *k)
       GCtab *t = tabV(o);
       cTValue *tv = lj_tab_get(L, t, k);
       if (LJ_LIKELY(!tvisnil(tv))) {
-	t->nomm = 0;  /* Invalidate negative metamethod cache. */
+	t->nomm = 0;  
 	lj_gc_anybarriert(L, t);
 	return (TValue *)tv;
       } else if (!(mo = lj_meta_fast(L, tabref(t->metatable), MM_newindex))) {
-	t->nomm = 0;  /* Invalidate negative metamethod cache. */
+	t->nomm = 0;  
 	lj_gc_anybarriert(L, t);
 	if (tv != niltv(L))
 	  return (TValue *)tv;
@@ -188,18 +164,18 @@ TValue *lj_meta_tset(lua_State *L, cTValue *o, cTValue *k)
       }
     } else if (tvisnil(mo = lj_meta_lookup(L, o, MM_newindex))) {
       lj_err_optype(L, o, LJ_ERR_OPINDEX);
-      return NULL;  /* unreachable */
+      return NULL;  
     }
     if (tvisfunc(mo)) {
       L->top = mmcall(L, lj_cont_nop, mo, o, k);
-      /* L->top+2 = v filled in by caller. */
-      return NULL;  /* Trigger metamethod call. */
+      
+      return NULL;  
     }
     copyTV(L, &tmp, mo);
     o = &tmp;
   }
   lj_err_msg(L, LJ_ERR_SETLOOP);
-  return NULL;  /* unreachable */
+  return NULL;  
 }
 
 static cTValue *str2num(cTValue *o, TValue *n)
@@ -214,7 +190,7 @@ static cTValue *str2num(cTValue *o, TValue *n)
     return NULL;
 }
 
-/* Helper for arithmetic instructions. Coercion, metamethod. */
+
 TValue *lj_meta_arith(lua_State *L, TValue *ra, cTValue *rb, cTValue *rc,
 		      BCReg op)
 {
@@ -222,7 +198,7 @@ TValue *lj_meta_arith(lua_State *L, TValue *ra, cTValue *rb, cTValue *rc,
   TValue tempb, tempc;
   cTValue *b, *c;
   if ((b = str2num(rb, &tempb)) != NULL &&
-      (c = str2num(rc, &tempc)) != NULL) {  /* Try coercion first. */
+      (c = str2num(rc, &tempc)) != NULL) {  
     setnumV(ra, lj_vm_foldarith(numV(b), numV(c), (int)mm-MM_add));
     return NULL;
   } else {
@@ -232,14 +208,14 @@ TValue *lj_meta_arith(lua_State *L, TValue *ra, cTValue *rb, cTValue *rc,
       if (tvisnil(mo)) {
 	if (str2num(rb, &tempb) == NULL) rc = rb;
 	lj_err_optype(L, rc, LJ_ERR_OPARITH);
-	return NULL;  /* unreachable */
+	return NULL;  
       }
     }
     return mmcall(L, lj_cont_ra, mo, rb, rc);
   }
 }
 
-/* Helper for bit operators. No bitop metamethods in v2.1. */
+
 void lj_meta_bitop(lua_State *L, TValue *ra, cTValue *rb, cTValue *rc, BCReg op)
 {
 #if LJ_HASFFI
@@ -309,7 +285,7 @@ err:
 #endif
 }
 
-/* Helper for CAT. Coercion, iterative concat, __concat metamethod. */
+
 TValue *lj_meta_cat(lua_State *L, TValue *top, int left)
 {
   int fromc = 0;
@@ -323,34 +299,18 @@ TValue *lj_meta_cat(lua_State *L, TValue *top, int left)
 	if (tvisnil(mo)) {
 	  if (tvisstr(top-1) || tvisnumber(top-1)) top++;
 	  lj_err_optype(L, top-1, LJ_ERR_OPCAT);
-	  return NULL;  /* unreachable */
+	  return NULL;  
 	}
       }
-      /* One of the top two elements is not a string, call __cat metamethod:
-      **
-      ** before:    [...][CAT stack .........................]
-      **                                 top-1     top         top+1 top+2
-      ** pick two:  [...][CAT stack ...] [o1]      [o2]
-      ** setup mm:  [...][CAT stack ...] [cont|?]  [mo|tmtype] [o1]  [o2]
-      ** in asm:    [...][CAT stack ...] [cont|PC] [mo|delta]  [o1]  [o2]
-      **            ^-- func base                              ^-- mm base
-      ** after mm:  [...][CAT stack ...] <--push-- [result]
-      ** next step: [...][CAT stack .............]
-      */
-      copyTV(L, top+2*LJ_FR2+2, top);  /* Carefully ordered stack copies! */
+      
+      copyTV(L, top+2*LJ_FR2+2, top);  
       copyTV(L, top+2*LJ_FR2+1, top-1);
       copyTV(L, top+LJ_FR2, mo);
       setcont(top-1, lj_cont_cat);
       if (LJ_FR2) { setnilV(top); setnilV(top+2); top += 2; }
-      return top+1;  /* Trigger metamethod call. */
+      return top+1;  
     } else {
-      /* Pick as many strings as possible from the top and concatenate them:
-      **
-      ** before:    [...][CAT stack ...........................]
-      ** pick str:  [...][CAT stack ...] [...... strings ......]
-      ** concat:    [...][CAT stack ...] [result]
-      ** next step: [...][CAT stack ............]
-      */
+      
       TValue *e, *o = top;
       uint64_t tlen = tvisstr(o) ? strV(o)->len :
 		      tvisbuf(o) ? sbufxlen(bufV(o)) : STRFMT_MAXBUF_NUM;
@@ -386,7 +346,7 @@ TValue *lj_meta_cat(lua_State *L, TValue *top, int left)
   return NULL;
 }
 
-/* Helper for LEN. __len metamethod. */
+
 TValue * LJ_FASTCALL lj_meta_len(lua_State *L, cTValue *o)
 {
   cTValue *mo = lj_meta_lookup(L, o, MM_len);
@@ -400,10 +360,10 @@ TValue * LJ_FASTCALL lj_meta_len(lua_State *L, cTValue *o)
   return mmcall(L, lj_cont_ra, mo, o, LJ_52 ? o : niltv(L));
 }
 
-/* Helper for equality comparisons. __eq metamethod. */
+
 TValue *lj_meta_equal(lua_State *L, GCobj *o1, GCobj *o2, int ne)
 {
-  /* Field metatable must be at same offset for GCtab and GCudata! */
+  
   cTValue *mo = lj_meta_fast(L, tabref(o1->gch.metatable), MM_eq);
   if (mo) {
     TValue *top;
@@ -421,7 +381,7 @@ TValue *lj_meta_equal(lua_State *L, GCobj *o1, GCobj *o2, int ne)
     it = ~(uint32_t)o1->gch.gct;
     setgcV(L, top, o1, it);
     setgcV(L, top+1, o2, it);
-    return top;  /* Trigger metamethod call. */
+    return top;  
   }
   return (TValue *)(intptr_t)ne;
 }
@@ -455,7 +415,7 @@ TValue * LJ_FASTCALL lj_meta_equal_cd(lua_State *L, BCIns ins)
 }
 #endif
 
-/* Helper for ordered comparisons. String compare, __lt/__le metamethods. */
+
 TValue *lj_meta_comp(lua_State *L, cTValue *o1, cTValue *o2, int op)
 {
   if (LJ_HASFFI && (tviscdata(o1) || tviscdata(o2))) {
@@ -465,7 +425,7 @@ TValue *lj_meta_comp(lua_State *L, cTValue *o1, cTValue *o2, int op)
     if (LJ_UNLIKELY(tvisnil(mo))) goto err;
     return mmcall(L, cont, mo, o1, o2);
   } else if (LJ_52 || itype(o1) == itype(o2)) {
-    /* Never called with two numbers. */
+    
     if (tvisstr(o1) && tvisstr(o2)) {
       int32_t res = lj_str_cmp(strV(o1), strV(o2));
       return (TValue *)(intptr_t)(((op&2) ? res <= 0 : res < 0) ^ (op&1));
@@ -482,9 +442,9 @@ TValue *lj_meta_comp(lua_State *L, cTValue *o1, cTValue *o2, int op)
 	if (tvisnil(mo) || !lj_obj_equal(mo, mo2))
 #endif
 	{
-	  if (op & 2) {  /* MM_le not found: retry with MM_lt. */
-	    cTValue *ot = o1; o1 = o2; o2 = ot;  /* Swap operands. */
-	    op ^= 3;  /* Use LT and flip condition. */
+	  if (op & 2) {  
+	    cTValue *ot = o1; o1 = o2; o2 = ot;  
+	    op ^= 3;  
 	    continue;
 	  }
 	  goto err;
@@ -501,7 +461,7 @@ TValue *lj_meta_comp(lua_State *L, cTValue *o1, cTValue *o2, int op)
   }
 }
 
-/* Helper for ISTYPE and ISNUM. Implicit coercion or error. */
+
 void lj_meta_istype(lua_State *L, BCReg ra, BCReg tp)
 {
   L->top = curr_topL(L);
@@ -513,7 +473,7 @@ void lj_meta_istype(lua_State *L, BCReg ra, BCReg tp)
   else lj_err_argtype(L, ra, lj_obj_itypename[tp]);
 }
 
-/* Helper for calls. __call metamethod. */
+
 void lj_meta_call(lua_State *L, TValue *func, TValue *top)
 {
   cTValue *mo = lj_meta_lookup(L, func, MM_call);
@@ -525,14 +485,14 @@ void lj_meta_call(lua_State *L, TValue *func, TValue *top)
   copyTV(L, func, mo);
 }
 
-/* Helper for FORI. Coercion. */
+
 void LJ_FASTCALL lj_meta_for(lua_State *L, TValue *o)
 {
   if (!lj_strscan_numberobj(o)) lj_err_msg(L, LJ_ERR_FORINIT);
   if (!lj_strscan_numberobj(o+1)) lj_err_msg(L, LJ_ERR_FORLIM);
   if (!lj_strscan_numberobj(o+2)) lj_err_msg(L, LJ_ERR_FORSTEP);
   if (LJ_DUALNUM) {
-    /* Ensure all slots are integers or all slots are numbers. */
+    
     int32_t k[3];
     int nint = 0;
     ptrdiff_t i;
@@ -544,11 +504,11 @@ void LJ_FASTCALL lj_meta_for(lua_State *L, TValue *o)
 	if (lj_num2int_check(numV(o+i), i64, k[i])) nint++;
       }
     }
-    if (nint == 3) {  /* Narrow to integers. */
+    if (nint == 3) {  
       setintV(o, k[0]);
       setintV(o+1, k[1]);
       setintV(o+2, k[2]);
-    } else if (nint != 0) {  /* Widen to numbers. */
+    } else if (nint != 0) {  
       if (tvisint(o)) setnumV(o, (lua_Number)intV(o));
       if (tvisint(o+1)) setnumV(o+1, (lua_Number)intV(o+1));
       if (tvisint(o+2)) setnumV(o+2, (lua_Number)intV(o+2));

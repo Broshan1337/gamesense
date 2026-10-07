@@ -17,9 +17,9 @@ namespace {
 
 int g_fd = -1;
 
-// The Steam runtime container stopped sharing /tmp with the host (2026-10-04 Steam client
-// update), so the log lives under $HOME/OsirisCS2/logs - the same writable exchange root the
-// CS2 module uses (cs2/Source/Utils/NsPaths.h there). Falls back to /tmp when HOME is unusable.
+
+
+
 char logPath[320] = "/tmp/gamesense_tf2.log";
 bool logPathResolved = false;
 
@@ -34,7 +34,7 @@ void resolveLogPath()
     char candidate[320];
     const int dirLen = snprintf(candidate, sizeof(candidate), "%s/OsirisCS2", home);
     if (dirLen <= 0 || size_t(dirLen) + 32 >= sizeof(candidate))
-        return; // keep the /tmp fallback
+        return; 
     if (::mkdir(candidate, 0777) != 0 && errno != EEXIST)
         return;
     char logsDir[320];
@@ -58,7 +58,7 @@ void writeAll(const char *data, size_t len)
     }
 }
 
-} // namespace
+} 
 
 void logInit()
 {
@@ -111,4 +111,4 @@ void logShutdown()
     g_fd = -1;
 }
 
-} // namespace ns_tf2
+} 

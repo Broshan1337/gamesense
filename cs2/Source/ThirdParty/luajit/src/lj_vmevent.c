@@ -1,7 +1,4 @@
-/*
-** VM event handling.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #include <stdio.h>
 
@@ -31,7 +28,7 @@ ptrdiff_t lj_vmevent_prepare(lua_State *L, VMEvent ev)
       return savestack(L, L->top);
     }
   }
-  g->vmevmask &= ~VMEVENT_MASK(ev);  /* No handler: cache this fact. */
+  g->vmevmask &= ~VMEVENT_MASK(ev);  
   return 0;
 }
 
@@ -42,11 +39,11 @@ void lj_vmevent_call(lua_State *L, ptrdiff_t argbase)
   uint8_t oldmask = g->vmevmask;
   uint8_t oldh = hook_save(g);
   int status;
-  g->vmevmask = 0;  /* Disable all events. */
+  g->vmevmask = 0;  
   hook_vmevent(g);
   status = lj_vm_pcall(L, restorestack(L, argbase), 0+1, 0);
   if (LJ_UNLIKELY(status)) {
-    /* Really shouldn't use stderr here, but where else to complain? */
+    
     L->top--;
     fputs("VM handler failed: ", stderr);
     fputs(tvisstr(L->top) ? strVdata(L->top) : "?", stderr);
@@ -58,6 +55,6 @@ void lj_vmevent_call(lua_State *L, ptrdiff_t argbase)
 #endif
   hook_restore(g, oldh);
   if (g->vmevmask != VMEVENT_NOCACHE)
-    g->vmevmask = oldmask;  /* Restore event mask, but not if not modified. */
+    g->vmevmask = oldmask;  
 }
 

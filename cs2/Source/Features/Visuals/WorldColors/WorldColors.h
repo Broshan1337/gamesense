@@ -20,18 +20,18 @@
 #include <Utils/ColorUtils.h>
 #include <Utils/VerifyConsole.h>
 
-// FrameworkCS2 port (Source/Features/Visuals/WorldColors): recolors molotov/incendiary fire
-// particles, scene lights and the sky. Every dereference below is guarded and fails closed per
-// element - a stale offset must cost a missing recolor, never a crash.
-//
-// Sky on this build: the "SkyTint" attribute string became its murmur2 hash 0x99E6002A, and the
-// SkyBox DrawArray (libscenesystem 0x335760) copies the tint INTO the render attribute list from
-// scene_animatable_object +0xD8/+0xDC/+0xE0 (r/g/b; alpha is forced to 0 by the game, it is not
-// read anymore). FrameworkCS2's +0x120 {r,g,b,a} is the same field pair on their older build.
-// 2026-09-10 game update: the desc pointer is no longer per-primitive (prim+0x00 is stale) -
-// the DrawArray now reads ONE pointer from just past the primitive array
-// ([rdx + 0x70*count - 0x58], i.e. last prim + 0x18; the Windows thread's "0x68*nCount - 0x50"
-// is the same slot on their 0x68-stride layout). Tint offset 0xD8 is unchanged on Linux.
+
+
+
+
+
+
+
+
+
+
+
+
 template <typename HookContext>
 class WorldColors {
 public:
@@ -46,23 +46,23 @@ public:
             return;
         if (!game_events::is(event, "game_newmap"))
             return;
-        // New map - the cached light objects and fog entities are gone, dump the caches.
+        
         auto& state = hookContext.featuresStates().visualFeaturesStates.worldColorsState;
         state.cachedLightCount = 0;
         state.cachedFogCount = 0;
     }
 
-    // Called from the hooked CParticleObjectDesc::DrawArray BEFORE the original runs, so the
-    // game consumes the modified primitives itself.
+    
+    
     void recolorParticles(void* primitives, int primitiveCount) const noexcept
     {
         if (!primitives || primitiveCount <= 0)
             return;
 
-        // Debug aid (SpectatorList's /tmp-file convention): `touch /tmp/<particles debug file>`
-        // dumps the distinct particle system names seen here into the engine log, so fire
-        // recoloring can be matched against the REAL system names (the molotov core flame kept
-        // its color while the edges changed - name mismatch suspected). Remove the file to stop.
+        
+        
+        
+        
         if (particlesDebugEnabled())
             dumpParticleNames(primitives, primitiveCount);
 
@@ -94,8 +94,8 @@ public:
         }
     }
 
-    // Called from the hooked CLightBinnerGPU::ProcessLights before the original runs. Original
-    // colors are cached once per light object; disabling the feature restores them (run()).
+    
+    
     void recolorLight(void* sceneLightObject) const noexcept
     {
         auto& state = hookContext.featuresStates().visualFeaturesStates.worldColorsState;
@@ -110,16 +110,16 @@ public:
         cacheOriginalLight(state, sceneLightObject, light + kLightColorOffset);
 
         const auto color = GET_CONFIG_VAR(WorldColorsLightColor);
-        // Lights cannot be transparent, so alpha doubles as an intensity multiplier
-        // (the reference's exact trick).
+        
+        
         const float scale = static_cast<float>(color.a()) / 255.0f;
         writeLightChannel(light + kLightColorOffset, static_cast<float>(color.r()) * scale / 255.0f);
         writeLightChannel(light + kLightColorOffset + 4, static_cast<float>(color.g()) * scale / 255.0f);
         writeLightChannel(light + kLightColorOffset + 8, static_cast<float>(color.b()) * scale / 255.0f);
     }
 
-    // Per-frame tick: restores cached light colors once the feature is disabled, drives the
-    // gradient-fog override, and forces the post-process bloom strength while Sky Bloom is on.
+    
+    
     void run() const noexcept
     {
         if (!GET_CONFIG_VAR(WorldColorsLightsEnabled))
@@ -131,18 +131,18 @@ public:
         updateBloom();
     }
 
-    // Sky Bloom: scale the game's own post-process bloom (r_csgo_render_post_bloom_strength).
-    //
-    // TWO write paths, because the first iteration (memory write alone) showed NO visual effect:
-    //   1. the console path (EngineCommandExecutor) - the command goes through the engine's
-    //      command buffer exactly as if typed, so any callback the post pipeline hooks to pick
-    //      the value up fires; this is what working reference clients do,
-    //   2. the direct memory write (forceFloatConVar) - belt-and-braces in case the cvar turns
-    //      out to be memory-read-per-frame.
-    // Queued on CHANGE only, plus a throttled self-heal: every ~2s while enabled the live cvar
-    // is read back and the command re-queued if something (map load, another writer) moved it.
-    // The game's original value is cached on first enable, restored once on disable. [bloom]
-    // diagnostics log each queue.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     void updateBloom() const noexcept
     {
         auto& state = hookContext.featuresStates().visualFeaturesStates.worldColorsState;
@@ -185,16 +185,16 @@ public:
         state.bloomWasEnabled = true;
     }
 
-    // World-geometry recolor, DrawArray pass-through style (hooked CBaseSceneObjectDesc /
-    // CAggregateSceneObjectDesc slot 1): overwrites the per-primitive color u32 BEFORE the
-    // original consumes the array. Same primitive layout as particles/sky (stride 0x70,
-    // color @0x50 - verified in the live draw path 0x40E240).
-    //
-    // The prim color alone only tints materials that multiply albedo by it (trims/corners).
-    // Big lit surfaces take their tint from the per-object LIGHT data: the game's own draw
-    // path copies sceneObject+0x50/+0x54 (scene object = prim+0x18) into the per-frame light
-    // entries (verified at 0x40E300-0x40E326: entry+4/+8 = [obj+0x50]/[obj+0x54], gated by
-    // the frame counter at obj+0x58). Writing the color there too is what tints the walls.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     void recolorWorld(void* primitives, int primitiveCount) const noexcept
     {
         if (!GET_CONFIG_VAR(WorldColorsWorldEnabled) || !primitives || primitiveCount <= 0)
@@ -205,36 +205,36 @@ public:
         for (int i = 0; i < primitiveCount; ++i, prim += kSkyPrimitiveStride) {
             std::memcpy(prim + kParticleColorOffset, &value, sizeof(value));
 
-            // OBJECT LIGHT-COLOR WRITES ARE DISABLED (2026-09-06 inject crash, twice, 100% repro):
-            // the +0x50/+0x54 writes were re-derived against the SKY DrawArray's object pointer
-            // (prim+0x00) and applied to the AGGREGATE path - but the crash is inside
-            // CAggregateSceneObjectDesc::DrawArray (libscenesystem sub_3C2C80, TinyBVH leaf walk,
-            // fault 0) reading a pointer that these writes corrupted. The aggregate objects'
-            // layout was NOT re-derived; the object pointer at prim+0x00 and/or the +0x50 offset
-            // is wrong for this desc family. Until that is re-derived against LIVE aggregate
-            // objects (the scenesystem .i64 exists), this stays a prim-color-only recolor: the
-            // file's own rule is "a stale offset must cost a missing recolor, never a crash".
-            //
-            // auto* object = readPointer(prim + kSkyAnimatableObjectOffset);
-            // if (!isPlausibleObjectPointer(object))
-            //     continue;
-            // auto* objectBytes = static_cast<std::byte*>(object);
-            // std::memcpy(objectBytes + kSceneObjectLightColorOffset, &value, sizeof(value));
-            // std::memcpy(objectBytes + kSceneObjectLightColorOffset + 4, &value, sizeof(value));
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
         }
     }
 
-    // Sky recolor, DrawArray pass-through style: the hook saves the original tint floats for
-    // the sky object it is about to draw, we overwrite them, the original runs, then the hook
-    // restores. recolorSky() fills the save buffer and returns how many entries it touched;
-    // restoreSky() puts the originals back. Both fail closed.
-    static constexpr auto kSkyTintOffset = 0xD8; // r/g/b floats on the sky scene object
-    // The desc pointer sits just past the primitive array: original reads
-    // [primitives + 0x70*count - 0x58] (= last primitive + 0x18).
+    
+    
+    
+    
+    static constexpr auto kSkyTintOffset = 0xD8; 
+    
+    
     static constexpr auto kSkyDescPointerFromEnd = 0x58;
 
-    // The post-process bloom strength knob the Sky Bloom feature forces (the game's only
-    // user-facing bloom amount control on this build - verified present in libclient strings).
+    
+    
     static constexpr const char* kBloomCvarName = "r_csgo_render_post_bloom_strength";
 
 
@@ -251,9 +251,9 @@ public:
             return 0;
 
         const auto color = GET_CONFIG_VAR(WorldColorsSkyColor);
-        // HDR overbright: values above 1.0 are what let the sky pass the bloom threshold (the
-        // bloom strength cvar only scales pixels that already qualify) - 100% = plain color,
-        // 800% = strongly overbright, glowing hard in the bloom pass.
+        
+        
+        
         const float brightness = static_cast<float>(GET_CONFIG_VAR(WorldColorsSkyBrightness));
         const float channels[3] = {
             static_cast<float>(color.r()) / 255.0f * brightness,
@@ -261,8 +261,8 @@ public:
             static_cast<float>(color.b()) / 255.0f * brightness,
         };
 
-        // 2026-09-10 update: one desc pointer past the primitive array (see class comment), no
-        // per-primitive object pointer anymore.
+        
+        
         void* object = readPointer(static_cast<std::byte*>(primitives)
             + kSkyPrimitiveStride * primitiveCount - kSkyDescPointerFromEnd);
         if (!isPlausibleObjectPointer(object))
@@ -290,9 +290,9 @@ private:
         return hookContext.template make<CvarSystem>();
     }
 
-    // Queues the console command AND writes the value through memory (whichever path the
-    // renderer honors, we are covered), logs both, and records the queued value for the
-    // change/self-heal detection above.
+    
+    
+    
     void queueBloom(float value, auto& state) const noexcept
     {
         char command[64];
@@ -312,21 +312,21 @@ private:
         clock_gettime(CLOCK_MONOTONIC, &ts);
         return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) * 1.0e-9;
     }
-    // Fog override (velocity-cs2 port, night-mode atmosphere): every map-placed fog entity is
-    // rewritten each frame while enabled; the originals are cached once and restored on
-    // disable / map change. All offsets come from the runtime schema and every field is
-    // optional - a missing offset only means that field keeps its map value.
-    //
-    // TWO entity types (live-measured 2026-08-30): C_GradientFog - the game's fog controller
-    // rewrites start/maxOpacity/color/heightFog back to map values every frame, but endDist +
-    // enabled PERSIST; and C_EnvCubemapFog - several maps (incl. the user's test map) drive
-    // their ACTUAL atmosphere with cubemap fog while the gradient-fog entities sit dormant.
-    // Visible fog strength = end distance: close to start = dense, far away = haze.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     void updateFog() const noexcept
     {
         auto& state = hookContext.featuresStates().visualFeaturesStates.worldColorsState;
 
-        // C_GradientFog fields
+        
         const auto startDistanceOffset = hookContext.schemaSystem().getFieldOffset("C_GradientFog", "m_flFogStartDistance");
         const auto endDistanceOffset = hookContext.schemaSystem().getFieldOffset("C_GradientFog", "m_flFogEndDistance");
         const auto heightFogOffset = hookContext.schemaSystem().getFieldOffset("C_GradientFog", "m_bHeightFogEnabled");
@@ -335,7 +335,7 @@ private:
         const auto strengthOffset = hookContext.schemaSystem().getFieldOffset("C_GradientFog", "m_flFogStrength");
         const auto startDisabledOffset = hookContext.schemaSystem().getFieldOffset("C_GradientFog", "m_bStartDisabled");
         const auto enabledOffset = hookContext.schemaSystem().getFieldOffset("C_GradientFog", "m_bIsEnabled");
-        // C_EnvCubemapFog fields
+        
         const auto cubeStartOffset = hookContext.schemaSystem().getFieldOffset("C_EnvCubemapFog", "m_flStartDistance");
         const auto cubeEndOffset = hookContext.schemaSystem().getFieldOffset("C_EnvCubemapFog", "m_flEndDistance");
         const auto cubeMaxOpacityOffset = hookContext.schemaSystem().getFieldOffset("C_EnvCubemapFog", "m_flFogMaxOpacity");
@@ -361,7 +361,7 @@ private:
             if (!entity)
                 return;
 
-            // Cache originals once per fog entity (linear scan, the cache holds at most 8).
+            
             bool alreadyCached = false;
             bool nativelyEnabled = false;
             for (int i = 0; i < state.cachedFogCount; ++i) {
@@ -397,23 +397,23 @@ private:
             }
 
             if (cubemapFog) {
-                // TUNE-ONLY POLICY (2026-09-12 RT pool exhaustion fix): never force-enable
-                // fog. Forcing m_bActive=true / m_bStartDisabled=false on maps that render
-                // without fog pushed the renderer into fog passes the rendertarget pool was
-                // never sized for - "[SceneSystem] Failed to allocate scratch rendertarget
-                // for game.watereffectsdepth" spam every frame, and the pass that composites
-                // the first-person viewmodel failed on those frames (black flickering arms/
-                // weapons). Fog entities the map itself disabled stay untouched; enabled ones
-                // get their distance lever turned.
+                
+                
+                
+                
+                
+                
+                
+                
                 if (!nativelyEnabled)
                     return;
                 writeFogField(entity, cubeEndOffset, fogDistance);
                 writeFogField(entity, cubeMaxOpacityOffset, density);
             } else {
-                // Same tune-only policy. The controller re-asserts start distance, strength,
-                // color, height-fog and the enabled flag every frame anyway - the levers that
-                // stick are end distance and opacity, so only those are written, and only on
-                // natively-enabled fog entities.
+                
+                
+                
+                
                 if (!nativelyEnabled)
                     return;
                 writeFogField(entity, endDistanceOffset, fogDistance);
@@ -499,19 +499,19 @@ private:
             std::memcpy(entity + *offset, &value, sizeof(value));
     }
 
-    // Layout constants; stride 0x70 is the chams-verified Linux CMeshDrawPrimitive stride.
+    
     struct ParticleDrawPrimitive {
         std::byte bytes[0x70];
     };
     static constexpr auto kParticleCollectionOffset = 0x0;
     static constexpr auto kParticleColorOffset = 0x50;
-    static constexpr auto kParticleSystemDefinitionOffset = 0x18; // ParticleCollection::definition (FrameworkCS2 layout, guarded)
-    static constexpr auto kParticleSystemNameOffset = 0x8;        // ParticleSystemDefinition::name (guarded)
-    static constexpr auto kLightColorOffset = 0xD4;               // SceneLightObject r/g/b (disassembly-verified)
-    static constexpr auto kSkyPrimitiveStride = 0x70;             // same 0x70 CMeshDrawPrimitive stride
-                                                                  // (2026-09-10 build: still 0x70 on Linux -
-                                                                  // the Windows thread's 0x68 is their layout)
-    static constexpr auto kSceneObjectLightColorOffset = 0x50;    // scene object light-tint dwords (draw path 0x40E300 copies these into the light entries)
+    static constexpr auto kParticleSystemDefinitionOffset = 0x18; 
+    static constexpr auto kParticleSystemNameOffset = 0x8;        
+    static constexpr auto kLightColorOffset = 0xD4;               
+    static constexpr auto kSkyPrimitiveStride = 0x70;             
+                                                                  
+                                                                  
+    static constexpr auto kSceneObjectLightColorOffset = 0x50;    
 
     [[nodiscard]] static void* readPointer(const std::byte* address) noexcept
     {
@@ -522,21 +522,21 @@ private:
 
     [[nodiscard]] static bool isPlausibleObjectPointer(const void* pointer) noexcept
     {
-        // Only a sanity floor: module bases are high, the null page is low. The real safety is
-        // that a wrong pointer still has to survive three chained reads AND a string match
-        // before any write happens.
+        
+        
+        
         return reinterpret_cast<std::uintptr_t>(pointer) > 0x10000;
     }
 
-    // the particles-debug file exists -> collect distinct particle system names and print
-    // them (throttled by VerifyConsole) to the gui log. The file lives in the exchange root
-    // (NsPaths.h) so it can be created from the host shell while the game runs.
+    
+    
+    
     [[nodiscard]] static bool particlesDebugEnabled() noexcept
     {
         char debugFile[ns_paths::kMaxPath];
         if (!ns_paths::join(debugFile, sizeof(debugFile), "osiris_particles_debug"))
             return false;
-        const int fd = LinuxPlatformApi::open(debugFile, 0 /* O_RDONLY */);
+        const int fd = LinuxPlatformApi::open(debugFile, 0 );
         if (fd >= 0) {
             LinuxPlatformApi::close(fd);
             return true;

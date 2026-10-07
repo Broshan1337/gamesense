@@ -20,33 +20,33 @@
 #include <Utils/Trig.h>
 #include <Utils/VerifyConsole.h>
 
-// The fast strafer - the QUANTIZED autostrafer, a faithful port of velocity-cs2's "test"
-// strafer, with the classic ideal-angle analog strafe as the in-tick fallback.
-//
-// The quantized path: a command may carry up to 32 subtick moves, each accepting a pure
-// view-angle adjustment (yaw_delta) at an exact moment through the tick; the server
-// air-accelerates against the view direction it had AT that moment. Split the remaining part of
-// the tick into up to 16 sub-frames, run the game's own air-acceleration math forward from the
-// current networked velocity, compute the ideal gain angle for the simulated speed at EVERY
-// sub-frame, and emit one yaw_delta step per sub-frame - alternating sides between steps.
-// The capture half runs at CreateMove; the steps are WRITTEN at slot 7 (WriteMoveCrc), the last
-// hook before checksumming.
-//
-// 2026-09-11 correction of a same-day misdiagnosis: the 12:22 console log (peaks 171 -> 277,
-// rising deltas, inj=16) proved the quantized write path ALIVE on the Sept-8 build; the "still
-// not strafing" report that followed had no console log and is explained by the AIRBORNE gate -
-// the strafer does (and must) nothing while running on the ground. The view-anchored sweep is
-// the confirmed-gaining anchor (the velocity-anchored variant cancels into an oscillation on
-// this build - see the 2026-08-30 entry below - and must not be re-ported).
-//
-// The fallback: velocity-cs2 never leaves an airborne tick unstrafed - its classic analog
-// airstrafe runs for every tick the quantized one did not handle. Skipped ticks here hand off to
-// the analog strafe through the bunnyhop (one ideal-angle correction per tick, input-side).
-//
-// The thresholds are the reference's: below 1 u/s there is no meaningful direction, below 15 u/s
-// the best move is straight along the wish direction, |velocity-to-target| > 2 degrees means the
-// player is deliberately steering and the strafer follows instead of optimizing, and steps stop
-// where the game's existing subticks already end (never stacking onto them).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 template <typename HookContext>
 class TestStrafer {
 public:
@@ -55,10 +55,11 @@ public:
     {
     }
 
-    // CAPTURE PHASE - CreateMove, after the original filled the command in.
+    
     void onCreateMove(cs2::CUserCmd* cmd) noexcept
     {
         handledThisTick = false;
+        captureValid = false;
 
         const UserCmd userCmd{cmd};
         if (!userCmd)
@@ -67,7 +68,7 @@ public:
         if (!GET_CONFIG_VAR(TestStraferEnabled) || Movement<HookContext>::jumpBugActive)
             return;
 
-        // Dead players do not strafe, and their flags mean nothing once they are a ragdoll.
+        
         auto&& localPawn = hookContext.localPlayerController().pawn().template as<PlayerPawn>();
         if (!localPawn)
             return;
@@ -75,13 +76,13 @@ public:
         if (!health.hasValue() || health.value() <= 0)
             return;
 
-        // Only while walking; on a ladder or in noclip the simulation models nothing real.
+        
         const auto walking = isWalking(localPawn);
         if (!walking.hasValue() || !walking.value())
             return;
 
-        // Ground movement does not need help - and the landing edge is where the per-hop
-        // speed measurement logs.
+        
+        
         const auto onGround = isOnGround(localPawn);
         if (!onGround.hasValue())
             return;
@@ -94,32 +95,32 @@ public:
         if (reason == SkipReason::none)
             captureValid = true;
 
-        // Analog assist on captured ticks: the quantized yaw_deltas alone leave mouse/WASD
-        // with no server-visible effect when the server ignores client-appended steps
-        // (inj=16 + no turn = this log's signature). Drive one ideal-angle analog wish per
-        // tick following the mouse through the proven forceMove path, so mouse steering
-        // gains even then. Mouse still (dx==0) hands off untouched - alternating a single
-        // per-tick analog wish locks the player in place (verified 2026-09-11).
+        
+        
+        
+        
+        
+        
         bool analogAssist = false;
         if (reason == SkipReason::none) {
             if (const auto dx = userCmd.mouseDx(); dx.hasValue() && dx.value() != 0) {
                 const float gainAngle = idealAngle(diagSpeed, capturedTickInterval,
-                    capturedMaxSpeed, capturedAirAccelerate, capturedAirMaxWishSpeed);
+                    capturedMaxSpeed, capturedAirAccelerate, capturedAirMaxWishSpeed, capturedFriction);
                 analogAssist = hookContext.template make<Bunnyhop>().engageClassicStrafeAngle(
                     userCmd, gainAngle, dx.value() < 0);
             }
         }
 
-        // One-per-second in-game state line while airborne (the [strafe] verification harness).
+        
         VerifyConsole::write(1.0f, "[strafe]", "r=%s spd=%d max=%.0f q=%d inj=%d a=%d",
             skipReasonText(reason), static_cast<int>(diagSpeed), capturedMaxSpeed, diagQuantized, lastInjectedCount, analogAssist ? 1 : 0);
 
         if (reason == SkipReason::none)
             return;
 
-        // The reference's hand-off: a skipped tick still has movement input worth steering, so
-        // the classic analog strafe takes it instead of the tick going to waste. Only the skips
-        // that leave an airborne player with something to steer are handed over.
+        
+        
+        
         switch (reason) {
         case SkipReason::sprint:
         case SkipReason::quantizeOff:
@@ -132,9 +133,9 @@ public:
         }
     }
 
-    // WRITE PHASE - slot 7 (WriteMoveCrc), the last hook before the command is checksummed and
-    // sent. Simulates the rest of the tick from the captured inputs and emits one yaw_delta step
-    // per sub-frame.
+    
+    
+    
     void onWriteMoveCrc(cs2::CUserCmd* cmd) noexcept
     {
         if (!captureValid)
@@ -146,8 +147,8 @@ public:
         if (!base)
             return;
 
-        // Steps start after everything already scheduled this tick (the bunnyhop's landing taps
-        // were written earlier in this same hook, plus whatever slot 6 rebuilt from the queue).
+        
+        
         const float startWhen = SubtickMoves<HookContext>::maxWhen(base);
         if (startWhen >= 0.99f) {
             lastInjectedCount = 0;
@@ -163,30 +164,30 @@ public:
         int injected = 0;
 
         for (int i = 1; i <= kMaxSubticks; ++i) {
-            // Sides alternate between steps, and the parity carries ACROSS ticks, so the server
-            // never sees two same-side accelerations back to back at a step boundary.
+            
+            
             const bool entrySide = ((substepCounter + i) % 2) == 0;
 
-            // THE SWEEP IS ANCHORED TO THE VIEW, not to the velocity. With the wish alternating
-            // view +/- theta: the perpendicular components cancel over pairs of steps, the
-            // forward components add, and the NET acceleration of every tick points at the look
-            // direction - so the velocity curves toward wherever the player aims while the sweep
-            // keeps each step's dot just under the air_max_wishspeed cap, which is where the
-            // gain comes from. (The velocity-anchored anchor was tried twice and measured twice
-            // as a regression on this build: the alternating wishes cancel into "velocity
-            // oscillates wherever it was".)
+            
+            
+            
+            
+            
+            
+            
+            
             const float simSpeed = trig::squareRoot(simVx * simVx + simVy * simVy);
             const float theta = idealAngle(simSpeed, subFrame, capturedMaxSpeed,
-                capturedAirAccelerate, capturedAirMaxWishSpeed);
+                capturedAirAccelerate, capturedAirMaxWishSpeed, capturedFriction);
             const float wishdirYaw = trig::normalizeDegrees(capturedTargetYaw + (entrySide ? theta : -theta));
 
-            // Translate the ideal wish yaw back into a view yaw the command can carry.
+            
             const float targetViewYaw = trig::normalizeDegrees(wishdirYaw - capturedBaseYawOffset);
             const float yawDelta = trig::normalizeDegrees(targetViewYaw - accumulatedYaw);
 
-            // Sub-degree corrections are below what the quantizer acts on - and stopping here
-            // rather than skipping matches the reference: once the simulation is aligned, later
-            // slices would only re-derive the same zero correction.
+            
+            
+            
             if (trig::absolute(yawDelta) <= 0.01f)
                 break;
 
@@ -195,9 +196,9 @@ public:
             auto* const step = hookContext.template make<SubtickMoves>().add(base, when);
             if (!step)
                 break;
-            // Field-for-field what the reference's apply_yaw_subtick writes: a pure view
-            // rotation with every other component explicitly zeroed, so the step is
-            // indistinguishable from one the game's own quantized input path produced.
+            
+            
+            
             SubtickMoves<HookContext>::setButton(step, 0, false);
             SubtickMoves<HookContext>::setAnalogDeltas(step, 0.0f, 0.0f);
             SubtickMoves<HookContext>::setYawDelta(step, yawDelta);
@@ -228,9 +229,9 @@ public:
     }
 
 private:
-    // Why the strafer stayed off this tick, in capturePath order. (Timeline-full and no-steps
-    // conditions are detected in the slot-7 write phase and show up as inj=0 in the [strafe]
-    // line instead of a skip reason.)
+    
+    
+    
     enum class SkipReason {
         none,
         sprint,
@@ -259,19 +260,19 @@ private:
         return "unknown";
     }
 
-    // View-relative movement components: x forward, y left, matching the rest of this project.
+    
     struct StrafeMove {
         float forward{};
         float left{};
     };
 
-    // The capture half of the per-tick driver: track the player's own movement keys, validate
-    // the tick and record every input the slot-7 write phase simulates from.
+    
+    
     [[nodiscard]] SkipReason capturePath(const UserCmd& userCmd) noexcept
     {
-        // velocity-cs2 gates on this cvar: when the server runs with quantized movement input
-        // off, yaw_delta steps are ignored outright. The cvar exists in this binary
-        // (client-registered); a failed lookup must not kill the feature - fail open instead.
+        
+        
+        
         const auto quantized = hookContext.template make<CvarSystem>().readBoolConVar("sv_quantize_movement_input");
         diagQuantized = quantized.has_value() ? (quantized.value() ? 1 : 0) : -1;
         if (quantized.has_value() && !quantized.value())
@@ -282,7 +283,7 @@ private:
 
         trackMovementKeys(userCmd);
 
-        // No movement keys means no wish direction - nothing to strafe with or around.
+        
         const StrafeMove heldMove = movementFromButtons();
         if (heldMove.forward == 0.0f && heldMove.left == 0.0f)
             return SkipReason::noMovementKeys;
@@ -312,20 +313,20 @@ private:
         if (airAccelerate.value() <= 0.0f || maxSpeed.value() <= 0.0f)
             return SkipReason::noMovementConVars;
 
-        // Ground friction of the surface below: enters the simulated acceleration exactly as the
-        // game applies it. If it cannot be read, 1.0 (default friction) degrades gracefully.
+        
+        
         const float friction = surfaceFriction().valueOr(1.0f);
 
         const auto tickInterval = hookContext.globalVars().tickInterval();
         if (!tickInterval.hasValue() || tickInterval.value() <= 0.0f)
             return SkipReason::noMovementConVars;
 
-        // The wish direction the player's held keys describe, relative to straight ahead: this
-        // is what "follow the player's intent" means in yaw terms - WASD in any combination
-        // steers the strafe, the mouse steers the view on top of it.
+        
+        
+        
         const float baseYawOffset = trig::arcTangent2(-heldMove.left, heldMove.forward) * trig::kRadiansToDegrees;
 
-        // Everything the slot-7 write phase needs, captured while the pawn state is current.
+        
         capturedVx = velocity.value().x;
         capturedVy = velocity.value().y;
         capturedYaw = commandYaw.value();
@@ -339,8 +340,8 @@ private:
         return SkipReason::none;
     }
 
-    // The classic fallback's gain angle (one tick of air acceleration) and side alternation -
-    // the same ideal-angle math at tick dt, for the ticks the quantized path skips.
+    
+    
     [[nodiscard]] float classicAngle(const UserCmd& userCmd) noexcept
     {
         const auto velocity = localVelocity();
@@ -354,36 +355,23 @@ private:
 
         const float speed = trig::squareRoot(velocity.value().x * velocity.value().x + velocity.value().y * velocity.value().y);
         const float friction = surfaceFriction().valueOr(1.0f);
-        const float halfAccel = 0.5f * airAccelerate.value() * maxSpeed.value() * tickInterval.value() * friction;
-        const float optimalFloor = std::max(halfAccel, airMaxWishSpeed.value() - halfAccel);
-        const float angle = std::clamp(trig::arcTangent2(optimalFloor, std::max(speed, 1.0f)) * trig::kRadiansToDegrees, 0.0f, 45.0f);
-
+        const float angle = idealAngle(speed, tickInterval.value(), effectiveMaxSpeed(maxSpeed.value(), userCmd.isButtonDown(kAttackButton)),
+            airAccelerate.value(), airMaxWishSpeed.value(), friction);
         strafeSide = !strafeSide;
         return angle;
     }
 
-    // The gain angle for the CURRENT simulated speed: how far off the velocity the wish direction
-    // must sit for air acceleration to add speed without being clamped away. Below 1 u/s the
-    // direction is meaningless; the reference answers 15 degrees there and so does this.
-    [[nodiscard]] static float idealAngle(float speed, float dt, float wishspeed, float airAccelerate, float airMaxWishSpeed) noexcept
+    
+    
+    
+    [[nodiscard]] static float idealAngle(float speed, float dt, float wishspeed, float airAccelerate,
+        float airMaxWishSpeed, float friction) noexcept
     {
-        if (speed < 1.0f)
-            return 15.0f;
-
-        const float accelSpeed = wishspeed * airAccelerate * dt;
-        float cosTheta{};
-        if (accelSpeed >= airMaxWishSpeed)
-            cosTheta = airMaxWishSpeed / (2.0f * speed);
-        else
-            cosTheta = (airMaxWishSpeed - accelSpeed) / speed;
-
-        cosTheta = std::clamp(cosTheta, -1.0f, 1.0f);
-        const float angleDegrees = trig::arcCosine(cosTheta) * trig::kRadiansToDegrees;
-        return angleDegrees < 1.0f ? 1.0f : angleDegrees;
+        return air_strafe::idealAngle(speed, {wishspeed, airAccelerate, airMaxWishSpeed, dt, friction}) * trig::kRadiansToDegrees;
     }
 
-    // One slice of Source's AirAccelerate, run forward on the SIMULATED velocity so the next
-    // slice's ideal angle is computed from where this one lands, not from stale input.
+    
+    
     static void airAccelSim(float& velX, float& velY, float wishdirYaw, float frameTime, float friction,
         float wishspeed, float airAccelerate, float airMaxWishSpeed) noexcept
     {
@@ -404,9 +392,9 @@ private:
         velY += wishDirY * step;
     }
 
-    // The reference's movement-key edge tracker: a key counts as pressed from the tick it goes
-    // down (or when its OPPOSITE comes up while it is held), and stops counting the moment it is
-    // released. The opposite-release rule is what makes transitions like W+D -> A feel instant.
+    
+    
+    
     void trackMovementKeys(const UserCmd& userCmd) noexcept
     {
         using Buttons = cs2::CCSGOInput::Buttons;
@@ -444,7 +432,7 @@ private:
         }
     }
 
-    // What the tracked keys describe, in view-relative components.
+    
     [[nodiscard]] StrafeMove movementFromButtons() const noexcept
     {
         using Buttons = cs2::CCSGOInput::Buttons;
@@ -465,10 +453,10 @@ private:
         return {forwardMove, leftMove};
     }
 
-    // Per-hop speed measurement (the [strafehop] line): the peak horizontal speed of each air
-    // phase and its delta against the previous hop. This is the objective "is it working"
-    // answer - the quantized strafe's gain shows up here as rising peaks, regardless of what
-    // the player feels.
+    
+    
+    
+    
     void trackHopSpeed(bool onGround) noexcept
     {
         if (onGround) {
@@ -505,8 +493,8 @@ private:
         return velocity;
     }
 
-    // m_pMovementServices off the pawn - the component the friction and max-speed reads share.
-    // Null when the field or the pointer is unavailable.
+    
+    
     [[nodiscard]] void* movementServices() const noexcept
     {
         auto&& localPawn = hookContext.localPlayerController().pawn().template as<PlayerPawn>();
@@ -522,8 +510,8 @@ private:
         return services;
     }
 
-    // m_flSurfaceFriction off the movement services - the
-    // multiplier the game itself puts into air acceleration (see Bunnyhop for the trail).
+    
+    
     [[nodiscard]] Optional<float> surfaceFriction() const noexcept
     {
         void* services = movementServices();
@@ -539,22 +527,22 @@ private:
         return friction;
     }
 
-    // The effective max speed the game's own movement code would use this tick, layered on top
-    // of the plain sv_maxspeed cvar the reference originally simulated with:
-    //   1. the movement services' own m_flMaxspeed cap (cvar, whichever is lower),
-    //   2. the active weapon's base run speed (weapon vdata m_flMaxSpeed - knives/pistols/rifles
-    //      all differ, and holding a rifle out makes the simulated gain angle wrong by minutes),
-    //   3. the post-activity stamina penalty, applied squared exactly as the game does,
-    //   4. the modern-jump landing speed-regen: right after a landing, max speed is reduced and
-    //      climbs back over the next ticks - the classic hop-chain speed decay. Skipping it made
-    //      the simulated angle optimistic on the first airborne ticks after every hop.
-    // Not ported: the surface-properties max_speed_factor - m_surfaceProps on the movement
-    // services is only a CUtlStringToken, and turning it into surface data needs an
-    // IPhysicsSurfaceProps::GetSurfaceData anchor in libphysics; the factor is 1.0 on
-    // effectively every playable CS2 surface, so the complexity buys nothing measurable.
-    // The reload/clip refinement on the attack factor (the reference also requires an loaded,
-    // non-reloading weapon) is skipped for the same reason - IN_ATTACK while airborne with an
-    // empty mag is a corner of a corner.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     [[nodiscard]] float effectiveMaxSpeed(float convarMaxSpeed, bool attacking) noexcept
     {
         float maxSpeed = convarMaxSpeed;
@@ -574,8 +562,8 @@ private:
         if (weaponMax.hasValue() && weaponMax.value() > 0.0f && weaponMax.value() < maxSpeed)
             maxSpeed = weaponMax.value();
 
-        // While attacking, the weapon's own speed multiplier applies on top (verified in the
-        // binary: the movement setup multiplies its max-speed accumulator by the vdata field).
+        
+        
         if (attacking) {
             const auto attackFactor = weapon.attackMovespeedFactor();
             if (attackFactor.hasValue() && attackFactor.value() > 0.0f)
@@ -593,15 +581,15 @@ private:
             }
         }
 
-        // Landing speed-regen, verified against the game's own implementation (two sites in
-        // libclient, 0x1551eb0 / 0x1552050, the latter writing the move-data max-speed slot):
-        //   base = clamp(1 + m_flLastLandedVelocityZ * 0.0005, 0.2, 1)   [const @0xB025E4]
-        //   regained = base^2 + elapsed_ticks * (1/64) * 1.1111894        [consts @0xB02450,
-        //   max_speed *= min(regained, 1.0)                                @0xB02228]
-        // where elapsed is a taia subtraction of the landed tick/frac from "now". Known
-        // approximation: the game sources "now" through a pause-duration helper (freeze time
-        // does not count toward the climb); the raw tickCount used here starts counting again
-        // one freeze period early, which only over-estimates regen while nobody can move.
+        
+        
+        
+        
+        
+        
+        
+        
+        
         const auto legacyJump = hookContext.template make<CvarSystem>().readBoolConVar("sv_legacy_jump");
         if (services && legacyJump.has_value() && !legacyJump.value()) {
             const auto jumpOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayer_MovementServices", "m_ModernJump");
@@ -623,9 +611,9 @@ private:
                 std::memcpy(&landedVelZ, jump + *landedVelZOffset, sizeof(landedVelZ));
 
                 const float base = std::clamp(1.0f + landedVelZ * 0.0005f, 0.2f, 1.0f);
-                // Elapsed in ticks (the game's taia subtraction floors to its tick part);
-                // the sub-tick fraction of "now" is not readable at capture time and costs at
-                // most one 1/64 step of the climb term.
+                
+                
+                
                 const float elapsed = static_cast<float>(nowTick.value()) - (static_cast<float>(landedTick) + landedFrac);
                 const int elapsedTicks = elapsed > 0.0f ? static_cast<int>(elapsed) : 0;
                 const float regained = base * base + static_cast<float>(elapsedTicks) * (1.0f / 64.0f) * 1.1111894f;
@@ -646,7 +634,7 @@ private:
         return *value;
     }
 
-    // MOVETYPE_WALK, from the game's own MOVETYPE name table (see Bunnyhop for the full trail).
+    
     static constexpr std::uint8_t kMoveTypeWalk = 2;
 
     [[nodiscard]] Optional<bool> isWalking(auto&& localPawn) const noexcept
@@ -660,7 +648,7 @@ private:
         return moveType == kMoveTypeWalk;
     }
 
-    // FL_ONGROUND, mask 0x1 out of the game's own flag-name table.
+    
     static constexpr std::uint32_t kOnGroundFlag = 0x1;
 
     [[nodiscard]] Optional<bool> isOnGround(auto&& localPawn) const noexcept
@@ -677,17 +665,17 @@ private:
     static constexpr int kMaxSubticks = 16;
     static constexpr float kMinStrafeSpeed = 5.0f;
 
-    // IN_SPRINT (shift-walk), 1 << 16 in the game's own button mask table. Sprinting is a
-    // deliberate slow-movement choice, so it opts the player out of acceleration steering.
+    
+    
     static constexpr std::uint64_t kSprintButton = 0x10000;
 
-    // IN_ATTACK (1 << 0, same mask table) - gates the weapon's attack-movespeed factor.
+    
     static constexpr std::uint64_t kAttackButton = 0x1;
 
-    // True from capture until the slot-7 write consumes it (one-shot per tick).
+    
     inline static bool captureValid{false};
 
-    // Captured simulation inputs (capture phase -> write phase within one tick).
+    
     inline static float capturedVx{0.0f};
     inline static float capturedVy{0.0f};
     inline static float capturedYaw{0.0f};
@@ -699,23 +687,23 @@ private:
     inline static float capturedFriction{1.0f};
     inline static float capturedTickInterval{0.0f};
 
-    // The reference's handled_this_tick, set by the slot-7 write phase once steps went out.
+    
     inline static bool handledThisTick{false};
     inline static std::uint64_t lastButtons{0};
     inline static std::uint64_t lastPressed{0};
     inline static int substepCounter{0};
 
-    // [strafe] diagnostics.
+    
     inline static int lastInjectedCount{0};
     inline static float diagSpeed{0.0f};
     inline static int diagQuantized{-1};
 
-    // [strafehop] per-hop peak speed measurement.
+    
     inline static bool wasAirborne{false};
     inline static float hopPeak{0.0f};
     inline static float lastHopPeak{0.0f};
 
-    // The alternation state for the classic fallback's aligned branch.
+    
     inline static bool strafeSide{false};
 
     HookContext& hookContext;

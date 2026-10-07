@@ -1,7 +1,4 @@
-/*
-** C type management.
-** Copyright (C) 2005-2026 Mike Pall. See Copyright Notice in luajit.h
-*/
+
 
 #include "lj_obj.h"
 
@@ -16,19 +13,19 @@
 #include "lj_ccallback.h"
 #include "lj_buf.h"
 
-/* -- C type definitions -------------------------------------------------- */
 
-/* Predefined typedefs. */
+
+
 #define CTTDDEF(_) \
-  /* Vararg handling. */ \
+   \
   _("va_list",			P_VOID) \
   _("__builtin_va_list",	P_VOID) \
   _("__gnuc_va_list",		P_VOID) \
-  /* From stddef.h. */ \
+   \
   _("ptrdiff_t",		INT_PSZ) \
   _("size_t",			UINT_PSZ) \
   _("wchar_t",			WCHAR) \
-  /* Subset of stdint.h. */ \
+   \
   _("int8_t",			INT8) \
   _("int16_t",			INT16) \
   _("int32_t",			INT32) \
@@ -41,13 +38,13 @@
   _("uint128_t",		UINT128) \
   _("intptr_t",			INT_PSZ) \
   _("uintptr_t",		UINT_PSZ) \
-  /* From POSIX. */ \
+   \
   _("ssize_t",			INT_PSZ) \
-  /* End of typedef list. */
+  
 
-/* Keywords (only the ones we actually care for). */
+
 #define CTKWDEF(_) \
-  /* Type specifiers. */ \
+   \
   _("void",		-1,	CTOK_VOID) \
   _("_Bool",		0,	CTOK_BOOL) \
   _("bool",		1,	CTOK_BOOL) \
@@ -70,7 +67,7 @@
   _("__signed",		0,	CTOK_SIGNED) \
   _("__signed__",	0,	CTOK_SIGNED) \
   _("unsigned",		0,	CTOK_UNSIGNED) \
-  /* Type qualifiers. */ \
+   \
   _("const",		0,	CTOK_CONST) \
   _("__const",		0,	CTOK_CONST) \
   _("__const__",	0,	CTOK_CONST) \
@@ -83,20 +80,20 @@
   _("inline",		0,	CTOK_INLINE) \
   _("__inline",		0,	CTOK_INLINE) \
   _("__inline__",	0,	CTOK_INLINE) \
-  /* Storage class specifiers. */ \
+   \
   _("typedef",		0,	CTOK_TYPEDEF) \
   _("extern",		0,	CTOK_EXTERN) \
   _("static",		0,	CTOK_STATIC) \
   _("auto",		0,	CTOK_AUTO) \
   _("register",		0,	CTOK_REGISTER) \
-  /* GCC Attributes. */ \
+   \
   _("__extension__",	0,	CTOK_EXTENSION) \
   _("__attribute",	0,	CTOK_ATTRIBUTE) \
   _("__attribute__",	0,	CTOK_ATTRIBUTE) \
   _("asm",		0,	CTOK_ASM) \
   _("__asm",		0,	CTOK_ASM) \
   _("__asm__",		0,	CTOK_ASM) \
-  /* MSVC Attributes. */ \
+   \
   _("__declspec",	0,	CTOK_DECLSPEC) \
   _("__cdecl",		CTCC_CDECL,	CTOK_CCDECL) \
   _("__thiscall",	CTCC_THISCALL,	CTOK_CCDECL) \
@@ -104,17 +101,17 @@
   _("__stdcall",	CTCC_STDCALL,	CTOK_CCDECL) \
   _("__ptr32",		4,	CTOK_PTRSZ) \
   _("__ptr64",		8,	CTOK_PTRSZ) \
-  /* Other type specifiers. */ \
+   \
   _("struct",		0,	CTOK_STRUCT) \
   _("union",		0,	CTOK_UNION) \
   _("enum",		0,	CTOK_ENUM) \
-  /* Operators. */ \
+   \
   _("sizeof",		0,	CTOK_SIZEOF) \
   _("__alignof",	0,	CTOK_ALIGNOF) \
   _("__alignof__",	0,	CTOK_ALIGNOF) \
-  /* End of keyword list. */
+  
 
-/* Type info for predefined types. Size merged in. */
+
 static CTInfo lj_ctype_typeinfo[] = {
 #define CTTYINFODEF(id, sz, ct, info)	CTINFO((ct),(((sz)&0x3fu)<<10)+(info)),
 #define CTTDINFODEF(name, id)		CTINFO(CT_TYPEDEF, CTID_##id),
@@ -128,7 +125,7 @@ CTKWDEF(CTKWINFODEF)
   0
 };
 
-/* Predefined type names collected in a single string. */
+
 static const char * const lj_ctype_typenames =
 #define CTTDNAMEDEF(name, id)		name "\0"
 #define CTKWNAMEDEF(name, sz, cds)	name "\0"
@@ -145,13 +142,13 @@ CTKWDEF(CTKWNAMEDEF)
 #define CTTYPETAB_MIN		128
 #endif
 
-/* -- C type interning ---------------------------------------------------- */
+
 
 #define ct_hashtype(info, size)	(hashrot(info, size) & CTHASH_MASK)
 #define ct_hashname(name) \
   (hashrot(u32ptr(name), u32ptr(name) + HASH_BIAS) & CTHASH_MASK)
 
-/* Create new type element. */
+
 CTypeID lj_ctype_new(CTState *cts, CType **ctp)
 {
   CTypeID id = cts->top;
@@ -180,7 +177,7 @@ CTypeID lj_ctype_new(CTState *cts, CType **ctp)
   return id;
 }
 
-/* Intern a type element. */
+
 CTypeID lj_ctype_intern(CTState *cts, CTInfo info, CTSize size)
 {
   uint32_t h = ct_hashtype(info, size);
@@ -219,7 +216,7 @@ CTypeID lj_ctype_intern(CTState *cts, CTInfo info, CTSize size)
   return id;
 }
 
-/* Add type element to hash table. */
+
 static void ctype_addtype(CTState *cts, CType *ct, CTypeID id)
 {
   uint32_t h = ct_hashtype(ct->info, ct->size);
@@ -227,7 +224,7 @@ static void ctype_addtype(CTState *cts, CType *ct, CTypeID id)
   cts->hash[h] = (CTypeID1)id;
 }
 
-/* Add named element to hash table. */
+
 void lj_ctype_addname(CTState *cts, CType *ct, CTypeID id)
 {
   uint32_t h = ct_hashname(gcref(ct->name));
@@ -235,7 +232,7 @@ void lj_ctype_addname(CTState *cts, CType *ct, CTypeID id)
   cts->hash[h] = (CTypeID1)id;
 }
 
-/* Get a C type by name, matching the type mask. */
+
 CTypeID lj_ctype_getname(CTState *cts, CType **ctp, GCstr *name, uint32_t tmask)
 {
   CTypeID id = cts->hash[ct_hashname(name)];
@@ -248,11 +245,11 @@ CTypeID lj_ctype_getname(CTState *cts, CType **ctp, GCstr *name, uint32_t tmask)
     }
     id = ct->next;
   }
-  *ctp = &cts->tab[0];  /* Simplify caller logic. ctype_get() would assert. */
+  *ctp = &cts->tab[0];  
   return 0;
 }
 
-/* Get a struct/union/enum/function field by name. */
+
 CType *lj_ctype_getfieldq(CTState *cts, CType *ct, GCstr *name, CTSize *ofs,
 			  CTInfo *qual)
 {
@@ -277,12 +274,12 @@ CType *lj_ctype_getfieldq(CTState *cts, CType *ct, GCstr *name, CTSize *ofs,
       }
     }
   }
-  return NULL;  /* Not found. */
+  return NULL;  
 }
 
-/* -- C type information -------------------------------------------------- */
 
-/* Follow references and get raw type for a C type ID. */
+
+
 CType *lj_ctype_rawref(CTState *cts, CTypeID id)
 {
   CType *ct = ctype_get(cts, id);
@@ -291,37 +288,37 @@ CType *lj_ctype_rawref(CTState *cts, CTypeID id)
   return ct;
 }
 
-/* Get size for a C type ID. Does NOT support VLA/VLS. */
+
 CTSize lj_ctype_size(CTState *cts, CTypeID id)
 {
   CType *ct = ctype_raw(cts, id);
   return ctype_hassize(ct->info) ? ct->size : CTSIZE_INVALID;
 }
 
-/* Get size for a variable-length C type. Does NOT support other C types. */
+
 CTSize lj_ctype_vlsize(CTState *cts, CType *ct, CTSize nelem)
 {
   uint64_t xsz = 0;
   if (ctype_isstruct(ct->info)) {
     CTypeID arrid = 0, fid = ct->sib;
-    xsz = ct->size;  /* Add the struct size. */
+    xsz = ct->size;  
     while (fid) {
       CType *ctf = ctype_get(cts, fid);
       if (ctype_type(ctf->info) == CT_FIELD)
-	arrid = ctype_cid(ctf->info);  /* Remember last field of VLS. */
+	arrid = ctype_cid(ctf->info);  
       fid = ctf->sib;
     }
     ct = ctype_raw(cts, arrid);
   }
   lj_assertCTS(ctype_isvlarray(ct->info), "VLA expected");
-  ct = ctype_rawchild(cts, ct);  /* Get array element. */
+  ct = ctype_rawchild(cts, ct);  
   lj_assertCTS(ctype_hassize(ct->info), "bad VLA without size");
-  /* Calculate actual size of VLA and check for overflow. */
+  
   xsz += (uint64_t)ct->size * nelem;
   return xsz < 0x80000000u ? (CTSize)xsz : CTSIZE_INVALID;
 }
 
-/* Get type, qualifiers, size and alignment for a C type ID. */
+
 CTInfo lj_ctype_info(CTState *cts, CTypeID id, CTSize *szp)
 {
   CTInfo qual = 0;
@@ -329,7 +326,7 @@ CTInfo lj_ctype_info(CTState *cts, CTypeID id, CTSize *szp)
   for (;;) {
     CTInfo info = ct->info;
     if (ctype_isenum(info)) {
-      /* Follow child. Need to look at its attributes, too. */
+      
     } else if (ctype_isattrib(info)) {
       if (ctype_isxattrib(info, CTA_QUAL))
 	qual |= ct->size;
@@ -348,7 +345,7 @@ CTInfo lj_ctype_info(CTState *cts, CTypeID id, CTSize *szp)
   return qual;
 }
 
-/* Ditto, but follow a reference. */
+
 CTInfo lj_ctype_info_raw(CTState *cts, CTypeID id, CTSize *szp)
 {
   CType *ct = ctype_get(cts, id);
@@ -356,7 +353,7 @@ CTInfo lj_ctype_info_raw(CTState *cts, CTypeID id, CTSize *szp)
   return lj_ctype_info(cts, id, szp);
 }
 
-/* Get ctype metamethod. */
+
 cTValue *lj_ctype_meta(CTState *cts, CTypeID id, MMS mm)
 {
   CType *ct = ctype_get(cts, id);
@@ -376,9 +373,9 @@ cTValue *lj_ctype_meta(CTState *cts, CTypeID id, MMS mm)
   return NULL;
 }
 
-/* -- C type representation ----------------------------------------------- */
 
-/* Fixed max. length of a C type representation. */
+
+
 #define CTREPR_MAX		512
 
 typedef struct CTRepr {
@@ -390,7 +387,7 @@ typedef struct CTRepr {
   char buf[CTREPR_MAX];
 } CTRepr;
 
-/* Prepend string. */
+
 static void ctype_prepstr(CTRepr *ctr, const char *str, MSize len)
 {
   char *p = ctr->pb;
@@ -404,14 +401,14 @@ static void ctype_prepstr(CTRepr *ctr, const char *str, MSize len)
 
 #define ctype_preplit(ctr, str)	ctype_prepstr((ctr), "" str, sizeof(str)-1)
 
-/* Prepend char. */
+
 static void ctype_prepc(CTRepr *ctr, int c)
 {
   if (ctr->buf >= ctr->pb) { ctr->ok = 0; return; }
   *--ctr->pb = c;
 }
 
-/* Prepend number. */
+
 static void ctype_prepnum(CTRepr *ctr, uint32_t n)
 {
   char *p = ctr->pb;
@@ -421,14 +418,14 @@ static void ctype_prepnum(CTRepr *ctr, uint32_t n)
   ctr->needsp = 0;
 }
 
-/* Append char. */
+
 static void ctype_appc(CTRepr *ctr, int c)
 {
   if (ctr->pe >= ctr->buf + CTREPR_MAX) { ctr->ok = 0; return; }
   *ctr->pe++ = c;
 }
 
-/* Append number. */
+
 static void ctype_appnum(CTRepr *ctr, uint32_t n)
 {
   char buf[10];
@@ -440,14 +437,14 @@ static void ctype_appnum(CTRepr *ctr, uint32_t n)
   ctr->pe = q;
 }
 
-/* Prepend qualifiers. */
+
 static void ctype_prepqual(CTRepr *ctr, CTInfo info)
 {
   if ((info & CTF_VOLATILE)) ctype_preplit(ctr, "volatile");
   if ((info & CTF_CONST)) ctype_preplit(ctr, "const");
 }
 
-/* Prepend named type. */
+
 static void ctype_preptype(CTRepr *ctr, CType *ct, CTInfo qual, const char *t)
 {
   if (gcref(ct->name)) {
@@ -559,7 +556,7 @@ static void ctype_repr(CTRepr *ctr, CTypeID id)
   }
 }
 
-/* Return a printable representation of a C type. */
+
 GCstr *lj_ctype_repr(lua_State *L, CTypeID id, GCstr *name)
 {
   global_State *g = G(L);
@@ -575,7 +572,7 @@ GCstr *lj_ctype_repr(lua_State *L, CTypeID id, GCstr *name)
   return lj_str_new(L, ctr.pb, ctr.pe - ctr.pb);
 }
 
-/* Convert int64_t/uint64_t to string with 'LL' or 'ULL' suffix. */
+
 GCstr *lj_ctype_repr_int64(lua_State *L, uint64_t n, int isunsigned)
 {
   char buf[1+20+3];
@@ -593,7 +590,7 @@ GCstr *lj_ctype_repr_int64(lua_State *L, uint64_t n, int isunsigned)
   return lj_str_new(L, p, (size_t)(buf+sizeof(buf)-p));
 }
 
-/* Convert complex to string with 'i' or 'I' suffix. */
+
 GCstr *lj_ctype_repr_complex(lua_State *L, void *sp, CTSize size)
 {
   SBuf *sb = lj_buf_tmp_(L);
@@ -610,9 +607,9 @@ GCstr *lj_ctype_repr_complex(lua_State *L, void *sp, CTSize size)
   return lj_buf_str(L, sb);
 }
 
-/* -- C type state -------------------------------------------------------- */
 
-/* Initialize C type table and state. */
+
+
 CTState *lj_ctype_init(lua_State *L)
 {
   CTState *cts = lj_mem_newt(L, sizeof(CTState), CTState);
@@ -646,10 +643,10 @@ CTState *lj_ctype_init(lua_State *L)
   return cts;
 }
 
-/* Create special weak-keyed finalizer table. */
+
 void lj_ctype_initfin(lua_State *L)
 {
-  /* NOBARRIER: The table is new (marked white). */
+  
   GCtab *t = lj_tab_new(L, 0, 1);
   setgcref(t->metatable, obj2gco(t));
   setstrV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "__mode")),
@@ -658,7 +655,7 @@ void lj_ctype_initfin(lua_State *L)
   setgcref(G(L)->gcroot[GCROOT_FFI_FIN], obj2gco(t));
 }
 
-/* Free C type table and state. */
+
 void lj_ctype_freestate(global_State *g)
 {
   CTState *cts = ctype_ctsG(g);

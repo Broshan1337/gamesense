@@ -11,23 +11,23 @@
 #include <HookContext/HookContextMacros.h>
 #include <MemoryPatterns/PatternTypes/ClientPatternTypes.h>
 
-// Makes OUR OWN client display chosen commend counters (leader / teacher / friendly) for the
-// local player, in two places:
-//
-// 1. The ranking-data block (the member KeyValues tree the profile card reads): flag 0x8 +
-//    the commends substruct (block+0x78) - the game formats "[f%d][t%d][l%d]" from the ints at
-//    +0x18 (friendly) / +0x1C (teaching) / +0x20 (leader) into game/commends. Spoofing only
-//    happens when the game's OWN substruct exists (never fabricated - death crash 2026-09-19).
-// 2. The local controller's InventoryServices persona fields (m_nPersonaDataPublicCommends*) -
-//    the networked copies other UI reads.
-//
-// Local and cosmetic, exactly like FakeLevel. Real commends are awarded by the Steam game
-// coordinator (k_EMsgGCCStrike15_v2_ClientCommendPlayer), which is a different connection and
-// not what this feature touches. The coordinator refreshes both targets, so the spoof is
-// re-asserted every frame and the originals are restored on toggle-off / unload.
-//
-// Controller field offsets are resolved through the schema (update-proof) and cached once they
-// resolve: onUnload() must not depend on the unload context's schema access.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 template <typename HookContext>
 class FakeCommends {
@@ -78,13 +78,13 @@ public:
     }
 
 private:
-    // Ranking-data block part (the profile card's game/commends source).
-    //
-    // CRASH RULE (2026-09-19 death crash): only spoof when the game's OWN commends substruct
-    // exists (block+0x78). Installing our own zero-filled struct made the death-time
-    // profile/scoreboard update walk unknown members of a 28-byte struct and crash on a null
-    // container inside the block's string/clone machinery. Same rule as FakePremier: never set
-    // the present-flag for data the game does not own.
+    
+    
+    
+    
+    
+    
+    
     void applyCommendsBlock() const noexcept
     {
         auto* const block = static_cast<std::byte*>(hookContext.patternSearchResults().template get<PlayerRankingDataPointer>());
@@ -97,7 +97,7 @@ private:
 
         if (GET_CONFIG_VAR(FakeCommendsEnabled)) {
             if (!sub)
-                return; // no game-owned substruct - no safe spoof surface
+                return; 
             auto* const bytes = static_cast<std::byte*>(sub);
             const std::int32_t friendly = GET_CONFIG_VAR(FakeCommendsFriendly);
             const std::int32_t teaching = GET_CONFIG_VAR(FakeCommendsTeaching);
@@ -190,9 +190,9 @@ private:
         std::memcpy(services + offsets.leader, &leader, sizeof(leader));
     }
 
-    // Saved so switching the feature off puts the real counters back. Captured only when what we
-    // are looking at is not already our own spoof, so a server-side refresh updates the
-    // originals instead of us saving our own lie.
+    
+    
+    
     void captureOriginal(cs2::C_BaseEntity* controllerEntity, int inventoryServicesOffset, Offsets offsets) const noexcept
     {
         auto* const services = inventoryServicesOf(controllerEntity, inventoryServicesOffset);
