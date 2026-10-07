@@ -11,6 +11,7 @@
 #include <CS2/Classes/Vector.h>
 #include <CS2/Constants/DllNames.h>
 #include <Features/Combat/AttackCommand.h>
+#include <Features/Combat/Autowall/Autowall.h>
 #include <Features/Combat/ShotGeometry.h>
 #include <Features/Combat/Rcs/RcsConfigVariables.h>
 #include <Features/Combat/SubtickShotWriter.h>
@@ -402,49 +403,41 @@ private:
         auto&& localPawn = hookContext.activeLocalPlayerPawn();
         const auto eye = localPawn.eyePosition();
         if (!eye.hasValue())
-            return true;
+            return false;
 
         auto&& node = target.baseEntity().gameSceneNode();
         auto bone = node.bonePosition(kHeadBone);
         if (!bone.hasValue())
             bone = node.bonePosition(kChestBone);
         if (!bone.hasValue())
-            return true;
+            return false;
 
         void* const skip = static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity());
         void* const targetEntity = static_cast<cs2::C_BaseEntity*>(target.baseEntity());
 
-        const auto forward = Tracing::traceLine(eye.value(), bone.value(), skip);
-        
-        if (!forward.didHit || forward.hitEntity == targetEntity)
-            return true;
-
-        
         if (autowallThickness <= 0)
-            return false;
+            return Tracing::traceLine(eye.value(), bone.value(), skip, Autowall::kBulletMask).reaches(targetEntity);
 
-        
-        if (forward.hitEntity != nullptr)
+        auto&& weapon = localPawn.getActiveWeapon();
+        const auto damage = weapon.baseDamage();
+        const auto rangeModifier = weapon.rangeModifier();
+        const auto maxRange = weapon.maxRange();
+        if (!damage.hasValue() || !rangeModifier.hasValue() || !maxRange.hasValue())
             return false;
-
-        
-        
-        const auto back = Tracing::traceLine(bone.value(), eye.value(), skip);
-        if (!back.didHit)
-            return false;
-
-        const float dx = forward.endPos.x - back.endPos.x;
-        const float dy = forward.endPos.y - back.endPos.y;
-        const float dz = forward.endPos.z - back.endPos.z;
-        const float thickness = trig::squareRoot(dx * dx + dy * dy + dz * dz);
-        const bool pass = thickness <= static_cast<float>(autowallThickness);
-        return pass;
+        penetration::TraceBudget budget;
+        const penetration::Limits limits{90.0f, float(autowallThickness), 4};
+        const auto impact = Autowall::evaluate(eye.value(), bone.value(), skip, targetEntity,
+            {damage.value(), weapon.penetrationPower().valueOr(0.0f), rangeModifier.value(), maxRange.value()},
+            limits, budget, [&](void* entity) {
+                auto* raw = static_cast<cs2::C_BaseEntity*>(entity);
+                return raw && raw->identity && raw->identity->entityClass
+                    && hookContext.entityClassifier().initialized()
+                    && !hookContext.template make<BaseEntity>(raw).template is<PlayerPawn>();
+            });
+        return impact.hasValue() && impact.value().damage >= 1.0f;
     }
 
-    
-    
-    
-    
+
     [[nodiscard]] bool onHead(auto&& target, const cs2::Vector& eye, float pitch, float yaw) const noexcept
     {
         const auto head = target.baseEntity().gameSceneNode().bonePosition(kHeadBone);

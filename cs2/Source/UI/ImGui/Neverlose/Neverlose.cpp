@@ -3112,7 +3112,7 @@ void pageLegitTriggerbot() noexcept
     addCard("TRIGGERBOT VISIBILITY", 4, [] {
         toggleVar<triggerbot_vars::WallCheck>("Shoot Visible", ++controlId);
         toggleVar<triggerbot_vars::Autowall>("Shoot Walls (Estimated)", ++controlId);
-        sliderVar<triggerbot_vars::AutowallMaxThickness>("Max Wall Thickness", ++controlId, " u");
+        sliderVar<triggerbot_vars::AutowallMaxThickness>("Max Total Wall Thickness", ++controlId, " u");
         toggleVar<triggerbot_vars::SeededFire>("Seeded Fire", ++controlId);
     });
 }

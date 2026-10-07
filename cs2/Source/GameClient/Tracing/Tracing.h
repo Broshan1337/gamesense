@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <cmath>
 
 #include <CS2/Classes/Vector.h>
 #include <CS2/Constants/DllNames.h>
@@ -35,7 +36,14 @@ public:
 
         [[nodiscard]] bool reaches(const void* targetEntity) const noexcept
         {
-            return valid && (!didHit || (targetEntity && hitEntity == targetEntity));
+            return valid && std::isfinite(fraction) && fraction >= 0.0f && fraction <= 1.0f
+                && didHit == (fraction < 1.0f) && finiteVector(endPos) && finiteVector(normal)
+                && (!didHit || (targetEntity && hitEntity == targetEntity));
+        }
+
+        [[nodiscard]] static bool finiteVector(const cs2::Vector& value) noexcept
+        {
+            return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
         }
     };
 
@@ -98,6 +106,8 @@ public:
     [[nodiscard]] static Result traceLine(const cs2::Vector& start, const cs2::Vector& end, void* skipEntity = nullptr, std::uint64_t mask = kDefaultMask) noexcept
     {
         Result out{false, 1.0f, end, cs2::Vector{}, nullptr};
+        if (!Result::finiteVector(start) || !Result::finiteVector(end))
+            return out;
 
         const auto anchors = resolvedAnchors();
         if (!anchors)
@@ -147,6 +157,7 @@ public:
         out.endPos = readAt<cs2::Vector>(result, kEndPosOffset);
         out.normal = readAt<cs2::Vector>(result, kNormalOffset);
         out.hitEntity = readAt<void*>(result, kHitEntityOffset);
+        out.valid = out.valid && Result::finiteVector(out.endPos) && Result::finiteVector(out.normal);
         return out;
     }
 
@@ -156,6 +167,9 @@ public:
     [[nodiscard]] static Result traceHull(const cs2::Vector& start, const cs2::Vector& end, const cs2::Vector& mins, const cs2::Vector& maxs, void* skipEntity = nullptr, std::uint64_t mask = kDefaultMask) noexcept
     {
         Result out{false, 1.0f, end, cs2::Vector{}, nullptr};
+        if (!Result::finiteVector(start) || !Result::finiteVector(end)
+            || !Result::finiteVector(mins) || !Result::finiteVector(maxs))
+            return out;
 
         const auto anchors = resolvedAnchors();
         if (!anchors)
@@ -197,6 +211,7 @@ public:
         out.endPos = readAt<cs2::Vector>(result, kEndPosOffset);
         out.normal = readAt<cs2::Vector>(result, kNormalOffset);
         out.hitEntity = readAt<void*>(result, kHitEntityOffset);
+        out.valid = out.valid && Result::finiteVector(out.endPos) && Result::finiteVector(out.normal);
         return out;
     }
 

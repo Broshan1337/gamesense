@@ -13,6 +13,7 @@
 #include <Features/Combat/ShotWait.h>
 #include <Features/Combat/AttackCommand.h>
 #include <Features/Combat/Autowall/Autowall.h>
+#include <Features/Combat/Autowall/DamageCache.h>
 #include <Features/Combat/ShotGeometry.h>
 #include <Features/Combat/SubtickShotWriter.h>
 #include <Features/Game/FvaEmulator.h>
@@ -43,6 +44,8 @@ public:
     void onCreateMove(cs2::CUserCmd* cmd) const noexcept
     {
 
+        wallTraceBudget = {};
+        damageCache.reset();
         forceShotThisTick = false;
         shotStagedThisTick = false;
         stagedCorrectionValid = false;
@@ -649,34 +652,49 @@ private:
     [[nodiscard]] float estimatedDamage(auto&& localPawn, const cs2::Vector& eye,
                                        const typename AimTarget<HookContext>::Target& target) const noexcept
     {
+        if (const auto cached = damageCache.find(eye, target.aimPoint, target.entity, target.hitgroup); cached.hasValue())
+            return cached.value();
+        const float damage = computeDamage(localPawn, eye, target);
+        damageCache.store(eye, target.aimPoint, target.entity, target.hitgroup, damage);
+        return damage;
+    }
+
+    [[nodiscard]] float computeDamage(auto&& localPawn, const cs2::Vector& eye,
+        const typename AimTarget<HookContext>::Target& target) const noexcept
+    {
         auto&& weapon = localPawn.getActiveWeapon();
         const auto base = weapon.baseDamage();
         const auto range = weapon.rangeModifier();
+        const auto maxRange = weapon.maxRange();
         const auto armorRatio = weapon.armorRatio();
         const auto headMultiplier = weapon.headshotMultiplier();
-        if (!base.hasValue() || !range.hasValue() || !armorRatio.hasValue() || !headMultiplier.hasValue()
+        if (!base.hasValue() || !range.hasValue() || !maxRange.hasValue() || !armorRatio.hasValue() || !headMultiplier.hasValue()
             || !std::isfinite(base.value()) || !std::isfinite(range.value()) || base.value()<=0
             || range.value()<=0 || range.value()>1 || !std::isfinite(armorRatio.value())
             || armorRatio.value()<0 || !std::isfinite(headMultiplier.value()) || headMultiplier.value()<=0)
             return kUnknownDamage;
         const auto delta = hitbox_geometry::subtract(target.aimPoint,eye);
-        const float distance = trig::squareRoot(hitbox_geometry::dot(delta,delta));
-        if (!std::isfinite(distance)) return kUnknownDamage;
-        float damage = base.value() * fastmath::powf(range.value(),distance/500.0f);
+        const float distance = std::hypot(delta.x, delta.y, delta.z);
+        if (!std::isfinite(distance) || !std::isfinite(maxRange.value()) || maxRange.value() <= 0.0f
+            || distance > maxRange.value()) return kUnknownDamage;
+        float damage = penetration::decay(base.value(), distance, range.value());
         const bool wallCheck = GET_CONFIG_VAR(aimbot_vars::WallCheck);
         const bool autowall = GET_CONFIG_VAR(aimbot_vars::Autowall);
-        if (wallCheck || autowall) {
-            const auto trace = Tracing::traceLine(eye,target.aimPoint,localPawn.baseEntity());
-            if (!trace.valid) return kUnknownDamage;
-            if (!trace.reaches(target.entity)) {
-                if (!autowall || trace.hitEntity) return kUnknownDamage;
-                const auto power = weapon.penetrationPower();
-                if (!power.hasValue()) return kUnknownDamage;
-                const auto surviving = Autowall::penetratedDamage(eye,target.aimPoint,localPawn.baseEntity(),
-                                                                 target.entity,damage,power.value());
-                if (!surviving.hasValue()) return kUnknownDamage;
-                damage = surviving.value();
-            }
+        if (autowall) {
+            const auto impact = Autowall::evaluate(eye, target.aimPoint, localPawn.baseEntity(), target.entity,
+                {base.value(), weapon.penetrationPower().valueOr(0.0f), range.value(), maxRange.value()}, {},
+                wallTraceBudget, [&](void* entity) {
+                    auto* raw = static_cast<cs2::C_BaseEntity*>(entity);
+                    return raw && raw->identity && raw->identity->entityClass
+                        && hookContext.entityClassifier().initialized()
+                        && !hookContext.template make<BaseEntity>(raw).template is<PlayerPawn>();
+                });
+            if (!impact.hasValue()) return kUnknownDamage;
+            damage = impact.value().damage;
+        } else if (wallCheck) {
+            if (!wallTraceBudget.take()) return kUnknownDamage;
+            const auto trace = Tracing::traceLine(eye, target.aimPoint, localPawn.baseEntity(), Autowall::kBulletMask);
+            if (!trace.reaches(target.entity)) return kUnknownDamage;
         }
         int armor=0; bool helmet=false;
         if (!readTargetArmor(target.entity,armor,helmet)) return kUnknownDamage;
@@ -709,7 +727,7 @@ private:
         }
 
         constexpr float armorBonus = 0.5f;
-        const float armorRatioScaled = armorRatio * 0.5f;
+        const float armorRatioScaled = std::clamp(armorRatio * 0.5f, 0.0f, 1.0f);
         float damageToHealth = damage * armorRatioScaled;
         const float damageToArmor = (damage - damageToHealth) * armorBonus;
         if (damageToArmor > static_cast<float>(armor))
@@ -719,9 +737,7 @@ private:
 
     [[nodiscard]] static float floorNonNegative(float value) noexcept
     {
-        if (value < 0.0f)
-            return 0.0f;
-        return static_cast<float>(static_cast<int>(value));
+        return std::isfinite(value) ? std::floor(std::max(0.0f, value)) : 0.0f;
     }
 
     bool readTargetArmor(cs2::C_BaseEntity* entity, int& armorOut, bool& hasHelmetOut) const noexcept
@@ -815,6 +831,8 @@ private:
     inline static bool stagedSpreadCompensation{false};
 
     inline static shot_wait::State shotWait;
+    inline static penetration::TraceBudget wallTraceBudget;
+    inline static penetration::DamageCache damageCache;
 
     inline static cs2::Vector stagedEye{};
     inline static cs2::Vector stagedAimPoint{};

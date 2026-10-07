@@ -634,6 +634,11 @@ public:
         return vDataFloat("m_flRangeModifier");
     }
 
+    [[nodiscard]] Optional<float> maxRange() const noexcept
+    {
+        return vDataFloat("m_flRange");
+    }
+
     
     
     [[nodiscard]] Optional<float> penetrationPower() const noexcept
