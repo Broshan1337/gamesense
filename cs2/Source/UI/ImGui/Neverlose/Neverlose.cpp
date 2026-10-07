@@ -3592,7 +3592,7 @@ void pageMovement() noexcept
         toggleVar<BlockbotEnabled>("Blockbot", ++controlId);
         toggleVar<BunnyhopEnabled>("Bunnyhop", ++controlId);
         toggleVar<AutoStrafeEnabled>("Auto Strafe", ++controlId);
-        toggleVar<TestStraferEnabled>("Test Strafer", ++controlId);
+        toggleVar<TestStraferEnabled>("Auto Strafe Diagnostics", ++controlId);
     });
     addCard("EDGE & SPEED", 7, [] {
         toggleVar<movement_vars::EdgeJump>("Edge Jump", ++controlId);

@@ -253,6 +253,43 @@ public:
     
     
     
+    // Remove only fields owned by horizontal movement. Keep the sample's time,
+    // view deltas, jump, duck and attack events intact.
+    static void stripMovement(std::byte* baseMessage, std::uint64_t movementMask) noexcept
+    {
+        stripAnalog(baseMessage);
+        if (!baseMessage || !movementMask)
+            return;
+        using Field = cs2::CUserCmd::BaseMessage::SubtickMoves;
+        auto* field = baseMessage + Field::kFieldOffset;
+        int size{};
+        std::byte* rep{};
+        std::memcpy(&size, field + Field::kCurrentSizeOffset, sizeof(size));
+        std::memcpy(&rep, field + Field::kRepOffset, sizeof(rep));
+        if (!rep || size <= 0 || size > Field::kMaxSteps)
+            return;
+        for (int i = 0; i < size; ++i) {
+            std::byte* step{};
+            std::memcpy(&step, rep + Field::kRepElementsOffset + i * sizeof(step), sizeof(step));
+            if (!step)
+                continue;
+            std::uint32_t bits{};
+            std::uint64_t button{};
+            std::memcpy(&bits, step + cs2::CSubtickMoveStep::kHasBitsOffset, sizeof(bits));
+            if (!(bits & cs2::CSubtickMoveStep::kButtonHasBit))
+                continue;
+            std::memcpy(&button, step + cs2::CSubtickMoveStep::kButtonOffset, sizeof(button));
+            if (!(button & movementMask))
+                continue;
+            button &= ~movementMask;
+            std::memcpy(step + cs2::CSubtickMoveStep::kButtonOffset, &button, sizeof(button));
+            if (!button) {
+                bits &= ~(cs2::CSubtickMoveStep::kButtonHasBit | cs2::CSubtickMoveStep::kPressedHasBit);
+                std::memcpy(step + cs2::CSubtickMoveStep::kHasBitsOffset, &bits, sizeof(bits));
+            }
+        }
+    }
+
     static void stripAnalog(std::byte* baseMessage) noexcept
     {
         if (!baseMessage)

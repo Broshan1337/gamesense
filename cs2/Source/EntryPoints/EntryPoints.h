@@ -885,7 +885,6 @@ std::uint64_t CSGOInputHook_onBuildUserCmd(cs2::CCSGOInput* thisptr, int slot, i
     HookContext<GlobalContext> hookContext;
     if (!shuttingDown && !hookContext.template make<PanicKey>().isActive()) {
         hookContext.template make<Blockbot>().onBuildUserCmd(thisptr, slot);
-        hookContext.template make<Bunnyhop>().onBuildUserCmd(thisptr, slot);
         hookContext.template make<Movement>().onBuildUserCmd(thisptr, slot);
     }
     CrashLogger::trace(0x373);
@@ -913,7 +912,6 @@ std::uint64_t CSGOInputHook_onWriteMoveCrc(cs2::CCSGOInput* thisptr, cs2::CUserC
     
     hookContext.template make<SuperToss>().onWriteMoveCrc(cmd);
     hookContext.template make<LastTickDefuse>().onWriteMoveCrc(cmd);
-    hookContext.template make<Bunnyhop>().onWriteMoveCrc(cmd);
     
     
     hookContext.template make<Movement>().onWriteMoveCrc(cmd);
@@ -941,6 +939,8 @@ std::uint64_t CSGOInputHook_onWriteMoveCrc(cs2::CCSGOInput* thisptr, cs2::CUserC
         
         
         hookContext.template make<FvaEmulator>().onWriteMoveCrcLate(cmd);
+        // Commit movement against the final command view basis.
+        hookContext.template make<Bunnyhop>().onWriteMoveCrc(cmd);
 
         
         

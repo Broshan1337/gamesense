@@ -10,8 +10,8 @@
 #include <Features/Game/AirStrafe.h>
 #include <Features/Game/BunnyhopConfigVariables.h>
 #include <Features/Game/Movement.h>
+#include <Features/Game/StrafeCommand.h>
 #include <GameClient/ConVars/CvarSystem.h>
-#include <GameClient/CSGOInputMovement.h>
 #include <GameClient/Entities/BaseEntity.h>
 #include <GameClient/Entities/PlayerPawn.h>
 #include <GameClient/KeyboardState.h>
@@ -58,7 +58,7 @@ public:
             return reset();
 
         const bool jumpHeld = KeyboardState::isKeyDown(sdl3::scancode::kSpace);
-        const bool strafeEnabled = GET_CONFIG_VAR(AutoStrafeEnabled) && !GET_CONFIG_VAR(TestStraferEnabled);
+        const bool strafeEnabled = GET_CONFIG_VAR(AutoStrafeEnabled) || GET_CONFIG_VAR(TestStraferEnabled);
         const bool bhopEnabled = GET_CONFIG_VAR(BunnyhopEnabled) && jumpHeld;
         if (!strafeEnabled && !bhopEnabled)
             return reset();
@@ -77,6 +77,9 @@ public:
             || !walking.hasValue() || !walking.value() || !onGround.hasValue())
             return reset();
 
+        pendingCommand = cmd;
+        pendingSequence = StrafeCommand::commandNumber(cmd);
+        pendingBase = userCmd.baseMessage();
         if (onGround.value())
             strafeSide = false;
 
@@ -84,13 +87,12 @@ public:
         // Holding movement or jump expresses intent; walking slowly remains manual.
         using Buttons = cs2::CCSGOInput::Buttons;
         constexpr auto moveMask = Buttons::kForward | Buttons::kBack | Buttons::kMoveLeft | Buttons::kMoveRight;
-        if (strafeEnabled && !onGround.value() && (jumpHeld || userCmd.isButtonDown(moveMask))
+        if (strafeEnabled && !onGround.value() && (jumpHeld || userCmd.isButtonDown(Buttons::kJump | moveMask)
+                || std::abs(userCmd.forwardMove().valueOr(0.0f)) > 0.001f
+                || std::abs(userCmd.leftMove().valueOr(0.0f)) > 0.001f)
             && !userCmd.isButtonDown(0x10000)) {
             if (const auto move = directionalStrafe(userCmd); move.hasValue()) {
-                pendingForward = move.value().forward;
-                pendingLeft = move.value().left;
-                hasPendingStrafe = true;
-                hasPendingInput = true;
+                hasPendingInput = pendingStrafe.stage(cmd, {move.value().forward, move.value().left});
             }
         }
 
@@ -116,82 +118,28 @@ public:
     
     
     
-    void onBuildUserCmd(cs2::CCSGOInput* input, int slot) const noexcept
-    {
-        if (slot != 0 || !hasPendingInput || !hasPendingStrafe)
-            return;
-
-        const CSGOInputMovement movement{input};
-        if (movement)
-            movement.forceMove(pendingForward, pendingLeft);
-    }
-
-    
-    
-    
-    
-    
-    
-    
-    
-    [[nodiscard]] bool engageClassicStrafe(const UserCmd& userCmd, bool requireAutoStrafeToggle = true) const noexcept
-    {
-        if (requireAutoStrafeToggle && !GET_CONFIG_VAR(AutoStrafeEnabled))
-            return false;
-
-        if (const auto move = directionalStrafe(userCmd); move.hasValue()) {
-            pendingForward = move.value().forward;
-            pendingLeft = move.value().left;
-            hasPendingStrafe = true;
-            hasPendingInput = true;
-            return true;
-        }
-        return false;
-    }
-
-    
-    
-    
-    
-    [[nodiscard]] bool engageClassicStrafeAngle(const UserCmd& userCmd, float angleDegrees, bool left) const noexcept
-    {
-        const auto viewYaw = userCmd.viewYaw();
-        if (!viewYaw.hasValue() || !std::isfinite(viewYaw.value()) || !std::isfinite(angleDegrees))
-            return false;
-
-        const auto velocity = localVelocity();
-        if (!velocity.hasValue() || !std::isfinite(velocity.value().x) || !std::isfinite(velocity.value().y))
-            return false;
-
-        
-        
-        const auto move = air_strafe::moveAtAngle(trig::arcTangent2(velocity.value().y, velocity.value().x),
-            viewYaw.value() * trig::kDegreesToRadians, angleDegrees * trig::kDegreesToRadians, left);
-        pendingForward = move.forward;
-        pendingLeft = move.left;
-        hasPendingStrafe = true;
-        hasPendingInput = true;
-        return true;
-    }
-
-    
-    
-    
-    
-    
-    
-    
     void onWriteMoveCrc(cs2::CUserCmd* cmd) const noexcept
     {
-        if (!cmd || !hasPendingInput)
+        if (!hasPendingInput)
             return;
-
         const UserCmd userCmd{cmd};
+        if (!cmd || cmd != pendingCommand || userCmd.baseMessage() != pendingBase
+            || StrafeCommand::commandNumber(cmd) != pendingSequence
+            || Movement<HookContext>::jumpBugActive) {
+            clearPending();
+            return;
+        }
+        auto&& localPawn = hookContext.localPlayerController().pawn().template as<PlayerPawn>();
+        const auto walking = isWalking();
+        if (!localPawn || localPawn.health().valueOr(0) <= 0 || !walking.valueOr(false)) {
+            clearPending();
+            return;
+        }
 
         
         
         
-        if (hasPendingJump) {
+        if (hasPendingJump && GET_CONFIG_VAR(BunnyhopEnabled)) {
             if (hasPendingLanding)
                 static_cast<void>(addLandingTap(userCmd, pendingLandingWhen));
             else if (hasPendingTap)
@@ -199,21 +147,10 @@ public:
             userCmd.setButtonState(cs2::CCSGOInput::Buttons::kJump, wantsJump);
         }
 
-        if (!hasPendingStrafe)
-            return;
-
-        using Buttons = cs2::CCSGOInput::Buttons;
-        userCmd.setButtonState(Buttons::kForward | Buttons::kBack | Buttons::kMoveLeft | Buttons::kMoveRight, false);
-
-        if (pendingForward > 0.0f)
-            userCmd.setButtonState(cs2::CCSGOInput::Buttons::kForward, true);
-        else if (pendingForward < 0.0f)
-            userCmd.setButtonState(cs2::CCSGOInput::Buttons::kBack, true);
-
-        if (pendingLeft > 0.0f)
-            userCmd.setButtonState(cs2::CCSGOInput::Buttons::kMoveLeft, true);
-        else if (pendingLeft < 0.0f)
-            userCmd.setButtonState(cs2::CCSGOInput::Buttons::kMoveRight, true);
+        if (pendingStrafe.active() && isOnGround() == false
+            && (GET_CONFIG_VAR(AutoStrafeEnabled) || GET_CONFIG_VAR(TestStraferEnabled)))
+            static_cast<void>(pendingStrafe.template commit<HookContext>(cmd));
+        clearPending();
     }
 
     void onUnload() const noexcept
@@ -396,9 +333,9 @@ private:
         hasPendingInput = false;
         hasPendingJump = false;
         wantsJump = false;
-        pendingForward = 0.0f;
-        pendingLeft = 0.0f;
-        hasPendingStrafe = false;
+        pendingStrafe.reset();
+        pendingCommand = nullptr;
+        pendingBase = nullptr;
         hasPendingLanding = false;
         hasPendingTap = false;
     }
@@ -433,6 +370,11 @@ private:
         if (const auto maximum = weapon.maxSpeed(); maximum.hasValue()
             && std::isfinite(maximum.value()) && maximum.value() > 0.0f)
             wishSpeed = std::min(wishSpeed, maximum.value());
+        if (userCmd.isButtonDown(cs2::CCSGOInput::Buttons::kAttack)) {
+            if (const auto factor = weapon.attackMovespeedFactor(); factor.hasValue()
+                && std::isfinite(factor.value()) && factor.value() > 0.0f && factor.value() <= 1.0f)
+                wishSpeed *= factor.value();
+        }
 
         const air_strafe::Parameters parameters{wishSpeed, airAccelerate.value(), airMaxWishSpeed.value(),
             tickInterval.value(), servicesFloat(services, "m_flSurfaceFriction").valueOr(1.0f)};
@@ -440,9 +382,13 @@ private:
             return {};
 
         using Buttons = cs2::CCSGOInput::Buttons;
-        const air_strafe::Move desired{
-            float(userCmd.isButtonDown(Buttons::kForward)) - float(userCmd.isButtonDown(Buttons::kBack)),
-            float(userCmd.isButtonDown(Buttons::kMoveLeft)) - float(userCmd.isButtonDown(Buttons::kMoveRight))};
+        // Analog intent supports custom binds and controllers; buttons cover
+        // early commands whose analog fields have not been populated yet.
+        air_strafe::Move desired{userCmd.forwardMove().valueOr(0.0f), userCmd.leftMove().valueOr(0.0f)};
+        if (std::abs(desired.forward) < 0.001f && std::abs(desired.left) < 0.001f)
+            desired = {
+                float(userCmd.isButtonDown(Buttons::kForward)) - float(userCmd.isButtonDown(Buttons::kBack)),
+                float(userCmd.isButtonDown(Buttons::kMoveLeft)) - float(userCmd.isButtonDown(Buttons::kMoveRight))};
         const auto move = air_strafe::steer(velocity.value().x, velocity.value().y,
             viewYaw.value() * trig::kDegreesToRadians, desired, userCmd.mouseDx().valueOr(0), strafeSide, parameters);
         return StrafeMove{move.forward, move.left};
@@ -528,9 +474,10 @@ private:
     inline static bool hasPendingInput{false};
     inline static bool hasPendingJump{false};
     inline static bool wantsJump{false};
-    inline static float pendingForward{0.0f};
-    inline static float pendingLeft{0.0f};
-    inline static bool hasPendingStrafe{false};
+    inline static StrafeCommand pendingStrafe;
+    inline static cs2::CUserCmd* pendingCommand{};
+    inline static std::byte* pendingBase{};
+    inline static int pendingSequence{};
     
     
     inline static bool hasPendingLanding{false};

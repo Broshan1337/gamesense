@@ -80,15 +80,15 @@ TEST(AirStrafeTest, SteersTowardLeftRightAndBackwardKeys)
     EXPECT_LT(move.forward, -0.99f);
 }
 
-TEST(AirStrafeTest, MouseTurningOverridesKeysAndStraightInputAlternates)
+TEST(AirStrafeTest, ExplicitDirectionWinsOverMouseNoiseAndStraightInputAlternates)
 {
     bool side = false;
     auto move = air_strafe::steer(250.0f, 0.0f, 0.0f, {0.0f, -1.0f}, -5, side, defaults);
-    EXPECT_GT(move.left, 0.99f);
-    move = air_strafe::steer(250.0f, 0.0f, 0.0f, {1.0f, 0.0f}, 0, side, defaults);
     EXPECT_LT(move.left, -0.99f);
     move = air_strafe::steer(250.0f, 0.0f, 0.0f, {1.0f, 0.0f}, 0, side, defaults);
     EXPECT_GT(move.left, 0.99f);
+    move = air_strafe::steer(250.0f, 0.0f, 0.0f, {1.0f, 0.0f}, 0, side, defaults);
+    EXPECT_LT(move.left, -0.99f);
 }
 
 TEST(AirStrafeTest, HandlesStandingStartsAndDiagonalInput)
@@ -118,4 +118,66 @@ TEST(AirStrafeTest, CardinalDirectionsHaveNoResidualOpposingInput)
     const auto back = air_strafe::moveAtAngle(trig::kPi, 0.0f, 0.0f, true);
     EXPECT_FLOAT_EQ(back.left, 0.0f);
     EXPECT_NEAR(back.forward, -1.0f, 0.00001f);
+}
+
+TEST(AirStrafeTest, LowSpeedLaunchesTowardInputRatherThanSideways)
+{
+    bool side = false;
+    for (float speed : {0.0f, 1.0f, 5.0f, 29.0f}) {
+        const auto move = air_strafe::steer(speed, 0.0f, 0.0f, {1.0f, 0.0f}, 0, side, defaults);
+        EXPECT_FLOAT_EQ(move.forward, 1.0f);
+        EXPECT_FLOAT_EQ(move.left, 0.0f);
+    }
+}
+
+TEST(AirStrafeTest, TurningMouseBreaksTiesAlongVelocity)
+{
+    bool side = false;
+    const auto left = air_strafe::steer(250.0f, 0.0f, 0.0f, {}, -3, side, defaults);
+    EXPECT_GT(left.left, 0.99f);
+    const auto right = air_strafe::steer(250.0f, 0.0f, 0.0f, {}, 3, side, defaults);
+    EXPECT_LT(right.left, -0.99f);
+}
+
+TEST(AirStrafeTest, SteeringRejectsNonFiniteInputsWithoutChangingSide)
+{
+    for (float invalid : {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()}) {
+        for (int field = 0; field < 5; ++field) {
+            float x = 250.0f, y = 0.0f, yaw = 0.0f;
+            air_strafe::Move desired{1.0f, 0.0f};
+            switch (field) {
+            case 0: x = invalid; break;
+            case 1: y = invalid; break;
+            case 2: yaw = invalid; break;
+            case 3: desired.forward = invalid; break;
+            case 4: desired.left = invalid; break;
+            }
+            bool side = false;
+            const auto move = air_strafe::steer(x, y, yaw, desired, 0, side, defaults);
+            EXPECT_FLOAT_EQ(move.forward, 0.0f);
+            EXPECT_FLOAT_EQ(move.left, 0.0f);
+            EXPECT_FALSE(side);
+        }
+    }
+}
+
+TEST(AirStrafeTest, SuccessiveTicksGainSpeedAndTrackRequestedHeading)
+{
+    float vx = 250.0f, vy = 0.0f;
+    bool side = false;
+    for (int tick = 0; tick < 128; ++tick) {
+        const float target = 30.0f * trig::kDegreesToRadians;
+        const auto move = air_strafe::steer(vx, vy, target, {1.0f, 0.0f}, 0, side, defaults);
+        const float wx = std::cos(target) * move.forward - std::sin(target) * move.left;
+        const float wy = std::sin(target) * move.forward + std::cos(target) * move.left;
+        const float oldSpeed = std::hypot(vx, vy);
+        const float acceleration = std::min(defaults.airAccelerate * defaults.wishSpeed * defaults.frameTime,
+            std::max(0.0f, defaults.airWishSpeedCap - vx * wx - vy * wy));
+        vx += acceleration * wx;
+        vy += acceleration * wy;
+        EXPECT_GE(std::hypot(vx, vy) + 0.001f, oldSpeed);
+        EXPECT_NEAR(std::hypot(move.forward, move.left), 1.0f, 0.00001f);
+    }
+    EXPECT_GT(std::hypot(vx, vy), 400.0f);
+    EXPECT_NEAR(std::atan2(vy, vx), 30.0f * trig::kDegreesToRadians, 5.0f * trig::kDegreesToRadians);
 }
