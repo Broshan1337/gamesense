@@ -29,6 +29,9 @@ void destroy() noexcept;
 
 
 void hideMenuNow() noexcept;
+// Relative motion enters the game's ordinary SDL input path (visible aim).
+[[nodiscard]] bool applyAimMotion(float dx, float dy) noexcept;
+[[nodiscard]] bool hasRecentPhysicalMouseMotion() noexcept;
 
 
 

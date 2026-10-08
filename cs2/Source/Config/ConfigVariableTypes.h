@@ -63,6 +63,7 @@
 #include <Features/Visuals/ViewmodelMod/ViewmodelModConfigVariables.h>
 #include <Features/Visuals/WorldColors/WorldColorsConfigVariables.h>
 #include <UI/ImGui/Neverlose/MenuThemeConfigVariables.h>
+#include <Features/Visuals/AnimationMods/AnimationModsConfigVariables.h>
 #include <Utils/TypeList.h>
 
 using ConfigVariableTypes = TypeList<
@@ -84,6 +85,10 @@ using ConfigVariableTypes = TypeList<
     BlockbotEnabled,
     BunnyhopEnabled,
     AutoStrafeEnabled,
+    AutoStrafeMode,
+    LegitStrafeStrength,
+    LegitStrafeMouseThreshold,
+
     TestStraferEnabled,
     panic_vars::Bind,
     FakePrimeEnabled,
@@ -206,11 +211,34 @@ using ConfigVariableTypes = TypeList<
     movement_vars::Desubtick,
     autopeek_vars::Enabled,
     reveal_radar_vars::Enabled,
+    chams_vars::HideEnemies,
+    chams_vars::HideLocalPlayer,
+    animation_mod_vars::Freeze,
+    animation_mod_vars::DisableIK,
+    animation_mod_vars::DisableRagdolls,
+    animation_mod_vars::ModifyRagdollScale,
+    animation_mod_vars::RagdollScale,
+    animation_mod_vars::AnimateViewmodel,
+    animation_mod_vars::ViewmodelSpinSpeed,
+    animation_mod_vars::ViewmodelPitchSway,
     chams_vars::Enabled,
     chams_vars::EnemyColor,
     spectator_list_params::SpectatorListEnabled,
     PlayerListOffsetX,
     PlayerListOffsetY,
+    legit_aimbot_vars::Mode,
+    legit_aimbot_vars::VisibleAim,
+    legit_aimbot_vars::AlwaysOn,
+    legit_aimbot_vars::OnlyWhileFiring,
+    legit_aimbot_vars::RequireMouseMovement,
+    legit_aimbot_vars::IgnoreFlash,
+    legit_aimbot_vars::RecoilCompensation,
+    legit_aimbot_vars::Strength,
+    legit_aimbot_vars::Deadzone,
+    legit_aimbot_vars::MaxSpeed,
+    legit_aimbot_vars::ReactionMs,
+    legit_aimbot_vars::SwitchDelayMs,
+    legit_aimbot_vars::SnapFov,
     legit_aimbot_vars::Enabled,
     legit_aimbot_vars::TargetSelection,
     legit_aimbot_vars::TargetLock,

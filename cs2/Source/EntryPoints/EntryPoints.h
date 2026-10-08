@@ -33,6 +33,7 @@
 #include <Features/Combat/AttackCommand.h>
 #include <Features/Combat/SpreadCircleVis/SpreadCircleVis.h>
 #include <Features/Combat/LegitAimbot/LegitAimbot.h>
+#include <Features/Visuals/AnimationMods/AnimationMods.h>
 #include <Features/Combat/Rcs/Rcs.h>
 #include <Features/Combat/Triggerbot/Triggerbot.h>
 #include <GameClient/Lagcomp.h>
@@ -434,6 +435,7 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     hookContext.template make<Watermark>().onUnload();
     hookContext.template make<Blockbot>().onUnload();
     hookContext.template make<Bunnyhop>().onUnload();
+    hookContext.template make<AnimationMods>().onUnload();
     hookContext.template make<Movement>().onUnload();
     hookContext.template make<SuperToss>().onUnload();
     hookContext.template make<LastTickDefuse>().onUnload();
@@ -779,7 +781,7 @@ void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCm
     
     
     
-    hookContext.template make<SubtickMoves>().clear(UserCmd{cmd}.baseMessage());
+    // Preserve native subtick inputs; individual features edit only their own fields.
 
     
     
@@ -932,6 +934,7 @@ std::uint64_t CSGOInputHook_onWriteMoveCrc(cs2::CCSGOInput* thisptr, cs2::CUserC
         
         
         hookContext.template make<Aimbot>().onWriteMoveCrc(cmd);
+        hookContext.template make<LegitAimbot>().onWriteMoveCrc(cmd);
         
         
         
@@ -1029,6 +1032,7 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     hookContext.make<NoScopeInaccuracyVis>().update();
     hookContext.make<AimbotFovCircle>().update();
     hookContext.make<SpreadCircleVis>().update();
+    hookContext.template make<AnimationMods>().run();
     hookContext.make<RenderingHookEntityLoop>().run();
     hookContext.make<GlowSceneObjects>().removeUnreferencedObjects();
     hookContext.make<DefusingAlert>().run();
@@ -1321,7 +1325,10 @@ void chams_hook::onGeneratePrimitives(void* desc, void* sceneObject, void* scene
     
     const bool chamsEnabled = GET_CONFIG_VAR(chams_vars::Enabled);
     const bool worldModEnabled = GET_CONFIG_VAR(WorldColorsWorldEnabled);
-    if (!chamsEnabled && !worldModEnabled) {
+    const bool hideSupported = Chams<HookContext<GlobalContext>>::hideModelsSupported();
+    const bool hideEnemies = hideSupported && GET_CONFIG_VAR(chams_vars::HideEnemies);
+    const bool hideLocal = hideSupported && GET_CONFIG_VAR(chams_vars::HideLocalPlayer);
+    if (!chamsEnabled && !worldModEnabled && !hideEnemies && !hideLocal) {
         RetAddrSpoofer::spoof(original)(desc, sceneObject, sceneView, primitives);
         return;
     }
@@ -1335,7 +1342,15 @@ void chams_hook::onGeneratePrimitives(void* desc, void* sceneObject, void* scene
     }
     --chamsCallsUntilSnapshot;
 
+    const auto previousCount = Chams<HookContext<GlobalContext>>::primitiveCount(primitives);
     RetAddrSpoofer::spoof(original)(desc, sceneObject, sceneView, primitives);
+    const bool enemyMesh = chams.wantsOverlayPass(sceneObject);
+    if (!Chams<HookContext<GlobalContext>>::isOutlineGeneration(
+            reinterpret_cast<std::uintptr_t>(__builtin_return_address(0)))
+        && ((hideEnemies && enemyMesh) || (hideLocal && chams.ownsLocalPawn(sceneObject)))) {
+        Chams<HookContext<GlobalContext>>::suppressGeneratedPrimitives(primitives, previousCount);
+        return;
+    }
 
     if (chamsEnabled && chams.wantsOverlayPass(sceneObject)) {
         
@@ -1345,7 +1360,7 @@ void chams_hook::onGeneratePrimitives(void* desc, void* sceneObject, void* scene
         
         
         if (primitives)
-            Chams<HookContext<GlobalContext>>::applyOverlay(primitives, 0,
+            Chams<HookContext<GlobalContext>>::applyOverlay(primitives, previousCount,
                 Chams<HookContext<GlobalContext>>::primitiveColor(GET_CONFIG_VAR(chams_vars::EnemyColor)));
         return;
     }
@@ -1358,7 +1373,7 @@ void chams_hook::onGeneratePrimitives(void* desc, void* sceneObject, void* scene
     
     
     if (worldModEnabled && primitives && !chams.ownsLocalPawn(sceneObject))
-        Chams<HookContext<GlobalContext>>::applyOverlay(primitives, 0,
+        Chams<HookContext<GlobalContext>>::applyOverlay(primitives, previousCount,
             Chams<HookContext<GlobalContext>>::primitiveColor(GET_CONFIG_VAR(WorldColorsWorldColor)));
 }
 
@@ -1373,6 +1388,13 @@ void viewmodel_rotation_hook::onUpdatePose(void* model, cs2::Vector* position, c
         || !HookContext<GlobalContext>::isGlobalContextComplete())
         return;
     HookContext<GlobalContext> hookContext;
+    if (GET_CONFIG_VAR(animation_mod_vars::AnimateViewmodel)) {
+        const float time = hookContext.globalVars().curtime().valueOr(0.0f);
+        if (std::isfinite(time)) {
+            angles->z += std::remainder(time * static_cast<float>(GET_CONFIG_VAR(animation_mod_vars::ViewmodelSpinSpeed)), 360.0f);
+            angles->x += std::sin(time * 3) * static_cast<float>(GET_CONFIG_VAR(animation_mod_vars::ViewmodelPitchSway));
+        }
+    }
     if (GET_CONFIG_VAR(viewmodel_mod_vars::ModifyPosition))
         *angles = viewmodel_rotation::apply(*angles,
             static_cast<float>(GET_CONFIG_VAR(viewmodel_mod_vars::Pitch)),

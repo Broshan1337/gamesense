@@ -87,3 +87,19 @@ TEST(UserCmdRandomSeedTest, MissingBaseMessageIsANoOp)
     userCmd.setRandomSeed(7);
     EXPECT_FALSE(userCmd.randomSeed().hasValue());
 }
+
+TEST(UserCmdViewAnglesTest, WritingZeroAnglesMarksBothComponentsPresent)
+{
+    FakeCommand command;
+    alignas(8) std::byte angles[40]{};
+    auto* pointer = angles;
+    std::memcpy(command.base + cs2::CUserCmd::BaseMessage::kViewAnglesOffset, &pointer, sizeof(pointer));
+    const UserCmd userCmd{command.handle()};
+    userCmd.setViewAngles(0.0f, 0.0f);
+    std::uint32_t bits{};
+    std::memcpy(&bits, angles + cs2::CUserCmd::BaseMessage::kHasBitsOffset, sizeof(bits));
+    EXPECT_EQ(bits & 3u, 3u);
+    EXPECT_NE(command.baseHasBits() & cs2::CUserCmd::BaseMessage::kViewAnglesHasBit, 0u);
+    EXPECT_FLOAT_EQ(userCmd.viewPitch().value(), 0.0f);
+    EXPECT_FLOAT_EQ(userCmd.viewYaw().value(), 0.0f);
+}

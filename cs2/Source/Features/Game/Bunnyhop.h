@@ -8,6 +8,7 @@
 #include <CS2/Classes/CUserCmd.h>
 #include <CS2/Classes/Vector.h>
 #include <Features/Game/AirStrafe.h>
+#include <Features/Game/JumpTiming.h>
 #include <Features/Game/BunnyhopConfigVariables.h>
 #include <Features/Game/Movement.h>
 #include <Features/Game/StrafeCommand.h>
@@ -109,7 +110,15 @@ public:
                 hasPendingLanding = true;
             }
         }
-        hasPendingTap = wantsJump && !hasPendingLanding;
+        const auto tick = hookContext.localPlayerController().tickBase();
+        const float dt = hookContext.globalVars().tickInterval().valueOr(1.0f / 64);
+        if (!tick.hasValue() || tick.value() <= 0 || !std::isfinite(dt) || dt <= 0) return;
+        pendingJumpTime = tick.value() * double(dt) + (hasPendingLanding ? pendingLandingWhen * dt : 0);
+        const float penalty = hookContext.template make<CvarSystem>().readFloatConVar("sv_jump_spam_penalty_time").value_or(1.0f / 64);
+        const bool allowed = jumpTiming.mayPress(pendingJumpTime, penalty);
+        hasPendingLanding = hasPendingLanding && allowed;
+        wantsJump = wantsJump && allowed;
+        hasPendingTap = wantsJump;
         hasPendingJump = true;
         hasPendingInput = true;
     }
@@ -140,11 +149,19 @@ public:
         
         
         if (hasPendingJump && GET_CONFIG_VAR(BunnyhopEnabled)) {
-            if (hasPendingLanding)
-                static_cast<void>(addLandingTap(userCmd, pendingLandingWhen));
-            else if (hasPendingTap)
-                addJumpTap(userCmd);
-            userCmd.setButtonState(cs2::CCSGOInput::Buttons::kJump, wantsJump);
+            using Moves = SubtickMoves<HookContext>;
+            Moves::stripButtons(userCmd.baseMessage(), cs2::CCSGOInput::Buttons::kJump);
+            userCmd.replaceButtons(cs2::CCSGOInput::Buttons::kJump,
+                wantsJump ? cs2::CCSGOInput::Buttons::kJump : 0);
+            if (wantsJump) jumpTiming.pressed(pendingJumpTime);
+            const float when = hasPendingLanding ? pendingLandingWhen : 0.0f;
+            if (hasPendingLanding || hasPendingTap) {
+                if (auto* press = hookContext.template make<SubtickMoves>().add(userCmd.baseMessage(), when)) {
+                    Moves::setButton(press, cs2::CCSGOInput::Buttons::kJump, true);
+                    Moves::sortByTime(userCmd.baseMessage());
+                    jumpTiming.pressed(pendingJumpTime);
+                }
+            }
         }
 
         if (pendingStrafe.active() && isOnGround() == false
@@ -159,54 +176,6 @@ public:
     }
 
 private:
-    
-    
-    void addJumpTap(const UserCmd& userCmd) const noexcept
-    {
-        auto&& subtickMoves = hookContext.template make<SubtickMoves>();
-        auto* const base = userCmd.baseMessage();
-
-        auto* const press = subtickMoves.add(base, kJumpTapWhen);
-        SubtickMoves<HookContext>::setButton(press, cs2::CCSGOInput::Buttons::kJump, true);
-
-        auto* const release = subtickMoves.add(base, kJumpTapWhen);
-        SubtickMoves<HookContext>::setButton(release, cs2::CCSGOInput::Buttons::kJump, false);
-    }
-
-    
-    static constexpr float kJumpTapWhen = 1.0f;
-
-    
-    
-    
-    [[nodiscard]] bool addLandingTap(const UserCmd& userCmd, float when) const noexcept
-    {
-        auto&& subtickMoves = hookContext.template make<SubtickMoves>();
-        auto* const base = userCmd.baseMessage();
-        if (!base)
-            return false;
-
-        const float releaseWhen = std::clamp(when - 1.0f / 64.0f, 1.0f / 64.0f, 63.0f / 64.0f);
-        if (releaseWhen < when) {
-            auto* const release = subtickMoves.add(base, releaseWhen);
-            if (!release)
-                return false;
-            SubtickMoves<HookContext>::setButton(release, cs2::CCSGOInput::Buttons::kJump, false);
-        }
-
-        auto* const press = subtickMoves.add(base, when);
-        if (!press)
-            return false;
-        SubtickMoves<HookContext>::setButton(press, cs2::CCSGOInput::Buttons::kJump, true);
-        return true;
-    }
-
-    
-    
-    
-    
-    
-    
     
     
     [[nodiscard]] Optional<float> predictLandingFraction(const UserCmd& userCmd) const noexcept
@@ -288,14 +257,12 @@ private:
 
         
         
-        if (result.fraction <= 0.0f || result.fraction >= 1.0f || result.normal.z < standableNormal.value())
+        if (!result.valid || result.fraction <= 0.0f || result.fraction >= 1.0f || result.normal.z < standableNormal.value())
             return {};
 
         
         
-        const float grid = result.fraction * 64.0f + 0.5f;
-        const float snapped = static_cast<float>(static_cast<int>(grid)) / 64.0f;
-        return std::clamp(snapped, 1.0f / 64.0f, 63.0f / 64.0f);
+        return jump_timing::landingWhen(result.fraction);
     }
 
     
@@ -344,6 +311,7 @@ private:
     {
         clearPending();
         strafeSide = false;
+        jumpTiming.reset();
     }
 
     [[nodiscard]] Optional<StrafeMove> directionalStrafe(const UserCmd& userCmd) const noexcept
@@ -389,8 +357,22 @@ private:
             desired = {
                 float(userCmd.isButtonDown(Buttons::kForward)) - float(userCmd.isButtonDown(Buttons::kBack)),
                 float(userCmd.isButtonDown(Buttons::kMoveLeft)) - float(userCmd.isButtonDown(Buttons::kMoveRight))};
+        const int mouseDx = userCmd.mouseDx().valueOr(0);
+        const bool legit = static_cast<std::uint8_t>(GET_CONFIG_VAR(AutoStrafeMode)) == 0;
+        if (legit && std::abs(mouseDx) < static_cast<int>(GET_CONFIG_VAR(LegitStrafeMouseThreshold))) return {};
         const auto move = air_strafe::steer(velocity.value().x, velocity.value().y,
             viewYaw.value() * trig::kDegreesToRadians, desired, userCmd.mouseDx().valueOr(0), strafeSide, parameters);
+        if (legit) {
+            // Mouse controls the strafe side; keep manual direction and blend
+            // assistance without switching sides on a stationary crosshair.
+            const auto assisted = air_strafe::moveAtAngle(std::atan2(velocity.value().y, velocity.value().x),
+                viewYaw.value() * trig::kDegreesToRadians,
+                air_strafe::idealAngle(std::hypot(velocity.value().x, velocity.value().y), parameters), mouseDx < 0);
+            const float blend = static_cast<float>(GET_CONFIG_VAR(LegitStrafeStrength)) / 100;
+            if (blend <= 0) return {};
+            return StrafeMove{desired.forward * (1 - blend) + assisted.forward * blend,
+                desired.left * (1 - blend) + assisted.left * blend};
+        }
         return StrafeMove{move.forward, move.left};
     }
 
@@ -471,6 +453,8 @@ private:
     static constexpr std::uint32_t kOnGroundFlag = 0x1;
 
     
+    inline static jump_timing::State jumpTiming;
+    inline static double pendingJumpTime{};
     inline static bool hasPendingInput{false};
     inline static bool hasPendingJump{false};
     inline static bool wantsJump{false};

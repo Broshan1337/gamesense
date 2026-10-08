@@ -232,3 +232,12 @@ TEST(AimTargetTest, RejectsNonFiniteViewAndEyeCoordinates) {
     EXPECT_FALSE(Targets{context}.acquire({invalid,0,0},0,0,30,headOnly,acceptAll).hasValue());
     EXPECT_FALSE(Targets{context}.acquire(eye,0,0,invalid,headOnly,acceptAll).hasValue());
 }
+
+TEST(AimTargetTest, RanksBeforeVisibilitySoClosestTargetNeedsOnlyOneExpensiveCheck) {
+    Context context; context.enemies.resize(32);
+    for (int i = 0; i < 32; ++i) context.enemies[i].bones[6] = cs2::Vector{100, float(32 - i), 0};
+    int calls = 0;
+    const auto result = Targets{context}.acquire(eye, 0, 0, 30, headOnly, [&](const auto&) { ++calls; return true; });
+    ASSERT_TRUE(result.hasValue()); EXPECT_EQ(result.value().entity, &context.enemies.back().entity);
+    EXPECT_EQ(calls, 1);
+}

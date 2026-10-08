@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <atomic>
 #include <cstdint>
 
 #include "ConfigFileOperation.h"
@@ -12,6 +13,8 @@
 struct ConfigState {
     bool autoSaveScheduled{false};
     bool loadScheduled{false};
+    std::atomic<std::uint32_t> loadRevision{0};
+    std::atomic<bool> lastLoadSucceeded{true};
     ConfigFileOperation currentFileOperation{ConfigFileOperation::None};
     char8_t* fileOperationBuffer{};
     std::size_t bufferUsedBytes{};

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cmath>
+#include <algorithm>
+#include <array>
 #include <limits>
 #include <cstddef>
 #include <cstring>
@@ -79,8 +81,14 @@ public:
             || !std::isfinite(maxFov) || maxFov <= 0
             || trig::absolute(currentPitch)>36000 || trig::absolute(currentYaw)>36000)
             return bestTarget;
-        float bestFov = maxFov;
-        float bestScore = std::numeric_limits<float>::infinity();
+        struct Candidate { Target target; float score; float fov; int priority; };
+        const auto better = [](const Candidate& a, const Candidate& b) {
+            if (a.priority != b.priority) return a.priority < b.priority;
+            if (a.score != b.score) return a.score < b.score;
+            return a.fov < b.fov;
+        };
+        std::array<Candidate, 256> candidates;
+        std::size_t candidateCount = 0;
         hookContext.template make<EntitySystem>().forEachNetworkableEntityIdentity([&](const auto& identity) {
             auto* const entity = static_cast<cs2::C_BaseEntity*>(identity.entity);
             if (entity == excludedEntity || (preferredEntity && entity != preferredEntity))
@@ -112,19 +120,25 @@ public:
             // legs participate; bone-only fallback is for unavailable model data.
             for (std::size_t i = 0; i < 5; ++i) {
                 if (!enabled[i]) continue;
-                Optional<Target> groupBest;
-                float groupFov = maxFov;
+
                 const auto consider = [&](const cs2::Vector& point, const hitbox_geometry::Shape& shape) {
                     const auto offset = hitbox_geometry::subtract(point,eye);
                     const float distanceSquared = hitbox_geometry::dot(offset,offset);
                     if (!std::isfinite(distanceSquared) || distanceSquared <= 0) return;
                     const auto angles = anglesTo(eye,point);
                     const float fov = fovBetween(currentPitch,currentYaw,angles.pitch,angles.yaw);
-                    if (!(fov < groupFov)) return;
+                    if (!(fov < maxFov)) return;
                     const Target candidate{angles,point,entity,groups[i],shape};
-                    if (!accept(candidate)) return;
-                    groupFov=fov;
-                    groupBest=candidate;
+                    const float score = mode == target_selection::Mode::Distance ? distanceSquared
+                        : mode == target_selection::Mode::Health ? static_cast<float>(health.value()) : fov;
+                    Candidate ranked{candidate, score, fov, static_cast<int>(i)};
+                    if (candidateCount < candidates.size()) candidates[candidateCount++] = ranked;
+                    else {
+                        // Keep the best bounded set even on large community servers.
+                        auto worst = std::max_element(candidates.begin(), candidates.end(),
+                            better);
+                        if (better(ranked, *worst)) *worst = ranked;
+                    }
                 };
                 if constexpr (requires { node.raw(); node.boneTransform(0); }) {
                     for (int h=0;h<set.count;++h) {
@@ -147,16 +161,12 @@ public:
                     const auto bone=node.bonePosition(bones[i]);
                     if (bone.hasValue()) consider(hitbox_geometry::add(bone.value(),delta),{});
                 }
-                if (!groupBest.hasValue()) continue;
-                const auto offset=hitbox_geometry::subtract(groupBest.value().aimPoint,eye);
-                const float score = mode == target_selection::Mode::Distance ? hitbox_geometry::dot(offset,offset)
-                    : mode == target_selection::Mode::Health ? static_cast<float>(health.value()) : groupFov;
-                if (score<bestScore || (score==bestScore && groupFov<bestFov)) {
-                    bestScore=score; bestFov=groupFov; bestTarget=groupBest;
-                }
-                break;
             }
         });
+        std::sort(candidates.begin(), candidates.begin() + candidateCount, better);
+        for (std::size_t i = 0; i < candidateCount; ++i) {
+            if (accept(candidates[i].target)) return candidates[i].target;
+        }
         return bestTarget;
     }
 

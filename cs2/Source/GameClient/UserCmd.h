@@ -63,6 +63,9 @@ public:
         std::memcpy(angles + cs2::CUserCmd::BaseMessage::ViewAngles::kPitchOffset, &pitch, sizeof(pitch));
         std::memcpy(angles + cs2::CUserCmd::BaseMessage::ViewAngles::kYawOffset, &yaw, sizeof(yaw));
 
+        // Angle scalars have their own protobuf presence bits. A zero original
+        // pitch/yaw may otherwise cause a new nonzero angle to be omitted.
+        orHasBit(angles + cs2::CUserCmd::BaseMessage::kHasBitsOffset, 0x3);
         orHasBit(base + cs2::CUserCmd::BaseMessage::kHasBitsOffset, cs2::CUserCmd::BaseMessage::kViewAnglesHasBit);
         setOuterHasBit(cs2::CUserCmd::kBaseMessageHasBit);
     }

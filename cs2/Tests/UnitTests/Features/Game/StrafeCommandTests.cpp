@@ -167,3 +167,22 @@ TEST(StrafeCommandTest, RejectsInvalidYawMovementAndMissingCommands)
     EXPECT_FALSE(pending.commit<Context>(cmd.handle()));
     EXPECT_EQ(cmd.base, saved);
 }
+
+TEST(StrafeCommandTest, WeakAssistPreservesMagnitudeRatherThanForcingFullInput) {
+    Command cmd; StrafeCommand pending;
+    ASSERT_TRUE(pending.stage(cmd.handle(), {0, .25f}));
+    ASSERT_TRUE(pending.commit<Context>(cmd.handle()));
+    EXPECT_FLOAT_EQ(UserCmd{cmd.handle()}.leftMove().value(), .25f);
+}
+TEST(StrafeCommandTest, JumpEditingPreservesAnalogLookAndOtherButtonsAndSortsEvents) {
+    Command cmd; cmd.subticks();
+    SubtickMoves<Context>::stripButtons(cmd.base.data(), Buttons::kJump);
+    EXPECT_EQ(read<std::uint32_t>(cmd.steps[1], Step::kHasBitsOffset) & Step::kButtonHasBit, 0);
+    EXPECT_NE(read<std::uint32_t>(cmd.steps[1], Step::kHasBitsOffset) & Step::kAnalogForwardDeltaHasBit, 0);
+    EXPECT_FLOAT_EQ(read<float>(cmd.steps[1], Step::kYawDeltaOffset), 5);
+    EXPECT_EQ(read<std::uint64_t>(cmd.steps[0], Step::kButtonOffset), Buttons::kForward);
+    write(cmd.steps[0], Step::kWhenOffset, .9f);
+    SubtickMoves<Context>::sortByTime(cmd.base.data());
+    EXPECT_EQ(read<std::byte*>(cmd.rep, Field::kRepElementsOffset), cmd.steps[1].data());
+    EXPECT_EQ(read<std::byte*>(cmd.rep, Field::kRepElementsOffset + 2 * sizeof(std::byte*)), cmd.steps[0].data());
+}

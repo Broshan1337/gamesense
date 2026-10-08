@@ -27,6 +27,7 @@ public:
         base = userCmd.baseMessage();
         sequence = commandNumber(cmd);
         sourceYaw = yaw.value();
+        magnitude = std::min(length, 1.0f);
         movement = {move.forward / length, move.left / length};
         return true;
     }
@@ -58,8 +59,8 @@ public:
                 double(trig::kTwoPi))),
             static_cast<float>(std::remainder(double(yaw.value()) * trig::kDegreesToRadians,
                 double(trig::kTwoPi))), 0.0f, true);
-        userCmd.setForwardMove(corrected.forward);
-        userCmd.setLeftMove(corrected.left);
+        userCmd.setForwardMove(corrected.forward * magnitude);
+        userCmd.setLeftMove(corrected.left * magnitude);
         using Buttons = cs2::CCSGOInput::Buttons;
         constexpr auto mask = Buttons::kForward | Buttons::kBack | Buttons::kMoveLeft | Buttons::kMoveRight;
         std::uint64_t buttons{};
@@ -85,6 +86,6 @@ private:
     cs2::CUserCmd* command{};
     std::byte* base{};
     int sequence{};
-    float sourceYaw{};
+    float sourceYaw{}, magnitude{1.0f};
     air_strafe::Move movement{};
 };

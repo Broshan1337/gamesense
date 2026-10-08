@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 
@@ -11,6 +12,8 @@
 #include <GameClient/Entities/PlayerPawn.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
 #include <Platform/Linux/LinuxPlatformApi.h>
+#include <GameClient/ClientBuildProfile.h>
+#include <Utils/CrashLogger.h>
 
 
 
@@ -34,6 +37,32 @@ public:
     explicit Chams(HookContext& hookContext) noexcept
         : hookContext{hookContext}
     {
+    }
+
+    // CGlowHelperSceneObjectDesc::GeneratePrimitives calls the attached mesh
+    // descriptor at +0x20, returning to client +0x1907de1 on this build.
+    // Preserve that nested generation while suppressing its ordinary mesh pass.
+    [[nodiscard]] static bool isOutlineGeneration(std::uintptr_t returnAddress) noexcept
+    {
+        return hideModelsSupported() && returnAddress == CrashLogger::clientModule.base + 0x1907de1;
+    }
+    [[nodiscard]] static bool hideModelsSupported() noexcept
+    {
+        int status = outlineProfileStatus.load(std::memory_order_relaxed);
+        if (!status) {
+            status = client_build_profile::supported(CrashLogger::clientModule.base) ? 2 : 1;
+            outlineProfileStatus.store(status, std::memory_order_relaxed);
+        }
+        return status == 2;
+    }
+    [[nodiscard]] static std::uint32_t primitiveCount(void* primitives) noexcept {
+        std::uint32_t count{};
+        if (primitives) std::memcpy(&count, static_cast<std::byte*>(primitives) + kPrimitiveCountOffset, sizeof(count));
+        return count;
+    }
+    static void suppressGeneratedPrimitives(void* primitives, std::uint32_t previous) noexcept {
+        if (primitives && primitiveCount(primitives) >= previous)
+            std::memcpy(static_cast<std::byte*>(primitives) + kPrimitiveCountOffset, &previous, sizeof(previous));
     }
 
     static constexpr std::size_t kPrimitiveStride = 0x70;
@@ -157,6 +186,7 @@ private:
     
     static constexpr std::uint16_t kPrimitiveNoDepthBits = 0x0020;
 
+    inline static std::atomic<int> outlineProfileStatus{0};
     inline static cs2::C_BaseEntity* livePawnPointers[kMaxLivePawns]{};
     inline static int livePawnCount{0};
     inline static cs2::C_BaseEntity* localPawnPointer{nullptr};

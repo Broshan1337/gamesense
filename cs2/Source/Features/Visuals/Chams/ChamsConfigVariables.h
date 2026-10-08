@@ -9,6 +9,8 @@ namespace chams_vars
 
 
 CONFIG_VARIABLE(Enabled, bool, false);
+CONFIG_VARIABLE(HideEnemies, bool, false);
+CONFIG_VARIABLE(HideLocalPlayer, bool, false);
 
 CONFIG_VARIABLE(EnemyColor, color::Rgba, (color::Rgba{255, 40, 40, 200}));
 

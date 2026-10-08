@@ -106,12 +106,15 @@ public:
                 preferredTarget = static_cast<cs2::C_BaseEntity*>(instance);
         }
 
+        Optional<typename AimTarget<HookContext>::Target> refinedCandidate;
         const auto aim = aimTarget.acquire(eye.value(), currentPitch.value(), currentYaw.value(), maxFov,
             hitboxFlags(), [&](const auto& candidate) {
                 if (passesVisibility(localPawn, eye.value(), candidate)) return true;
                 if (!GET_CONFIG_VAR(aimbot_vars::Multipoint) || !candidate.shape.valid) return false;
                 const auto point = refineMultipoint(localPawn, eye.value(), candidate);
-                return passesVisibility(localPawn, eye.value(), point);
+                if (!passesVisibility(localPawn, eye.value(), point)) return false;
+                refinedCandidate = point;
+                return true;
             },
             preferredTarget, static_cast<target_selection::Mode>(static_cast<std::uint8_t>(GET_CONFIG_VAR(aimbot_vars::TargetSelection))));
         if (!aim.hasValue()) {
@@ -123,7 +126,10 @@ public:
 
         auto chosen = aim.value();
         if (!chosen.shape.valid) chosen = withShape(chosen);
-        if (GET_CONFIG_VAR(aimbot_vars::Multipoint))
+        if (refinedCandidate.hasValue() && refinedCandidate.value().entity == chosen.entity
+            && refinedCandidate.value().hitgroup == chosen.hitgroup)
+            chosen = refinedCandidate.value();
+        else if (GET_CONFIG_VAR(aimbot_vars::Multipoint))
             chosen = refineMultipoint(localPawn, eye.value(), chosen);
 
         if (!passesVisibility(localPawn, eye.value(), chosen)) {
@@ -355,10 +361,9 @@ private:
         const bool chancePassed = chance <= 0 || passesHitchance(localPawn, eye, target, chance);
         const bool maxAccuracy = localPawn.isAtMaxAccuracy() && chancePassed;
         const bool wait = GET_CONFIG_VAR(aimbot_vars::ForceShotWait);
-        // With no chance constraint, immediate shooting still waits for maximum
-        // accuracy. An explicit timer permits a fallback after its configured delay.
+        // Accuracy waiting is optional; zero hitchance means no probability gate.
         const bool accuracyReady = shotWait.ready(lastTargetHandleValue, tick.valueOr(-1), eligible, maxAccuracy,
-                              chancePassed && (chance > 0 || wait), wait,
+                              chancePassed, wait,
                               static_cast<int>(GET_CONFIG_VAR(aimbot_vars::ForceShotWaitTicks)));
         return accuracyReady && localPawn.getActiveWeapon().isReadyToFire(tick.valueOr(-1)) == true;
     }
@@ -681,6 +686,8 @@ private:
         int actualHitgroup = target.hitgroup;
         const bool wallCheck = GET_CONFIG_VAR(aimbot_vars::WallCheck);
         const bool autowall = GET_CONFIG_VAR(aimbot_vars::Autowall);
+        // Native bullet simulation supplies the actual struck hitgroup even
+        // for a clear shot: a ray to the head can strike an arm first.
         if (autowall) {
             const auto impact = Autowall::evaluate(eye, target.aimPoint, localPawn.baseEntity(), target.entity,
                 {base.value(), weapon.penetrationPower().valueOr(0.0f), range.value(), maxRange.value()}, {},

@@ -1,10 +1,12 @@
 #include "GUI.h"
+#include <CS2/Constants/DllNames.h>
 #include "MenuInput.h"
 
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <cmath>
@@ -41,6 +43,21 @@ namespace
 
 
 
+
+constexpr std::uint32_t kAimMotionTag = 0x4e534149;
+using PushEventFn = bool (*)(SDL_Event*);
+using TicksFn = std::uint64_t (*)();
+PushEventFn pushAimEvent{};
+TicksFn aimTicks{};
+std::atomic<std::uint64_t> lastPhysicalMotion{};
+std::atomic<std::uint32_t> physicalMouseId{};
+
+void resolveAimInput() noexcept
+{
+    const DynamicLibrary sdl{cs2::SDL_DLL};
+    if (!pushAimEvent) pushAimEvent = sdl.getFunctionAddress("SDL_PushEvent").as<PushEventFn>();
+    if (!aimTicks) aimTicks = sdl.getFunctionAddress("SDL_GetTicksNS").as<TicksFn>();
+}
 
 constexpr int kEventQueueCapacity = 256;
 
@@ -325,6 +342,35 @@ bool GUI::isInitialized() noexcept
     return initialized.load(std::memory_order_acquire);
 }
 
+bool GUI::applyAimMotion(float dx, float dy) noexcept
+{
+    if (!isInitialized() || isMenuOpen() || !gui_sdl::windowId
+        || !std::isfinite(dx) || !std::isfinite(dy) || (dx == 0 && dy == 0)) return false;
+    resolveAimInput();
+    if (!pushAimEvent || !aimTicks || !gui_sdl::window
+        || !gui_sdl::functions.getWindowFlags
+        || !(gui_sdl::functions.getWindowFlags(gui_sdl::window) & SDL_WINDOW_INPUT_FOCUS)) return false;
+    SDL_Event event{};
+    event.motion.type = SDL_EVENT_MOUSE_MOTION;
+    event.motion.reserved = kAimMotionTag;
+    event.motion.timestamp = aimTicks();
+    event.motion.windowID = gui_sdl::windowId;
+    event.motion.which = physicalMouseId.load(std::memory_order_relaxed);
+    if (gui_sdl::functions.getMouseState)
+        event.motion.state = gui_sdl::functions.getMouseState(&event.motion.x, &event.motion.y);
+    event.motion.xrel = std::clamp(dx, -16384.0f, 16384.0f);
+    event.motion.yrel = std::clamp(dy, -16384.0f, 16384.0f);
+    return pushAimEvent(&event);
+}
+
+bool GUI::hasRecentPhysicalMouseMotion() noexcept
+{
+    resolveAimInput();
+    const auto last = lastPhysicalMotion.load(std::memory_order_relaxed);
+    const auto now = aimTicks ? aimTicks() : 0;
+    return last && now >= last && now - last <= 40000000;
+}
+
 int GUI::polledEvents(SDL_Event* events, int count) noexcept
 {
     if (!initialized.load(std::memory_order_acquire) || !events)
@@ -338,6 +384,12 @@ int GUI::polledEvents(SDL_Event* events, int count) noexcept
     int kept = 0;
     for (int i = 0; i < count; ++i) {
         const SDL_Event event = events[i];
+        if (event.type == SDL_EVENT_MOUSE_MOTION && event.motion.reserved != kAimMotionTag
+            && (event.motion.xrel != 0 || event.motion.yrel != 0)) {
+            physicalMouseId.store(event.motion.which, std::memory_order_relaxed);
+            resolveAimInput();
+            if (aimTicks) lastPhysicalMotion.store(aimTicks(), std::memory_order_relaxed);
+        }
         if (menu_input::toggles(event)) {
             const bool wasOpen = menuOpen.load(std::memory_order_acquire);
             menuOpen.store(!wasOpen, std::memory_order_release);

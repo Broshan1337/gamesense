@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -31,6 +32,8 @@ protected:
     {
         MockLinuxPlatformApi::instance = &platformApi;
     }
+
+    ~TestLinuxDynamicLibrary() override { MockLinuxPlatformApi::instance = nullptr; }
 
     testing::StrictMock<MockLinuxPlatformApi> platformApi;
     void* dummyHandleValue = reinterpret_cast<void*>(0x1234567890ABCDEF);
@@ -171,12 +174,12 @@ int LinuxPlatformApi::dlinfo(void* handle, int request, void* info) noexcept
 
 int LinuxPlatformApi::open(const char* pathname, int flags, mode_t mode) noexcept
 {
-    return MockLinuxPlatformApi::instance->open(pathname, flags, mode);
+    return MockLinuxPlatformApi::instance ? MockLinuxPlatformApi::instance->open(pathname, flags, mode) : ::open(pathname, flags, mode);
 }
 
 int LinuxPlatformApi::close(int fd) noexcept
 {
-    return MockLinuxPlatformApi::instance->close(fd);
+    return MockLinuxPlatformApi::instance ? MockLinuxPlatformApi::instance->close(fd) : ::close(fd);
 }
 
 int LinuxPlatformApi::fstat(int fd, struct stat* buf) noexcept
@@ -196,5 +199,5 @@ int LinuxPlatformApi::munmap(void* addr, size_t length) noexcept
 
 char* LinuxPlatformApi::getenv(const char* name) noexcept
 {
-    return MockLinuxPlatformApi::instance->getenv(name);
+    return MockLinuxPlatformApi::instance ? MockLinuxPlatformApi::instance->getenv(name) : ::getenv(name);
 }

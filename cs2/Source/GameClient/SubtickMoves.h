@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <algorithm>
+#include <cmath>
 
 #include <CS2/Classes/CUserCmd.h>
 #include <MemoryPatterns/PatternTypes/ClientPatternTypes.h>
@@ -195,6 +197,58 @@ public:
     
     
     
+    // Remove only selected button fields. Analog and look deltas survive.
+    static void stripButtons(std::byte* baseMessage, std::uint64_t mask) noexcept
+    {
+        if (!baseMessage) return;
+        using F = cs2::CUserCmd::BaseMessage::SubtickMoves;
+        auto* field = baseMessage + F::kFieldOffset;
+        int count{}; std::byte* rep{};
+        std::memcpy(&count, field + F::kCurrentSizeOffset, sizeof(count));
+        std::memcpy(&rep, field + F::kRepOffset, sizeof(rep));
+        if (!rep || count < 0 || count > F::kMaxSteps) return;
+        for (int i = 0; i < count; ++i) {
+            std::byte* step{};
+            std::memcpy(&step, rep + F::kRepElementsOffset + i * sizeof(step), sizeof(step));
+            if (!step) continue;
+            std::uint32_t bits{}; std::uint64_t button{};
+            std::memcpy(&bits, step + cs2::CSubtickMoveStep::kHasBitsOffset, sizeof(bits));
+            std::memcpy(&button, step + cs2::CSubtickMoveStep::kButtonOffset, sizeof(button));
+            if (!(bits & cs2::CSubtickMoveStep::kButtonHasBit) || !(button & mask)) continue;
+            button &= ~mask;
+            std::memcpy(step + cs2::CSubtickMoveStep::kButtonOffset, &button, sizeof(button));
+            if (!button) {
+                bits &= ~(cs2::CSubtickMoveStep::kButtonHasBit | cs2::CSubtickMoveStep::kPressedHasBit);
+                std::memcpy(step + cs2::CSubtickMoveStep::kHasBitsOffset, &bits, sizeof(bits));
+            }
+        }
+    }
+
+    // Allocation appends; the engine consumes events in timestamp order.
+    static void sortByTime(std::byte* baseMessage) noexcept
+    {
+        if (!baseMessage) return;
+        using F = cs2::CUserCmd::BaseMessage::SubtickMoves;
+        auto* field = baseMessage + F::kFieldOffset;
+        int count{}; std::byte* rep{};
+        std::memcpy(&count, field + F::kCurrentSizeOffset, sizeof(count));
+        std::memcpy(&rep, field + F::kRepOffset, sizeof(rep));
+        if (!rep || count < 0 || count > F::kMaxSteps) return;
+        auto** steps = reinterpret_cast<std::byte**>(rep + F::kRepElementsOffset);
+        const auto when = [](const std::byte* step) {
+            float time{};
+            if (step) std::memcpy(&time, step + cs2::CSubtickMoveStep::kWhenOffset, sizeof(time));
+            return std::isfinite(time) ? time : 1.0f;
+        };
+        for (int i = 1; i < count; ++i) {
+            auto* item = steps[i]; int j = i;
+            while (j > 0 && when(steps[j - 1]) > when(item)) {
+                steps[j] = steps[j - 1]; --j;
+            }
+            steps[j] = item;
+        }
+    }
+
     static void releaseButton(std::byte* baseMessage, std::uint64_t button) noexcept
     {
         if (!baseMessage || !button)

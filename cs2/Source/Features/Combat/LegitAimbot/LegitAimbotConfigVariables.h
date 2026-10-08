@@ -43,4 +43,18 @@ CONFIG_VARIABLE(HitStomach, bool, false);
 CONFIG_VARIABLE(HitArms, bool, false);
 CONFIG_VARIABLE(HitLegs, bool, false);
 
+CONFIG_VARIABLE_RANGE(Mode, (RangeConstrainedVariableParams<std::uint8_t>{0, 2, 0}));
+CONFIG_VARIABLE(VisibleAim, bool, true);
+CONFIG_VARIABLE(AlwaysOn, bool, false);
+CONFIG_VARIABLE(OnlyWhileFiring, bool, false);
+CONFIG_VARIABLE(RequireMouseMovement, bool, false);
+CONFIG_VARIABLE(IgnoreFlash, bool, true);
+CONFIG_VARIABLE(RecoilCompensation, bool, true);
+CONFIG_VARIABLE_RANGE(Strength, (RangeConstrainedVariableParams<std::uint8_t>{1, 100, 65}));
+CONFIG_VARIABLE_RANGE(Deadzone, (RangeConstrainedVariableParams<float>{0.0f, 3.0f, 0.05f}));
+CONFIG_VARIABLE_RANGE(MaxSpeed, (RangeConstrainedVariableParams<float>{1.0f, 720.0f, 180.0f}));
+CONFIG_VARIABLE_RANGE(ReactionMs, (RangeConstrainedVariableParams<std::uint16_t>{0, 500, 0}));
+CONFIG_VARIABLE_RANGE(SwitchDelayMs, (RangeConstrainedVariableParams<std::uint16_t>{0, 500, 120}));
+CONFIG_VARIABLE_RANGE(SnapFov, (RangeConstrainedVariableParams<float>{0.1f, 30.0f, 2.0f}));
+
 }

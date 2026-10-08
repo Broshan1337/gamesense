@@ -239,6 +239,20 @@ private:
         configConversion.endObject();
 
         configConversion.beginObject(u8"LegitAimbot");
+        configConversion.boolean(u8"VisibleAim", loadVariable<legit_aimbot_vars::VisibleAim>(), saveVariable<legit_aimbot_vars::VisibleAim>());
+        configConversion.uint(u8"Mode", loadVariable<legit_aimbot_vars::Mode>(), saveVariable<legit_aimbot_vars::Mode>());
+        configConversion.boolean(u8"AlwaysOn", loadVariable<legit_aimbot_vars::AlwaysOn>(), saveVariable<legit_aimbot_vars::AlwaysOn>());
+        configConversion.boolean(u8"OnlyWhileFiring", loadVariable<legit_aimbot_vars::OnlyWhileFiring>(), saveVariable<legit_aimbot_vars::OnlyWhileFiring>());
+        configConversion.boolean(u8"RequireMouseMovement", loadVariable<legit_aimbot_vars::RequireMouseMovement>(), saveVariable<legit_aimbot_vars::RequireMouseMovement>());
+        configConversion.boolean(u8"IgnoreFlash", loadVariable<legit_aimbot_vars::IgnoreFlash>(), saveVariable<legit_aimbot_vars::IgnoreFlash>());
+        configConversion.boolean(u8"RecoilCompensation", loadVariable<legit_aimbot_vars::RecoilCompensation>(), saveVariable<legit_aimbot_vars::RecoilCompensation>());
+        configConversion.uint(u8"Strength", loadVariable<legit_aimbot_vars::Strength>(), saveVariable<legit_aimbot_vars::Strength>());
+        configConversion.floating(u8"Deadzone", loadVariable<legit_aimbot_vars::Deadzone>(), saveVariable<legit_aimbot_vars::Deadzone>());
+        configConversion.floating(u8"MaxSpeed", loadVariable<legit_aimbot_vars::MaxSpeed>(), saveVariable<legit_aimbot_vars::MaxSpeed>());
+        configConversion.uint(u8"ReactionMs", loadVariable<legit_aimbot_vars::ReactionMs>(), saveVariable<legit_aimbot_vars::ReactionMs>());
+        configConversion.uint(u8"SwitchDelayMs", loadVariable<legit_aimbot_vars::SwitchDelayMs>(), saveVariable<legit_aimbot_vars::SwitchDelayMs>());
+        configConversion.floating(u8"SnapFov", loadVariable<legit_aimbot_vars::SnapFov>(), saveVariable<legit_aimbot_vars::SnapFov>());
+
         configConversion.boolean(u8"WallCheck", loadVariable<legit_aimbot_vars::WallCheck>(), saveVariable<legit_aimbot_vars::WallCheck>());
         configConversion.boolean(u8"Enabled", loadVariable<legit_aimbot_vars::Enabled>(), saveVariable<legit_aimbot_vars::Enabled>());
         configConversion.uint(u8"TargetSelection", loadVariable<legit_aimbot_vars::TargetSelection>(), saveVariable<legit_aimbot_vars::TargetSelection>());
@@ -632,6 +646,10 @@ private:
         configConversion.endObject();
 
         configConversion.beginObject(u8"Bunnyhop");
+        configConversion.uint(u8"AutoStrafeMode", loadVariable<AutoStrafeMode>(), saveVariable<AutoStrafeMode>());
+        configConversion.uint(u8"LegitStrafeStrength", loadVariable<LegitStrafeStrength>(), saveVariable<LegitStrafeStrength>());
+        configConversion.uint(u8"LegitStrafeMouseThreshold", loadVariable<LegitStrafeMouseThreshold>(), saveVariable<LegitStrafeMouseThreshold>());
+
         configConversion.boolean(u8"Enabled", loadVariable<BunnyhopEnabled>(), saveVariable<BunnyhopEnabled>());
         configConversion.boolean(u8"AutoStrafe", loadVariable<AutoStrafeEnabled>(), saveVariable<AutoStrafeEnabled>());
         configConversion.boolean(u8"TestStrafer", loadVariable<TestStraferEnabled>(), saveVariable<TestStraferEnabled>());
@@ -850,7 +868,19 @@ private:
         
         
         
+        configConversion.beginObject(u8"AnimationMods");
+        configConversion.boolean(u8"Freeze", loadVariable<animation_mod_vars::Freeze>(), saveVariable<animation_mod_vars::Freeze>());
+        configConversion.boolean(u8"DisableIK", loadVariable<animation_mod_vars::DisableIK>(), saveVariable<animation_mod_vars::DisableIK>());
+        configConversion.boolean(u8"DisableRagdolls", loadVariable<animation_mod_vars::DisableRagdolls>(), saveVariable<animation_mod_vars::DisableRagdolls>());
+        configConversion.boolean(u8"ModifyRagdollScale", loadVariable<animation_mod_vars::ModifyRagdollScale>(), saveVariable<animation_mod_vars::ModifyRagdollScale>());
+        configConversion.floating(u8"RagdollScale", loadVariable<animation_mod_vars::RagdollScale>(), saveVariable<animation_mod_vars::RagdollScale>());
+        configConversion.boolean(u8"AnimateViewmodel", loadVariable<animation_mod_vars::AnimateViewmodel>(), saveVariable<animation_mod_vars::AnimateViewmodel>());
+        configConversion.floating(u8"ViewmodelSpinSpeed", loadVariable<animation_mod_vars::ViewmodelSpinSpeed>(), saveVariable<animation_mod_vars::ViewmodelSpinSpeed>());
+        configConversion.floating(u8"ViewmodelPitchSway", loadVariable<animation_mod_vars::ViewmodelPitchSway>(), saveVariable<animation_mod_vars::ViewmodelPitchSway>());
+        configConversion.endObject();
         configConversion.beginObject(u8"Chams");
+        configConversion.boolean(u8"HideEnemies", loadVariable<chams_vars::HideEnemies>(), saveVariable<chams_vars::HideEnemies>());
+        configConversion.boolean(u8"HideLocalPlayer", loadVariable<chams_vars::HideLocalPlayer>(), saveVariable<chams_vars::HideLocalPlayer>());
         configConversion.boolean(u8"Enabled", loadVariable<chams_vars::Enabled>(), saveVariable<chams_vars::Enabled>());
         configConversion.uint(u8"EnemyColor", loadVariable<chams_vars::EnemyColor>(), saveVariable<chams_vars::EnemyColor>());
         configConversion.endObject();

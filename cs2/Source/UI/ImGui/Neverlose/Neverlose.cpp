@@ -19,6 +19,7 @@
 
 #include <GameClient/Bind.h>
 #include "FeatureBinds.h"
+#include "PopupSurface.h"
 #include <Features/Hud/SpectatorList/SpectatorSnapshot.h>
 #include <Features/Lua/LuaManager.h>
 #include <Features/Game/MovementConfigVariables.h>
@@ -725,6 +726,9 @@ void recordPopupRect(int kind, ImVec2 min, ImVec2 max) noexcept
 {
     popupCur[kind] = {min, max, true};
 }
+
+using popup_surface::popupPosition;
+using popup_surface::PopupSurface;
 
 bool hit(const char* id, ImVec2 p, ImVec2 size) noexcept
 {
@@ -1463,20 +1467,34 @@ void multiSelectPopover(ImDrawList* d) noexcept
 
     const float width = s(160.0f);
     const float rowHeight = s(26.0f);
-    const ImVec2 size(width, state.multiSelectCount * rowHeight + s(6.0f));
+    const float fullHeight = state.multiSelectCount * rowHeight;
+    const ImVec2 size(width, ImMin(fullHeight + s(6.0f), ImGui::GetMainViewport()->Size.y - 12.0f));
+    static float scroll = 0.0f;
+    static int owner = -1;
+    if (owner != state.multiSelectOwner || ImGui::GetFrameCount() == state.multiSelectOpenedFrame) {
+        owner = state.multiSelectOwner;
+        scroll = 0.0f;
+    }
     
     
-    const bool openAbove = state.multiSelectAnchor.y + s(23.0f) + s(4.0f) + size.y > d->GetClipRectMax().y;
-    const ImVec2 p(state.multiSelectAnchor.x,
+    const bool openAbove = state.multiSelectAnchor.y + s(23.0f) + s(4.0f) + size.y > (ImGui::GetMainViewport()->Pos + ImGui::GetMainViewport()->Size).y;
+    ImVec2 p(state.multiSelectAnchor.x,
         openAbove ? state.multiSelectAnchor.y - size.y - s(4.0f) : state.multiSelectAnchor.y + s(23.0f) + s(4.0f));
+    p = popupPosition(p, size);
+    PopupSurface surface{PopupMultiSelect, p, size, d};
     recordPopupRect(PopupMultiSelect, p, p + size);
     softShadow(d, p, p + size, s(10.0f));
     d->AddRectFilled(p, p + size, kPopupBg, s(8));
     d->AddRect(p, p + size, kPopupBorder, s(8));
 
     const bool accepts = ImGui::GetFrameCount() > state.multiSelectOpenedFrame;
+    if (ImGui::IsMouseHoveringRect(p, p + size))
+        scroll -= ImGui::GetIO().MouseWheel * rowHeight * 3;
+    scroll = ImClamp(scroll, 0.0f, ImMax(0.0f, fullHeight + s(6) - size.y));
+    d->PushClipRect(p, p + size, true);
     for (int i = 0; i < state.multiSelectCount; ++i) {
-        const ImVec2 rp = p + ImVec2(s(4), s(3) + i * rowHeight);
+        const ImVec2 rp = p + ImVec2(s(4), s(3) + i * rowHeight - scroll);
+        if (rp.y < p.y || rp.y + rowHeight > p.y + size.y) continue;
         ImGui::PushID(7500 + i);
         const bool clicked = hitModal("##ms_row", rp, ImVec2(size.x - s(8), rowHeight - s(4)));
         const float hover = motion(animKey(0xa11ceu, 7500 + i), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
@@ -1496,6 +1514,7 @@ void multiSelectPopover(ImDrawList* d) noexcept
             state.multiSelectToggle(static_cast<std::size_t>(i));
     }
 
+    d->PopClipRect();
     if (accepts && clickedOutside(p, p + size))
         state.multiSelectOpen = false;
 }
@@ -1659,12 +1678,14 @@ void featureBindPopover(ImDrawList* d) noexcept
         + (entry.numeric ? rowH + gap : 0.0f);
     ImVec2 p = state.featureBindAnchor;
     
-    const ImVec2 clipMin = d->GetClipRectMin();
-    const ImVec2 clipMax = d->GetClipRectMax();
+    const ImVec2 clipMin = ImGui::GetMainViewport()->Pos;
+    const ImVec2 clipMax = (ImGui::GetMainViewport()->Pos + ImGui::GetMainViewport()->Size);
     p.x = ImClamp(p.x, clipMin.x + s(10.0f), ImMax(clipMin.x + s(10.0f), clipMax.x - width - s(10.0f)));
     p.y = ImClamp(p.y, clipMin.y + s(10.0f), ImMax(clipMin.y + s(10.0f), clipMax.y - height - s(10.0f)));
     const ImVec2 size{width, height};
 
+    p = popupPosition(p, size);
+    PopupSurface surface{PopupFeatureBind, p, size, d};
     recordPopupRect(PopupFeatureBind, p, p + size);
     softShadow(d, p, p + size, s(14.0f));
     d->AddRectFilled(p, p + size, (kInsetBg & 0x00FFFFFFu) | (248u << IM_COL32_A_SHIFT), s(12));
@@ -1932,17 +1953,19 @@ void colorPickerPopover(ImDrawList* d) noexcept
     const float height = s(10) + squareH + gap + barH + gap + barH + gap + s(18);
     
     
-    const bool openAbove = state.colorPickerAnchor.y + s(23.0f) + s(4.0f) + height > d->GetClipRectMax().y;
+    const bool openAbove = state.colorPickerAnchor.y + s(23.0f) + s(4.0f) + height > (ImGui::GetMainViewport()->Pos + ImGui::GetMainViewport()->Size).y;
     
     
     float pickerX = state.colorPickerAnchor.x;
-    const ImVec2 clipMin = d->GetClipRectMin();
-    const float clipMaxX = d->GetClipRectMax().x;
+    const ImVec2 clipMin = ImGui::GetMainViewport()->Pos;
+    const float clipMaxX = (ImGui::GetMainViewport()->Pos + ImGui::GetMainViewport()->Size).x;
     pickerX = ImMax(pickerX, clipMin.x + s(6.0f));
     pickerX = ImMin(pickerX, clipMaxX - width - s(6.0f));
-    const ImVec2 p(pickerX,
+    ImVec2 p(pickerX,
         openAbove ? state.colorPickerAnchor.y - height - s(4.0f) : state.colorPickerAnchor.y + s(23.0f) + s(4.0f));
     const ImVec2 size(width, height);
+    p = popupPosition(p, size);
+    PopupSurface surface{PopupColor, p, size, d};
     recordPopupRect(PopupColor, p, p + size);
     softShadow(d, p, p + size, s(12.0f));
     
@@ -2696,10 +2719,12 @@ void paintKitPopupLayer(ImDrawList* d) noexcept
     const ImVec2 size(width, searchHeight + s(12.0f) + listHeight + s(8.0f));
     
     ImVec2 p(state.popup.anchor.x - s(28.0f), state.popup.anchor.y + s(27.0f));
-    const ImVec2 clipMin = d->GetClipRectMin();
-    const ImVec2 clipMax = d->GetClipRectMax();
+    const ImVec2 clipMin = ImGui::GetMainViewport()->Pos;
+    const ImVec2 clipMax = (ImGui::GetMainViewport()->Pos + ImGui::GetMainViewport()->Size);
     p.x = ImClamp(p.x, clipMin.x + s(10.0f), clipMax.x - size.x - s(10.0f));
     p.y = ImClamp(p.y, clipMin.y + s(10.0f), ImMax(clipMin.y + s(10.0f), clipMax.y - size.y - s(10.0f)));
+    p = popupPosition(p, size);
+    PopupSurface surface{PopupDropdown, p, size, d};
     recordPopupRect(PopupDropdown, p, p + size);
     const int first = d->VtxBuffer.Size;
     softShadow(d, p, p + size, s(16.0f));
@@ -3128,7 +3153,7 @@ void pageLegitAim() noexcept
 {
     using namespace legit_aimbot_vars;
     addCard("AIM ASSIST", 8, [] {
-        toggleVar<Enabled>("Smooth Aim", ++controlId);
+        toggleVar<Enabled>("Aim Assist", ++controlId);
         toggleVar<WallCheck>("Aim Visible", ++controlId);
         keybindVar<AimKey>("Hold Key", ++controlId);
         sliderVar<Fov>("Field Of View", ++controlId, " deg");
@@ -3136,6 +3161,24 @@ void pageLegitAim() noexcept
         toggleVar<DrawFov>("Draw FOV Circle", ++controlId);
         colorVar<FovCircleColor>("FOV Circle Color", ++controlId);
         toggleVar<SpreadCircleFov>("Spread Circle FOV", ++controlId);
+    });
+    addCard("RESPONSE", 8, [] {
+        static constexpr const char* const modes[]{"Smooth", "Magnet", "Snap"};
+        selectVar<Mode>("Aim Mode", modes, 3, ++controlId);
+        sliderVar<Strength>("Assist Strength", ++controlId, "%");
+        floatSliderVar<Deadzone>("Deadzone", ++controlId, " deg");
+        floatSliderVar<MaxSpeed>("Turn Speed", ++controlId, " deg/s");
+        floatSliderVar<SnapFov>("Snap / Magnet Radius", ++controlId, " deg");
+        sliderVar<ReactionMs>("Acquire Delay", ++controlId, " ms");
+        sliderVar<SwitchDelayMs>("Switch Delay", ++controlId, " ms");
+        toggleVar<RecoilCompensation>("Aim Recoil Compensation", ++controlId);
+    });
+    addCard("ACTIVATION", 5, [] {
+        toggleVar<VisibleAim>("Visible Mouse Aim", ++controlId);
+        toggleVar<AlwaysOn>("Always Active", ++controlId);
+        toggleVar<OnlyWhileFiring>("Only While Firing", ++controlId);
+        toggleVar<RequireMouseMovement>("Require Mouse Movement", ++controlId);
+        toggleVar<IgnoreFlash>("Pause When Flashed", ++controlId);
     });
     addCard("TARGETS", 2, [] {
         static constexpr const char* const modes[]{"Closest To Crosshair", "Nearest Distance", "Lowest Health"};
@@ -3415,6 +3458,20 @@ void pageEffects() noexcept
         toggleVar<RemoveFlashOverlay>("Remove Flash Overlay", ++controlId);
         toggleVar<RemoveMenuAds>("Remove Main Menu Ads", ++controlId);
     });
+    addCard("MODELS", 2, [] {
+        toggleVar<chams_vars::HideEnemies>("Hide Enemy Meshes", ++controlId);
+        toggleVar<chams_vars::HideLocalPlayer>("Hide Local Player Mesh", ++controlId);
+    });
+    addCard("ANIMATIONS", 8, [] {
+        toggleVar<animation_mod_vars::Freeze>("Freeze Client Animations", ++controlId);
+        toggleVar<animation_mod_vars::DisableIK>("Disable Foot IK", ++controlId);
+        toggleVar<animation_mod_vars::DisableRagdolls>("Disable Ragdolls", ++controlId);
+        toggleVar<animation_mod_vars::ModifyRagdollScale>("Modify Ragdoll Scale", ++controlId);
+        floatSliderVar<animation_mod_vars::RagdollScale>("Ragdoll Size", ++controlId);
+        toggleVar<animation_mod_vars::AnimateViewmodel>("Animate Viewmodel", ++controlId);
+        floatSliderVar<animation_mod_vars::ViewmodelSpinSpeed>("Viewmodel Spin", ++controlId, " deg/s");
+        floatSliderVar<animation_mod_vars::ViewmodelPitchSway>("Viewmodel Pitch Sway", ++controlId, " deg");
+    });
     addCard("CHAMS", 2, [] {
         toggleVar<chams_vars::Enabled>("Enemy Chams", ++controlId);
         colorVar<chams_vars::EnemyColor>("Enemy Color", ++controlId);
@@ -3653,10 +3710,14 @@ void laggerProbeRow(const char* label, const char* buttonText, int id) noexcept
 
 void pageMovement() noexcept
 {
-    addCard("AUTOMATION", 4, [] {
+    addCard("AUTOMATION", 7, [] {
         toggleVar<BlockbotEnabled>("Blockbot", ++controlId);
         toggleVar<BunnyhopEnabled>("Bunnyhop", ++controlId);
         toggleVar<AutoStrafeEnabled>("Auto Strafe", ++controlId);
+        static constexpr const char* const modes[]{"Legit", "Rage"};
+        selectVar<AutoStrafeMode>("Strafe Mode", modes, 2, ++controlId);
+        sliderVar<LegitStrafeStrength>("Legit Assist", ++controlId, "%");
+        sliderVar<LegitStrafeMouseThreshold>("Mouse Threshold", ++controlId);
         toggleVar<TestStraferEnabled>("Auto Strafe Diagnostics", ++controlId);
     });
     addCard("EDGE & SPEED", 7, [] {
@@ -6480,8 +6541,10 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
     
     
     const float height = rowHeight * 12.0f + s(26.0f) + s(16.0f);
-    const ImVec2 p = base + ImVec2(s(7.0f), kShellHeight - s(45.0f) - height * open - s(6.0f));
+    ImVec2 p = base + ImVec2(s(7.0f), kShellHeight - s(45.0f) - height * open - s(6.0f));
     const ImVec2 size(width, height);
+    p = popupPosition(p, size);
+    PopupSurface surface{PopupProfile, p, size, d};
     recordPopupRect(PopupProfile, p, p + size);
     const int first = d->VtxBuffer.Size;
     softShadow(d, p, p + size, s(16.0f));
@@ -6806,10 +6869,15 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
     }
 
     const float searchHeight = s(30.0f);
-    const float listHeight = visibleCount * s(28.0f) + s(6.0f);
-    const float actionHeight = s(134.0f); 
-    const ImVec2 p = base + ImVec2(kSidebarWidth + s(11), kToolbarHeight + s(4));
+    const float fullListHeight = visibleCount * s(28.0f);
+    const float listHeight = ImMin(fullListHeight, ImMax(s(28), ImGui::GetMainViewport()->Size.y - s(210))) + s(6);
+    static float configScroll = 0;
+    if (ImGui::GetFrameCount() == configPopoverOpenedFrame) configScroll = 0;
+    const float actionHeight = s(164.0f);
+    ImVec2 p = base + ImVec2(kSidebarWidth + s(11), kToolbarHeight + s(4));
     const ImVec2 size(width, searchHeight + listHeight + actionHeight);
+    p = popupPosition(p, size);
+    PopupSurface surface{PopupConfig, p, size, d};
     recordPopupRect(PopupConfig, p, p + size);
     const int first = d->VtxBuffer.Size;
     softShadow(d, p, p + size, s(16.0f));
@@ -6827,11 +6895,17 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
 
     
     const int activeIndex = ui_config::activeConfigIndex();
+    const ImVec2 listMin = p + ImVec2(0, searchHeight);
+    const ImVec2 listMax = listMin + ImVec2(width, listHeight);
+    if (ImGui::IsMouseHoveringRect(listMin, listMax)) configScroll -= ImGui::GetIO().MouseWheel * s(84);
+    configScroll = ImClamp(configScroll, 0.0f, ImMax(0.0f, fullListHeight + s(6) - listHeight));
+    d->PushClipRect(listMin, listMax, true);
     for (std::uint8_t v = 0; v < visibleCount; ++v) {
         const std::uint8_t i = visible[v];
-        ImVec2 rp = p + ImVec2(s(4), searchHeight + s(4) + v * s(28.0f));
+        ImVec2 rp = p + ImVec2(s(4), searchHeight + s(4) + v * s(28.0f) - configScroll);
+        if (rp.y < listMin.y || rp.y + s(28) > listMax.y) continue;
         ImGui::PushID(9100 + i);
-        const bool clicked = hitPopupRow("##cfg_row", rp, ImVec2(width - s(8), s(28)), PopupConfig);
+        const bool clicked = hitPopupRow("##cfg_row", rp, ImVec2(width - s(85), s(28)), PopupConfig);
         const float hover = motion(animKey(0x51e1u, 9100 + i), ImGui::IsItemHovered() ? 1.0f : 0.0f, 22.0f);
         ImGui::PopID();
         if (hover > 0.001f && i != activeIndex)
@@ -6840,11 +6914,17 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
         if (active)
             d->AddRectFilled(rp + ImVec2(s(2), s(5)), rp + ImVec2(s(5), s(23)), g_accent, s(3));
         textY(d, rp.x + s(12), rp.y, s(28), active ? C(224, 229, 243) : C(182, 185, 196), ui_config::listedConfigName(i), kTextControl, nullptr);
-        if (clicked && !active) {
+        ImGui::PushID(9500 + i);
+        const ImVec2 loadPos = rp + ImVec2(width - s(80), s(2));
+        const bool loadClicked = hitPopupRow("##cfg_load", loadPos, ImVec2(s(48), s(24)), PopupConfig);
+        d->AddRectFilled(loadPos, loadPos + ImVec2(s(48), s(24)), kPillBg, s(5));
+        textYCentered(d, loadPos.x, s(48), loadPos.y, s(24), g_accent, "LOAD", kTextControl, nullptr);
+        ImGui::PopID();
+        if (clicked || loadClicked) {
             ui_config::switchToConfig(i);
             lastCleanConfigEpoch = ui_config::changeEpoch.load(std::memory_order_relaxed);
             char toastText[96];
-            std::snprintf(toastText, sizeof(toastText), "Switched to %s", ui_config::activeConfigNameForDisplay());
+            std::snprintf(toastText, sizeof(toastText), "Loading %s", ui_config::activeConfigNameForDisplay());
             pushToast(toastText, g_accent);
         }
 
@@ -6873,6 +6953,7 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
     }
 
     
+    d->PopClipRect();
     float ay = p.y + searchHeight + listHeight + s(4.0f);
     auto actionButton = [&](int id, const char* label) {
         const ImVec2 bp = p + ImVec2(s(8), ay - p.y);
@@ -6888,7 +6969,7 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
     if (actionButton(0, "SAVE")) {
         ui_config::saveActive();
         lastCleanConfigEpoch = ui_config::changeEpoch.load(std::memory_order_relaxed);
-        pushToast("Config saved", g_accent);
+        pushToast("Save queued", g_accent);
     }
     if (actionButton(1, "DUPLICATE")) {
         if (ui_config::duplicateActiveConfig()) {
@@ -6906,12 +6987,12 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
     
     const ImVec2 inputPos = p + ImVec2(s(8), ay - p.y + s(2.0f));
     ImGui::SetCursorScreenPos(inputPos);
-    ImGui::PushItemWidth(width - s(140.0f));
+    ImGui::PushItemWidth(width - s(16.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(6), s(4)));
     ImGui::InputTextWithHint("##nl_new_cfg", "new name", newConfigName, sizeof(newConfigName));
     ImGui::PopStyleVar();
     ImGui::PopItemWidth();
-    ImGui::SameLine(0.0f, s(4));
+    ImGui::SetCursorScreenPos(inputPos + ImVec2(0, s(28)));
     if (ImGui::Button("NEW", ImVec2(s(52.0f), 0.0f))) {
         if (ui_config::createAndSwitchToConfig(newConfigName)) {
             newConfigName[0] = '\0';
@@ -6951,6 +7032,16 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
 
 void neverlose::render() noexcept
 {
+    static std::uint32_t reportedLoadRevision{};
+    ui_config::withConfig([&](auto&& config) {
+        const auto revision = config.loadRevision();
+        if (revision != reportedLoadRevision) {
+            reportedLoadRevision = revision;
+            pushToast(config.lastLoadSucceeded() ? "Config loaded" : "Load failed: settings kept",
+                config.lastLoadSucceeded() ? g_accent : C(229, 72, 77));
+            lastCleanConfigEpoch = ui_config::changeEpoch.load(std::memory_order_relaxed);
+        }
+    });
     
     
     
@@ -7236,9 +7327,11 @@ void neverlose::render() noexcept
             ImVec2 sp = styleSelect.anchor + ImVec2(0.0f, s(22));
             
             
-            sp.x = ImClamp(sp.x, d->GetClipRectMin().x + s(10.0f), d->GetClipRectMax().x - size.x - s(10.0f));
-            sp.y = ImClamp(sp.y, d->GetClipRectMin().y + s(10.0f), d->GetClipRectMax().y - size.y - s(10.0f));
+            sp.x = ImClamp(sp.x, ImGui::GetMainViewport()->Pos.x + s(10.0f), (ImGui::GetMainViewport()->Pos + ImGui::GetMainViewport()->Size).x - size.x - s(10.0f));
+            sp.y = ImClamp(sp.y, ImGui::GetMainViewport()->Pos.y + s(10.0f), (ImGui::GetMainViewport()->Pos + ImGui::GetMainViewport()->Size).y - size.y - s(10.0f));
             const bool accepts = ImGui::GetFrameCount() > styleSelect.openedFrame;
+            ImDrawList* d = ImGui::GetWindowDrawList();
+            PopupSurface surface{PopupStyle, sp, size, d};
             recordPopupRect(PopupStyle, sp, sp + size);
             d->AddRectFilled(sp, sp + size, kPopupBg, s(14));
             d->AddRect(sp, sp + size, kPopupBorder, s(14));
@@ -7401,6 +7494,18 @@ void registerFeatureBinds() noexcept
     feature_binds::registerNumber<aimbot_vars::MinDamage>("Min Damage");
     feature_binds::registerNumber<legit_aimbot_vars::Fov>("Field Of View");
     feature_binds::registerNumber<legit_aimbot_vars::Smooth>("Smoothing");
+    feature_binds::registerNumber<legit_aimbot_vars::Strength>("Assist Strength");
+    feature_binds::registerNumber<legit_aimbot_vars::Deadzone>("Aim Deadzone");
+    feature_binds::registerNumber<legit_aimbot_vars::MaxSpeed>("Aim Turn Speed");
+    feature_binds::registerNumber<legit_aimbot_vars::ReactionMs>("Aim Acquire Delay");
+    feature_binds::registerNumber<legit_aimbot_vars::SwitchDelayMs>("Aim Switch Delay");
+    feature_binds::registerNumber<legit_aimbot_vars::SnapFov>("Snap / Magnet Radius");
+    feature_binds::registerNumber<LegitStrafeStrength>("Legit Strafe Strength");
+    feature_binds::registerNumber<LegitStrafeMouseThreshold>("Strafe Mouse Threshold");
+    feature_binds::registerNumber<animation_mod_vars::RagdollScale>("Ragdoll Size");
+    feature_binds::registerNumber<animation_mod_vars::ViewmodelSpinSpeed>("Viewmodel Spin");
+    feature_binds::registerNumber<animation_mod_vars::ViewmodelPitchSway>("Viewmodel Pitch Sway");
+
     feature_binds::registerNumber<rcs_vars::Strength>("Strength");
     feature_binds::registerNumber<triggerbot_vars::DelayMilliseconds>("Min Reaction Delay");
     feature_binds::registerNumber<triggerbot_vars::DelayMillisecondsMax>("Max Reaction Delay");
@@ -7503,7 +7608,23 @@ void registerFeatureBinds() noexcept
     feature_binds::registerToggle<aimbot_vars::Extrapolate>("Lead Targets");
 
     
-    feature_binds::registerToggle<legit_aimbot_vars::Enabled>("Smooth Aim");
+    feature_binds::registerToggle<legit_aimbot_vars::Enabled>("Legit Aim Assist");
+    feature_binds::registerToggle<legit_aimbot_vars::VisibleAim>("Legit Visible Mouse Aim");
+    feature_binds::registerToggle<legit_aimbot_vars::AlwaysOn>("Legit Always Active");
+    feature_binds::registerToggle<legit_aimbot_vars::OnlyWhileFiring>("Legit Only While Firing");
+    feature_binds::registerToggle<legit_aimbot_vars::RequireMouseMovement>("Legit Require Mouse");
+    feature_binds::registerToggle<legit_aimbot_vars::IgnoreFlash>("Legit Pause When Flashed");
+    feature_binds::registerToggle<legit_aimbot_vars::RecoilCompensation>("Legit Recoil Compensation");
+    feature_binds::registerToggle<AutoStrafeEnabled>("Auto Strafe");
+    feature_binds::registerToggle<BunnyhopEnabled>("Bunnyhop");
+    feature_binds::registerToggle<chams_vars::HideEnemies>("Hide Enemy Meshes");
+    feature_binds::registerToggle<chams_vars::HideLocalPlayer>("Hide Local Player");
+    feature_binds::registerToggle<animation_mod_vars::Freeze>("Freeze Client Animations");
+    feature_binds::registerToggle<animation_mod_vars::DisableIK>("Disable Foot IK");
+    feature_binds::registerToggle<animation_mod_vars::DisableRagdolls>("Disable Ragdolls");
+    feature_binds::registerToggle<animation_mod_vars::ModifyRagdollScale>("Modify Ragdoll Scale");
+    feature_binds::registerToggle<animation_mod_vars::AnimateViewmodel>("Animate Viewmodel");
+
     feature_binds::registerToggle<legit_aimbot_vars::TargetLock>("Legit Target Lock");
     feature_binds::registerToggle<legit_aimbot_vars::WallCheck>("Legit Aim Visible");
     feature_binds::registerToggle<legit_aimbot_vars::DrawFov>("Draw FOV Circle");

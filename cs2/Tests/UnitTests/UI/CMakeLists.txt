@@ -6,3 +6,5 @@ target_sources(UnitTests PRIVATE
 )
 
 target_link_libraries(UnitTests sdl3_headers)
+
+target_sources(UnitTests PRIVATE PopupSurfaceTests.cpp)
