@@ -1,5 +1,9 @@
 #pragma once
 
+#include <Hooks/ViewmodelRotationHook.h>
+#include <Features/Visuals/ViewmodelMod/ViewmodelRotation.h>
+#include <UI/ImGui/MenuInput.h>
+
 #include "GlobalContext/HookQuiesce.h"
 #include "GlobalContext/GlobalContext.h"
 #include "Hooks/PeepEventsHook.h"
@@ -380,6 +384,7 @@
     (void)scene_render_hooks::install(); 
     
     (void)chams_hook::install();
+    static_cast<void>(viewmodel_rotation_hook::install());
     
     
     static_cast<void>(netlag_hook::install());
@@ -408,17 +413,10 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     if (initInProgress)
         finishInit(hookContext);
 
-    const int processed = hookContext.hooks().peepEventsHook.original(events, numevents, action, minType, maxType);
+    return menu_input::drain(events, numevents, action, minType, maxType,
+        hookContext.hooks().peepEventsHook.original,
+        [](SDL_Event* batch, int count) { return GUI::polledEvents(batch, count); });
 
-    
-    
-    
-    
-    if (action == SDL_GETEVENT && processed > 0
-        && GUI::polledEvents(static_cast<const SDL_Event*>(events), processed))
-        return 0;
-
-    return processed;
 }
 
 [[NOINLINE]] void unload(auto& hookContext) noexcept
@@ -462,8 +460,10 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     
     
     hookContext.template make<Removals>().onUnload();
+    hookContext.template make<ViewmodelMod>().onUnload();
     scene_render_hooks::uninstall();
     chams_hook::uninstall();
+    viewmodel_rotation_hook::uninstall();
     netlag_hook::unload();
     hookContext.hooks().viewRenderHook.uninstall();
     hookContext.hooks().source2ClientHook.uninstall();
@@ -1083,6 +1083,8 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
         
         
         
+        // Restore temporary config overrides before ui_config rejects shutdown writes.
+        neverlose::restoreFeatureBinds();
         HookQuiesce::beginShutdown();
         
         
@@ -1104,6 +1106,7 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
         
         
         HookQuiesce::drainInFlightCallbacks();
+        viewmodel_rotation_hook::releaseRelay();
 
         
         
@@ -1360,3 +1363,18 @@ void chams_hook::onGeneratePrimitives(void* desc, void* sceneObject, void* scene
 }
 
 
+
+void viewmodel_rotation_hook::onUpdatePose(void* model, cs2::Vector* position, cs2::Vector* angles) noexcept
+{
+    HookQuiesce::InFlight flight;
+    // The original writes bob and positional offsets into this frame's private pose.
+    original(model, position, angles);
+    if (HookQuiesce::isShuttingDown() || !angles
+        || !HookContext<GlobalContext>::isGlobalContextComplete())
+        return;
+    HookContext<GlobalContext> hookContext;
+    if (GET_CONFIG_VAR(viewmodel_mod_vars::ModifyPosition))
+        *angles = viewmodel_rotation::apply(*angles,
+            static_cast<float>(GET_CONFIG_VAR(viewmodel_mod_vars::Pitch)),
+            static_cast<float>(GET_CONFIG_VAR(viewmodel_mod_vars::Roll)));
+}

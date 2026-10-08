@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "ConfigVariableTypes.h"
+#include "ConfigOverrideState.h"
 #include <HookContext/HookContextMacros.h>
 
 template <typename HookContext>
@@ -504,6 +505,8 @@ private:
         configConversion.floating(u8"OffsetX", loadVariable<viewmodel_mod_vars::OffsetX>(), saveVariable<viewmodel_mod_vars::OffsetX>());
         configConversion.floating(u8"OffsetY", loadVariable<viewmodel_mod_vars::OffsetY>(), saveVariable<viewmodel_mod_vars::OffsetY>());
         configConversion.floating(u8"OffsetZ", loadVariable<viewmodel_mod_vars::OffsetZ>(), saveVariable<viewmodel_mod_vars::OffsetZ>());
+        configConversion.floating(u8"Pitch", loadVariable<viewmodel_mod_vars::Pitch>(), saveVariable<viewmodel_mod_vars::Pitch>());
+        configConversion.floating(u8"Roll", loadVariable<viewmodel_mod_vars::Roll>(), saveVariable<viewmodel_mod_vars::Roll>());
         configConversion.endObject();
 
         
@@ -924,7 +927,8 @@ private:
     {
         if constexpr (IsRangeConstrained<typename ConfigVariable::ValueType>::value) {
             return [this] {
-                return static_cast<typename ConfigVariable::ValueType::ValueType>(GET_CONFIG_VAR(ConfigVariable));
+                return config_overrides::valueForSave(ConfigVariableTypes::indexOf<ConfigVariable>(),
+                    static_cast<typename ConfigVariable::ValueType::ValueType>(GET_CONFIG_VAR(ConfigVariable)));
             };
         } else if constexpr (std::is_enum_v<typename ConfigVariable::ValueType>) {
             return [this] {
@@ -932,7 +936,7 @@ private:
             };
         } else {
             return [this] {
-                return GET_CONFIG_VAR(ConfigVariable);
+                return config_overrides::valueForSave(ConfigVariableTypes::indexOf<ConfigVariable>(), GET_CONFIG_VAR(ConfigVariable));
             };
         }
     }

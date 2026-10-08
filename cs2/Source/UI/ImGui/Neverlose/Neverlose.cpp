@@ -1593,6 +1593,47 @@ void analyzerMultiSelect(const char* label, int id) noexcept
 
 
 
+void openFeatureBind(feature_binds::Entry* entry) noexcept
+{
+    if (!entry)
+        return;
+    state.featureBindOpen = true;
+    state.featureBindOpenedFrame = ImGui::GetFrameCount();
+    state.featureBindIndex = static_cast<int>(entry - feature_binds::entries);
+    state.featureBindAnchor = ImGui::GetIO().MousePos;
+    state.popup.open = false;
+    state.multiSelectOpen = false;
+    state.colorPickerOpen = false;
+    styleSelect.open = false;
+}
+
+void numericBindGesture(feature_binds::Entry* entry) noexcept
+{
+    if (state.featureBindOpen || state.popup.open || state.multiSelectOpen
+        || state.colorPickerOpen || styleSelect.open)
+        return;
+    const ImVec2 start{card.origin.x, card.origin.y + (card.row - 1) * kRowHeight};
+    const bool hovered = ImGui::IsMouseHoveringRect(start, start + ImVec2(card.width, kRowHeight));
+    if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+        openFeatureBind(entry);
+    else if (hovered && !ImGui::IsAnyItemActive())
+        ImGui::SetTooltip("Right-click to bind a value (Hold or Toggle)");
+    if (entry && entry->key != Bind::kOff) {
+        const float x = card.origin.x + s(13) + card.lastLabelWidth + s(7);
+        const float available = card.width - s(158) - (x - card.origin.x);
+        const char* key = Bind::displayName(entry->key);
+        const float width = ImGui::CalcTextSize(key).x + s(10);
+        if (width <= available) {
+            ImDrawList* d = ImGui::GetWindowDrawList();
+            const float y = start.y + rowCentered(s(18));
+            d->AddRectFilled(ImVec2{x, y}, ImVec2{x + width, y + s(18)},
+                entry->active ? g_buttonAccent : kPillBg, s(6));
+            textYCentered(d, x, width, y, s(18), entry->active ? kInsetBg : kTextFaint,
+                key, s(10), nullptr);
+        }
+    }
+}
+
 void featureBindPopover(ImDrawList* d) noexcept
 {
     if (!state.featureBindOpen)
@@ -1614,7 +1655,8 @@ void featureBindPopover(ImDrawList* d) noexcept
     const float rowH = s(25.0f);
     const float gap = s(7.0f);
     const float headerH = s(30.0f);
-    const float height = headerH + rowH + gap + rowH + gap + rowH + s(10.0f);
+    const float height = headerH + rowH + gap + rowH + gap + rowH + s(10.0f)
+        + (entry.numeric ? rowH + gap : 0.0f);
     ImVec2 p = state.featureBindAnchor;
     
     const ImVec2 clipMin = d->GetClipRectMin();
@@ -1655,6 +1697,7 @@ void featureBindPopover(ImDrawList* d) noexcept
                     state.capture = State::Capture::WaitingPress;
             } else if (state.capture == State::Capture::WaitingPress) {
                 if (gui_sdl::scancodeDown[76]) { 
+                    entry.restore();
                     entry.key = Bind::kOff;
                     feature_binds::save();
                     state.capture = State::Capture::Inactive;
@@ -1678,6 +1721,7 @@ void featureBindPopover(ImDrawList* d) noexcept
                         }
                     }
                     if (bind != Bind::kOff) {
+                        entry.restore();
                         entry.key = bind;
                         entry.lastKeyDown = true; 
                                                   
@@ -1709,6 +1753,7 @@ void featureBindPopover(ImDrawList* d) noexcept
             const bool clicked = hitModal("##fb_mode", ImVec2{x, y}, ImVec2{pillWidth, rowH});
             ImGui::PopID();
             if (clicked && accepts && entry.key != Bind::kOff && entry.holdMode != (mode != 0)) {
+                entry.restore();
                 entry.holdMode = mode != 0;
                 entry.lastKeyDown = false;
                 feature_binds::save();
@@ -1723,12 +1768,25 @@ void featureBindPopover(ImDrawList* d) noexcept
         y += rowH + gap;
     }
 
+    if (entry.numeric) {
+        ImGui::SetCursorScreenPos(ImVec2{p.x + s(10), y});
+        ImGui::SetNextItemWidth(width - s(20));
+        float value = static_cast<float>(entry.boundValue);
+        if (ImGui::SliderFloat("##fb_value", &value, static_cast<float>(entry.minimum),
+                static_cast<float>(entry.maximum), entry.integral ? "Value: %.0f" : "Value: %.2f", ImGuiSliderFlags_AlwaysClamp)) {
+            entry.setBoundValue(value);
+            feature_binds::save();
+        }
+        y += rowH + gap;
+    }
+
     
     if (entry.key != Bind::kOff) {
         ImGui::PushID(91020);
         const bool clicked = hitModal("##fb_unbind", ImVec2{p.x + s(10), y}, ImVec2{width - s(20), rowH});
         ImGui::PopID();
         if (clicked && accepts) {
+            entry.restore();
             entry.key = Bind::kOff;
             entry.lastKeyDown = false;
             feature_binds::save();
@@ -2017,6 +2075,7 @@ void colorPickerPopover(ImDrawList* d) noexcept
 template <typename Var>
 void floatSliderVar(const char* label, int id, const char* suffix = "") noexcept
 {
+    feature_binds::registerNumber<Var>(label);
     using Range = typename Var::ValueType;
     ImDrawList* d = ImGui::GetWindowDrawList();
     beginRow(d, label);
@@ -2092,6 +2151,7 @@ void floatSliderVar(const char* label, int id, const char* suffix = "") noexcept
         d->PopClipRect();
     }
     ImGui::PopID();
+    numericBindGesture(feature_binds::entryFor<Var>());
 }
 
 bool keybindRow(const char* label, int* bindValue, int id) noexcept
@@ -2505,10 +2565,12 @@ void enemiesAllOffVar(const char* label, int id) noexcept
 template <typename ConfigVar>
 void sliderVar(const char* label, int id, const char* suffix = nullptr) noexcept
 {
+    feature_binds::registerNumber<ConfigVar>(label);
     const auto current = ui_config::get<ConfigVar>();
     int value = static_cast<int>(static_cast<typename ConfigVar::ValueType::ValueType>(current));
     if (sliderRow(label, &value, static_cast<int>(ConfigVar::ValueType::kMin), static_cast<int>(ConfigVar::ValueType::kMax), id, suffix))
         ui_config::set<ConfigVar>(typename ConfigVar::ValueType{static_cast<typename ConfigVar::ValueType::ValueType>(value)});
+    numericBindGesture(feature_binds::entryFor<ConfigVar>());
 }
 
 template <typename ConfigVar>
@@ -3323,11 +3385,13 @@ void pageViewmodel() noexcept
         toggleVar<ModifyFov>("Modify Viewmodel Fov", ++controlId);
         sliderVar<Fov>("Fov", ++controlId);
     });
-    addCard("VIEWMODEL POSITION", 4, [] {
+    addCard("VIEWMODEL POSITION", 6, [] {
         toggleVar<ModifyPosition>("Modify Position", ++controlId);
         floatSliderVar<OffsetX>("Offset X", ++controlId, " u");
         floatSliderVar<OffsetY>("Offset Y", ++controlId, " u");
         floatSliderVar<OffsetZ>("Offset Z", ++controlId, " u");
+        floatSliderVar<Pitch>("Pitch", ++controlId, " deg");
+        floatSliderVar<Roll>("Roll", ++controlId, " deg");
     });
 }
 
@@ -7329,6 +7393,84 @@ void registerFeatureBinds() noexcept
         return;
     done = true;
 
+    feature_binds::registerNumber<aimbot_vars::PointScale>("Point Scale ");
+    feature_binds::registerNumber<aimbot_vars::BacktrackTicks>("Backtrack Ticks");
+    feature_binds::registerNumber<aimbot_vars::ExtrapolateTicks>("Lead Ticks");
+    feature_binds::registerNumber<aimbot_vars::ForceShotWaitTicks>("Accuracy Wait Ticks");
+    feature_binds::registerNumber<aimbot_vars::Hitchance>("Min Estimated Hitchance");
+    feature_binds::registerNumber<aimbot_vars::MinDamage>("Min Damage");
+    feature_binds::registerNumber<legit_aimbot_vars::Fov>("Field Of View");
+    feature_binds::registerNumber<legit_aimbot_vars::Smooth>("Smoothing");
+    feature_binds::registerNumber<rcs_vars::Strength>("Strength");
+    feature_binds::registerNumber<triggerbot_vars::DelayMilliseconds>("Min Reaction Delay");
+    feature_binds::registerNumber<triggerbot_vars::DelayMillisecondsMax>("Max Reaction Delay");
+    feature_binds::registerNumber<triggerbot_vars::AccuracyRadius>("Max Bullet Deviation");
+    feature_binds::registerNumber<triggerbot_vars::Hitchance>("Minimum Hitchance");
+    feature_binds::registerNumber<triggerbot_vars::AutowallMaxThickness>("Max Total Wall Thickness");
+    feature_binds::registerNumber<viewmodel_mod_vars::Fov>("Fov");
+    feature_binds::registerNumber<viewmodel_mod_vars::OffsetX>("Offset X");
+    feature_binds::registerNumber<viewmodel_mod_vars::OffsetY>("Offset Y");
+    feature_binds::registerNumber<viewmodel_mod_vars::OffsetZ>("Offset Z");
+    feature_binds::registerNumber<HitmarkerLength>("Length");
+    feature_binds::registerNumber<HitmarkerGap>("Gap");
+    feature_binds::registerNumber<HitmarkerTimeout>("Fade Time (ms)");
+    feature_binds::registerNumber<ForceThirdPersonDistance>("Distance");
+    feature_binds::registerNumber<WorldColorsSkyBrightness>("Sky Brightness");
+    feature_binds::registerNumber<WorldColorsFogDensity>("Fog Density");
+    feature_binds::registerNumber<WorldColorsFogDistance>("Fog Distance");
+    feature_binds::registerNumber<WorldColorsBloomStrength>("Bloom Strength");
+    feature_binds::registerNumber<watermark_vars::OffsetX>("X Offset");
+    feature_binds::registerNumber<watermark_vars::OffsetY>("Y Offset");
+    feature_binds::registerNumber<PlayerListOffsetX>("X Offset");
+    feature_binds::registerNumber<PlayerListOffsetY>("Y Offset");
+    feature_binds::registerNumber<combat_stats_vars::CountersOffsetX>("X Offset");
+    feature_binds::registerNumber<combat_stats_vars::CountersOffsetY>("Y Offset");
+    feature_binds::registerNumber<combat_stats_vars::FeedLifetime>("Hide After");
+    feature_binds::registerNumber<combat_stats_vars::FeedOffsetX>("X Offset");
+    feature_binds::registerNumber<combat_stats_vars::FeedOffsetY>("Y Offset");
+    feature_binds::registerNumber<status_panel_vars::OffsetX>("X Offset");
+    feature_binds::registerNumber<status_panel_vars::OffsetY>("Y Offset");
+    feature_binds::registerNumber<movement_vars::SlowWalkSpeed>("Slow Walk Speed");
+    feature_binds::registerNumber<net_lag_vars::ChokeTicks>("Choke Ticks");
+    feature_binds::registerNumber<net_lag_vars::BlipCount>("Blip Count");
+    feature_binds::registerNumber<net_lag_vars::DupCount>("Dup Count");
+    feature_binds::registerNumber<net_lag_vars::DelayMs>("Delay Ms");
+    feature_binds::registerNumber<net_lag_vars::FloodBurstCount>("Flood Burst");
+    feature_binds::registerNumber<net_lag_vars::ConnlessFloodCount>("Connless Flood");
+    feature_binds::registerNumber<userinfo_flood_vars::SendsPerTick>("Sends Per Tick");
+    feature_binds::registerNumber<userinfo_flood_vars::EveryTicks>("Every N Ticks");
+    feature_binds::registerNumber<server_lagger_vars::MsgsPerBatch>("Msgs / Batch");
+    feature_binds::registerNumber<server_lagger_vars::AudioKB>("Audio KB");
+    feature_binds::registerNumber<server_lagger_vars::Amount>("Batches / Tick");
+    feature_binds::registerNumber<server_lagger_vars::FreezeTicks>("Freeze Ticks");
+    feature_binds::registerNumber<server_lagger_vars::RampInterval>("Ramp Step");
+    feature_binds::registerNumber<server_lagger_vars::PulseOn>("Pulse On");
+    feature_binds::registerNumber<server_lagger_vars::PulseOff>("Pulse Off");
+    feature_binds::registerNumber<FakeLevelValue>("Level");
+    feature_binds::registerNumber<FakeLevelXp>("Level Xp");
+    feature_binds::registerNumber<FakePremierScore>("Premier Score");
+    feature_binds::registerNumber<FakeCommendsFriendly>("Friendly Commends");
+    feature_binds::registerNumber<FakeCommendsTeaching>("Teaching Commends");
+    feature_binds::registerNumber<FakeCommendsLeader>("Leader Commends");
+    feature_binds::registerNumber<analyzer_vars::SnapThreshold>("Snap Threshold");
+    feature_binds::registerNumber<analyzer_vars::CalloutThreshold>("Callout Score");
+    feature_binds::registerNumber<chat_vars::NameCycleInterval>("Cycle Every");
+    feature_binds::registerNumber<name_animator_vars::Speed>("Animate Speed");
+    feature_binds::registerNumber<chat_vars::ClanTagAnimateSpeed>("Tag Speed");
+    feature_binds::registerNumber<glitch_gen_vars::Intensity>("Intensity");
+    feature_binds::registerNumber<chat_vars::TheaterDelay>("Retry After");
+    feature_binds::registerNumber<chat_vars::SpamCount>("Burst Lines");
+    feature_binds::registerNumber<chat_vars::SpamInterval>("Spam Interval");
+    feature_binds::registerNumber<chat_vars::WheelInterval>("Radio Interval");
+    feature_binds::registerNumber<chat_vars::PingInterval>("Ping Interval");
+    feature_binds::registerNumber<chat_vars::HudColorCycleSpeed>("Cycle Speed");
+    feature_binds::registerNumber<fva_vars::Substeps>("Chain Steps");
+    feature_binds::registerNumber<radio_vars::Volume>("Volume");
+
+    feature_binds::registerNumber<viewmodel_mod_vars::Pitch>("Viewmodel Pitch");
+    feature_binds::registerNumber<viewmodel_mod_vars::Roll>("Viewmodel Roll");
+    feature_binds::registerToggle<viewmodel_mod_vars::ModifyPosition>("Modify Viewmodel Position");
+
     using namespace aimbot_vars;
     using namespace triggerbot_vars;
     using namespace legit_aimbot_vars;
@@ -8831,6 +8973,11 @@ void neverlose::processDeferred() noexcept
     }
 }
 
+void neverlose::restoreFeatureBinds() noexcept
+{
+    feature_binds::restoreAll();
+}
+
 void neverlose::cancelKeybindCapture() noexcept
 {
     state.capture = State::Capture::Inactive;
@@ -8845,9 +8992,15 @@ void neverlose::beginReveal() noexcept
 
 void neverlose::beginDismiss() noexcept
 {
-    
-    
-    dismissActive = true;
+    dismissActive = false;
+    reveal = 0.0f;
+    cancelKeybindCapture();
+    state.featureBindOpen = false;
+    state.popup.open = false;
+    state.multiSelectOpen = false;
+    state.colorPickerOpen = false;
+    state.editingSlider = -1;
+    styleSelect.open = false;
 }
 
 bool neverlose::isDismissing() noexcept

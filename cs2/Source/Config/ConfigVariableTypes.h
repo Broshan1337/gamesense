@@ -149,6 +149,8 @@ using ConfigVariableTypes = TypeList<
     viewmodel_mod_vars::OffsetX,
     viewmodel_mod_vars::OffsetY,
     viewmodel_mod_vars::OffsetZ,
+    viewmodel_mod_vars::Pitch,
+    viewmodel_mod_vars::Roll,
     viewmodel_mod_vars::Fov,
     no_scope_inaccuracy_vis_vars::Enabled,
     triggerbot_vars::Enabled,

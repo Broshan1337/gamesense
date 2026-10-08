@@ -49,6 +49,7 @@ void drawMenuGlow(float menuAlpha) noexcept;
 void processDeferred() noexcept;
 
 
+void restoreFeatureBinds() noexcept;
 void cancelKeybindCapture() noexcept;
 
 

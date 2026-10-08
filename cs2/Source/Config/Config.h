@@ -70,6 +70,7 @@ public:
 
     void restoreDefaults() noexcept
     {
+        config_overrides::restore();
         ConfigVariableTypes::forEach([this] <typename ConfigVariable> (std::type_identity<ConfigVariable>) {
             this->setVariableWithoutAutoSave<ConfigVariable>(ConfigVariable::kDefaultValue);
         });
@@ -448,6 +449,7 @@ private:
 
     void finishLoadFromFile()
     {
+        config_overrides::restore();
         assert(state().currentFileOperation == ConfigFileOperation::Load);
         state().currentFileOperation = ConfigFileOperation::None;
 

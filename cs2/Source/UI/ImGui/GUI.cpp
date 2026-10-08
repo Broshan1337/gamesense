@@ -1,4 +1,5 @@
 #include "GUI.h"
+#include "MenuInput.h"
 
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -187,10 +188,7 @@ constexpr float expDecay(float current, float target, float decay, float dt) noe
 }
 
 
-[[nodiscard]] bool isMenuToggleKey(const SDL_Event& event) noexcept
-{
-    return event.key.key == SDLK_INSERT || (event.key.mod == SDL_KMOD_LALT && event.key.key == SDLK_I);
-}
+
 
 
 
@@ -327,76 +325,45 @@ bool GUI::isInitialized() noexcept
     return initialized.load(std::memory_order_acquire);
 }
 
-bool GUI::polledEvents(const SDL_Event* events, int count) noexcept
+int GUI::polledEvents(SDL_Event* events, int count) noexcept
 {
-    if (!initialized.load(std::memory_order_acquire))
-        return false;
+    if (!initialized.load(std::memory_order_acquire) || !events)
+        return count;
 
     if (!loggedFirstPoll) {
         loggedFirstPoll = true;
         gui_log::write("polledEvents: first batch, %d event(s)", count);
     }
 
-    bool sawToggleKey = false;
-
+    int kept = 0;
     for (int i = 0; i < count; ++i) {
-        const SDL_Event& event = events[i];
-
-        
-        if (event.type < SDL_EVENT_KEY_DOWN || event.type > SDL_EVENT_DROP_POSITION)
-            continue;
-        if (event.type == SDL_EVENT_USER)
-            continue;
-
-        
-        
-        
-        if (event.type == SDL_EVENT_KEY_DOWN) {
-            const int key = static_cast<int>(event.key.key);
-            if (key == SDLK_INSERT || key == SDLK_ESCAPE || key == SDLK_DELETE || key == SDLK_I)
-                gui_log::write("key down: key=%d scancode=%d mod=0x%x menuOpen=%d",
-                    key, static_cast<int>(event.key.scancode), static_cast<int>(event.key.mod),
-                    menuOpen.load(std::memory_order_acquire) ? 1 : 0);
+        const SDL_Event event = events[i];
+        if (menu_input::toggles(event)) {
+            const bool wasOpen = menuOpen.load(std::memory_order_acquire);
+            menuOpen.store(!wasOpen, std::memory_order_release);
+            if (wasOpen)
+                synthesizeMenuCloseInput();
         }
-
-        if (event.type == SDL_EVENT_KEY_DOWN && isMenuToggleKey(event))
-            sawToggleKey = true;
-
+        const bool open = menuOpen.load(std::memory_order_acquire);
         queueEvent(event);
-    }
-
-    bool menuWasOpen = false;
-    if (sawToggleKey) {
-        menuWasOpen = menuOpen.load(std::memory_order_acquire);
-        menuOpen.store(!menuWasOpen, std::memory_order_release);
-        gui_log::write("menu %s via INSERT", menuWasOpen ? "CLOSE" : "OPEN");
-        if (menuWasOpen)
-            synthesizeMenuCloseInput(); 
-    }
-
-    
-    
-    
-    
-    if (!menuOpen.load(std::memory_order_acquire)) {
-        for (int i = 0; i < count; ++i) {
-            const SDL_Event& event = events[i];
-            switch (event.type) {
-            case SDL_EVENT_KEY_DOWN:
-            case SDL_EVENT_KEY_UP: {
-                const auto scancode = static_cast<int>(event.key.scancode);
-                if (scancode >= 0 && scancode < 256)
-                    gameKeyDown[scancode] = event.type == SDL_EVENT_KEY_DOWN;
-                break;
-            }
-            case SDL_EVENT_MOUSE_BUTTON_DOWN:
-            case SDL_EVENT_MOUSE_BUTTON_UP:
-                if (event.button.button >= 1 && event.button.button <= 5)
-                    gameMouseDown[event.button.button] = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
-                break;
-            default:
-                break;
-            }
+        if (menu_input::captured(event, open))
+            continue;
+        events[kept++] = event;
+        switch (event.type) {
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_UP: {
+            const auto scancode = static_cast<int>(event.key.scancode);
+            if (scancode >= 0 && scancode < 256)
+                gameKeyDown[scancode] = event.type == SDL_EVENT_KEY_DOWN;
+            break;
+        }
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            if (event.button.button >= 1 && event.button.button <= 5)
+                gameMouseDown[event.button.button] = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
+            break;
+        default:
+            break;
         }
     }
 
@@ -404,7 +371,7 @@ bool GUI::polledEvents(const SDL_Event* events, int count) noexcept
         
         
         
-        for (int i = 0; i < count; ++i) {
+        for (int i = 0; i < kept; ++i) {
             const SDL_Event& event = events[i];
             if (event.type >= SDL_EVENT_WINDOW_FIRST && event.type <= SDL_EVENT_WINDOW_LAST) {
                 if (SDL_Window* window = gui_sdl::functions.getWindowFromID(event.window.windowID))
@@ -418,7 +385,7 @@ bool GUI::polledEvents(const SDL_Event* events, int count) noexcept
         }
     }
 
-    return menuOpen.load(std::memory_order_acquire);
+    return kept;
 }
 
 void GUI::requestUnload() noexcept
@@ -497,7 +464,7 @@ bool GUI::render(VkCommandBuffer commandBuffer) noexcept
 
     const float target = isMenuOpen() ? 1.0f : 0.0f;
     static float alpha = 0.0f; 
-    alpha = expDecay(alpha, target, kAlphaDecay, io.DeltaTime);
+    alpha = isMenuOpen() ? expDecay(alpha, target, kAlphaDecay, io.DeltaTime) : 0.0f;
 
     if (!isMenuOpen())
         neverlose::cancelKeybindCapture(); 
@@ -512,7 +479,7 @@ bool GUI::render(VkCommandBuffer commandBuffer) noexcept
 
     
     
-    if (alpha > kAlphaEpsilon || neverlose::isDismissing()) {
+    if (isMenuOpen() && alpha > kAlphaEpsilon) {
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
         neverlose::render();
         ImGui::PopStyleVar();

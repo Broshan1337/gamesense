@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Features/Combat/Autowall/EnginePenetration.h>
+#include <GameClient/ClientBuildProfile.h>
 #include <GameClient/Tracing/TracingSigs.h>
 #include <Platform/Linux/LinuxPlatformApi.h>
 #include <Utils/StatusReport.h>
@@ -50,15 +51,7 @@ inline const Binding& binding() noexcept
         const auto* map = client.getLinkMap();
         if (!map || !map->l_addr) return out;
         const auto base = static_cast<std::uintptr_t>(map->l_addr);
-        // Exact loaded ELF note, including GNU/type/size. safeRead also rejects
-        // an unmapped note if a future ELF changes its segment arrangement.
-        constexpr std::array<std::uint8_t, 36> expectedNote{
-            4,0,0,0,20,0,0,0,3,0,0,0,0x47,0x4e,0x55,0,
-            0xea,0x57,0xd8,0x83,0x3a,0xb2,0x97,0xb6,0x22,0x69,
-            0x99,0x25,0xdb,0xc8,0x3b,0xf6,0xaa,0x1a,0xa6,0x15};
-        std::array<std::uint8_t, 36> note{};
-        if (!LinuxPlatformApi::safeRead(reinterpret_cast<void*>(base + 0x2a8), note.data(), note.size())
-            || note != expectedNote) return out;
+        if (!client_build_profile::supported(base)) return out;
         const auto code = client.getCodeSection().raw();
         const auto matches = [&](std::uintptr_t rva, const char* signature) {
             const auto sig = tracing_sigs::detail::parse(signature);

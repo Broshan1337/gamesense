@@ -4,60 +4,42 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <cmath>
+#include <type_traits>
+#include "FeatureBindState.h"
+#include "FeatureBindRecord.h"
 
 #include <fcntl.h>
 #include <unistd.h>
 
 #include <GameClient/Bind.h>
+#include <Config/ConfigOverrideState.h>
 #include <UI/ImGui/UiConfig.h>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 namespace feature_binds
 {
 
-struct Entry {
-    std::uint64_t id{};        
-    const char* label{};       
-    bool (*get)() = nullptr;   
-    bool (*set)(bool) = nullptr; 
-    int key = Bind::kOff;
-    bool holdMode = false;     
-    bool lastKeyDown = false;  
-    bool holdRestore = false;  
-};
-
-inline constexpr std::size_t kMaxEntries = 128;
+inline constexpr std::size_t kMaxEntries = 256;
 inline Entry entries[kMaxEntries]{};
 inline std::size_t entryCount = 0;
 inline bool loadAttempted = false;
 
+inline void restoreAll() noexcept
+{
+    for (std::size_t i = 0; i < entryCount; ++i)
+        entries[i].restore();
+}
+
+template <typename ConfigVar>
+void registerSavedBase(Entry& entry) noexcept
+{
+    constexpr auto index = ConfigVariableTypes::indexOf<ConfigVar>();
+    static_assert(index < config_overrides::kCapacity);
+    config_overrides::registerValue(index, &entry.active, &entry.restoreValue);
+    config_overrides::restoreBeforeLoad = &restoreAll;
+}
+
 namespace detail {
-
-
-
 
 template <typename ConfigVar>
 consteval std::uint64_t idFromString() noexcept
@@ -80,18 +62,16 @@ template <typename ConfigVar>
 }
 
 template <typename ConfigVar>
-[[nodiscard]] bool typeGetter() noexcept
+[[nodiscard]] double typeGetter() noexcept
 {
-    return static_cast<bool>(ui_config::get<ConfigVar>());
+    return static_cast<double>(ui_config::get<ConfigVar>());
 }
 
 template <typename ConfigVar>
-bool typeSetter(bool value) noexcept
+bool typeSetter(double value) noexcept
 {
-    return ui_config::set<ConfigVar>(typename ConfigVar::ValueType{value});
+    return ui_config::set<ConfigVar>(typename ConfigVar::ValueType{value != 0.0});
 }
-
-
 
 template <typename ConfigVar>
 void registerToggle(const char* label) noexcept
@@ -110,6 +90,7 @@ void registerToggle(const char* label) noexcept
     entry.label = label;
     entry.get = &typeGetter<ConfigVar>;
     entry.set = &typeSetter<ConfigVar>;
+    registerSavedBase<ConfigVar>(entry);
 }
 
 template <typename ConfigVar>
@@ -123,6 +104,42 @@ template <typename ConfigVar>
     return nullptr;
 }
 
+template <typename ConfigVar>
+bool numericSetter(double value) noexcept
+{
+    using Range = typename ConfigVar::ValueType;
+    using Number = typename Range::ValueType;
+    if (!std::isfinite(value))
+        return false;
+    value = std::clamp(value, static_cast<double>(Range::kMin), static_cast<double>(Range::kMax));
+    if constexpr (std::is_integral_v<Number>)
+        value = std::round(value);
+    return ui_config::set<ConfigVar>(Range{static_cast<Number>(value)});
+}
+
+template <typename ConfigVar>
+void registerNumber(const char* label) noexcept
+{
+    if (auto* existing = entryFor<ConfigVar>()) {
+        existing->label = label;
+        return;
+    }
+    if (entryCount >= kMaxEntries)
+        return;
+    using Range = typename ConfigVar::ValueType;
+    auto& entry = entries[entryCount++];
+    entry.id = idFor<ConfigVar>();
+    entry.label = label;
+    entry.get = &typeGetter<ConfigVar>;
+    entry.set = &numericSetter<ConfigVar>;
+    entry.numeric = true;
+    entry.integral = std::is_integral_v<typename Range::ValueType>;
+    entry.minimum = static_cast<double>(Range::kMin);
+    entry.maximum = static_cast<double>(Range::kMax);
+    entry.boundValue = entry.get();
+    registerSavedBase<ConfigVar>(entry);
+}
+
 [[nodiscard]] inline Entry* entryById(std::uint64_t id) noexcept
 {
     for (std::size_t i = 0; i < entryCount; ++i) {
@@ -131,8 +148,6 @@ template <typename ConfigVar>
     }
     return nullptr;
 }
-
-
 
 [[nodiscard]] inline bool filePath(char (&path)[512]) noexcept
 {
@@ -148,12 +163,12 @@ template <typename ConfigVar>
     std::size_t length = 0;
     while (dir[length] != '\0' && length + 1 < sizeof(path) - sizeof("/feature_binds.txt"))
         ++length;
+    if (dir[length] != '\0')
+        return false;
     std::memcpy(path, dir, length);
     std::memcpy(path + length, "/feature_binds.txt", sizeof("/feature_binds.txt"));
     return true;
 }
-
-
 
 inline void load() noexcept
 {
@@ -165,68 +180,29 @@ inline void load() noexcept
     if (fd < 0)
         return; 
 
-    char buffer[4096];
+    char buffer[32768];
     const auto readBytes = ::pread(fd, buffer, sizeof(buffer) - 1, 0);
     ::close(fd);
     if (readBytes <= 0)
         return;
     buffer[readBytes] = '\0';
 
-    std::size_t offset = 0;
-    while (offset < static_cast<std::size_t>(readBytes)) {
-        std::size_t lineLength = 0;
-        while (buffer[offset + lineLength] != '\0' && buffer[offset + lineLength] != '\n')
-            ++lineLength;
-        const auto next = offset + lineLength + 1;
-
-        if (lineLength > 0 && buffer[offset] != '#') {
-            std::uint64_t id = 0;
-            std::size_t i = 0;
-            bool validId = lineLength > 2;
-            while (i < lineLength && buffer[offset + i] != ' ') {
-                const char c = buffer[offset + i];
-                int digit = -1;
-                if (c >= '0' && c <= '9') digit = c - '0';
-                else if (c >= 'a' && c <= 'f') digit = c - 'a' + 10;
-                else if (c >= 'A' && c <= 'F') digit = c - 'A' + 10;
-                if (digit < 0) { validId = false; break; }
-                id = id * 16 + static_cast<std::uint64_t>(digit);
-                ++i;
-            }
-            if (validId && i < lineLength) {
-                int key = 0;
-                bool holdMode = false;
-                int fields = 0;
-                ++i;
-                while (i < lineLength && fields < 2) {
-                    int value = 0;
-                    bool valid = false;
-                    while (i < lineLength && buffer[offset + i] != ' ') {
-                        if (buffer[offset + i] < '0' || buffer[offset + i] > '9') { valid = false; break; }
-                        value = value * 10 + (buffer[offset + i] - '0');
-                        valid = true;
-                        ++i;
-                    }
-                    if (!valid)
-                        break;
-                    if (fields == 0)
-                        key = value;
-                    else
-                        holdMode = value != 0;
-                    ++fields;
-                    while (i < lineLength && buffer[offset + i] == ' ')
-                        ++i;
-                }
-                if (fields == 2) {
-                    if (auto* entry = entryById(id)) {
-                        entry->key = key;
-                        entry->holdMode = holdMode;
-                        entry->lastKeyDown = false;
-                    }
-                }
+    char* line = buffer;
+    while (line) {
+        char* next = std::strchr(line, '\n');
+        if (next)
+            *next++ = '\0';
+        Record record;
+        if (parseRecord(line, record, Bind::kLast)) {
+            if (auto* entry = entryById(record.id)) {
+                entry->restore();
+                entry->key = record.key;
+                entry->holdMode = record.holdMode;
+                if (record.hasValue)
+                    entry->setBoundValue(record.value);
             }
         }
-        offset = next;
+        line = next;
     }
 }
 
@@ -236,24 +212,39 @@ inline void save() noexcept
     if (!filePath(path))
         return;
 
-    const int fd = ::open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    char temporary[528];
+    std::snprintf(temporary, sizeof(temporary), "%s.tmp", path);
+    const int fd = ::open(temporary, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (fd < 0)
         return;
 
-    char line[64];
-    for (std::size_t i = 0; i < entryCount; ++i) {
+    bool complete = true;
+    char line[96];
+    for (std::size_t i = 0; i < entryCount && complete; ++i) {
         if (entries[i].id == 0)
             continue;
-        const int length = std::snprintf(line, sizeof(line), "%llx %d %d\n",
-                                         static_cast<unsigned long long>(entries[i].id),
-                                         entries[i].key, entries[i].holdMode ? 1 : 0);
-        if (length > 0)
-            static_cast<void>(::write(fd, line, static_cast<std::size_t>(length)));
+        const int length = std::snprintf(line, sizeof(line), "%llx %d %d %.17g\n",
+            static_cast<unsigned long long>(entries[i].id), entries[i].key,
+            entries[i].holdMode ? 1 : 0, entries[i].boundValue);
+        if (length <= 0 || length >= static_cast<int>(sizeof(line))) {
+            complete = false;
+            break;
+        }
+        int written = 0;
+        while (written < length) {
+            const auto result = ::write(fd, line + written, static_cast<std::size_t>(length - written));
+            if (result <= 0) {
+                complete = false;
+                break;
+            }
+            written += static_cast<int>(result);
+        }
     }
-    ::close(fd);
+    if (::close(fd) != 0)
+        complete = false;
+    if (!complete || LinuxPlatformApi::rename(temporary, path) != 0)
+        static_cast<void>(LinuxPlatformApi::unlink(temporary));
 }
-
-
 
 inline void apply() noexcept
 {
@@ -262,30 +253,8 @@ inline void apply() noexcept
         load();
     }
 
-    for (std::size_t i = 0; i < entryCount; ++i) {
-        auto& entry = entries[i];
-        if (entry.key == Bind::kOff || !entry.get || !entry.set) {
-            entry.lastKeyDown = false;
-            continue;
-        }
-
-        const bool down = Bind::isDown(entry.key);
-        if (entry.holdMode) {
-            if (down && !entry.lastKeyDown) {
-                entry.holdRestore = entry.get();
-                if (!entry.holdRestore)
-                    entry.set(true);
-            } else if (!down && entry.lastKeyDown) {
-                
-                
-                if (!entry.holdRestore)
-                    entry.set(false);
-            }
-        } else if (down && !entry.lastKeyDown) {
-            entry.set(!entry.get());
-        }
-        entry.lastKeyDown = down;
-    }
+    for (std::size_t i = 0; i < entryCount; ++i)
+        entries[i].update(Bind::isDown(entries[i].key));
 }
 
 }

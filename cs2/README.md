@@ -26,6 +26,25 @@ Tests: `cmake -B cs2/build-tests -S cs2 -DENABLE_TESTS=unit` then
 
 Settings are stored in `$HOME/OsirisCS2/configs`.
 
+## Slider binds and viewmodel rotation
+
+Right-click a numeric slider row to choose a key, Hold/Toggle mode, and an override
+value. Hold restores the normal value when released; Toggle restores it on the next
+press. Unbinding, changing keys/modes, and unloading also restore active overrides.
+Auto-save preserves the normal values while overrides are active; loading/resetting
+a config clears active overrides first. Bindings and their values are saved in `configs/feature_binds.txt`; existing boolean
+bind files remain compatible. Percentage sliders and minimum damage support this
+alongside the other ranged sliders.
+
+In Visuals → Viewmodel, enable **Modify Position** to use X/Y/Z offsets and
+**Pitch/Roll** (−180° to 180°). Rotation changes the private first-person HUD pose
+used by the arms and weapon. The Linux hook currently supports client build ID
+`ea57d8833ab297b622699925dbc83bf6aa1aa615`; other builds leave rotation inactive and
+report that status. Position offsets are restored when disabled or unloaded.
+
+Insert toggles on physical presses. Captured SDL input is drained without hiding
+window/quit events, and menu dismissal has no closing fade.
+
 ## Building with OLLVM obfuscation (Arkari)
 
 The tree supports per-function obfuscation through [Arkari](https://github.com/Arkari/obfuscator)

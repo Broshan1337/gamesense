@@ -14,4 +14,6 @@ constexpr auto kOffsetX = RangeConstrainedVariableParams<float>{.min = -10.0f, .
 constexpr auto kOffsetY = RangeConstrainedVariableParams<float>{.min = -10.0f, .max = 10.0f, .def = 1.0f};
 constexpr auto kOffsetZ = RangeConstrainedVariableParams<float>{.min = -10.0f, .max = 10.0f, .def = -1.0f};
 
+constexpr auto kRotation = RangeConstrainedVariableParams<float>{.min = -180.0f, .max = 180.0f, .def = 0.0f};
+
 }

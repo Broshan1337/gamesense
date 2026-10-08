@@ -33,7 +33,7 @@ void hideMenuNow() noexcept;
 
 
 
-[[nodiscard]] bool polledEvents(const SDL_Event* events, int count) noexcept;
+[[nodiscard]] int polledEvents(SDL_Event* events, int count) noexcept;
 
 
 
