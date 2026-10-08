@@ -9,23 +9,23 @@
 namespace
 {
 
-// A synthetic resolution chain mirroring the real 23-byte iteration layout of
-// librendersystemvulkan.so (validated against the 2026-08 build; 1176 iterations, present slot
-// 0x8bee78). Layout helpers build absolute "addresses" as offsets into the buffer, then the
-// displacements are encoded the way the assembler would.
+
+
+
+
 constexpr std::size_t kTextSize = 256;
 
 struct SyntheticModule {
-    // .text with two iterations; .rodata names and .bss slots are folded into one buffer at
-    // fixed offsets so the rip-relative displacements stay computable.
+    
+    
     std::byte text[kTextSize]{};
 
-    // Layout plan (buffer offsets):
-    //   0x00: iteration A (lea names "vkQueuePresentKHR")
-    //   0x17: iteration B (lea names "vkCmdPipelineBarrier2KHR") - its store is A's hook slot
-    //   0x2E: name "vkQueuePresentKHR"
-    //   0x50: name "vkCmdPipelineBarrier2KHR"
-    //   0x60: slot qword that iteration B stores into (= vkQueuePresentKHR's cache slot)
+    
+    
+    
+    
+    
+    
     static constexpr std::size_t kIterA = 0x00;
     static constexpr std::size_t kIterB = 0x17;
     static constexpr std::size_t kNameA = 0x2E;
@@ -69,8 +69,8 @@ TEST(VulkanResolutionChainNameTest, DecodesNameFromLeaDisplacement) {
 
 TEST(VulkanResolutionChainNameTest, TruncatesLongNames) {
     SyntheticModule module;
-    // Point the name displacement at a long non-terminated run of 'x' bytes; the decoder must
-    // stop at the buffer bound and null-terminate.
+    
+    
     auto* b = module.text + SyntheticModule::kIterA;
     std::memset(module.text + 0x80, 0x78, vulkan_resolution_chain::kMaxNameLength * 2);
     const std::int32_t disp = static_cast<std::int32_t>(0x80 - (SyntheticModule::kIterA + 7));
@@ -83,11 +83,11 @@ TEST(VulkanResolutionChainNameTest, TruncatesLongNames) {
 
 TEST(VulkanResolutionChainSlotTest, StoreDisplacementYieldsSlotAddress) {
     SyntheticModule module;
-    // Iteration B's store writes iteration A's hook slot (the store lags one name behind).
+    
     auto* slot = vulkan_resolution_chain::storeSlot(module.text + SyntheticModule::kIterB);
     EXPECT_EQ(slot, reinterpret_cast<volatile std::uint64_t*>(module.text + SyntheticModule::kSlot));
 
-    // And writing through the decoded slot hits the expected bytes.
+    
     *slot = 0xDEADBEEF;
     std::uint64_t value = 0;
     std::memcpy(&value, module.text + SyntheticModule::kSlot, sizeof(value));

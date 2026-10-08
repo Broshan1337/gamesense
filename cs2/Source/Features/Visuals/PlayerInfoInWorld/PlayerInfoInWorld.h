@@ -23,6 +23,12 @@ public:
 
     void drawPlayerInformation(auto&& playerPawn) noexcept
     {
+        // Deathmatch leaves old pawns behind during respawns. Only render the
+        // controller's current, confirmed living pawn.
+        if (!playerPawn.isAlive().value_or(false) || !playerPawn.health().greaterThan(0).valueOr(false))
+            return;
+        if (static_cast<cs2::C_BaseEntity*>(playerPawn.playerController().pawn()) != playerPawn.rawPawn())
+            return;
         const bool infoRun = shouldRun();
         const bool analyzerTag = shouldDrawAnalyzerTag(playerPawn);
         if (!infoRun && !analyzerTag)
@@ -39,8 +45,8 @@ public:
             return;
 
         auto&& playerInformationPanel = hookContext.template make<InWorldPanels>().getNextPlayerInfoPanel();
-        // analyzerOnly = the tag wants this pawn but the regular info path does not (the Player
-        // Info visual is off, or its OnlyEnemies rule excludes the pawn) - only the tag updates.
+        
+        
         playerInformationPanel.drawPlayerInfo(playerPawn, !infoRun || !shouldDrawInfoOnPawn(playerPawn));
         playerInformationPanel.updatePosition(absOrigin.value());
     }
@@ -65,9 +71,9 @@ private:
             && (!context().config().template getVariable<player_info_vars::OnlyEnemies>() || playerPawn.isEnemy().value_or(true));
     }
 
-    // CHEAT O METER tag: shown for every scanned player that has data, even when the Player
-    // Info visual itself is off - the tag shares the info container but carries its own toggle
-    // (analyzer_vars::EspTag) and its own team/alive gates.
+    
+    
+    
     [[nodiscard]] bool shouldDrawAnalyzerTag(auto&& playerPawn) const noexcept
     {
         if (!context().config().template getVariable<analyzer_vars::Enabled>() || !context().config().template getVariable<analyzer_vars::EspTag>())
@@ -80,7 +86,7 @@ private:
         auto* const controllerEntity = static_cast<cs2::C_BaseEntity*>(playerPawn.playerController().baseEntity());
         if (!controllerEntity)
             return false;
-        // controller slot (picker/event numbering) - never the pawn's entity index
+        
         const auto slot = static_cast<int>(hookContext.template make<BaseEntity>(controllerEntity).handle().index().value) - 1;
         return cheat_ometer::tagForSlot(slot).active;
     }

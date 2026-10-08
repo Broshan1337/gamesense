@@ -21,21 +21,21 @@ namespace ns_tf2 {
 
 namespace {
 
-// ---------------------------------------------------------------------------
-// Finding the present chain entry.
-//
-// Live findings (2026-09-14):
-//  - The game never calls libvulkan's PUBLIC vkQueuePresentKHR (inline hook installed,
-//    zero calls): shaderapivk/dxvk resolve via vkGetDeviceProcAddr at device creation,
-//    pre-injection, and call the loader terminator directly.
-//  - Loader queue-wrapper objects (magic 0x10ADED040410ADED, allocated in a ~2GB malloc
-//    arena) hold the dispatch chain at +0x690: the next link is Steam's
-//    steamoverlayvulkanlayer.so present function (an implicit Vulkan layer).
-//  - The layer chain is on EVERY present path (table, terminator, cached pointer), so
-//    inline-hooking the chain function intercepts everything - and it survives lazy
-//    wrapper allocation / device recreation, because the hook is on the function, not
-//    the table.
-// ---------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 constexpr uint64_t kWrapperMagic = 0x10ADED040410ADEDULL;
 constexpr size_t kPresentSlotOffset = 0x690;
@@ -61,8 +61,8 @@ int hookedQueuePresent(void *queue, const void *presentInfo)
     const uint64_t n = g_presentCount.fetch_add(1, std::memory_order_relaxed) + 1;
     if (g_loggedPresents < 12) {
         ++g_loggedPresents;
-        // VkPresentInfoKHR: sType(4) pad(4) pNext(8) waitSemaphoreCount(4) pad(4)
-        //                   pWaitSemaphores(8*wait) swapchainCount(4) pad(4) pSwapchains...
+        
+        
         uint32_t swapchainCount = 0;
         const void *firstSwapchain = nullptr;
         if (presentInfo) {
@@ -92,21 +92,21 @@ bool inAnyExec(uintptr_t value)
     return false;
 }
 
-// A real loader dispatch slot sits in a CLUSTER of function pointers: the live dump
-// (2026-09-14) shows +0x670..+0x6a8 holding 7 consecutive exec pointers (layer/loader/
-// driver mix) with nulls elsewhere (unresolved optional functions). A ±24-slot density
-// check fails on that layout - the cluster IS the signature. Stack/heap garbage never
-// produces 5+ consecutive exec pointers aligned to this exact window (caught live: the
-// host smoke test patched stack garbage and crashed).
+
+
+
+
+
+
 bool looksLikeDispatchTable(int memFd, uintptr_t wrapperAddr)
 {
-    constexpr int kWindowLow = -5;  // +0x660
-    constexpr int kWindowHigh = +9; // +0x6d8 exclusive
+    constexpr int kWindowLow = -5;  
+    constexpr int kWindowHigh = +9; 
     constexpr int kMinExecPtrs = 5;
     int execPtrs = 0;
     for (int i = kWindowLow; i < kWindowHigh; ++i) {
         if (i == 0)
-            continue; // our target slot, already validated
+            continue; 
         uintptr_t value = 0;
         const uintptr_t addr = wrapperAddr + kPresentSlotOffset + uintptr_t(i * 8);
         if (::pread(memFd, &value, 8, off_t(addr)) != 8)
@@ -122,10 +122,10 @@ struct SlotCandidate {
     uintptr_t fn;
 };
 
-// Scans a virtual range via /proc/self/mem pread instead of direct dereference: the game's
-// threads mmap/munmap continuously, so a mapping seen in /proc/self/maps can be gone by
-// the time we read it (two live SIGSEGV crashes taught this the hard way). pread returns
-// -EIO instead of faulting.
+
+
+
+
 int scanRange(int memFd, uintptr_t start, uintptr_t end, SlotCandidate *candidates,
               int &candidateCount, int maxCandidates)
 {
@@ -139,7 +139,7 @@ int scanRange(int memFd, uintptr_t start, uintptr_t end, SlotCandidate *candidat
         const size_t want = size_t((chunk + kChunk <= end) ? kChunk : (end - chunk));
         const ssize_t got = ::pread(memFd, buf, want, off_t(chunk));
         if (got <= 0)
-            break; // stale/unmapped range mid-scan - skip the rest of it
+            break; 
         const uintptr_t chunkEnd = chunk + size_t(got);
         for (uintptr_t cursor = chunk; cursor + sizeof(uint64_t) <= chunkEnd; cursor += 8) {
             uint64_t value = 0;
@@ -147,12 +147,12 @@ int scanRange(int memFd, uintptr_t start, uintptr_t end, SlotCandidate *candidat
             if (value != kWrapperMagic)
                 continue;
             if (cursor + kPresentSlotOffset + sizeof(uint64_t) > end)
-                continue; // slot would leave the range
+                continue; 
             if (candidateCount >= maxCandidates)
                 break;
             uintptr_t fn = 0;
             if (::pread(memFd, &fn, 8, off_t(cursor + kPresentSlotOffset)) != 8)
-                continue; // slot raced away
+                continue; 
             candidates[candidateCount].address = cursor;
             candidates[candidateCount].fn = fn;
             ++candidateCount;
@@ -165,9 +165,9 @@ int scanRange(int memFd, uintptr_t start, uintptr_t end, SlotCandidate *candidat
     return hits;
 }
 
-// Finds the present dispatch-chain function: scan writable memory for loader wrapper
-// objects, majority-vote the +0x690 slot among candidates that point into executable
-// memory inside a real dispatch cluster. Returns 0 when nothing credible is found.
+
+
+
 uintptr_t findChainPresent()
 {
     const int memFd = ::open("/proc/self/mem", O_RDONLY);
@@ -188,8 +188,8 @@ uintptr_t findChainPresent()
     }
 
     char lineBuf[512];
-    // Exec ranges are re-collected EVERY pass (dlopen of late modules grows the set);
-    // without the reset the array fills with duplicates and late ranges get dropped.
+    
+    
     g_execRangeCount = 0;
     while (fgets(lineBuf, sizeof(lineBuf), maps)) {
         uintptr_t start = 0, end = 0;
@@ -197,7 +197,7 @@ uintptr_t findChainPresent()
         int consumed = 0;
         if (sscanf(lineBuf, "%lx-%lx %7s%n", &start, &end, perms, &consumed) != 3)
             continue;
-        // Executable mappings: candidate slot values must point into one of these.
+        
         if (std::strchr(perms, 'x')
             && g_execRangeCount < int(sizeof(g_execRanges) / sizeof(g_execRanges[0]))) {
             g_execRanges[g_execRangeCount].start = start;
@@ -214,7 +214,7 @@ uintptr_t findChainPresent()
             continue;
         if (!std::strchr(perms, 'r') || !std::strchr(perms, 'w'))
             continue;
-        // File-backed ranges carry a path after inode - wrappers live in anonymous heap.
+        
         const char *p = lineBuf + consumed;
         for (int f = 0; f < 3; ++f) {
             while (*p && !isspace(static_cast<unsigned char>(*p)))
@@ -223,14 +223,14 @@ uintptr_t findChainPresent()
                 ++p;
         }
         if (*p == '/') {
-            // File-backed: only libvulkan's own data sections are interesting.
+            
             const char *base = std::strrchr(p, '/');
             base = base ? base + 1 : p;
             if (std::strncmp(base, "libvulkan.so", 12) != 0)
                 continue;
         } else if (std::strncmp(p, "[stack", 6) == 0) {
-            // NEVER scan the stacks (thread stacks are anonymous - the name check only
-            // covers the main one; the density check below covers the rest).
+            
+            
             continue;
         }
         if (end - start > kMaxScanRangeBytes)
@@ -246,7 +246,7 @@ uintptr_t findChainPresent()
     log("[vk] chain scan: %zu MB scanned, %d exec ranges, %d magic objects", scannedBytes / (1024 * 1024),
         g_execRangeCount, candidateCount);
 
-    // Majority vote on the slot value among credible objects.
+    
     uintptr_t majorityFn = 0;
     int majorityCount = 0;
     for (int i = 0; i < candidateCount; ++i) {
@@ -277,27 +277,27 @@ uintptr_t findChainPresent()
     return majorityFn;
 }
 
-// ---------------------------------------------------------------------------
-// Inline hook on the chain present function.
-//
-// Captured prologue (steamoverlayvulkanlayer.so, session 2026-09-14 20:17):
-//   +0x00 41 57              push %r15
-//   +0x02 41 56              push %r14
-//   +0x04 49 89 f6           mov  %rsi,%r14
-//   +0x07 41 55              push %r13
-//   +0x09 48 8d 35 XX XX XX XX   lea <rip+disp32>,%rsi   <- only rip-relative op
-//   (patch boundary = +0x0c, exactly 12 bytes)
-//   +0x10 ...                (push r12/rbp/rbx, sub rsp, ...)  <- resume target
-//
-// Trampoline: re-emits pushes + mov, re-emits the lea with a displacement corrected for
-// the trampoline's own address, then abs-jumps to target+0x10. Original arguments
-// (rdi=queue, rsi=presentInfo) flow through untouched.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 constexpr uint8_t kChainPrologue[12] = {
-    0x41, 0x57,             // push %r15
-    0x41, 0x56,             // push %r14
-    0x49, 0x89, 0xf6,       // mov %rsi,%r14
-    0x41, 0x55,             // push %r13
-    0x48, 0x8d, 0x35,       // lea disp32(%rip),%rsi (opcode prefix - disp checked apart)
+    0x41, 0x57,             
+    0x41, 0x56,             
+    0x49, 0x89, 0xf6,       
+    0x41, 0x55,             
+    0x48, 0x8d, 0x35,       
 };
 
 bool installInlineHook(uintptr_t target)
@@ -308,7 +308,7 @@ bool installInlineHook(uintptr_t target)
     }
     auto fn = reinterpret_cast<uint8_t *>(target);
 
-    // Pattern check (prologue may differ across layer updates - fail loud, patch nothing).
+    
     int memFd = ::open("/proc/self/mem", O_RDONLY);
     if (memFd < 0) {
         log("[vk] /proc/self/mem unavailable - inline hook aborted");
@@ -333,7 +333,7 @@ bool installInlineHook(uintptr_t target)
         | (int32_t(live[15]) << 24);
     const uintptr_t leaTarget = target + 0x10 + uint32_t(origDisp);
 
-    // Trampoline near the target so the relocated lea's displacement stays in int32 range.
+    
     void *tramp = mmap(reinterpret_cast<void *>(target & ~uintptr_t(0x3FFFFFFF)), 4096,
                        PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (tramp == MAP_FAILED)
@@ -344,11 +344,11 @@ bool installInlineHook(uintptr_t target)
     }
     uint8_t *c = static_cast<uint8_t *>(tramp);
     size_t o = 0;
-    // push r15; push r14; mov rsi,r14; push r13
+    
     const uint8_t head[9] = {0x41, 0x57, 0x41, 0x56, 0x49, 0x89, 0xf6, 0x41, 0x55};
     std::memcpy(c + o, head, 9);
     o += 9;
-    // relocated lea: rip after instruction = tramp + 9 + 7
+    
     const uintptr_t leaRip = reinterpret_cast<uintptr_t>(c) + o + 7;
     const int32_t newDisp = int32_t(uint64_t(leaTarget) - leaRip);
     if (leaTarget > leaRip + 0x7FFFFFFFull || leaRip > leaTarget + 0x80000000ull) {
@@ -361,7 +361,7 @@ bool installInlineHook(uintptr_t target)
     c[o++] = 0x35;
     std::memcpy(c + o, &newDisp, 4);
     o += 4;
-    // jmp target+0x10
+    
     const uintptr_t resume = target + 0x10;
     c[o++] = 0x48;
     c[o++] = 0xB8;
@@ -378,7 +378,7 @@ bool installInlineHook(uintptr_t target)
     __builtin___clear_cache(reinterpret_cast<char *>(c), reinterpret_cast<char *>(c) + o);
     g_trampolineFn.store(reinterpret_cast<uintptr_t>(c), std::memory_order_relaxed);
 
-    // Patch: movabs %rax, hook; jmp *%rax (12 bytes, instruction-boundary aligned).
+    
     const long pageSize = sysconf(_SC_PAGESIZE);
     uint8_t *pageStart = reinterpret_cast<uint8_t *>(target & ~uintptr_t(pageSize - 1));
     if (mprotect(pageStart, 8192, PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
@@ -409,7 +409,7 @@ void rescanLoop()
     int pass = 0;
     while (!g_rescanStop.load(std::memory_order_relaxed)) {
         for (int i = 0; i < 100 && !g_rescanStop.load(std::memory_order_relaxed); ++i)
-            usleep(100 * 1000); // 10s in 100ms slices
+            usleep(100 * 1000); 
         if (g_rescanStop.load(std::memory_order_relaxed))
             return;
         ++pass;
@@ -417,20 +417,20 @@ void rescanLoop()
         if (!chainFn)
             continue;
         if (installInlineHook(chainFn))
-            return; // hooked - the function-level hook covers all future wrappers
+            return; 
         log("[vk] rescan pass %d: found chain fn but hook failed", pass);
     }
 }
 
-} // namespace
+} 
 
 int installVkPresentSlotHook()
 {
     const uintptr_t chainFn = findChainPresent();
     if (chainFn && installInlineHook(chainFn))
         return 1;
-    // Wrapper may not exist yet (lazy vkGetDeviceQueue) or the prologue may need a retry:
-    // keep looking in the background until hooked.
+    
+    
     g_rescanStop.store(false, std::memory_order_relaxed);
     std::thread(rescanLoop).detach();
     log("[vk] rescan thread running (10s interval, until hooked)");
@@ -442,4 +442,4 @@ void shutdownVkPresentSlotHook()
     g_rescanStop.store(true, std::memory_order_relaxed);
 }
 
-} // namespace ns_tf2
+} 

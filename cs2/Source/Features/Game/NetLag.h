@@ -18,10 +18,11 @@
 #include <GameClient/Bind.h>
 #include <HookContext/HookContextMacros.h>
 #include <Platform/Linux/LinuxDynamicLibrary.h>
+#include <Utils/NsPaths.h>
 #include <Platform/Linux/LinuxPlatformApi.h>
 
-// Shared state between the game thread (config polling) and the network thread(s) that run the
-// hooked sendto/sendmsg. Atomics only - the send path must never block on game-side locks.
+
+
 namespace net_lag
 {
 inline std::atomic<bool> chokeEngaged{false};
@@ -35,11 +36,11 @@ inline std::atomic<bool> connlessFloodEngaged{false};
 inline std::atomic<std::uint32_t> connlessFloodCount{0};
 inline std::atomic<bool> delayEnabled{false};
 inline std::atomic<std::uint32_t> delayMs{50};
-// Script-driven delay override (Lua `net.set_delay`, fake-ping use): milliseconds of extra
-// send-side hold applied IN ADDITION to the menu card, 0 = off. Gated on masterEnabled like
-// everything else (the Movement > NET LAG > Enabled toggle is the master switch), published
-// through the same lock-free atomics, and cleared on hook unload so a stale script value can
-// never wedge the send path. Cap lives here so C++ and the Lua binding agree.
+
+
+
+
+
 inline constexpr std::uint32_t kMaxLuaDelayMs = 500;
 inline std::atomic<std::uint32_t> luaDelayMs{0};
 inline std::atomic<bool> statsEnabled{false};
@@ -47,7 +48,7 @@ inline std::atomic<bool> statsEnabled{false};
 inline std::atomic<std::uint64_t> statSends{0};
 inline std::atomic<std::uint64_t> statPassed{0};
 inline std::atomic<std::uint64_t> statDropped{0};
-// Choke-window position (datagrams withheld since the last release). Network-thread only.
+
 inline std::atomic<std::uint32_t> windowCounter{0};
 inline std::atomic<std::uint64_t> statDuped{0};
 inline std::atomic<std::uint64_t> statFlooded{0};
@@ -59,29 +60,29 @@ inline std::atomic<std::uint64_t> statFlushed{0};
 inline std::atomic<std::uint64_t> statOverflow{0};
 }
 
-// Region selector (script-driven, see server_region.lua): a set of relay IPv4s whose datagrams
-// are silently swallowed in the hook. Blocking a region's relays makes its SDR pings fail, so
-// matchmaking excludes it and only the allowed region gets matched - the same trick the
-// firewall-based server pickers use, but in-process, reversible and root-free.
-// Reader/writer protocol (the send path must never block): seqlock over the whole list. The
-// writer (Lua, rare) bumps the generation odd, rewrites, bumps even. A reader that sees an odd
-// or changed generation SKIPS filtering that datagram instead of retrying - a handful of
-// datagrams passing through during a list swap is harmless, a stall in the send path is not.
+
+
+
+
+
+
+
+
 namespace net_region
 {
 inline constexpr std::size_t kMaxBlockedIps = 512;
 
 inline std::atomic<std::uint64_t> statRegionBlocked{0};
-inline std::atomic<std::uint32_t> seqlockGen{0};   // even = stable, odd = being rewritten
+inline std::atomic<std::uint32_t> seqlockGen{0};   
 inline std::atomic<std::uint32_t> blockedCount{0};
-// Host-byte-order IPv4s, sorted ascending at publish time (binary search on the read path).
+
 inline std::uint32_t blockedIps[kMaxBlockedIps];
 
 inline void publishBlockedIps(std::uint32_t* ips, std::size_t count) noexcept
 {
     if (count > kMaxBlockedIps)
         count = kMaxBlockedIps;
-    // Insertion sort - lists are tiny (a region block is ~200 entries) and rewrites are rare.
+    
     for (std::size_t i = 1; i < count; ++i) {
         const std::uint32_t key = ips[i];
         std::size_t j = i;
@@ -91,15 +92,15 @@ inline void publishBlockedIps(std::uint32_t* ips, std::size_t count) noexcept
         }
         ips[j] = key;
     }
-    seqlockGen.fetch_add(1, std::memory_order_relaxed);   // odd - rewrite in progress
+    seqlockGen.fetch_add(1, std::memory_order_relaxed);   
     std::atomic_thread_fence(std::memory_order_seq_cst);
     for (std::size_t i = 0; i < count; ++i)
         blockedIps[i] = ips[i];
     std::atomic_thread_fence(std::memory_order_seq_cst);
     blockedCount.store(static_cast<std::uint32_t>(count), std::memory_order_relaxed);
-    // The even bump must be release-ordered (seq_cst): a reader that loads the even generation
-    // with acquire then also sees the data + count writes above.
-    seqlockGen.fetch_add(1, std::memory_order_seq_cst);   // even - stable again
+    
+    
+    seqlockGen.fetch_add(1, std::memory_order_seq_cst);   
 }
 
 inline void clearBlockedIps() noexcept
@@ -110,7 +111,7 @@ inline void clearBlockedIps() noexcept
     seqlockGen.fetch_add(1, std::memory_order_seq_cst);
 }
 
-// Binary search over the published list; false on any torn read (see protocol above).
+
 [[nodiscard]] inline bool isBlocked(std::uint32_t ip) noexcept
 {
     const std::uint32_t generation = seqlockGen.load(std::memory_order_acquire);
@@ -129,11 +130,11 @@ inline void clearBlockedIps() noexcept
     }
     const bool found = low < count && blockedIps[low] == ip;
     if (seqlockGen.load(std::memory_order_acquire) != generation)
-        return false;   // list rewritten under us - skip filtering this datagram
+        return false;   
     return found;
 }
 
-// 0 for non-IPv4 destinations (relay data is v4-only; v6 traffic always passes).
+
 [[nodiscard]] inline std::uint32_t destIpv4(const sockaddr* to) noexcept
 {
     if (!to || to->sa_family != AF_INET)
@@ -143,21 +144,21 @@ inline void clearBlockedIps() noexcept
 }
 }
 
-// Datagram-level network lag: a GOT/PLT hook over the sendto/sendmsg imports of
-// libsteamnetworkingsockets.so. Every datagram the game transmits (community-server UDP, SDR
-// relay traffic, voice) leaves through that module's libc imports, so patching its GOT entries
-// gives the same NET_SendPacket-level control the Windows reference gets from engine hooks -
-// see (drop = choke), duplicate (dup), withhold-and-release-later (delay) and inject
-// (zero-size blips).
+
+
+
+
+
+
 namespace netlag_hook
 {
-// NOTE: everything here is deliberately inline (no anonymous namespace) - this header is
-// included from BOTH the main TU (EntryPoints/dllmain) and the Lua TU, and the hook state
-// (originals, ring, captured endpoint) must be one shared copy per process.
 
-constexpr std::size_t kMaxDatagram = 1400;   // SNS MTU-sized payloads; larger datagrams pass untouched
+
+
+
+constexpr std::size_t kMaxDatagram = 1400;   
 constexpr std::size_t kRingSlots = 128;
-constexpr const char* kStatsPath = "/tmp/ns_netlag_stats.txt";
+constexpr const char* kStatsName = "ns_netlag_stats.txt";
 
 using SendToFn = ssize_t(*)(int, const void*, std::size_t, int, const sockaddr*, socklen_t);
 using SendMsgFn = ssize_t(*)(int, const msghdr*, int);
@@ -185,10 +186,10 @@ inline bool slotUsed[kRingSlots];
 inline std::size_t ringCursor = 0;
 inline pthread_mutex_t ringMutex = PTHREAD_MUTEX_INITIALIZER;
 
-// The game server's endpoint, learned from observed traffic: the hook sees every passing game
-// datagram's destination, and while connected the consistent one is the server. Guarded by the
-// ring mutex (sends are ~100s/sec - lock cost is irrelevant). The flood sends FROM here so the
-// server's per-IP limiter counts the address the game itself uses.
+
+
+
+
 struct ServerEndpoint {
     bool valid{};
     int fd{};
@@ -207,9 +208,9 @@ inline void captureServerEndpoint(int fd, const sockaddr* to, socklen_t toLen) n
     pthread_mutex_unlock(&ringMutex);
 }
 
-// Region filter decision (see net_region above). True = swallow this datagram. The match we are
-// already in is never blocked - relays can only be pinned while matchmaking, not enforced
-// mid-game - so the captured server endpoint always passes.
+
+
+
 [[nodiscard]] inline bool regionShouldBlock(const sockaddr* to) noexcept
 {
     const std::uint32_t ip = net_region::destIpv4(to);
@@ -228,10 +229,10 @@ inline void captureServerEndpoint(int fd, const sockaddr* to, socklen_t toLen) n
     return true;
 }
 
-// Builds connectionless-shaped datagrams (0xFFFFFFFF magic + command byte) and sends them
-// straight through the ORIGINAL sendto - bypassing our own GOT hook, so the flood neither
-// recurses into the dup/flood logic nor pollutes the traffic counters. Command bytes cycle
-// 'q'/'k'/'!' (the three commands the engine2 dispatcher dispatches on).
+
+
+
+
 inline void sendConnlessBurst(std::uint32_t count) noexcept
 {
     if (count == 0 || !originalSendTo)
@@ -254,9 +255,9 @@ inline void sendConnlessBurst(std::uint32_t count) noexcept
     }
 }
 
-// ---- script-facing bridge (the Lua `net` library rides on these two) ----
 
-// Copy of the captured game-server endpoint for callers outside the hook.
+
+
 [[nodiscard]] inline bool getServerEndpoint(int* outFd, sockaddr_storage* outAddr, socklen_t* outAddrLen) noexcept
 {
     pthread_mutex_lock(&ringMutex);
@@ -270,10 +271,10 @@ inline void sendConnlessBurst(std::uint32_t count) noexcept
     return valid;
 }
 
-// Sends `count` copies of an arbitrary payload to the captured game-server endpoint through the
-// ORIGINAL sendto (bypasses our GOT hook: no recursion, no dup/flood amplification, no statSends
-// pollution). Hard caps: 256 packets per call, 1400-byte payload - a script can therefore move
-// at most 64 ticks * 256 * 1400B/sec, bounded by its own tick callback. Returns packets sent.
+
+
+
+
 inline int sendRawToServer(const unsigned char* data, std::size_t len, std::uint32_t count) noexcept
 {
     if (!data || len == 0 || len > kMaxDatagram || count == 0)
@@ -304,8 +305,8 @@ inline int sendRawToServer(const unsigned char* data, std::size_t len, std::uint
     return static_cast<std::uint64_t>(ts.tv_sec) * 1000 + static_cast<std::uint64_t>(ts.tv_nsec) / 1000000;
 }
 
-// Only touch UDP-family destinations with a remote address - that is the game's server traffic.
-// Connected-socket sends, AF_UNIX control traffic and oversize payloads pass straight through.
+
+
 [[nodiscard]] inline bool isGameDatagram(const void* addr, std::size_t len) noexcept
 {
     if (!addr || len == 0 || len > kMaxDatagram)
@@ -314,9 +315,9 @@ inline int sendRawToServer(const unsigned char* data, std::size_t len, std::uint
     return family == AF_INET || family == AF_INET6;
 }
 
-// Script delay override (Lua `net.set_delay`): active while a nonzero hold is published AND
-// the menu master switch is on. The master gate means disabling Movement > NET LAG > Enabled
-// always stops script-driven delay too - no script can wedge the send path behind the user's back.
+
+
+
 [[nodiscard]] inline bool isScriptDelayActive() noexcept
 {
     return net_lag::luaDelayMs.load(std::memory_order_relaxed) > 0
@@ -341,14 +342,17 @@ inline void writeStats() noexcept
         static_cast<unsigned long long>(net_lag::statOverflow.load(std::memory_order_relaxed)),
         static_cast<unsigned long long>(net_region::statRegionBlocked.load(std::memory_order_relaxed)),
         net_lag::chokeEngaged.load(std::memory_order_relaxed) ? 1 : 0);
-    if (const int fd = LinuxPlatformApi::open(kStatsPath, O_WRONLY | O_CREAT | O_TRUNC, 0644); fd >= 0) {
+    char statsPath[ns_paths::kMaxPath];
+    if (!ns_paths::join(statsPath, sizeof(statsPath), netlag_hook::kStatsName))
+        return;
+    if (const int fd = LinuxPlatformApi::open(statsPath, O_WRONLY | O_CREAT | O_TRUNC, 0644); fd >= 0) {
         static_cast<void>(LinuxPlatformApi::write(fd, line, std::strlen(line)));
         static_cast<void>(LinuxPlatformApi::close(fd));
     }
 }
 
-// Releases every buffered datagram whose delay has elapsed (or all of them when flushAll).
-// Sends go through the saved originals, never back through the GOT, so no re-entry.
+
+
 inline void flushDue(bool flushAll) noexcept
 {
     const std::uint64_t now = monotonicMs();
@@ -370,8 +374,8 @@ inline void flushDue(bool flushAll) noexcept
 [[nodiscard]] inline bool enqueueDatagram(int fd, const unsigned char* data, std::size_t len, int flags,
     const sockaddr* to, socklen_t toLen) noexcept
 {
-    // Effective hold = the larger of the menu card and the script override (either may be idle
-    // while the other drives; both feed the same ring and the same delayed/flushed counters).
+    
+    
     const std::uint32_t menuMs = net_lag::delayMs.load(std::memory_order_relaxed);
     const std::uint32_t scriptMs = net_lag::luaDelayMs.load(std::memory_order_relaxed);
     const std::uint64_t deadline = monotonicMs() + (menuMs > scriptMs ? menuMs : scriptMs);
@@ -385,8 +389,8 @@ inline void flushDue(bool flushAll) noexcept
         }
     }
     if (slot == kRingSlots) {
-        // Full: sacrifice the oldest (cursor position) - the count of sacrifices is part of the
-        // experiment's data, not an error to hide.
+        
+        
         slot = ringCursor;
         net_lag::statOverflow.fetch_add(1, std::memory_order_relaxed);
     }
@@ -406,10 +410,10 @@ inline void flushDue(bool flushAll) noexcept
     return true;
 }
 
-// Choke window: drop while fewer than `window` datagrams were withheld since the last release.
-// Window state is only ever touched through fetch_add, so concurrent network threads degrade to
-// an approximate window instead of corrupting it. The call that completes the window releases
-// the blips (zero-length keep-alive datagrams, the Harpoon trick) and passes.
+
+
+
+
 [[nodiscard]] inline bool shouldDrop() noexcept
 {
     const auto window = net_lag::chokeWindow.load(std::memory_order_relaxed);
@@ -418,7 +422,7 @@ inline void flushDue(bool flushAll) noexcept
     const auto previous = net_lag::windowCounter.fetch_add(1, std::memory_order_relaxed);
     if (previous + 1 < window)
         return true;
-    net_lag::windowCounter.store(0, std::memory_order_relaxed);   // window completed; caller releases blips
+    net_lag::windowCounter.store(0, std::memory_order_relaxed);   
     return false;
 }
 
@@ -445,10 +449,10 @@ inline void sendDuplicates(int fd, const void* buf, std::size_t len, int flags, 
     net_lag::statDuped.fetch_add(extra, std::memory_order_relaxed);
 }
 
-// Flood burst (the MMCrasher DupPercent equivalent): extra copies of every PASSING game
-// datagram. Key-gated or continuous via floodEngaged; volume set by floodCount. Valid-duplicate
-// flooding is what the engine2 per-source rate limiter, the SNS RateLimit_Recv_* config and the
-// CQ command queue all classify - that classification is the experiment.
+
+
+
+
 inline void sendFloodBurst(int fd, const void* buf, std::size_t len, int flags, const sockaddr* to, socklen_t toLen) noexcept
 {
     const auto count = net_lag::floodCount.load(std::memory_order_relaxed);
@@ -467,10 +471,10 @@ inline ssize_t hookSendTo(int fd, const void* buf, std::size_t len, int flags, c
 
     const bool udpGame = isGameDatagram(to, len);
 
-    // Region filter first: blocked-relay datagrams vanish before any lag logic sees them.
+    
     if (udpGame && regionShouldBlock(to)) {
         net_region::statRegionBlocked.fetch_add(1, std::memory_order_relaxed);
-        return static_cast<ssize_t>(len);   // silently swallowed - the game reads this as a dead relay
+        return static_cast<ssize_t>(len);   
     }
 
     const bool engaged = net_lag::chokeEngaged.load(std::memory_order_relaxed)
@@ -481,9 +485,9 @@ inline ssize_t hookSendTo(int fd, const void* buf, std::size_t len, int flags, c
     if (gameTraffic && net_lag::chokeEngaged.load(std::memory_order_relaxed)) {
         if (shouldDrop()) {
             net_lag::statDropped.fetch_add(1, std::memory_order_relaxed);
-            return static_cast<ssize_t>(len);   // withheld; the game believes it was sent
+            return static_cast<ssize_t>(len);   
         }
-        sendBlips(fd, to, toLen, flags);        // window completed with this datagram
+        sendBlips(fd, to, toLen, flags);        
     }
 
     if (gameTraffic && (net_lag::delayEnabled.load(std::memory_order_relaxed) || isScriptDelayActive())) {
@@ -511,8 +515,8 @@ inline ssize_t hookSendMsg(int fd, const msghdr* msg, int flags) noexcept
     net_lag::statSends.fetch_add(1, std::memory_order_relaxed);
     flushDue(false);
 
-    // Only the simple UDP shape (remote address, single iovec, no ancillary data) is handled;
-    // anything else passes through untouched rather than being mis-reconstructed.
+    
+    
     if (msg && msg->msg_name && msg->msg_iov && msg->msg_iovlen >= 1 && !msg->msg_control
         && isGameDatagram(msg->msg_name, msg->msg_iov[0].iov_len)) {
         if (regionShouldBlock(static_cast<const sockaddr*>(msg->msg_name))) {
@@ -539,7 +543,7 @@ inline ssize_t hookSendMsg(int fd, const msghdr* msg, int flags) noexcept
 
     if (!originalSendMsg)
         return -1;
-    // Dup/flood on the simple-UDP shape, mirroring hookSendTo.
+    
     if (msg && msg->msg_name && msg->msg_iov && msg->msg_iovlen >= 1 && !msg->msg_control
         && isGameDatagram(msg->msg_name, msg->msg_iov[0].iov_len)
         && net_lag::masterEnabled.load(std::memory_order_relaxed)) {
@@ -555,10 +559,10 @@ inline ssize_t hookSendMsg(int fd, const msghdr* msg, int flags) noexcept
     return originalSendMsg(fd, msg, flags);
 }
 
-// Walks the module's in-memory dynamic section and resolves its sendto/sendmsg relocation slots.
-// Works for both lazy PLT (R_X86_64_JUMP_SLOT in DT_JMPREL) and -fno-plt builds
-// (R_X86_64_GLOB_DAT in DT_RELA). d_ptr tags are already biased to absolute addresses by
-// glibc on x86-64, but the heuristic below also accepts relative values just in case.
+
+
+
+
 [[nodiscard]] inline bool findGotSlots(std::uintptr_t base, void*** outSendTo, void*** outSendMsg) noexcept
 {
     const auto* ehdr = reinterpret_cast<const ElfW(Ehdr)*>(base);
@@ -630,8 +634,8 @@ inline void writeSlot(void** slot, void* value) noexcept
     static_cast<void>(LinuxPlatformApi::mprotect(pageStart, 0x1000, PROT_READ));
 }
 
-// Idempotent. Resolves the originals through dlsym (never through the pre-patch GOT value,
-// which can still be a lazy-binding stub), then redirects the module's slots to our handlers.
+
+
 [[nodiscard]] inline bool install() noexcept
 {
     if (installed)
@@ -662,9 +666,9 @@ inline void writeSlot(void** slot, void* value) noexcept
     return true;
 }
 
-// Restores the GOT, releases everything still buffered and writes a final stats snapshot.
-// In-flight calls that already read the handler stay safe: they only touch the originals,
-// which remain valid.
+
+
+
 inline void unload() noexcept
 {
     if (!installed)
@@ -677,7 +681,7 @@ inline void unload() noexcept
     net_lag::luaDelayMs.store(0, std::memory_order_relaxed);
     net_lag::floodEngaged.store(false, std::memory_order_relaxed);
     net_lag::connlessFloodEngaged.store(false, std::memory_order_relaxed);
-    net_region::clearBlockedIps();   // a script-owned list must not survive the unload
+    net_region::clearBlockedIps();   
     pthread_mutex_lock(&ringMutex);
     serverEndpoint.valid = false;
     pthread_mutex_unlock(&ringMutex);
@@ -685,11 +689,11 @@ inline void unload() noexcept
     writeStats();
 }
 
-} // namespace netlag_hook
+} 
 
-// Game-thread side: publishes the config to the network thread and drains the delay queue.
-// SDL key state is not thread-safe, so the hold-to-choke bind is polled HERE (CreateMove) and
-// only its result crosses to the network thread.
+
+
+
 template <typename HookContext>
 class NetLag {
 public:
@@ -721,9 +725,9 @@ public:
         net_lag::floodCount.store(floodBurst, std::memory_order_relaxed);
         net_lag::floodEngaged.store(enabled && floodBurst > 0 && (floodKey == Bind::kOff || floodHeld), std::memory_order_relaxed);
 
-        // Connectionless flood: sent from THIS thread (the game's own) straight through the
-        // original sendto - the server's per-IP limiter then counts the address the game itself
-        // uses, exactly like a real query flood would.
+        
+        
+        
         const int connlessKey = GET_CONFIG_VAR(net_lag_vars::ConnlessKeyBind);
         const bool connlessHeld = connlessKey > Bind::kOff && connlessKey <= Bind::kLast && Bind::isDown(connlessKey);
         const auto connlessBurst = GET_CONFIG_VAR(net_lag_vars::ConnlessFloodCount);

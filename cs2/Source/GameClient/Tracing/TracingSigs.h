@@ -1,17 +1,17 @@
 #pragma once
 
-// Runtime signature resolution for the libclient.so anchors that used to be hardcoded RVAs.
-// Rationale: a CS2 update recompiles and relocates the module, so hardcoded RVAs go stale every
-// time (the Sep-10 update broke ALL four recorded Tracing/Autowall RVAs again). These signatures
-// wildcard every rip-relative displacement/imm64 and match on the surrounding register-movement
-// structure instead, so they survive relocation. Each signature was verified exactly-once against
-// the shipped module's .text with the scratchpad byte toolkit, and each resolution was
-// cross-checked (the caller pattern's EntityToHandle call lands on the independently matched
-// EntityToHandle prologue; all 21 fingerprinted trace callers agree on the same TraceShape).
-//
-// A resolution failure degrades gracefully: every anchor falls back to its last-known RVA, and
-// only when THAT fails validation too do the consumers fail closed (features disable themselves,
-// nothing ever points at garbage).
+
+
+
+
+
+
+
+
+
+
+
+
 
 #include <array>
 #include <atomic>
@@ -25,27 +25,27 @@
 namespace tracing_sigs
 {
 
-// Plausible libclient.so mapped extent (file-backed + bss) - used to sanity-check resolved
-// pointers the same way the game's own manager singletons are checked.
+
+
 inline constexpr std::uint64_t kMaxModuleExtent = 0x4C00000;
 
-// --- signatures (offsets are byte offsets from the match start) ------------------------------
 
-// CGameTraceManager::TraceShape: RESOLVED VIA THE CALLER BLOCK'S OWN CALL (see
-// kCallerTraceCallOffset) - there is NO standalone prologue signature for it anymore.
-// 2026-09-27 lesson: the old standalone prologue sig ("55 48 89 E5 41 57 49 89 CF...") went
-// POISON after the 5GB update - the real TraceShape recompiled to a different prologue
-// (55 48 8D 05 <disp32> 48 89 E5 41 57 49 89 F7...) and the old shape then matched a
-// DIFFERENT function (an argument-reordering wrapper at 0x11347F0 that fed our Vector* args
-// to an inner walker as objects -> mid-match SIGSEGV). The caller-block capture is unique by
-// construction (the block is fingerprinted) and self-consistent: the same match yields the
-// filter vtable, the manager global, and the trace function the game itself calls with them.
+
+
+
+
+
+
+
+
+
+
 inline constexpr const char* kEntityToHandleSig =
     "48 85 FF 74 3B 48 8B 57 10 B8 FF FF FF FF 48 85";
-// The fingerprinted trace-caller block. Captures (byte offsets from match start):
-//   +62  lea disp32 -> generic CTraceFilter VTABLE (.data.rel.ro)
-//   +154 lea disp32 -> qword holding the CGameTraceManager pointer (.bss)
-//   +74  call rel32 -> EntityToHandle (cross-validation against the prologue match)
+
+
+
+
 inline constexpr const char* kCallerSig =
     "48 B8 ? ? ? ? ? ? ? ? 48 89 45 80 E8 ? ? ? ? BA 0F 03 00 00 31 FF 48 B8 ? ? ? ? ? ? ? ? "
     "48 89 85 00 FF FF FF B8 00 49 00 00 66 0F EF C0 66 89 85 08 FF FF FF 48 8D 05 ? ? ? ? "
@@ -55,27 +55,27 @@ inline constexpr const char* kCallerSig =
 inline constexpr std::size_t kCallerVtableDispOffset = 62;
 inline constexpr std::size_t kCallerManagerDispOffset = 154;
 inline constexpr std::size_t kCallerEntityToHandleCallOffset = 74;
-// The block's own `call rel32` to CGameTraceManager::TraceShape (0xF3 on build 68f386a6;
-// the target cross-checks against the filter/manager captured from the same block).
+
+
 inline constexpr std::size_t kCallerTraceCallOffset = 0xF3;
-// ff_damage_bullet_penetration READER: lea rbx,[obj] / mov esi,-1 / mov [rbp-1B8h],r9 / mov rdi,rbx / call
+
 inline constexpr const char* kFfReaderSig =
     "48 8D 1D ? ? ? ? BE FF FF FF FF 4C 89 8D 48 FE FF FF 48 89 DF E8 ? ? ? ?";
 inline constexpr std::size_t kFfReaderObjectDispOffset = 3;
 inline constexpr std::size_t kFfReaderGetterCallOffset = 22;
-// The getter itself (validated = the reader's call target)
+
 inline constexpr const char* kFfGetterSig =
     "55 48 89 E5 53 48 89 FB 48 83 EC 08 E8 5F 61 BE 00 48 85 C0";
 
-// Legacy RVAs (2026-09-26 build 68f386a6) - per-anchor fallback when a signature drifts.
+
 inline constexpr std::uint64_t kRvaTraceShape = 0x16F69C0;
 inline constexpr std::uint64_t kRvaEntityToHandle = 0x16C1AE0;
 inline constexpr std::uint64_t kRvaManagerQword = 0x458BB70;
 inline constexpr std::uint64_t kRvaFilterVtable = 0x42EAF38;
 
 struct Anchors {
-    bool ok = false;    // trace primitive usable
-    bool ffOk = false;  // autowall inputs usable (getter + cvar object address)
+    bool ok = false;    
+    bool ffOk = false;  
     std::uint64_t moduleBase = 0;
     std::uint64_t traceShape = 0;
     std::uint64_t entityToHandle = 0;
@@ -83,19 +83,19 @@ struct Anchors {
     std::uint64_t filterVtable = 0;
     std::uint64_t ffGetter = 0;
     std::uint64_t ffObject = 0;
-    // Where resolution stopped (the 2026-09-13 runtime-vs-inject mismatch probe: the SAME
-    // resolution works during global-context init but fails when called from a hook, and the
-    // failing step was invisible). 0 = fully resolved.
-    int failStep = 0;   // 1 client not found, 2 empty code section, 3 no link map, 4 functions missing, 5 data missing
+    
+    
+    
+    int failStep = 0;   
 };
 
 namespace detail
 {
 
-// One parsed signature: byte values with a fixed/wildcard mask.
+
 struct ParsedSig {
     std::array<unsigned char, 160> values{};
-    std::array<unsigned char, 160> mask{}; // 1 = fixed, 0 = wildcard
+    std::array<unsigned char, 160> mask{}; 
     std::size_t length = 0;
 };
 
@@ -143,8 +143,8 @@ inline ParsedSig parse(const char* pattern) noexcept
     return out;
 }
 
-// First match of the (value, mask) signature inside the haystack, or nullptr. Scans the LIVE
-// module image (the spans handed in are runtime-mapped .text), so results are usable addresses.
+
+
 inline const std::byte* scan(std::span<const std::byte> haystack, const ParsedSig& sig) noexcept
 {
     if (haystack.size() < sig.length || sig.length == 0)
@@ -176,27 +176,27 @@ inline std::int32_t readDisp32(const std::byte* at) noexcept
     return value;
 }
 
-} // namespace detail
+} 
 
 inline const Anchors& resolved() noexcept
 {
     static Anchors anchors;
-    static std::atomic<int> state{0}; // 0 = not resolved, 1 = resolved
+    static std::atomic<int> state{0}; 
     if (state.load(std::memory_order_acquire) != 0)
         return anchors;
     if (state.exchange(1, std::memory_order_acq_rel) != 0)
-        return anchors; // another thread won the race and is finalizing the result
+        return anchors; 
 
     const LinuxDynamicLibrary client{cs2::CLIENT_DLL};
     if (!client) {
-        anchors.failStep = 1; // dlopen(RTLD_NOLOAD, "libclient.so") failed at runtime
-        return anchors; // fail closed - nothing resolved
+        anchors.failStep = 1; 
+        return anchors; 
     }
     const auto code = client.getCodeSection();
     const std::span<const std::byte> haystack = code.raw();
     const link_map* const map = client.getLinkMap();
     if (haystack.empty() || !map || !map->l_addr) {
-        anchors.failStep = 2 + (haystack.empty() ? 0 : 1); // 2 empty code section, 3 no link map
+        anchors.failStep = 2 + (haystack.empty() ? 0 : 1); 
         return anchors;
     }
     const std::uint64_t base = static_cast<std::uint64_t>(map->l_addr);
@@ -205,14 +205,14 @@ inline const Anchors& resolved() noexcept
         return address >= base && address < base + kMaxModuleExtent;
     };
 
-    // 1. Functions by their own prologue patterns. TraceShape is deliberately NOT scanned
-    // this way anymore - see the kTraceShapeSig removal note above; it is captured from the
-    // caller block's own call below (unique + self-consistent with the filter/manager).
+    
+    
+    
     if (const auto* match = detail::scan(haystack, detail::parse(kEntityToHandleSig)))
         anchors.entityToHandle = reinterpret_cast<std::uint64_t>(match);
 
-    // 2. The fingerprinted trace-caller block: filter vtable + manager qword disp32 captures
-    //    AND the block's own call target = CGameTraceManager::TraceShape.
+    
+    
     if (const auto* callerMatch = detail::scan(haystack, detail::parse(kCallerSig))) {
         const auto matchAddress = reinterpret_cast<std::uint64_t>(callerMatch);
         const auto readDisp = [callerMatch](std::size_t offset) {
@@ -225,8 +225,8 @@ inline const Anchors& resolved() noexcept
         anchors.traceShape = matchAddress + kCallerTraceCallOffset + 5 + readDisp(kCallerTraceCallOffset + 1);
     }
 
-    // 3. ff_damage_bullet_penetration: getter by its own sig, cvar object from the reader's lea
-    //    disp32 (the reader's call target must BE the getter - ties the two matches together).
+    
+    
     if (const auto* getterMatch = detail::scan(haystack, detail::parse(kFfGetterSig))) {
         const auto getterAddress = reinterpret_cast<std::uint64_t>(getterMatch);
         if (const auto* readerMatch = detail::scan(haystack, detail::parse(kFfReaderSig))) {
@@ -242,7 +242,7 @@ inline const Anchors& resolved() noexcept
         }
     }
 
-    // Per-anchor fallback to the recorded RVAs (validated below before use).
+    
     const auto fallback = [&base](std::uint64_t& target, std::uint64_t rva) {
         if (target == 0)
             target = base + rva;
@@ -252,13 +252,13 @@ inline const Anchors& resolved() noexcept
     fallback(anchors.filterVtable, kRvaFilterVtable);
     fallback(anchors.managerQword, kRvaManagerQword);
 
-    // Validation: functions must start with their OWN recorded prologues and data anchors must
-    // point in-module. NOTE: EntityToHandle does NOT start with push rbp/mov rbp,rsp (it opens
-    // with test rdi,rdi / je) - a generic 55-48-89-E5 check on it fails forever and latched the
-    // whole trace primitive fail-closed (the 2026-09-13 "confirms trace misses everything" root
-    // cause, found via the [tba] ok=0 step=4 probe).
-    // The 68f386a6+ TraceShape opens with `push rbp; lea rax, [rip+disp32]` (a telemetry
-    // anchor) - validate the lea PREFIX, then `mov rbp, rsp` right after the disp32 hole.
+    
+    
+    
+    
+    
+    
+    
     static constexpr std::array<unsigned char, 4> kTraceShapeLeaPrefix{0x55, 0x48, 0x8D, 0x05};
     static constexpr std::array<unsigned char, 3> kTraceShapeAfterDisp{0x48, 0x89, 0xE5};
     static constexpr std::array<unsigned char, 4> kTestRdiPrologue{0x48, 0x85, 0xFF, 0x74};
@@ -280,7 +280,7 @@ inline const Anchors& resolved() noexcept
     else if (!dataOk)
         anchors.failStep = 5;
 
-    // ff inputs are optional (Autowall-only); they only count when they point in-module.
+    
     if (!inModule(anchors.ffGetter))
         anchors.ffGetter = 0;
     if (!inModule(anchors.ffObject))
@@ -288,4 +288,4 @@ inline const Anchors& resolved() noexcept
     return anchors;
 }
 
-} // namespace tracing_sigs
+} 

@@ -11,13 +11,13 @@
 #include <Utils/Trig.h>
 #include <Features/Combat/LegitAimbot/LegitAimbotConfigVariables.h>
 
-// Draws the legit aimbot's FOV limit as a circle centred on the crosshair, using the same round-panel
-// technique as the no-scope inaccuracy visual (a HUD-reticle child, 50% border radius, height sized
-// through the view->projection matrix). The size is the FOV angle projected to screen: a target on
-// the circle edge is exactly the FOV away from the crosshair, so the circle shows what the assist will
-// pull onto. This is velocity's legit visualize_fov - the class kept its old AimbotFovCircle name from
-// when it hung off the rage aimbot (rage has no FOV visual in velocity; its max_fov is an invisible
-// per-point gate). The fill is near-transparent (alpha ~20) so it does not obscure the view.
+
+
+
+
+
+
+
 template <typename HookContext>
 class AimbotFovCircle {
 public:
@@ -39,8 +39,8 @@ public:
         if (visible) {
             panel.setHeight(computeHeightFromFov());
             const auto configuredColor = GET_CONFIG_VAR(legit_aimbot_vars::FovCircleColor);
-            // the border uses the picked color including its alpha; the fill stays near-transparent
-            // so it never obscures the view
+            
+            
             const cs2::Color color{configuredColor.r(), configuredColor.g(), configuredColor.b(), configuredColor.a()};
             panel.setBorder(kBorderWidth, color);
             panel.setBackgroundColor(color.setAlpha(kBackgroundAlpha));
@@ -69,11 +69,11 @@ private:
         return localPlayerPawn && localPlayerPawn.isAlive() == true;
     }
 
-    // Diameter of the circle as a percentage of screen height. The FOV angle's tangent is the
-    // view-space slope a point at that angle sits on; transforming it through the projection matrix
-    // (exactly as the no-scope visual does with the inaccuracy slope) gives its normalized screen
-    // extent. Clamped below 90 degrees for drawing so the tangent cannot blow up (the hit gate still
-    // uses the full slider value; only the on-screen circle is clamped).
+    
+    
+    
+    
+    
     [[nodiscard]] cs2::CUILength computeHeightFromFov() const
     {
         auto fovDegrees = static_cast<float>(GET_CONFIG_VAR(legit_aimbot_vars::Fov));

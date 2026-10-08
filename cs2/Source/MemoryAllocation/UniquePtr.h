@@ -17,8 +17,8 @@ template <typename T>
     requires (!std::is_array_v<T>)
 [[nodiscard]] auto makeUniqueForOverwrite() noexcept
 {
-    // Placement-new on a null pointer is UB - an exhausted pool must yield an EMPTY pointer,
-    // not a construction site at address 0 (callers check for emptiness before use).
+    
+    
     if (const auto memory = MemoryAllocator<T>::allocate())
         return UniquePtr<T>{ new (memory) T };
     return UniquePtr<T>{};

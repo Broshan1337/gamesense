@@ -21,19 +21,19 @@
 static int g_initialized = 0;
 static pthread_mutex_t g_init_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// Filter tokens live XOR-encrypted (vac_str.h): our own module names must not
-// sit in .rodata as scannable byte strings. NOTE: the fprintf diagnostics
-// below stay plaintext on purpose - grepping them in
-// ~/.local/share/Steam/logs/console-linux.txt is the documented way to verify
-// the Steam-side hooks actually installed (a silent no-op hid here before).
+
+
+
+
+
 namespace {
 VAC_XSTR(kTokModule, "libMangoHud.so");
 VAC_XSTR(kTokMemfd, "memfd:libMangoHud");
-// GDB-fallback copy (inject.sh) and this module's own Steam-side copy land in
-// /tmp under these names; their maps lines contain no libMangoHud substring.
+
+
 VAC_XSTR(kTokFallback, ".fc-cache-");
 VAC_XSTR(kTokSteamTmp, ".Xauthority-");
-} // namespace
+} 
 
 typedef FILE* (*FopenFn)(const char*, const char*);
 typedef char* (*FgetsFn)(char*, int, FILE*);
@@ -76,9 +76,9 @@ typedef Elf32_Rel NsRel;
 #define NS_R_SYM(i) ELF32_R_SYM(i)
 #endif
 
-// ld.so may have already adjusted .dynamic d_ptr entries to absolute
-// addresses; other contexts leave link-time vaddrs. If the value lands
-// inside the module image, use it as-is -- otherwise add the load base.
+
+
+
 static uintptr_t ns_adjust_ptr(void* base, uintptr_t v)
 {
     const uintptr_t b = (uintptr_t)base;
@@ -118,11 +118,11 @@ static void** find_got_entry(void* base, const char* sym_name)
         }
     }
 
-    // Walk the PLT relocation table directly -- no DT_HASH dependency (updated
-    // Steam libraries ship GNU_HASH only) and no hardcoded fallback (stale
-    // offsets after an update land inside .text and crash the host).
-    // NOTE: parses with the injected-into process' native width -- steamservice.so
-    // is 32-bit inside the Steam client; Elf64 structs on an ELF32 image fail.
+    
+    
+    
+    
+    
     if (!symtab || !strtab || !jmprel || !pltrelsz) return nullptr;
 
     const size_t entry_size = use_rela ? sizeof(NsRela) : sizeof(NsRel);
@@ -148,10 +148,10 @@ static int patch_got(void** got, void* newval)
 {
     if (!got) return -1;
 
-    // Save/restore the page's ACTUAL protection (see vac_hook.cpp), and touch
-    // exactly ONE page: an 8-byte GOT pointer cannot straddle a boundary,
-    // while a wider span can run past a mapping end (ENOMEM -> write faults).
-    // NOTE: uintptr_t-wide mask (a 32-bit ~0xFFFu truncates to 32 bits).
+    
+    
+    
+    
     const uintptr_t page = (uintptr_t)got & ~(uintptr_t)0xFFFu;
     int saved = PROT_READ;
     FILE* maps = fopen("/proc/self/maps", "r");
@@ -196,8 +196,8 @@ static int token_in_line(const char* token, const char* line)
 static int should_filter(const char* line)
 {
     if (!line) return 0;
-    // Decrypted into stack buffers: the plaintext module names exist only
-    // transiently, never in .rodata.
+    
+    
     char module[32];
     char memfd[32];
     char fallback[32];
@@ -362,9 +362,9 @@ static void free_maps_slot_fp(FILE* fp)
 int hook_fclose(FILE* fp)
 {
     if (!g_orig_fclose) return -1;
-    // Without this, tracked maps FILE* slots leak (fclose closes via libc
-    // internally, never reaching any fd hook) and later maps opens go
-    // untracked past MAX_MAPS_FILES.
+    
+    
+    
     if (fp) free_maps_slot_fp(fp);
     return g_orig_fclose(fp);
 }
@@ -438,17 +438,17 @@ static void init_hooks(void)
         fprintf(stderr, "[SteamVAC] Hooked fclose at %p\n", fclose_got);
     }
 
-    // Link_map unlink REVERTED 2026-09-11 alongside vac_hook.cpp while a
-    // deterministic inject-time freeze is bisected (see kEnableLinkHide
-    // there). Flip to re-enable; the block stays compiled so it can't rot.
+    
+    
+    
     static const int kEnableLinkHide = 0;
     if (kEnableLinkHide)
     {
-    // Drop our link_map node (same rationale as vac_hook.cpp): in-process
-    // enumeration via dl_iterate_phdr no longer lists this module. No
-    // restore: this module has no unload path (process exit tears everything
-    // down, and re-injection always uses a fresh timestamped copy).
-    // Verification fprintf lines above run BEFORE the unlink on purpose.
+    
+    
+    
+    
+    
     {
         Dl_info info;
         if (dladdr((const void*)hook_fopen, &info) != 0 && info.dli_fbase) {
@@ -479,14 +479,14 @@ static void init_hooks(void)
     fprintf(stderr, "[SteamVAC] Hooks installed\n");
 }
 
-// ---- session binding ------------------------------------------------------------
-//
-// The loader stamps every module it injects with a 64-byte trailer after the ELF image
-// ("NSHB02" | pad[2] | u64 loaderPid | loaderComm[16] | proof[32] = loaderComm XOR key - see
-// Loader/src/SessionTrailer.h). A steam module re-injected standalone from a dump has no
-// trailer -> fails closed (inert). The key is the same material the Loader embeds
-// (heartbeat.key in its key dir); stored here XOR-masked (Utils/SessionBindKey.h) so the
-// plaintext key is not a literal in the binary.
+
+
+
+
+
+
+
+
 static int verify_session_trailer(void)
 {
     unsigned char key[32];
@@ -533,15 +533,14 @@ static int verify_session_trailer(void)
         return 0;
     }
     close(fd);
-    /* "NSHB02" XOR-obfuscated (see cs2/Source/Utils/SessionBind.h) */
+    
     static const unsigned char kMagicObf[6] = {0x14, 0x09, 0x12, 0x18, 0x6A, 0x68};
     unsigned char magic[6];
     for (int i = 0; i < 6; ++i)
         magic[i] = (unsigned char)(kMagicObf[i] ^ 0x5A);
     if (memcmp(trailer, magic, 6) != 0)
         return 0;
-    /* The proof mixes the TARGET pid the loader stamped (2026-09-24): a copied memfd file
-     * re-injected elsewhere carries the old pid - proof mismatch -> bricked. */
+    
     const unsigned long long ownPid = (unsigned long long)getpid();
     for (int i = 0; i < 32; ++i) {
         const unsigned char targetByte = (unsigned char)((ownPid >> ((i % 8) * 8)) & 0xff);

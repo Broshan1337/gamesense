@@ -1,33 +1,33 @@
-// Fake-VAC harness: automated adversary against the production VAC hooks.
-//
-// Architecture mirrors the real one: VacFixture (a stand-in "steamclient.so",
-// recognised by the production resolver via the "steamclient.so" filename
-// substring) plays the VAC side - every libc call it makes resolves through
-// ITS OWN GOT, which the harness patches with the real hook addresses from
-// Source/hooks/vac_hook.cpp. The test binary itself only observes and
-// asserts, exactly like an external analyst would.
-//
-// What runs here, in order (gtest runs TEST_F in declaration order):
-//   1. BaselineSeesEverything - pre-hook scan: hidden entries MUST be visible
-//      (proves the scanner + fixture visibility actually work).
-//   2. InstallAndHide - post-hook scans with hostile sizes (fgets buf 53,
-//      read chunks 37/500/4096/65536): hidden entries gone, everything else
-//      byte-identical to baseline minus hidden lines.
-//   3. SlotReuse - 25 maps open/close cycles, then still hidden (fclose fix).
-//   4. FileSpoof - the cheat-named file served fake-clean through fopen,
-//      open, openat, pread, fstat, mmap and lseek; control file untouched.
-//   5. StatsAdvance - hook counters moved.
-//   6. UninstallRestores - entries visible again (restore path works).
-//   7. ServiceModuleHunter - synthetic <checksum>-<size>.so decoys in a temp
-//      dir are found/flagged correctly (validates the offline capture tool).
-//
-// Verbose transcript: run the binary directly (or ctest -V) - every scan
-// prints method, sizes, counts and hook stats. NOTE: installing the hooks
-// writes a few first-hit lines to /tmp/gamesense_gui.log (and rotates it),
-// same as in-game.
-//
-// Manual service-module capture after a secured-server session:
-//   ./VacHarnessBin --scan /tmp
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -80,8 +80,8 @@ typedef int (*VacfLseekSize)(const char*, long*);
 namespace
 {
 
-const char* kTokModule = "libMangoHud.so"; // these live in the TEST binary
-const char* kTokFallback = ".fc-cache-424242"; // (never injected) - fine plain
+const char* kTokModule = "libMangoHud.so"; 
+const char* kTokFallback = ".fc-cache-424242"; 
 const char* kTokMemfd = "memfd:libMangoHud";
 const char* kControlNeedle = "libc";
 
@@ -133,9 +133,9 @@ size_t count_token(const std::vector<std::string>& lines, const char* needle)
     return n;
 }
 
-// Baseline lines minus hidden lines must equal hooked lines EXACTLY: no
-// truncation (fake EOF would drop trailing libc lines), no extras, no leaks.
-// On mismatch, dump the difference (capped) - that diff IS the diagnosis.
+
+
+
 void expect_exact_filter(const std::vector<std::string>& baseline,
                          const std::vector<std::string>& hooked)
 {
@@ -207,7 +207,7 @@ bool copy_file(const char* src, const char* dst)
     return ok;
 }
 
-// ---- service-module hunter (offline capture tool) ----
+
 
 struct SvcFinding {
     std::string path;
@@ -241,8 +241,8 @@ std::vector<SvcFinding> scan_service_modules(const std::string& dir)
         if (!name)
             break;
         std::string base(name);
-        // VAC drops runtime modules as <checksum>-<size>.so (see the VAC
-        // report: small ~15-20KB objects with a `runfunc` export).
+        
+        
         if (base.size() < 5 || base.compare(base.size() - 3, 3, ".so") != 0)
             continue;
         if (base.find('-') == std::string::npos)
@@ -268,7 +268,7 @@ std::vector<SvcFinding> scan_service_modules(const std::string& dir)
     return out;
 }
 
-// ---- shared environment ----
+
 
 class VacEnv : public ::testing::Test {
 protected:
@@ -278,22 +278,22 @@ protected:
         ASSERT_NE(::mkdtemp(tmpl), nullptr);
         tmpdir_ = tmpl;
 
-        // Hidden entry A: a mapping whose path names the module.
+        
         path_module_ = tmpdir_ + "/libMangoHud.so";
         ASSERT_TRUE(copy_file(VAC_FIXTURE_PATH, path_module_.c_str()));
 
-        // Hidden entry B: a mapping under the GDB-fallback tmp name.
+        
         path_fallback_ = tmpdir_ + "/.fc-cache-424242";
         ASSERT_TRUE(copy_file(VAC_FIXTURE_PATH, path_fallback_.c_str()));
 
-        // Hidden entry C: an anonymous memfd mapping with the module name.
+        
         memfd_ = ::memfd_create("libMangoHud.so", MFD_CLOEXEC);
         ASSERT_GE(memfd_, 0);
         ASSERT_EQ(::ftruncate(memfd_, 4096), 0);
         memfd_map_ = ::mmap(nullptr, 4096, PROT_READ, MAP_SHARED, memfd_, 0);
         ASSERT_NE(memfd_map_, MAP_FAILED);
 
-        // Plain control file: must pass through byte-identical.
+        
         path_control_ = tmpdir_ + "/control.txt";
         {
             FILE* fp = fopen(path_control_.c_str(), "w");
@@ -302,8 +302,8 @@ protected:
             fclose(fp);
         }
 
-        // The "steamclient": filename carries the substring the production
-        // resolver looks for, so install_vac_hook() patches THIS module.
+        
+        
         h_fixture_ = ::dlopen(VAC_FIXTURE_PATH, RTLD_NOW | RTLD_LOCAL);
         ASSERT_NE(h_fixture_, nullptr);
         api_.fgets_all = (VacfFgetsAll)::dlsym(h_fixture_, "vacf_fgets_all");
@@ -330,10 +330,10 @@ protected:
         h_b_ = ::dlopen(path_fallback_.c_str(), RTLD_NOW | RTLD_LOCAL);
         ASSERT_NE(h_b_, nullptr);
 
-        // Baseline scan BEFORE install (validates the scanner itself), then
-        // install once for the whole process. ctest runs every TEST_F below
-        // as its own process (--gtest_filter), so setup must leave each test
-        // hermetic: installed hooks + populated baseline, no cross-test order.
+        
+        
+        
+        
         {
             size_t len = 0;
             char* text = api_.fgets_all("/proc/self/maps", 4096, &len);
@@ -342,8 +342,8 @@ protected:
             free(text);
         }
 
-        // Pre-install control: the fixture GOT must be fully clean before
-        // our hooks land (proves the auditor isn't flagging everything).
+        
+        
         {
             const auto pre = expose::audit_got(::getpid(), "vacfixture_steamclient");
             ASSERT_TRUE(pre.mem_ok);
@@ -356,7 +356,7 @@ protected:
 
     static void TearDownTestSuite()
     {
-        fva::hooks::uninstall_vac_hook(); // idempotent: safe after the uninstall test
+        fva::hooks::uninstall_vac_hook(); 
         if (memfd_map_ != MAP_FAILED)
             ::munmap(memfd_map_, 4096);
         if (memfd_ >= 0)
@@ -395,8 +395,8 @@ protected:
 
 TEST_F(VacEnv, BaselineScanValid)
 {
-    // The pre-hook scan (taken in setup) must show every hidden entry, or
-    // the scanner is blind and every later "hidden" assertion is vacuous.
+    
+    
     printf("[harness] baseline: %zu lines\n", baseline_.size());
     EXPECT_GT(baseline_.size(), 10u);
     EXPECT_GT(count_token(baseline_, kTokModule), 0u) << "module copy not mapped?";
@@ -408,9 +408,9 @@ TEST_F(VacEnv, BaselineScanValid)
 
 TEST_F(VacEnv, InstallAndHide)
 {
-    // Post-hook scans with hostile sizes (fgets buf 53, read chunks
-    // 37/500/4096/65536): hidden entries gone, everything else
-    // byte-identical to baseline minus hidden lines.
+    
+    
+    
     {
         size_t len = 0;
         char* text = api_.fgets_all("/proc/self/maps", 53, &len);
@@ -438,7 +438,7 @@ TEST_F(VacEnv, InstallAndHide)
         free(text);
     }
 
-    // Transcript head: what VAC would actually receive.
+    
     {
         size_t len = 0;
         char* text = api_.fgets_all("/proc/self/maps", 4096, &len);
@@ -454,9 +454,9 @@ TEST_F(VacEnv, InstallAndHide)
 
 TEST_F(VacEnv, SlotReuseAfterManyOpens)
 {
-    // 25 tracked open/close cycles against an 8-slot table: with the fclose
-    // fix every slot is recycled; without it the 9th open goes untracked and
-    // the module leaks back into view.
+    
+    
+    
     for (int i = 0; i < 25; ++i) {
         size_t len = 0;
         char* text = api_.fgets_all("/proc/self/maps", 4096, &len);
@@ -477,10 +477,10 @@ TEST_F(VacEnv, SlotReuseAfterManyOpens)
 
 TEST_F(VacEnv, FileSpoofSurvivesAllAccessPatterns)
 {
-    // The cheat-named file must serve the fake clean ELF through every access
-    // pattern a hashing module might use. Expected fake: 128 bytes (sizeof
-    // fake_elf_header in integrity_audit.cpp) starting 7F 45 4C 46, regular
-    // file, seekable, mappable.
+    
+    
+    
+    
     static constexpr long kFakeSize = 128;
     unsigned char buf[128]{};
     size_t got = 0;
@@ -521,7 +521,7 @@ TEST_F(VacEnv, FileSpoofSurvivesAllAccessPatterns)
     EXPECT_EQ(end, kFakeSize);
     printf("[harness] lseek END: %ld\n", end);
 
-    // Negative control: unrelated files pass through byte-identical.
+    
     memset(buf, 0, sizeof(buf));
     ssize_t n = api_.open_read(path_control_.c_str(), buf, 32);
     ASSERT_EQ(n, 31);
@@ -531,8 +531,8 @@ TEST_F(VacEnv, FileSpoofSurvivesAllAccessPatterns)
 
 TEST_F(VacEnv, StatsAdvance)
 {
-    // Self-sufficient: exercise one maps scan and one spoof probe, then
-    // assert the counters moved (delta-based, so parallel/full runs agree).
+    
+    
     const auto before = fva::hooks::vac_hook_stats();
     {
         size_t len = 0;
@@ -554,9 +554,9 @@ TEST_F(VacEnv, StatsAdvance)
 
 TEST_F(VacEnv, LinkMapHideRestore)
 {
-    // In-process enumeration (what a dlopen'd service module would use)
-    // must lose exactly the hidden node and nothing else, while hooked
-    // filtering keeps working throughout.
+    
+    
+    
     auto collect = []() {
         std::vector<std::string> names;
         ::dl_iterate_phdr(
@@ -577,7 +577,7 @@ TEST_F(VacEnv, LinkMapHideRestore)
         return false;
     };
 
-    // Setup's install must NOT have unlinked the test executable itself.
+    
     EXPECT_FALSE(fva::hooks::link_is_hidden());
 
     const auto pre = collect();
@@ -597,7 +597,7 @@ TEST_F(VacEnv, LinkMapHideRestore)
     EXPECT_TRUE(has(hid, "vacfixture_steamclient")) << "surgical miss: fixture dropped";
     EXPECT_TRUE(has(hid, "libc")) << "chain corrupted?";
 
-    // Functionality intact while hidden: maps filtering still applies.
+    
     {
         size_t len = 0;
         char* text = api_.fgets_all("/proc/self/maps", 4096, &len);
@@ -617,9 +617,9 @@ TEST_F(VacEnv, LinkMapHideRestore)
 
 TEST_F(VacEnv, DeferredHideSkipsExe)
 {
-    // Production path (not the seam): must refuse the main executable and
-    // stay idempotent across presents. Would abort the process if the guard
-    // ever failed to stop an exe unlink.
+    
+    
+    
     EXPECT_FALSE(fva::hooks::link_is_hidden());
     fva::hooks::apply_deferred_link_hide();
     EXPECT_FALSE(fva::hooks::link_is_hidden());
@@ -630,8 +630,8 @@ TEST_F(VacEnv, DeferredHideSkipsExe)
 
 TEST_F(VacEnv, ExposeFlagsOwnHooks)
 {
-    // Red-team proof that a GOT-integrity check sees exactly our hooks
-    // (accepted exposure): the flagged set must equal the 7 patched imports.
+    
+    
     const auto rep = expose::audit_got(::getpid(), "vacfixture_steamclient");
     ASSERT_TRUE(rep.mem_ok);
     EXPECT_GT(rep.slots_checked, 0u);
@@ -651,8 +651,8 @@ TEST_F(VacEnv, ExposeFlagsOwnHooks)
 
 TEST_F(VacEnv, ExposeTextSynthetic)
 {
-    // Flip one .text byte in the fixture: the file-vs-mem auditor must flag
-    // exactly that rva; after restore it must be clean again.
+    
+    
     uintptr_t bias = 0;
     std::string mpath;
     ASSERT_TRUE(expose::module_bias(::getpid(), "vacfixture_steamclient", bias, mpath));
@@ -691,7 +691,7 @@ TEST_F(VacEnv, ExposeTextSynthetic)
 
 TEST_F(VacEnv, ExposeListsSelf)
 {
-    // An RWX probe mapping must show up flagged rwx; our own tid listed.
+    
     void* probe = ::mmap(nullptr, 4096, PROT_READ | PROT_WRITE | PROT_EXEC,
                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     ASSERT_NE(probe, MAP_FAILED);
@@ -794,7 +794,7 @@ TEST(ServiceModuleHunter, FlagsDecoys)
     ::rmdir(dir.c_str());
 }
 
-} // namespace
+} 
 
 int main(int argc, char** argv)
 {
@@ -810,9 +810,9 @@ int main(int argc, char** argv)
             return 0;
         }
         if (std::string(argv[i]) == "--expose") {
-            // Exposure audit: what a mem-reading module would see. Optional
-            // pid argument (default: self). External pids need mem access
-            // (same user usually denied by yama - reported, not fatal).
+            
+            
+            
             pid_t pid = 0;
             if (i + 1 < argc && argv[i + 1][0] != '-')
                 pid = static_cast<pid_t>(atoi(argv[++i]));
@@ -831,7 +831,7 @@ int main(int argc, char** argv)
             for (const auto& t : threads)
                 printf("[expose]   tid=%d comm=%s\n", t.tid, t.comm.c_str());
 
-            // GOT + text audit per file-backed module.
+            
             std::vector<std::string> mods;
             for (const auto& m : expose::parse_maps(pid)) {
                 if (m.path.empty() || m.path[0] == '[')
@@ -841,7 +841,7 @@ int main(int argc, char** argv)
             }
             printf("[expose] modules: %zu\n", mods.size());
             for (const auto& mod : mods) {
-                // Basename substring is enough for module_bias to find it.
+                
                 const size_t slash = mod.find_last_of('/');
                 const std::string sub =
                     (slash == std::string::npos) ? mod : mod.substr(slash + 1);

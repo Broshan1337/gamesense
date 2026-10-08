@@ -100,6 +100,14 @@ private:
             if (!channel.sfx)
                 continue;
 
+            
+            
+            
+            
+            
+            if (i >= channelInfo2.size || channelInfo2.memory[i].guid != channel.guid)
+                continue;
+
             std::array<char, 1024> buffer;
             fileNames.getString(channel.sfx->fileNameHandle, buffer);
             buffer.back() = '\0';

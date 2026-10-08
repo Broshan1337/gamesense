@@ -22,13 +22,13 @@ public:
         container.setHeight(kHeight);
         container.setPosition(kPositionX, kPositionY);
         container.setBorderRadius(kBorderRadius);
-        // todo: implement setting below style properties in C++
+        
         hookContext.template make<PanoramaUiEngine>().runScript(parentPanel,
             R"(
 (function() {
   var panel = $.GetContextPanel().FindChildInLayoutFile('BombPlantAlert');
   panel.style.worldBlur = 'gaussian(2, 2, 2)';
-  panel.style.backgroundImage = 'url("s2r://panorama/images/backgrounds/bluedots_large_png.vtex")';
+  panel.style.backgroundImage = 'url("s2r:
   panel.style.backgroundSize = 'auto 390px';
   panel.style.backgroundImgOpacity = '0.04';
 })();

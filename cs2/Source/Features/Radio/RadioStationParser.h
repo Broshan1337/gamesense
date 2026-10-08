@@ -2,23 +2,23 @@
 
 #include <cstddef>
 
-// One station extracted from a RadioTime/TuneIn render=json response. Fixed buffers because the project
-// is -nostdlib (no std::string). Sizes are generous for TuneIn's text/subtext.
+
+
 struct RadioStation {
-    char id[24];        // guide_id, e.g. "s307738"
-    char text[96];      // display name
-    char subtext[192];  // short description (may be empty)
+    char id[24];        
+    char text[96];      
+    char subtext[192];  
 };
 
-// Parses the JSON returned by opml.radiotime.com Search.ashx / Browse.ashx (render=json). It is not a
-// general JSON parser - it is a small depth-aware scanner tuned to that response: it walks objects,
-// remembering each object's own text / guide_id / subtext / item fields, and emits an entry whenever an
-// object closes that was marked "item":"station". This handles both the flat search body and the nested
-// local-browse body ({...,"children":[ {station}... ]}) because only leaf station objects carry
-// item:"station". The first "title" string (head.title, always first) is copied to headTitleOut.
-//
-// Tested offline against real Search.ashx (disco) and Browse.ashx?c=local responses - see the parser
-// test harness in scratchpad.
+
+
+
+
+
+
+
+
+
 class RadioStationParser {
 public:
     [[nodiscard]] static int parse(const char* buf, std::size_t len, RadioStation* out, int maxOut,
@@ -107,7 +107,7 @@ public:
                 continue;
             }
 
-            // A bareword value (number / true / false / null). Consume it; it is never a field we keep.
+            
             expectingValue = false;
             while (pos < len) {
                 const char d = buf[pos];
@@ -138,11 +138,11 @@ private:
         return a[i] == b[i];
     }
 
-    // Reads a JSON string starting at buf[pos]=='"'. Writes the unescaped contents to out (capped),
-    // returns the position just past the closing quote.
+    
+    
     static std::size_t readString(const char* buf, std::size_t len, std::size_t pos, char* out, int cap) noexcept
     {
-        ++pos; // opening quote
+        ++pos; 
         int oi = 0;
         while (pos < len) {
             const char c = buf[pos++];
@@ -158,13 +158,13 @@ private:
                 case 'b': decoded = '\b'; break;
                 case 'f': decoded = '\f'; break;
                 case 'u': {
-                    // Skip the 4 hex digits; substitute a placeholder rather than decode UTF-16.
+                    
                     for (int k = 0; k < 4 && pos < len; ++k)
                         ++pos;
                     decoded = '?';
                     break;
                 }
-                default: decoded = e; break; // \" \\ \/ and anything else -> literal
+                default: decoded = e; break; 
                 }
                 if (oi < cap - 1)
                     out[oi++] = decoded;

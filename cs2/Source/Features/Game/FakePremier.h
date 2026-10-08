@@ -11,20 +11,20 @@
 #include <HookContext/HookContextMacros.h>
 #include <MemoryPatterns/PatternTypes/ClientPatternTypes.h>
 
-// Makes OUR OWN client display a chosen premier rating for the local player, in two places:
-//
-// 1. The ranking-data block (the member KeyValues tree the profile card / lobby UI reads):
-//    flag 0x4 + the ranking substruct (block+0x70 -> ranking int at +0x3C) publish game/ranking.
-//    Requires the game's own ranking substruct to exist (GC ranking data); skipped otherwise.
-// 2. The local controller's competitive-rank fields (m_iCompetitiveRanking + rank type 11,
-//    11 = premier) - what our player list's rank column reads.
-//
-// Local and cosmetic, exactly like FakeLevel. Nothing is sent anywhere; the game coordinator
-// refreshes both targets, which is why the spoof re-asserts every frame and the originals are
-// restored when the feature is switched off or the module unloads.
-//
-// Controller field offsets are resolved through the schema (update-proof) and cached once they
-// resolve: onUnload() must not depend on the unload context's schema access.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 template <typename HookContext>
 class FakePremier {
@@ -67,13 +67,13 @@ public:
     }
 
 private:
-    // Ranking-data block part (the profile card's game/ranking source).
-    //
-    // CRASH RULE (2026-09-19 death crash): the flag bit MUST only be set when the game's own
-    // ranking substruct exists. Setting flag 0x4 while block+0x70 is null makes block consumers
-    // dereference structurally invalid state (the death-time profile/scoreboard update crashed
-    // in the block's string/clone machinery on a null container). Fabricating our own substruct
-    // is equally forbidden - the layout beyond the three ints the publisher reads is unknown.
+    
+    
+    
+    
+    
+    
+    
     void applyRankingBlock() const noexcept
     {
         auto* const block = static_cast<std::byte*>(hookContext.patternSearchResults().template get<PlayerRankingDataPointer>());
@@ -86,13 +86,13 @@ private:
 
         if (GET_CONFIG_VAR(FakePremierEnabled)) {
             if (!sub)
-                return; // no game-owned substruct - no safe spoof surface
+                return; 
             const auto bytes = static_cast<std::byte*>(sub) + cs2::PlayerRankingData::kRankingSubstructRankingOffset;
             std::int32_t current{};
             std::memcpy(&current, bytes, sizeof(current));
             const std::int32_t score = GET_CONFIG_VAR(FakePremierScore);
-            // capture the real value (and the original flag bit) whenever what we see is not
-            // already our own spoof, so a refresh from the game coordinator updates the original
+            
+            
             if (!(hasBlockOriginal && current == score)) {
                 std::uint32_t flags{};
                 std::memcpy(&flags, block + cs2::PlayerRankingData::kFlagsOffset, sizeof(flags));
@@ -147,9 +147,9 @@ private:
         std::memcpy(bytes + rankTypeOffset, &premierRankType, sizeof(premierRankType));
     }
 
-    // Saved so switching the feature off puts the real rank back. Captured only when what we
-    // are looking at is not already our own spoof, so a server-side refresh updates the
-    // originals instead of us saving our own lie.
+    
+    
+    
     void captureOriginal(cs2::C_BaseEntity* controllerEntity, int rankingOffset, int rankTypeOffset) const noexcept
     {
         const auto bytes = reinterpret_cast<const std::byte*>(controllerEntity);
@@ -173,7 +173,7 @@ private:
         hasOriginal = false;
     }
 
-    static constexpr std::int8_t kPremierRankType = 11; // 0xb - the rank type that reads m_iCompetitiveRanking as a premier rating
+    static constexpr std::int8_t kPremierRankType = 11; 
 
     inline static cs2::C_BaseEntity* cachedController{nullptr};
     inline static int cachedRankingOffset{0};

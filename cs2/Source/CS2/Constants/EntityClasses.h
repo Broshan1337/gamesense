@@ -68,9 +68,9 @@ constexpr auto kEntityClassNames = TypedStaticStringPool{}
     .add<C_GradientFog>("C_GradientFog")
     .add<C_EnvCubemapFog>("C_EnvCubemapFog")
     .add<C_Inferno>("C_Inferno")
-    // Appended LAST so every existing typeIndex stays put: the controller is the death-proof
-    // player anchor (controllers exist for every connected player for the whole session, pawns
-    // do not) - the PlayerList / CHEAT O METER walks classify with it.
+    
+    
+    
     .add<CCSPlayerController>("CCSPlayerController");
 
 using EntityClasses = decltype(kEntityClassNames)::TypeList;

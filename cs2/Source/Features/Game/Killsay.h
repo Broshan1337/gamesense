@@ -15,17 +15,17 @@
 #include <Utils/RetAddrSpoofer.h>
 #include <Utils/VerifyConsole.h>
 
-// Killsay: when the local player kills someone, SEND a random phrase from the user's own list
-// as a real chat message through their account (engine `say` command - this is genuinely
-// networked, everyone in the lobby sees it, exactly as the user asked).
-//
-// The list lives in <configDir>/killsay.txt next to the config files - one phrase per line,
-// '#' lines are comments, '{name}' inside a phrase is replaced with the victim's name. The file
-// is re-read on every kill (it is tiny), so edits apply mid-match without touching the menu.
-//
-// Sanitizing is NOT optional here: the phrase (and especially the substituted victim name) is
-// attacker-controlled text going into a console command. Quotes, semicolons and control
-// characters are stripped so a crafted name cannot split the command or escape the say.
+
+
+
+
+
+
+
+
+
+
+
 template <typename HookContext>
 class Killsay {
 public:
@@ -60,8 +60,8 @@ public:
     }
 
 private:
-    // Reads <configDir>/killsay.txt, picks one enabled line at random. Returns false when the
-    // file is missing/empty (one throttled console hint so a silent feature is explainable).
+    
+    
     [[nodiscard]] bool pickPhrase(char (&outPhrase)[160]) const noexcept
     {
         const auto& directoryPath = hookContext.configState().pathToConfigDirectory;
@@ -78,7 +78,7 @@ private:
             std::memcpy(path + length, "/killsay.txt", sizeof("/killsay.txt"));
         }
 
-        const int fd = LinuxPlatformApi::open(path, 0 /* O_RDONLY */);
+        const int fd = LinuxPlatformApi::open(path, 0 );
         if (fd < 0)
             return hintUnavailable();
 
@@ -88,7 +88,7 @@ private:
         if (readBytes <= 0)
             return hintUnavailable();
 
-        // First pass: count enabled lines. '#' comments and blank lines are skipped.
+        
         std::size_t lineCount = 0;
         std::size_t offset = 0;
         while (offset < static_cast<std::size_t>(readBytes)) {
@@ -104,7 +104,7 @@ private:
         if (chosen >= lineCount)
             chosen = lineCount - 1;
 
-        // Second pass: copy the chosen line out.
+        
         std::size_t enabledIndex = 0;
         offset = 0;
         while (offset < static_cast<std::size_t>(readBytes)) {
@@ -128,7 +128,7 @@ private:
         std::size_t length = 0;
         while (offset + length < totalBytes && buffer[offset + length] != '\n')
             ++length;
-        // Trim a trailing '\r' (editing on Windows).
+        
         if (length > 0 && buffer[offset + length - 1] == '\r')
             --length;
         return length;
@@ -143,8 +143,8 @@ private:
         return true;
     }
 
-    // Replaces every '{name}' in the phrase with the victim's name (bounded, may truncate the
-    // tail of an overlong phrase rather than overflow).
+    
+    
     static void substituteName(const char* phrase, const char* victimName, char (&out)[192]) noexcept
     {
         constexpr std::string_view nameToken{"{name}"};
@@ -173,10 +173,10 @@ private:
         return false;
     }
 
-    // Sends "say <text>" through the engine's ExecuteClientCommand - the same mechanism
-    // VerifyConsole uses for echo, except this one reaches the server. Text is sanitized first:
-    // player names are attacker-controlled and quotes/semicolons/control bytes in a console
-    // command are an injection vector. Also clamped to the chat message length.
+    
+    
+    
+    
     void sayThroughConsole(const char* text) const noexcept
     {
         const EngineClientPointer engineClient{};

@@ -7,11 +7,11 @@
 #include <GameClient/Entities/PlayerPawn.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
 
-// Maps the 0-based player slots that game events carry ("attacker", "userid") to the actual player,
-// and gets a display name out of them.
-//
-// Shared because every event-driven feature needs exactly this and the two non-obvious parts below
-// are worth having in one place rather than reimplemented per feature.
+
+
+
+
+
 template <typename HookContext>
 class PlayerSlotLookup {
 public:
@@ -20,8 +20,8 @@ public:
     {
     }
 
-    // 65535 is the engine's "nobody" marker (world/fall damage); anything outside a real slot
-    // range is rejected rather than trusted.
+    
+    
     static constexpr std::int64_t kMaxPlayerSlot = 63;
 
     [[nodiscard]] static bool isValidSlot(std::int64_t slot) noexcept
@@ -29,10 +29,10 @@ public:
         return slot >= 0 && slot <= kMaxPlayerSlot;
     }
 
-    // Player controllers occupy entity indices 1..maxplayers in slot order, so a slot maps to
-    // controller entity index slot+1. There is no index->entity lookup available, and the entity
-    // classifier does not recognise CCSPlayerController, so this goes via the pawns (which it does
-    // recognise) and matches on each pawn's own controller.
+    
+    
+    
+    
     [[nodiscard]] auto pawnBySlot(std::int64_t slot) const noexcept
     {
         cs2::C_BaseEntity* foundEntity = nullptr;
@@ -52,13 +52,13 @@ public:
         return hookContext.template make<BaseEntity>(foundEntity).template as<PlayerPawn>();
     }
 
-    // m_iszPlayerName is a fixed char array inside the controller, not a pointer, so this reads
-    // bytes in-object and never dereferences anything. That matters: if the schema lookup fails, or
-    // the field is ever something other than an array, the worst case is unreadable bytes - which
-    // the printable check rejects - rather than a fault.
-    //
-    // The returned string is attacker-controlled and may contain anything, including percent signs.
-    // It must never be used as a printf format - see ChatPrinter, which always goes through "%s".
+    
+    
+    
+    
+    
+    
+    
     [[nodiscard]] const char* nameBySlot(std::int64_t slot) const noexcept
     {
         auto&& pawn = pawnBySlot(slot);

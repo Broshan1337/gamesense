@@ -44,6 +44,8 @@ public:
 
     [[nodiscard]] decltype(auto) getHandle() const noexcept
     {
+        if (!offsetsUsable())
+            return cs2::PanelHandle{};
         return hookContext.patternSearchResults().template get<OffsetToPanelHandle>().of(panel).valueOr(cs2::PanelHandle{});
     }
 
@@ -78,10 +80,18 @@ public:
 
     void setVisible(bool visible) const noexcept
     {
+        if (!panel)
+            return;
+#if IS_LINUX()
+        // The client virtual-call anchor matched an unrelated pointer getter.
+        if (const auto fn = hookContext.patternSearchResults().template get<SetPanelVisibleFunctionPointer>())
+            fn(panel, visible);
+#else
         if (isVisible() != visible) {
             if (auto&& setVisibleFn = setVisible())
                 setVisibleFn(visible);
         }
+#endif
     }
 
     [[nodiscard]] decltype(auto) findChildInLayoutFile(const char* childId) const noexcept
@@ -133,17 +143,19 @@ public:
 
     [[nodiscard]] decltype(auto) children() const noexcept
     {
-        // 2026-09-26 5GB update: the children = two separate fields - the count at
-        // ChildPanelsCountOffset and the array at ChildPanelsArrayOffset = countOffset + 8.
-        // 2026-09-27: !panel guard - the HUD-root walk (and findChildInLayoutFile recursion
-        // during map teardown) legitimately produce a null panel; the 02:06 crash was this
-        // deref at [nullptr + countOffset] via Hud::getHudReticle -> findChildInLayoutFile.
+        
+        
+        
+        
+        
         const auto countOffset = hookContext.patternSearchResults().template get<ChildPanelsCountOffset>();
         const auto arrayOffset = hookContext.patternSearchResults().template get<ChildPanelsArrayOffset>();
         if (!panel || !countOffset || !arrayOffset)
             return PanoramaUiPanelChildPanels{hookContext, nullptr, 0};
         const auto childCount = *reinterpret_cast<const std::uint32_t*>(reinterpret_cast<std::uintptr_t>(panel) + countOffset.rawOffset());
         const auto childArray = *reinterpret_cast<cs2::CUIPanel***>(reinterpret_cast<std::uintptr_t>(panel) + arrayOffset.rawOffset());
+        if (childCount > 4096 || (childCount != 0 && !childArray))
+            return PanoramaUiPanelChildPanels{hookContext, nullptr, 0};
         return PanoramaUiPanelChildPanels{hookContext, childArray, childCount};
     }
 
@@ -285,16 +297,22 @@ private:
 
     [[nodiscard]] PanoramaUiPanelClasses classes() const noexcept
     {
+        if (!offsetsUsable())
+            return PanoramaUiPanelClasses{nullptr};
         return PanoramaUiPanelClasses{hookContext.patternSearchResults().template get<PanelClassesVectorOffset>().of(panel).get()};
     }
 
     [[nodiscard]] decltype(auto) getParentWindow() const noexcept
     {
+        if (!offsetsUsable())
+            return hookContext.template make<TopLevelWindow>(nullptr);
         return hookContext.template make<TopLevelWindow>(hookContext.patternSearchResults().template get<ParentWindowOffset>().of(panel).valueOr(nullptr));
     }
 
     [[nodiscard]] Optional<bool> hasFlag(cs2::EPanelFlag flag) const noexcept
     {
+        if (!offsetsUsable())
+            return {};
         return (hookContext.patternSearchResults().template get<OffsetToPanelFlags>().of(panel).toOptional() & flag) != 0;
     }
 
@@ -332,11 +350,18 @@ private:
 
     [[nodiscard]] cs2::CPanelStyle* getStyle() const noexcept
     {
+        
+        
+        
+        if (!offsetsUsable())
+            return nullptr;
         return hookContext.patternSearchResults().template get<PanelStyleOffset>().of(panel).get();
     }
 
     [[nodiscard]] const char* getId() const noexcept
     {
+        if (!offsetsUsable())
+            return "";
         if (const auto id = hookContext.patternSearchResults().template get<OffsetToPanelId>().of(panel).get(); id && id->m_pString)
             return id->m_pString;
         return "";
@@ -344,4 +369,23 @@ private:
 
     HookContext& hookContext;
     cs2::CUIPanel* panel;
+
+    
+    
+    
+    
+    
+    
+    
+    [[nodiscard]] bool offsetsUsable() const noexcept
+    {
+        return panel && hookContext.patternSearchResults().template get<PanelStyleOffset>()
+            && hookContext.patternSearchResults().template get<ParentWindowOffset>()
+            && hookContext.patternSearchResults().template get<OffsetToPanelId>()
+            && hookContext.patternSearchResults().template get<OffsetToPanelFlags>()
+            && hookContext.patternSearchResults().template get<OffsetToPanelHandle>()
+            && hookContext.patternSearchResults().template get<PanelClassesVectorOffset>()
+            && hookContext.patternSearchResults().template get<ChildPanelsCountOffset>()
+            && hookContext.patternSearchResults().template get<ChildPanelsArrayOffset>();
+    }
 };

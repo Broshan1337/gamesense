@@ -9,14 +9,14 @@
 #include <HookContext/HookContextMacros.h>
 #include <MemoryPatterns/PatternTypes/ClientPatternTypes.h>
 
-// Makes OUR OWN client display a chosen profile rank.
-//
-// Local and cosmetic, exactly like FakePrime: it edits the client's own copy of its ranking data so
-// the client's own UI reads it back. Nothing is sent anywhere, and the server keeps its own record -
-// this cannot change what anyone else sees.
-//
-// Rewritten every frame because the game coordinator refreshes this block, which would otherwise
-// quietly revert it.
+
+
+
+
+
+
+
+
 template <typename HookContext>
 class FakeLevel {
 public:
@@ -59,22 +59,22 @@ private:
         const std::uint32_t level = GET_CONFIG_VAR(FakeLevelValue);
         write(rankingData, cs2::PlayerRankingData::kLevelOffset, level);
 
-        // The XP bar is driven by the Xp slider (0..4999 within the level) rather than left at
-        // the level's start, so the bar can be dressed up together with the badge.
+        
+        
         const std::uint32_t xp = GET_CONFIG_VAR(FakeLevelXp);
         write(rankingData, cs2::PlayerRankingData::kExperienceOffset, xp);
 
-        // Both present-flags, without which the game reports zero for these regardless of what the
-        // fields hold. This is the step the reference snippet leaves out.
+        
+        
         std::uint32_t flags{};
         std::memcpy(&flags, rankingData + cs2::PlayerRankingData::kFlagsOffset, sizeof(flags));
         flags |= cs2::PlayerRankingData::kLevelPresentFlag | cs2::PlayerRankingData::kExperiencePresentFlag;
         std::memcpy(rankingData + cs2::PlayerRankingData::kFlagsOffset, &flags, sizeof(flags));
     }
 
-    // Saved so that switching the feature off puts the real rank back rather than leaving the last
-    // spoofed one sitting there. Captured only when what we are looking at is not already our own
-    // value, so a refresh from the game coordinator updates it instead of us saving our own lie.
+    
+    
+    
     void captureOriginal(std::byte* rankingData) const noexcept
     {
         std::uint32_t level{};
@@ -101,7 +101,7 @@ private:
         std::memcpy(rankingData + offset, &value, sizeof(value));
     }
 
-    // Constant-initialised and trivially destructible, so no __cxa_guard under -nostdlib.
+    
     inline static std::uint32_t originalLevel{};
     inline static std::uint32_t originalExperience{};
     inline static std::uint32_t originalFlags{};

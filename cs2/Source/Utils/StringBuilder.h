@@ -118,7 +118,7 @@ template <std::size_t Capacity>
 struct StringBuilderStorage {
     StringBuilderStorage()
     {
-        // prevents zeroing the buffer in zero initialization
+        
     }
 
     StringBuilder builder()

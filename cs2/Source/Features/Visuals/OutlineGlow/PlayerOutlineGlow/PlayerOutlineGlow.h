@@ -21,7 +21,7 @@ public:
         return GET_CONFIG_VAR(outline_glow_vars::GlowPlayers);
     }
 
-    [[nodiscard]] bool shouldApplyGlow(EntityTypeInfo /* entityTypeInfo */, auto&& playerPawn) const noexcept
+    [[nodiscard]] bool shouldApplyGlow(EntityTypeInfo , auto&& playerPawn) const noexcept
     {
         return playerPawn.isAlive().value_or(true)
             && playerPawn.health().greaterThan(0).valueOr(true)
@@ -30,12 +30,12 @@ public:
             && (!GET_CONFIG_VAR(outline_glow_vars::GlowOnlyEnemies) || playerPawn.isEnemy().value_or(true));
     }
 
-    [[nodiscard]] cs2::Color color(EntityTypeInfo /* entityTypeInfo */, auto&& playerPawn) const noexcept
+    [[nodiscard]] cs2::Color color(EntityTypeInfo , auto&& playerPawn) const noexcept
     {
         if (const auto isEnemy = playerPawn.isEnemy(); isEnemy.has_value()) {
             const auto configuredColor = *isEnemy ? GET_CONFIG_VAR(outline_glow_vars::EnemyColor) : GET_CONFIG_VAR(outline_glow_vars::AllyColor);
-            // spawn-protected players keep the dimmed immunity alpha so they stay easy to
-            // distinguish; otherwise the alpha picked by the user in the color picker is used
+            
+            
             const auto alpha = static_cast<std::uint8_t>(playerPawn.hasImmunity().valueOr(false)
                 ? outline_glow_params::kImmunePlayerGlowAlpha
                 : configuredColor.a());

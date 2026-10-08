@@ -1,6 +1,9 @@
 #pragma once
 
 #include <utility>
+#include <type_traits>
+#include <Features/Visuals/Chams/ChamsConfigVariables.h>
+#include <Features/Visuals/ModelGlow/ModelGlowConfigVariables.h>
 
 #include <CS2/Classes/CPlantedC4.h>
 #include <CS2/Classes/Entities/CBaseAnimGraph.h>
@@ -31,13 +34,22 @@ public:
     [[nodiscard]] auto applyGlow() const noexcept
     {
         return [this](auto&& glow, auto&& entity, EntityTypeInfo entityTypeInfo) {
-            if (!GET_CONFIG_VAR(outline_glow_vars::Enabled) || !glow.enabled())
+            bool hiddenModelGlow = false;
+            if constexpr (std::is_same_v<std::remove_cvref_t<decltype(glow)>, PlayerOutlineGlow<HookContext>>) {
+                hiddenModelGlow = GET_CONFIG_VAR(chams_vars::HideEnemies)
+                    && GET_CONFIG_VAR(model_glow_vars::Enabled) && GET_CONFIG_VAR(model_glow_vars::GlowPlayers)
+                    && entity.isEnemy() == true && entity.isAlive() == true;
+            }
+            if ((!GET_CONFIG_VAR(outline_glow_vars::Enabled) || !glow.enabled()) && !hiddenModelGlow)
                 return;
 
             if (!entityTypeInfo.isModelEntity() || entity.baseEntity().template as<BaseModelEntity>().glowProperty().isGlowing().valueOr(false))
                 return;
 
-            if (shouldApplyGlow(glow, entityTypeInfo, entity))
+            if (hiddenModelGlow) {
+                const auto c = GET_CONFIG_VAR(model_glow_vars::EnemyColor);
+                entity.baseEntity().applyGlowRecursively(cs2::Color{c.r(), c.g(), c.b(), c.a()}, getGlowRange(glow));
+            } else if (shouldApplyGlow(glow, entityTypeInfo, entity))
                 entity.baseEntity().applyGlowRecursively(getGlowColor(glow, entity, entityTypeInfo), getGlowRange(glow));
         };
     }
@@ -79,8 +91,8 @@ private:
             return glow.hue();
     }
 
-    // Glows exposing a ready-made color() (the player glow, which mixes hue-based and full RGBA
-    // color modes) use it as-is; every other glow still derives its color from a hue.
+    
+    
     [[nodiscard]] static cs2::Color getGlowColor(auto&& glow, auto&& entity, EntityTypeInfo entityTypeInfo)
     {
         if constexpr (requires { { glow.color(entityTypeInfo, entity) }; })

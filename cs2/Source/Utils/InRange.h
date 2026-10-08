@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <type_traits>
 
-// workaround for clang < 18 not supporting float non-type template parameters
+
 template <typename T>
 struct BinaryRepresentationTemplateParameter {
     std::array<std::byte, sizeof(T)> binaryRepresentation;

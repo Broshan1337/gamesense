@@ -13,26 +13,26 @@
 #include <HookContext/HookContextMacros.h>
 #include <MemoryPatterns/PatternTypes/WeaponPatternTypes.h>
 
-// Local agent model changer. Port of the reference agents changer (velocity agents.cpp /
-// FrameworkCS2 ModelChanger): while the local player is alive, swap the pawn's model to the
-// configured agent via the game's own SetModel (PointerToSetModel - the same generic
-// C_BaseModelEntity::SetModel the knife impersonation uses; works on pawns too, called on the
-// game thread through the return-address spoofer like every other spoofed pattern call).
-//
-// Per the reference's known visual follow-ups after a model swap:
-//  - the collision bounds are rewritten to the standard player hull (agents share it), and
-//  - the owned weapons' m_hOwnerEntity handles are cycled (write 0xFFFFFFFF, write back) so
-//    the weapon entities re-attach to the new model and don't disappear.
-// The previous model (m_hModel resource handle + m_ModelName symbol, both u64 in CModelState)
-// is captured before the first swap so "None" can write it back (full restore also happens
-// naturally on respawn, where the game re-runs its own model selection).
-//
-// Runs on the GAME thread (CreateMove hook) - the same thread-safety rule as the inventory
-// changer: never mutate live game objects from the present thread.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 namespace agent_changer
 {
 
-// CModelState field offsets (schema-stable; resolved via the schema system per call).
+
 struct ModelState {
     std::uint64_t modelHandle;
     std::uint64_t modelNameSymbol;
@@ -85,7 +85,7 @@ T readAt(const unsigned char* base, std::uint32_t offset) noexcept
     return value;
 }
 
-} // namespace agent_changer
+} 
 
 template <typename HookContext>
 class AgentChanger {
@@ -97,13 +97,13 @@ public:
 
     void run() noexcept
     {
-        // MAP-TRANSITION SESSION GATE (AGENTS.md rule 0, crash 2026-09-19 23:28): during a map
-        // load the pawn is rebuilt while the engine's model system is still spinning up - our
-        // SetModel on the fresh pawn raced the model-load machinery and the loading thread died
-        // on a null virtual call (engine2, mov rax,[rdi=0]; call [rax+0x140]). The alive-pawn
-        // check alone is not a session gate: the pawn exists and reads "alive" long before the
-        // scene is safe. Same idiom as NameAnimator/SkinChanger/ServerLagger: no curtime below
-        // kMinMapTime = transition window = stand down.
+        
+        
+        
+        
+        
+        
+        
         if (const auto mapTime = hookContext.globalVars().curtime();
             !mapTime.hasValue() || mapTime.value() < schema_readiness::kMinMapTime)
             return;
@@ -111,14 +111,14 @@ public:
         if (auto&& localPawn = hookContext.activeLocalPlayerPawn()) {
             if (!localPawn.isAlive().value_or(false))
                 return;
-            // PAWN-SETTLE GATE (2026-09-27, crashes 02:14/10:12 - both map-load, both right
-            // after the fresh pawn spawned): the curtime gate above is BLIND during the join
-            // window (old map's large curtime until the GlobalVars swap - the 09-12 lesson),
-            // so SetModel still fired on a pawn whose model/animgraph state was mid-build
-            // (the same race as the documented 09-19 23:28 crash). CLOCK_MONOTONIC identity
-            // settle: the fresh pawn must be the local pawn for pawn_settle::kSettleNs
-            // before any model swap. Mid-round respawns re-arm the window too (rule 0:
-            // don't re-fire on a pawn identity change until the session gate passes).
+            
+            
+            
+            
+            
+            
+            
+            
             if (!pawn_settle::ready(localPawn.rawPawn()))
                 return;
             applyToPawn(static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity()));
@@ -150,7 +150,7 @@ private:
 
         const auto handle = agent_changer::readAt<std::uint64_t>(modelState, kModelHandleOffset);
 
-        // Track pawn identity: respawn/model resets by the game invalidate the capture.
+        
         if (trackedPawn != pawn) {
             trackedPawn = pawn;
             savedHandle = 0;
@@ -160,8 +160,8 @@ private:
 
         if (!agent || !agent->model[0]) {
             if (savedHandle != 0) {
-                // Selection cleared: write the captured original model back (a respawn also
-                // restores it through the game's own model selection).
+                
+                
                 agent_changer::writeAt(modelState, kModelHandleOffset, savedHandle);
                 agent_changer::writeAt(modelState, kModelNameOffset, savedNameSymbol);
                 savedHandle = 0;
@@ -172,7 +172,7 @@ private:
         }
 
         if (appliedDef == def && handle == appliedHandle)
-            return; // already wearing it (and no respawn since)
+            return; 
 
         if (savedHandle == 0) {
             savedHandle = handle;
@@ -182,12 +182,12 @@ private:
         const auto setModel = hookContext.patternSearchResults().template get<PointerToSetModel>();
         if (!setModel)
             return;
-        CrashLogger::trace(0x350); // agent SetModel about to fire (0x351 = done)
+        CrashLogger::trace(0x350); 
         setModel(reinterpret_cast<cs2::C_CSWeaponBase*>(pawn), agent->model);
         CrashLogger::trace(0x351);
 
-        // Standard player hull - the reference rewrites it after every swap so a shorter/taller
-        // agent model can't leave stale collision behind.
+        
+        
         alignas(4) static constexpr float kMins[3] = {-16.0f, -16.0f, 0.0f};
         alignas(4) static constexpr float kMaxs[3] = {16.0f, 16.0f, 72.0f};
         auto* const collision = pawnBytes + offsets.collision;
@@ -200,8 +200,8 @@ private:
         appliedDef = def;
     }
 
-    // Write 0xFFFFFFFF into every owned weapon's m_hOwnerEntity and immediately restore it -
-    // forces the weapon entities to re-attach to the swapped model (they otherwise vanish).
+    
+    
     void cycleWeaponOwners(cs2::C_BaseEntity* pawn, const agent_changer::PawnOffsets& offsets) noexcept
     {
         auto* const pawnBytes = reinterpret_cast<unsigned char*>(pawn);
@@ -234,6 +234,6 @@ private:
     std::uint16_t appliedDef = 0;
     std::uint64_t appliedHandle = 0;
 
-    static constexpr std::uint32_t kModelHandleOffset = 0xA0; // CModelState::m_hModel
-    static constexpr std::uint32_t kModelNameOffset = 0xA8;   // CModelState::m_ModelName
+    static constexpr std::uint32_t kModelHandleOffset = 0xA0; 
+    static constexpr std::uint32_t kModelNameOffset = 0xA8;   
 };

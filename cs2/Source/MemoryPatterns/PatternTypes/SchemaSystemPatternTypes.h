@@ -4,9 +4,9 @@
 
 #include <Utils/StrongTypeAlias.h>
 
-// Internal (non-exported) libschemasystem.so functions. Signatures reverse engineered
-// against a specific build - see SchemaSystem class for usage. All operate on opaque
-// engine-owned objects; this codebase only ever forwards the pointers it gets back.
+
+
+
 
 using SchemaFindDeclaredClassOrEnumFn = void*(void* typeScope, const char* name);
 using SchemaBeginFieldIteratorFn = void(void* outIterator, void* classBinding, std::int32_t kind);

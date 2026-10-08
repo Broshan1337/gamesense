@@ -13,7 +13,6 @@
 #include <GameClient/FileNameSymbolTableState.h>
 #include <GameClient/Hud/HudState.h>
 #include <GameClient/MemAllocState.h>
-#include <GameClient/GameEventManagerPointer.h>
 #include <GameClient/Panorama/PanoramaSymbols.h>
 #include <GameClient/Source2ClientPointer.h>
 #include <OutlineGlow/GlowSceneObjectState.h>
@@ -35,6 +34,7 @@
 #include <GameClient/Hud/BombStatus/BombStatusPanelManager.h>
 #include <GameClient/Hud/BombStatus/BombStatusPanelManagerContext.h>
 #include <GameClient/Hud/BombStatus/BombStatusPanelState.h>
+#include <GameClient/CSGOInputRuntimePointer.h>
 #include <MemorySearch/PatternFinder.h>
 #include <MemorySearch/PatternSearchResults.h>
 #include <OutlineGlow/GlowSceneObjectsState.h>
@@ -57,7 +57,7 @@ struct FullGlobalContext {
             patternSearchResults.get<ViewRenderPointer>(),
             Source2ClientPointer{}.get(),
             patternSearchResults.get<GameEventManagerGlobalPointer>(),
-            patternSearchResults.get<CSGOInputPointer>(),
+            CSGOInputRuntimePointer{patternSearchResults.get<CSGOInputPointer>()}.get(),
             VmtLengthCalculator{clientDLL.getCodeSection(), clientDLL.getVmtSection()}}
     {
     }

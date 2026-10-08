@@ -16,21 +16,21 @@
 #include <HookContext/HookContextMacros.h>
 #include <Utils/Optional.h>
 
-// Last-tick defuse + plant (friend-source port). While the bind is HELD:
-//
-//   DEFUSE - when a planted bomb's remaining time drops under what a defuse needs (5.2s with
-//   a kit, 10.2s without - the friend-source constants, matching the game's own durations),
-//   IN_USE is pressed every tick, so walking onto the bomb in the last seconds finishes the
-//   defuse the moment the timer would no longer allow it.
-//
-//   PLANT - carrying the C4 in the last seconds of a live round (3.35s window: the 3.125s
-//   plant plus a margin), ATTACK+USE are pressed so the plant completes at the buzzer; while
-//   the arm is in progress the same pair stays held so a released key cannot interrupt it.
-//
-// WRITE PATH (the proven movement-suite one): decisions at CreateMove; the button words at
-// WriteMoveCrc (slot 7 pre-original) - the same position EdgeJump presses its jump from, right
-// before the original copies the raw words into buttons_pb and checksums move_crc. IN_USE =
-// 0x20 in the game's own button-mask table (the same value the Lua `buttons` binding ships).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 template <typename HookContext>
 class LastTickDefuse {
 public:
@@ -89,17 +89,17 @@ private:
         pendingAttack = false;
     }
 
-    // ---- defuse half -----------------------------------------------------------------------
+    
 
     void tickDefuse() const noexcept
     {
-        // The planted bomb the game's own HUD tracks (the same pointer the bomb HUD reads).
+        
         auto&& bomb = hookContext.template make<PlantedC4>(hookContext.plantedC4Raw());
         if (!bomb.baseEntity())
             return;
 
-        // Not ticking = already defused or already gone; someone else holding the defuse
-        // means piling on accomplishes nothing.
+        
+        
         if (!bomb.isTicking().valueOr(true))
             return;
         if (bomb.isBeingDefused())
@@ -109,8 +109,8 @@ private:
         if (!timeToBlow.hasValue())
             return;
 
-        // Only the last-seconds window, and only while a defuse is still possible at all -
-        // past the deadline, do nothing instead of pressing USE at a dead bomb.
+        
+        
         const bool hasDefuser = readHasDefuser();
         const float defuseSeconds = hasDefuser ? 5.2f : 10.2f;
         if (timeToBlow.value() > 0.0f && timeToBlow.value() <= defuseSeconds)
@@ -141,7 +141,7 @@ private:
         return value != 0;
     }
 
-    // ---- plant half ------------------------------------------------------------------------
+    
 
     void tickPlant(auto&& localPawn) const noexcept
     {
@@ -158,7 +158,7 @@ private:
         if (!startedArming.has_value())
             return;
 
-        // Mid-plant: hold ATTACK+USE so the arm never loses its keys (the friend-source hold).
+        
         if (startedArming.value()) {
             const auto bombPlanted = schemaBool("C_C4", "m_bBombPlanted", c4Entity);
             if (!bombPlanted.has_value() || !bombPlanted.value())
@@ -166,12 +166,12 @@ private:
             return;
         }
 
-        // Not arming yet: engage only in the plant window at the end of a live round.
+        
         auto&& gameRules = hookContext.gameRules();
         if (gameRules.isRoundOver().valueOr(true))
             return;
-        // Freeze/warmup: fail closed (an unreadable state counts as "in freeze") - the game
-        // refuses plants there anyway, and pressing during warmup is pure noise.
+        
+        
         if (gameRules.isFreezePeriod().value_or(true) || gameRules.isWarmupPeriod().value_or(true))
             return;
 
@@ -180,7 +180,7 @@ private:
         if (!roundEndTime.hasValue() || !curtime.hasValue())
             return;
 
-        constexpr float kPlantThreshold = 3.35f; // 3.125s plant + small margin (friend-source)
+        constexpr float kPlantThreshold = 3.35f; 
         const float remaining = roundEndTime.value() - curtime.value();
         if (remaining > 0.0f && remaining <= kPlantThreshold)
             pendingUse = pendingAttack = true;
@@ -198,7 +198,7 @@ private:
         return value != 0;
     }
 
-    static constexpr std::uint64_t kUseButton = 0x20; // IN_USE, game button-mask table
+    static constexpr std::uint64_t kUseButton = 0x20; 
 
     inline static bool pendingUse{false};
     inline static bool pendingAttack{false};

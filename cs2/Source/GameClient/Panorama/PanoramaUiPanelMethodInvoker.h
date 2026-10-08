@@ -21,8 +21,8 @@ struct PanoramaUiPanelMethodInvoker {
     template <typename... Args>
     decltype(auto) operator()(Args&&... args) const noexcept
     {
-        // VMT-slot dispatch: `function` points into the panel's vtable, so dereference it to get
-        // the game function, then spoof its return address.
+        
+        
         return RetAddrSpoofer::spoof(*function)(panel, std::forward<Args>(args)...);
     }
 

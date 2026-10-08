@@ -5,7 +5,7 @@
 namespace cs2
 {
 
-// item_definition_index_t
+
 enum class ItemDefinitionIndex : std::uint16_t {
     DesertEagle = 1,
     DualBerettas = 2,
@@ -46,15 +46,15 @@ enum class ItemDefinitionIndex : std::uint16_t {
     SmokeGrenade = 45,
     Incendiary = 48,
 
-    // Generic "weapon_knife" entity definitions - what a live C_Knife entity's own
-    // m_iItemDefinitionIndex reads as before any type override. Several legacy values
-    // exist in the schema (era/team-default variants); Knife (42) is the one seen in
-    // practice on a currently-equipped knife.
+    
+    
+    
+    
     Knife = 42,
     KnifeT = 59,
 
-    // Specific knife types (item schema economy definitions - what a player's loadout
-    // resolves to for "which knife model to show"). Cross-platform, same on every OS.
+    
+    
     Bayonet = 500,
     ClassicKnife = 503,
     FlipKnife = 505,
@@ -76,7 +76,7 @@ enum class ItemDefinitionIndex : std::uint16_t {
     SkeletonKnife = 525,
     KukriKnife = 526,
 
-    // Gloves.
+    
     StuddedBloodhoundGloves = 5027,
     SportyGloves = 5030,
     SlickGloves = 5031,

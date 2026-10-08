@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 
@@ -65,6 +66,24 @@ public:
         const auto vData = static_cast<cs2::CCSWeaponBaseVData*>(hookContext.template make<BaseEntity>(baseWeapon).vData().valueOr(nullptr));
         return hookContext.patternSearchResults().template get<OffsetToWeaponName>().of(vData).valueOr(nullptr);
     }
+    [[nodiscard]] Optional<bool> isReadyToFire(int tick) const noexcept
+    {
+        if (!baseWeapon || tick <= 0) return {};
+        auto&& schema = hookContext.schemaSystem();
+        const auto nextOffset = schema.getFieldOffset("C_BasePlayerWeapon", "m_nNextPrimaryAttackTick");
+        const auto fractionOffset = schema.getFieldOffset("C_BasePlayerWeapon", "m_flNextPrimaryAttackTickRatio");
+        const auto reloadOffset = schema.getFieldOffset("C_CSWeaponBase", "m_bInReload");
+        if (!nextOffset.has_value() || *nextOffset<=0 || !fractionOffset.has_value() || *fractionOffset<=0
+            || !reloadOffset.has_value() || *reloadOffset<=0) return {};
+        const auto* bytes = reinterpret_cast<const std::byte*>(baseWeapon);
+        int next{}; float fraction{}; bool reload{};
+        std::memcpy(&next, bytes+*nextOffset, sizeof(next));
+        std::memcpy(&fraction, bytes+*fractionOffset, sizeof(fraction));
+        std::memcpy(&reload, bytes+*reloadOffset, sizeof(reload));
+        if (!std::isfinite(fraction) || fraction<0 || fraction>1) return {};
+        return !reload && (next<tick || (next==tick && fraction==0));
+    }
+
 
     [[nodiscard]] auto clipAmmo() const noexcept
     {
@@ -614,6 +633,10 @@ public:
     [[nodiscard]] Optional<float> rangeModifier() const noexcept
     {
         return vDataFloat("m_flRangeModifier");
+    }
+    [[nodiscard]] Optional<float> maxRange() const noexcept
+    {
+        return vDataFloat("m_flRange");
     }
 
     // Penetration power (CCSWeaponBaseVData::m_flPenetration) - the autowall loss formula's

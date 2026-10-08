@@ -9,17 +9,17 @@
 #include <GameClient/Tracing/Tracing.h>
 #include <Utils/Trig.h>
 
-// Predicts where a moving enemy will be a few ticks from now - velocity-cs2's shared::lagcomp
-// predict_movement + extrapolate (extrapolation.cpp). Steps the target's origin forward using its
-// velocity, gravity and hull traces against the world (so it slides along walls and stops at them rather
-// than walking through), letting the aimbot LEAD a strafing/running target instead of aiming where they
-// currently are. Returns just the origin delta (predicted - current); the caller offsets the aim point by
-// it - velocity shifts the whole skeleton by the same delta, which is a good approximation over the few
-// ticks we predict.
-//
-// Simplifications vs velocity (deliberate, first cut): no lag-comp record history, so no turn-rate
-// (direction_change) prediction - we extrapolate along the CURRENT velocity heading. gravity is the CS2
-// default 800 rather than read from sv_gravity. Both are fine for leading a target a handful of ticks.
+
+
+
+
+
+
+
+
+
+
+
 template <typename HookContext>
 class TargetExtrapolator {
 public:
@@ -28,8 +28,8 @@ public:
     {
     }
 
-    // The predicted displacement of `target` (a PlayerPawn wrapper) after `ticks` ticks, or {0,0,0} if it
-    // can't be predicted (ticks<=0, target stationary, or a required field/origin is unreadable).
+    
+    
     [[nodiscard]] cs2::Vector predictedDelta(auto&& target, int ticks) const noexcept
     {
         const cs2::Vector zero{0.0f, 0.0f, 0.0f};
@@ -53,7 +53,7 @@ public:
         cs2::Vector velocity{};
         std::memcpy(&velocity, reinterpret_cast<const std::byte*>(entity) + *velocityOffset, sizeof(velocity));
         if (trig::squareRoot(velocity.x * velocity.x + velocity.y * velocity.y) < 0.1f)
-            return zero; // stationary - nothing to lead
+            return zero; 
 
         std::uint32_t flags{};
         std::memcpy(&flags, reinterpret_cast<const std::byte*>(entity) + *flagsOffset, sizeof(flags));
@@ -71,8 +71,8 @@ public:
     }
 
 private:
-    // Reads the target's OBB from its CCollisionProperty; leaves the passed-in standing-player defaults if
-    // the collision object or the fields don't resolve.
+    
+    
     void readCollisionBounds(cs2::C_BaseEntity* entity, auto&& schema, cs2::Vector& mins, cs2::Vector& maxs) const noexcept
     {
         const auto collisionOffset = schema.getFieldOffset("C_BaseEntity", "m_pCollision");
@@ -90,8 +90,8 @@ private:
         std::memcpy(&maxs, reinterpret_cast<const std::byte*>(collision) + *maxsOffset, sizeof(maxs));
     }
 
-    // One tick of movement: gravity (or grounded), a hull sweep to the next position with up to two wall
-    // slides, then a short down-trace to refresh the on-ground flag. Faithful to velocity's predict_movement.
+    
+    
     void predictMovement(cs2::Vector& origin, cs2::Vector& velocity, std::uint32_t& flags, const cs2::Vector& mins, const cs2::Vector& maxs, void* skip) const noexcept
     {
         if (flags & kFlOnGround)
@@ -131,8 +131,8 @@ private:
             flags |= kFlOnGround;
     }
 
-    // Removes the component of `velocity` going into a surface with `normal` (and a second pass if it still
-    // points inward) - the standard slide-along-wall clip.
+    
+    
     static void clipVelocity(cs2::Vector& velocity, const cs2::Vector& normal) noexcept
     {
         const float dot = velocity.x * normal.x + velocity.y * normal.y + velocity.z * normal.z;
@@ -149,8 +149,8 @@ private:
     }
 
     static constexpr std::uint32_t kFlOnGround = 1u << 0;
-    static constexpr float kTickInterval = 0.015625f; // 1/64 (CS2 is 64 tick)
-    static constexpr float kGravity = 800.0f;         // sv_gravity default
+    static constexpr float kTickInterval = 0.015625f; 
+    static constexpr float kGravity = 800.0f;         
 
     HookContext& hookContext;
 };

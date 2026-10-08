@@ -6,34 +6,41 @@
 
 #include <Platform/Linux/LinuxPlatformApi.h>
 
+#include <Utils/NsPaths.h>
 #include <Utils/NsStr.h>
 
-// Append-only diagnostics file for the ImGui UI bootstrap (same pattern as
-// LinuxSelfUnload::log): /tmp/gamesense_gui.log. The engine console is not always ready when
-// the early menu/Vulkan-hook stages run, and StatusReport only dumps once - this file answers
-// "how far did the chain get" from outside the game. Best-effort: open+write+close per line,
-// failures ignored. Temporary verification scaffolding for the UI migration.
-//
-// Lines carry [unix-time.ms] [P<pid>:T<tid>] prefixes (multi-thread init debugging: the Vulkan
-// hook, the menu and the game-side features all log here from different threads). The previous
-// session's log is rotated to /tmp/gamesense_gui.log.old on the first write of a session, so a
-// crash's last lines survive the next injection.
+
+
+
+
+
+
+
+
+
+
+
 namespace gui_log
 {
 
 inline bool rotated{false};
 
+
 inline void write(const char* fmt, ...) noexcept
 {
     if (!rotated) {
         rotated = true;
-        NS_STR(rotFrom, "/tmp/gamesense_gui.log");
-        NS_STR(rotTo, "/tmp/gamesense_gui.log.old");
-        (void)LinuxPlatformApi::rename(rotFrom, rotTo);
+        char rotFrom[ns_paths::kMaxPath];
+        char rotTo[ns_paths::kMaxPath];
+        if (ns_paths::joinLog(rotFrom, sizeof(rotFrom), "gamesense_gui.log")
+            && ns_paths::joinLog(rotTo, sizeof(rotTo), "gamesense_gui.log.old"))
+            (void)LinuxPlatformApi::rename(rotFrom, rotTo);
     }
 
-    // O_WRONLY | O_APPEND | O_CREAT, 0644 - numeric because fcntl flags under -nostdlib.
-    NS_STR(logPath, "/tmp/gamesense_gui.log");
+    
+    char logPath[ns_paths::kMaxPath];
+    if (!ns_paths::joinLog(logPath, sizeof(logPath), "gamesense_gui.log"))
+        return;
     const auto fd = LinuxPlatformApi::open(logPath, 0x441, 0644);
     if (fd < 0)
         return;

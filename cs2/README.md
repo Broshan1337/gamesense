@@ -14,13 +14,36 @@ cmake --build cs2/build-dbg --target Neversnooze
 
 Inject with `sudo cs2/inject.sh` (it prompts: release from `cs2/build/`, debug from
 `cs2/build-dbg/`; it refuses stale builds). Work in a debug build first — crashes give full
-logs there, and the in-game log lives at `/tmp/gamesense_gui.log` (anomaly-only: a healthy
-session prints nothing).
+logs there, and the in-game log lives at `$HOME/OsirisCS2/logs/gamesense_gui.log` (anomaly-only:
+a healthy session prints nothing). All module diagnostics and the loader/module exchange files
+(unload request, RPC/persona/radio helper scripts) live under that exchange root — `/tmp`
+stopped being shared between the Steam container and the host with the 2026-10-04 Steam client
+update, so `/tmp` paths no longer work for anything the module writes (see
+`Source/Utils/NsPaths.h`).
 
 Tests: `cmake -B cs2/build-tests -S cs2 -DENABLE_TESTS=unit` then
 `cmake --build cs2/build-tests && ctest --test-dir cs2/build-tests`.
 
 Settings are stored in `$HOME/OsirisCS2/configs`.
+
+## Slider binds and viewmodel rotation
+
+Right-click a numeric slider row to choose a key, Hold/Toggle mode, and an override
+value. Hold restores the normal value when released; Toggle restores it on the next
+press. Unbinding, changing keys/modes, and unloading also restore active overrides.
+Auto-save preserves the normal values while overrides are active; loading/resetting
+a config clears active overrides first. Bindings and their values are saved in `configs/feature_binds.txt`; existing boolean
+bind files remain compatible. Percentage sliders and minimum damage support this
+alongside the other ranged sliders.
+
+In Visuals → Viewmodel, enable **Modify Position** to use X/Y/Z offsets and
+**Pitch/Roll** (−180° to 180°). Rotation changes the private first-person HUD pose
+used by the arms and weapon. The Linux hook currently supports client build ID
+`ea57d8833ab297b622699925dbc83bf6aa1aa615`; other builds leave rotation inactive and
+report that status. Position offsets are restored when disabled or unloaded.
+
+Insert toggles on physical presses. Captured SDL input is drained without hiding
+window/quit events, and menu dismissal has no closing fade.
 
 ## Building with OLLVM obfuscation (Arkari)
 

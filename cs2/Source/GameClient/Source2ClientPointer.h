@@ -8,18 +8,18 @@
 #include <CS2/Constants/DllNames.h>
 #include <Platform/DynamicLibrary.h>
 
-// Resolves the live CSource2Client singleton via the exported CreateInterface(name, status)
-// entry point - the same classic Source engine interface-registry mechanism confirmed working
-// for the schema system (see ClientTypeScopePointer.h): CreateInterface walks a linked list of
-// {vtable, name, next} nodes registered by the module, strcmp's the requested name, and calls
-// the matched node's own factory function with no arguments. "Source2Client002" is
-// CSource2Client's real registered interface name - found as a literal string, cross-confirmed
-// via two separate per-module "interfaces I depend on" registration tables that both reference
-// it by name (both otherwise-unrelated functions list the exact same 3-4 interface name
-// strings, ruling out an incidental/unrelated match). Unlike ClientTypeScopePointer's target
-// (a per-name-keyed scope lookup), a module's registered CreateInterface factories are
-// lazily-constructed-once singletons - safe to resolve a single time and treat as stable for
-// the process's whole lifetime, no need to re-resolve per frame.
+
+
+
+
+
+
+
+
+
+
+
+
 struct Source2ClientPointer {
     Source2ClientPointer() noexcept
         : pointer{resolve()}
@@ -50,7 +50,7 @@ private:
         if (!source2Client)
             return nullptr;
 
-        // A real CSource2Client's vtable is compiled into libclient.so itself.
+        
         void* vtable = nullptr;
         std::memcpy(&vtable, source2Client, sizeof(vtable));
         if (!clientDLL.getVmtSection().contains(std::uintptr_t(vtable)))

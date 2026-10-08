@@ -1,6 +1,6 @@
-// Provides the LinuxPlatformApi methods the Lua framework's gui_log::write needs. The dlopen
-// family is intentionally absent - SharedObjectTests.cpp mocks it; the game build gets the
-// real definitions from dllmain.cpp including LinuxPlatformApiImpl.h.
+
+
+
 #include <Platform/Linux/LinuxPlatformApi.h>
 
 #include <cstdio>
@@ -26,3 +26,12 @@ int LinuxPlatformApi::threadId() noexcept
 {
     return static_cast<int>(::syscall(SYS_gettid));
 }
+
+#include <dirent.h>
+ssize_t LinuxPlatformApi::pread(int fd, void* buf, size_t count, off_t offset) noexcept { return ::pread(fd, buf, count, offset); }
+int LinuxPlatformApi::unlink(const char* path) noexcept { return ::unlink(path); }
+void* LinuxPlatformApi::openDir(const char* path) noexcept { return ::opendir(path); }
+const char* LinuxPlatformApi::readDir(void* dir) noexcept {
+    const auto* entry = ::readdir(static_cast<DIR*>(dir)); return entry ? entry->d_name : nullptr;
+}
+void LinuxPlatformApi::closeDir(void* dir) noexcept { ::closedir(static_cast<DIR*>(dir)); }

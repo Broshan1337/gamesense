@@ -1,15 +1,15 @@
-// Fake steamclient for the VAC harness (VacHarness.cpp).
-//
-// Every libc call below resolves through THIS module's PLT/GOT - exactly how
-// steamclient.so's own calls resolve in-game. The harness patches this
-// module's GOT with the production hook addresses, so these helpers exercise
-// the real filter/spoof code paths end to end. Callers must go through these
-// helpers (never libc directly): a direct call from the test binary uses the
-// test binary's own unpatched PLT and bypasses the hooks, which is precisely
-// the distinction under test.
-//
-// Build output name must keep containing "steamclient.so": the production
-// resolver locates its target with strstr(l_name, "steamclient.so").
+
+
+
+
+
+
+
+
+
+
+
+
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -24,9 +24,9 @@
 #define VACF_API
 #endif
 
-// Read a whole text file via fopen/fgets with the given per-call buffer size.
-// Small sizes force line splits across fgets calls. Returns malloc'd
-// NUL-terminated content (*out_len excludes the NUL), or NULL on failure.
+
+
+
 VACF_API char* vacf_fgets_all(const char* path, int bufsz, size_t* out_len)
 {
     if (!path || bufsz <= 1 || !out_len)
@@ -71,9 +71,9 @@ VACF_API char* vacf_fgets_all(const char* path, int bufsz, size_t* out_len)
     return acc;
 }
 
-// Read a whole file via open/read with the given per-call chunk size. Small
-// chunks force hide tokens to split across read() boundaries - the stash
-// logic's exact case. Returns malloc'd content (*out_len bytes), or NULL.
+
+
+
 VACF_API char* vacf_read_all(const char* path, size_t chunk, size_t* out_len)
 {
     if (!path || chunk == 0 || !out_len)
@@ -115,7 +115,7 @@ VACF_API char* vacf_read_all(const char* path, size_t chunk, size_t* out_len)
     return acc;
 }
 
-// fopen+fread path (what a file-hashing module would do first).
+
 VACF_API int vacf_fopen_first(const char* path, unsigned char* out, size_t n, size_t* got)
 {
     if (!path || !out || n == 0 || !got)
@@ -130,7 +130,7 @@ VACF_API int vacf_fopen_first(const char* path, unsigned char* out, size_t n, si
     return rc;
 }
 
-// open+read path.
+
 VACF_API ssize_t vacf_open_read(const char* path, void* buf, size_t n)
 {
     if (!path || !buf)
@@ -143,8 +143,8 @@ VACF_API ssize_t vacf_open_read(const char* path, void* buf, size_t n)
     return r;
 }
 
-// openat path: modern glibc fopen() opens via openat, so the file-spoof must
-// also trigger here, and maps enumeration via openat must be tracked.
+
+
 VACF_API ssize_t vacf_openat_read(const char* path, void* buf, size_t n)
 {
     if (!path || !buf)
@@ -157,7 +157,7 @@ VACF_API ssize_t vacf_openat_read(const char* path, void* buf, size_t n)
     return r;
 }
 
-// pread path (offset reads must see the same fake content).
+
 VACF_API ssize_t vacf_pread_first(const char* path, void* buf, size_t n, off_t off)
 {
     if (!path || !buf)
@@ -170,7 +170,7 @@ VACF_API ssize_t vacf_pread_first(const char* path, void* buf, size_t n, off_t o
     return r;
 }
 
-// fstat probe: a pipe-backed spoof reports S_FIFO here; memfd reports S_REG.
+
 VACF_API int vacf_fstat_probe(const char* path, long* size_out, int* isreg_out)
 {
     if (!path || !size_out || !isreg_out)
@@ -188,7 +188,7 @@ VACF_API int vacf_fstat_probe(const char* path, long* size_out, int* isreg_out)
     return rc;
 }
 
-// mmap probe: a pipe-backed spoof fails here; memfd maps fine.
+
 VACF_API int vacf_mmap_first(const char* path, unsigned char first4[4])
 {
     if (!path || !first4)
@@ -209,7 +209,7 @@ VACF_API int vacf_mmap_first(const char* path, unsigned char first4[4])
     return rc;
 }
 
-// lseek-to-end size probe.
+
 VACF_API int vacf_lseek_size(const char* path, long* end_out)
 {
     if (!path || !end_out)

@@ -34,7 +34,7 @@ public:
     {
         return GET_CONFIG_VAR(model_glow_vars::TickingBombHue);
     }
-    [[nodiscard]] cs2::Color color(EntityTypeInfo /* entityTypeInfo */, auto&& /* entity */) const noexcept
+    [[nodiscard]] cs2::Color color(EntityTypeInfo , auto&& ) const noexcept
     {
         const auto picked = GET_CONFIG_VAR(model_glow_vars::TickingBombColor);
         return cs2::Color{picked.r(), picked.g(), picked.b(), picked.a()};

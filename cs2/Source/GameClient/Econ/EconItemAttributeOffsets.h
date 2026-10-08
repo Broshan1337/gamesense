@@ -8,10 +8,10 @@
 #include <CS2/Classes/Entities/C_EconEntity.h>
 #include <Utils/FieldOffset.h>
 
-// Resolved once (via SchemaSystem) and cached for the lifetime of the process. This is
-// the C_EconEntity -> C_AttributeContainer -> C_EconItemView -> CAttributeList ->
-// m_Attributes chain that drives the live gun-skin render path - unlike the fallback
-// fields (see EconEntityOffsets), which only affect the menu/preview render path.
+
+
+
+
 struct EconItemAttributeOffsets {
     explicit EconItemAttributeOffsets(auto&& schemaSystem) noexcept
         : attributeManager{resolve(schemaSystem, "C_EconEntity", "m_AttributeManager")}
@@ -38,10 +38,10 @@ struct EconItemAttributeOffsets {
     FieldOffset<cs2::CEconItemView, cs2::CEconItemView::m_iItemDefinitionIndex, std::int32_t> itemDefinitionIndex;
     FieldOffset<cs2::CEconItemView, cs2::CEconItemView::m_iEntityQuality, std::int32_t> entityQuality;
     FieldOffset<cs2::CAttributeList, cs2::CAttributeList::m_Attributes, std::int32_t> attributes;
-    // Added to faithfully port the reference's full ProcessKnife field-write sequence (m_paint_kit/
-    // m_wear/m_seed's siblings), after two cheaper animation-fix hypotheses (SetModel presence,
-    // an ownership-toggle nudge) were both tested live and disproven - the reference is confirmed
-    // to work correctly, so a real, still-missing field write is the leading remaining theory.
+    
+    
+    
+    
     FieldOffset<cs2::CEconItemView, cs2::CEconItemView::m_iAccountID, std::int32_t> accountID;
     FieldOffset<cs2::CEconItemView, cs2::CEconItemView::m_bDisallowSOC, std::int32_t> disallowSOC;
     FieldOffset<cs2::CEconItemView, cs2::CEconItemView::m_bRestoreCustomMaterialAfterPrecache, std::int32_t> restoreCustomMaterialAfterPrecache;

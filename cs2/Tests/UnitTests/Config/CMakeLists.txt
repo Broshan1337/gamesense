@@ -4,3 +4,5 @@ target_sources(UnitTests PRIVATE
   ConfigToStringTests.cpp
   ConfigVariablesTests.cpp
 )
+
+target_sources(UnitTests PRIVATE ConfigWorkflowTests.cpp)

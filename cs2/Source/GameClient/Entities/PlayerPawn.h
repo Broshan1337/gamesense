@@ -51,7 +51,7 @@ public:
         return playerPawn != nullptr;
     }
 
-    // Raw pawn identity for the pawn-settle session gate (CLOCK_MONOTONIC identity tracking).
+    
     [[nodiscard]] cs2::C_CSPlayerPawn* rawPawn() const noexcept
     {
         return playerPawn;
@@ -67,29 +67,35 @@ public:
 
     [[nodiscard]] decltype(auto) weaponServices() const noexcept
     {
-        return hookContext.template make<WeaponServices>(hookContext.patternSearchResults().template get<OffsetToWeaponServices>().of(playerPawn).valueOr(nullptr));
+        cs2::CCSPlayer_WeaponServices* services = nullptr;
+        if (playerPawn) {
+            const auto offset = hookContext.schemaSystem().getFieldOffset("C_BasePlayerPawn", "m_pWeaponServices");
+            if (offset.has_value() && *offset > 0)
+                std::memcpy(&services, reinterpret_cast<const std::byte*>(playerPawn) + *offset, sizeof(services));
+        }
+        return hookContext.template make<WeaponServices>(services);
     }
 
-    // The player's current aim punch (recoil kick) as {pitch, yaw, roll} degrees. CS2 fires the bullet
-    // along (view_angles + aim punch), so the aimbot subtracts this from the angle it writes into
-    // input_history to keep the shot on target as recoil kicks the view up - the same step velocity-cs2
-    // does. Uses the game's OWN aim-punch getter (sub_14D31A0, see PointerToGetAimPunchFunction), which
-    // interpolates the predictable + unpredictable base punch to the current tick - i.e. the exact value
-    // the game will add to the shot, not just the base-angle field. The services pointer is schema-
-    // resolved (m_pAimPunchServices). Returns {} if the services pointer or the getter is unavailable.
-    // Aim punch is ~0 before the first shot of a burst, so subtracting it never disturbs a fresh or
-    // standing shot - only the ongoing spray we are trying to correct.
+    
+    
+    
+    
+    
+    
+    
+    
+    
     [[nodiscard]] Optional<cs2::Vector> aimPunchAngle() const noexcept
     {
         if (!playerPawn)
             return {};
 
-        // MAP-TRANSITION SESSION GATE (AGENTS.md rule 0; the 2026-09-27 map-load crash):
-        // GetAimPunch walks the pawn's aim-punch history at [services+0x28], which is not
-        // built yet on a freshly-spawned pawn - the game itself only calls it after the
-        // entity is fully constructed. Covers every reader (Removals view-punch, Rcs,
-        // Aimbot, Triggerbot x2) in one place. CLOCK_MONOTONIC pawn-settle, NOT curtime -
-        // curtime is blind during the join window (old map's value until the GlobalVars swap).
+        
+        
+        
+        
+        
+        
         if (!pawn_settle::ready(playerPawn))
             return {};
 
@@ -106,19 +112,25 @@ public:
         if (!getAimPunch)
             return {};
 
-        // 2026-09-27 signature correction: the update added a caller-supplied accumulator
-        // pair in rsi (read unconditionally, no null guard). A zeroed pair = zero extra
-        // accumulation = the base predictable punch, which is what a standalone read wants.
-        // The old call left rsi = an uncontrolled register - the mid-match SEGV class.
-        PunchAccumulator zeroAccumulator{0, 0.0f};
-        const auto punch = getAimPunch(services, &zeroAccumulator, 0.0f);
+        
+        
+        
+        
+        const auto tick = hookContext.localPlayerController().tickBase();
+        if (!tick.hasValue() || tick.value() <= 0)
+            return {};
+        PunchAccumulator sampleTime{tick.value(), 0.0f};
+        // Query the read-only punch getter, never the recoil updater called by weapons.
+        const auto punch = getAimPunch(services, &sampleTime, false);
+        if (!__builtin_isfinite(punch.pitch) || !__builtin_isfinite(punch.yaw) || !__builtin_isfinite(punch.roll))
+            return {};
         return cs2::Vector{punch.pitch, punch.yaw, punch.roll};
     }
 
-    // How many shots into the current spray this player is (m_iShotsFired). 0 before firing, 1 on the
-    // first shot, growing as the spray continues - the recoil-control system uses it to know a spray is
-    // underway (velocity-cs2 gates its RCS on this being > 1). Schema-resolved by name. {} if the field
-    // is unavailable.
+    
+    
+    
+    
     [[nodiscard]] Optional<int> shotsFired() const noexcept
     {
         if (!playerPawn)
@@ -133,9 +145,9 @@ public:
         return value;
     }
 
-    // Eye position = the pawn origin plus its view offset (m_vecViewOffset), the point shots and traces
-    // originate from. Resolved by name through the schema system, so a game update that moves the field
-    // does not silently make callers aim from the feet. {} if the origin or the field is unavailable.
+    
+    
+    
     [[nodiscard]] Optional<cs2::Vector> eyePosition() const noexcept
     {
         const auto origin = baseEntity().absOrigin();
@@ -151,10 +163,10 @@ public:
         return cs2::Vector{origin.value().x + viewOffset.x, origin.value().y + viewOffset.y, origin.value().z + viewOffset.z};
     }
 
-    // The local player's first-person "arms" entity - owns the actual rendered viewmodel
-    // weapon clones as scene-node children (see SkinChanger::findHudWeapon()). Resolved via
-    // the schema system (m_hHudModelArms confirmed as a real field name via a direct string
-    // search of libclient.so), not a byte pattern.
+    
+    
+    
+    
     [[nodiscard]] decltype(auto) hudModelArms() const noexcept
     {
         const auto handle = hookContext.hudModelArmsOffset().hudModelArms.of(playerPawn).valueOr(cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX});
@@ -263,8 +275,8 @@ public:
         return weaponServices().getActiveWeapon();
     }
 
-    // Whether the player is standing on the ground (m_fFlags & FL_ONGROUND). {} if the field did not
-    // resolve. Used by the rage force-shot to pick the ground vs air toggle.
+    
+    
     [[nodiscard]] Optional<bool> isOnGround() const noexcept
     {
         const auto flagsOffset = hookContext.schemaSystem().getFieldOffset("C_BaseEntity", "m_fFlags");
@@ -275,12 +287,12 @@ public:
         return (flags & (1u << 0)) != 0;
     }
 
-    // True if the currently-equipped weapon is at its MINIMUM possible inaccuracy for this player's
-    // current stance (velocity-cs2's is_max_accuracy). Reads the player's own m_fFlags (on-ground /
-    // ducking) and m_vecAbsVelocity (2D speed) and hands them to BaseWeapon::isMaxAccuracy along with the
-    // live, penalty-updated inaccuracy. False if the active weapon or any required field can't be read
-    // (cannot confirm max accuracy -> do not claim it). Shared by the triggerbot's "Only Shoot At Max
-    // Accuracy" gate and the rage force-shot's fire gate.
+    
+    
+    
+    
+    
+    
     [[nodiscard]] bool isAtMaxAccuracy() const noexcept
     {
         auto&& weapon = getActiveWeapon();
@@ -300,8 +312,8 @@ public:
         cs2::Vector velocity{};
         std::memcpy(&velocity, bytes + *velocityOffset, sizeof(velocity));
 
-        // FL_ONGROUND is bit 0; FL_DUCKING is bit 1 - the Source FL_ layout (and velocity-cs2's own
-        // entity_flags enum) skips bit 2, so ducking is 1<<1.
+        
+        
         const bool onGround = (flags & (1u << 0)) != 0;
         const bool ducking = (flags & (1u << 1)) != 0;
         const float speed2d = trig::squareRoot(velocity.x * velocity.x + velocity.y * velocity.y);

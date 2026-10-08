@@ -7,11 +7,11 @@
 
 #include "PanoramaUiPanelIterator.h"
 
-// 2026-09-26 5GB update: the CUIPanel children storage split into two separate fields -
-// the COUNT at +0x2C8 (uint32) and the ARRAY POINTER at +0x2D0 (CUIPanel*[]), verified
-// live: the root 'CSGOHud' panel's count = its child count and the array = the children
-// CUIPanels ('Hud', 'HudTeamCounter', ...). The old single-embedded-CUtlVector shape is
-// gone. This struct now carries the two fields separately.
+
+
+
+
+
 template <typename HookContext>
 struct PanoramaUiPanelChildPanels {
     PanoramaUiPanelChildPanels(HookContext& hookContext, cs2::CUIPanel** memory, std::uint32_t count) noexcept

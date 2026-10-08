@@ -13,12 +13,12 @@
 #include <Vmt/VmtLengthCalculator.h>
 
 struct Hooks {
-    Hooks(PeepEventsHook peepEventsHook, cs2::CViewRender** viewRender, cs2::CSource2Client* source2Client, cs2::IGameEventManager2** gameEventManagerGlobal, cs2::CCSGOInput* csgoInput, const VmtLengthCalculator& clientVmtLengthCalculator) noexcept
+    Hooks(PeepEventsHook peepEventsHook, cs2::CViewRender** viewRender, cs2::CSource2Client* source2Client, cs2::IGameEventManager2* gameEventManager, cs2::CCSGOInput* csgoInput, const VmtLengthCalculator& clientVmtLengthCalculator) noexcept
         : clientVmtLengthCalculator{clientVmtLengthCalculator}
         , peepEventsHook{peepEventsHook}
         , viewRenderHook{viewRender, clientVmtLengthCalculator}
         , source2ClientHook{source2Client, clientVmtLengthCalculator}
-        , gameEventManagerHook{gameEventManagerGlobal, clientVmtLengthCalculator}
+        , gameEventManagerHook{gameEventManager, clientVmtLengthCalculator}
         , csgoInputHook{csgoInput, clientVmtLengthCalculator}
     {
     }

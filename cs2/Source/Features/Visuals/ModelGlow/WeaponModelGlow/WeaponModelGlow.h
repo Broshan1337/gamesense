@@ -59,7 +59,7 @@ public:
         }
     }
 
-    [[nodiscard]] cs2::Color color(EntityTypeInfo entityTypeInfo, auto&& /* entity */) const noexcept
+    [[nodiscard]] cs2::Color color(EntityTypeInfo entityTypeInfo, auto&& ) const noexcept
     {
         switch (entityTypeInfo.typeIndex) {
         case EntityTypeInfo::indexOf<cs2::C_MolotovGrenade>():

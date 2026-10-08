@@ -9,18 +9,18 @@
 
 #include <Platform/Linux/LinuxPlatformApi.h>
 
-// Writes bytes over live executable code, remembering the originals so the change can be undone.
-//
-// This is the only place in this project that modifies the game's CODE rather than hooking it or
-// reading its data, so it is deliberately conservative:
-//  - it refuses to apply twice, and to restore when not applied, so the saved originals can never
-//    be overwritten with already-patched bytes (which would make the change permanent for the
-//    session);
-//  - it restores on unload, like the project's hooks do, rather than leaving the game modified;
-//  - mprotect works on whole pages, so the address is rounded DOWN to a page boundary and the
-//    length extended to cover a patch that straddles two pages. Passing an unaligned address to
-//    mprotect fails outright, which would otherwise turn into a silent no-patch or a segfault on
-//    the memcpy.
+
+
+
+
+
+
+
+
+
+
+
+
 template <std::size_t Size>
 class BytePatch {
 public:
@@ -34,7 +34,7 @@ public:
 
         std::memcpy(originalBytes, address, Size);
         std::memcpy(address, bytes, Size);
-        (void)setWritable(address, false); // re-protecting is best-effort; the patched bytes are in place
+        (void)setWritable(address, false); 
 
         patchedAddress = address;
         applied = true;
@@ -48,7 +48,7 @@ public:
 
         if (setWritable(patchedAddress, true)) {
             std::memcpy(patchedAddress, originalBytes, Size);
-            (void)setWritable(patchedAddress, false); // best-effort, same as in apply()
+            (void)setWritable(patchedAddress, false); 
         }
 
         applied = false;

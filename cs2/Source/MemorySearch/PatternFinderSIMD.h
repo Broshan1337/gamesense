@@ -19,7 +19,7 @@ public:
 
     const std::byte* operator()() noexcept
     {
-        // http://0x80.pl/articles/simd-strfind.html
+        
 
         const auto indexOfFirstNonWildcardChar{pattern.indexOfFirstNonWildcardChar()};
         if (indexOfFirstNonWildcardChar >= pattern.length()) {

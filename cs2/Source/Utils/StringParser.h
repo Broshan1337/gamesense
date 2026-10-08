@@ -41,13 +41,13 @@ public:
 
         while (*string >= '0' && *string <= '9') {
             const auto digit = static_cast<IntegralType>(*string - '0');
-            // Saturate on overflow instead of wrapping: an oversized number (e.g. typed into a text
-            // entry) clamps to the type's max, which the caller's own range check then handles.
-            //
-            // The previous version instead capped the DIGIT COUNT at std::numeric_limits::digits10,
-            // which for std::uint8_t is 2 (only 2 decimal digits are guaranteed to fit) - so it
-            // silently truncated every value to 2 digits, capping every uint8 slider at 99 even
-            // though the type holds 255. That was the "sliders stop at 99" bug.
+            
+            
+            
+            
+            
+            
+            
             if (parsedInteger > static_cast<IntegralType>((maxValue - digit) / 10))
                 parsedInteger = maxValue;
             else
@@ -67,7 +67,7 @@ public:
         bool parseSuccessful = false;
 
         if (*string == '-') {
-            // unsupported
+            
             return false;
         }
 

@@ -10,7 +10,7 @@
 #include <GameClient/Panorama/PanelHandle.h>
 #include <GameClient/Panorama/PanoramaTransformations.h>
 
-// Persistent state for one pooled-dot overlay (container panel handle + pool high-water mark).
+
 struct WorldDotPanelsState {
     cs2::PanelHandle containerPanelHandle;
     std::size_t panelsCreated{0};
@@ -22,10 +22,10 @@ struct WorldDotPanelsState {
     }
 };
 
-// Pooled small colored round panels for world-positioned markers (bullet impact dots, tracer
-// segments, grenade trajectory points). Modeled on InWorldPanels + SoundVisualizationFeature:
-// one container panel under the HUD reticle, a lazily-grown pool, each frame positioning the
-// active dots with the same percent-translate projection path the sound visualizers use.
+
+
+
+
 template <typename HookContext>
 class WorldDotPanels {
 public:
@@ -35,8 +35,8 @@ public:
     {
     }
 
-    // Makes sure the container and at least maxPanels dots exist. Dots are created visible and
-    // hidden immediately (a panel created hidden may never reveal - see the panorama notes).
+    
+    
     void prepare(float dotSizePx, cs2::Color color, std::size_t maxPanels) noexcept
     {
         auto&& container = containerPanel();

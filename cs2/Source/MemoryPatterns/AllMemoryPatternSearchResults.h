@@ -18,13 +18,13 @@ struct AllMemoryPatternSearchResults {
     {
     }
 
-    // Velocity-parity choke point: every spoofable function-pattern result is wrapped in a
-    // RetAddrSpoofer::SpoofedInvoker, so calling it (`fn(args)`) goes through the return-address
-    // spoofer and a stack walk from inside the game function sees a return address in libclient.so
-    // instead of ours. Data pointers / offsets / C-variadic functions are returned raw (wrapSpoofed
-    // passes them through unchanged). This is signature-agnostic - the naked-asm shim never inspects
-    // generated code (unlike the old self-modifying trampoline that crashed on FakePrime's void*()
-    // econSystem() call); verified offline across int/float/ptr/5-arg/reentrant cases.
+    
+    
+    
+    
+    
+    
+    
     template <typename PatternType>
     [[nodiscard]] auto get() const noexcept
     {

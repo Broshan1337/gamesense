@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "ConfigVariableTypes.h"
+#include "ConfigOverrideState.h"
 #include <HookContext/HookContextMacros.h>
 
 template <typename HookContext>
@@ -28,7 +29,7 @@ public:
         chatToolsObject(configConversion);
         combatStatsObject(configConversion);
         statusPanelObject(configConversion);
-        // Appended LAST (top-level objects must go last to keep old configs parsing).
+        
         playerAnalyzerObject(configConversion);
         fakePremierObject(configConversion);
         fakeCommendsObject(configConversion);
@@ -37,7 +38,7 @@ public:
     }
 
 private:
-    // Appended LAST (top-level objects must go last to keep old configs parsing).
+    
     void fakePremierObject(auto&& configConversion)
     {
         configConversion.beginObject(u8"FakePremier");
@@ -50,7 +51,7 @@ private:
     {
         configConversion.beginObject(u8"FakeCommends");
         configConversion.boolean(u8"Enabled", loadVariable<FakeCommendsEnabled>(), saveVariable<FakeCommendsEnabled>());
-        // Appended LAST (order-sensitive parser).
+        
         configConversion.uint(u8"Friendly", loadVariable<FakeCommendsFriendly>(), saveVariable<FakeCommendsFriendly>());
         configConversion.uint(u8"Teaching", loadVariable<FakeCommendsTeaching>(), saveVariable<FakeCommendsTeaching>());
         configConversion.uint(u8"Leader", loadVariable<FakeCommendsLeader>(), saveVariable<FakeCommendsLeader>());
@@ -62,12 +63,12 @@ private:
         configConversion.beginObject(u8"GlitchGenerator");
         configConversion.uint(u8"Style", loadVariable<glitch_gen_vars::Style>(), saveVariable<glitch_gen_vars::Style>());
         configConversion.uint(u8"Intensity", loadVariable<glitch_gen_vars::Intensity>(), saveVariable<glitch_gen_vars::Intensity>());
-        // Appended LAST (order-sensitive parser).
+        
         configConversion.uint(u8"Preset", loadVariable<glitch_gen_vars::Preset>(), saveVariable<glitch_gen_vars::Preset>());
         configConversion.endObject();
     }
 
-    // Appended LAST (top-level objects must go last to keep old configs parsing).
+    
     void discordRpcObject(auto&& configConversion)
     {
         configConversion.beginObject(u8"DiscordRpc");
@@ -75,23 +76,23 @@ private:
         configConversion.endObject();
     }
 
-    // Appended after DiscordRpc - same rule: new top-level objects go last.
+    
     void inventoryChangerObject(auto&& configConversion)
     {
-        // InventoryChanger (local GC items: cases/keys/add/open) REMOVED 2026-09-06 - the
-        // session-view mutation kept racing the game's own enumeration (map-load crashes).
-        // Keys stay as parse-and-discard placeholders so existing config files keep loading.
+        
+        
+        
         configConversion.beginObject(u8"InventoryChanger");
         configConversion.boolean(u8"Enabled", [](bool) {}, [] { return false; });
         configConversion.uint(u8"CaseDefIndex", [](std::uint64_t) {}, [] { return 0; });
         configConversion.uint(u8"KeyDefIndex", [](std::uint64_t) {}, [] { return 0; });
-        // Appended LAST (order-sensitive parser). The agent changer's selection is the only
-        // live key - the model-swap feature stays (it does no GC/session mutation).
+        
+        
         configConversion.uint(u8"AgentDef", loadVariable<agent_changer_vars::AgentDef>(), saveVariable<agent_changer_vars::AgentDef>());
         configConversion.endObject();
     }
 
-    // Appended after InventoryChanger - same rule: new top-level objects go last.
+    
     void chatToolsObject(auto&& configConversion)
     {
         configConversion.beginObject(u8"ChatTools");
@@ -114,17 +115,17 @@ private:
         configConversion.boolean(u8"LiveBadgeEnabled", loadVariable<chat_vars::LiveBadgeEnabled>(), saveVariable<chat_vars::LiveBadgeEnabled>());
         configConversion.uint(u8"KickReason", loadVariable<chat_vars::KickReason>(), saveVariable<chat_vars::KickReason>());
         configConversion.uint(u8"KickKey", loadVariable<chat_vars::KickKey>(), saveVariable<chat_vars::KickKey>());
-        // Appended LAST (order-sensitive parser).
+        
         configConversion.boolean(u8"NameForceReconnect", loadVariable<chat_vars::NameForceReconnect>(), saveVariable<chat_vars::NameForceReconnect>());
         configConversion.boolean(u8"ClanTagEnabled", loadVariable<chat_vars::ClanTagEnabled>(), saveVariable<chat_vars::ClanTagEnabled>());
-        // Clan tag animator (2026-10-03) - appended LAST (order-sensitive parser).
+        
         configConversion.boolean(u8"ClanTagAnimateEnabled", loadVariable<chat_vars::ClanTagAnimateEnabled>(), saveVariable<chat_vars::ClanTagAnimateEnabled>());
         configConversion.uint(u8"ClanTagAnimateMode", loadVariable<chat_vars::ClanTagAnimateMode>(), saveVariable<chat_vars::ClanTagAnimateMode>());
         configConversion.uint(u8"ClanTagAnimateSpeed", loadVariable<chat_vars::ClanTagAnimateSpeed>(), saveVariable<chat_vars::ClanTagAnimateSpeed>());
         configConversion.endObject();
     }
 
-    // Appended after ChatTools - same rule: new top-level objects go last.
+    
     void combatStatsObject(auto&& configConversion)
     {
         configConversion.beginObject(u8"CombatStats");
@@ -136,7 +137,7 @@ private:
         configConversion.endObject();
     }
 
-    // Appended after CombatStats - same rule: new top-level objects go last.
+    
     void statusPanelObject(auto&& configConversion)
     {
         configConversion.beginObject(u8"StatusPanel");
@@ -145,15 +146,15 @@ private:
         configConversion.endObject();
     }
 
-    // Appended after StatusPanel - same rule: new top-level objects go last.
-    // CHEAT O METER (local player-analyzer; see PlayerAnalyzer.h).
+    
+    
     void playerAnalyzerObject(auto&& configConversion)
     {
         configConversion.beginObject(u8"PlayerAnalyzer");
         configConversion.boolean(u8"Enabled", loadVariable<analyzer_vars::Enabled>(), saveVariable<analyzer_vars::Enabled>());
         configConversion.boolean(u8"EspTag", loadVariable<analyzer_vars::EspTag>(), saveVariable<analyzer_vars::EspTag>());
         configConversion.uint(u8"SnapThreshold", loadVariable<analyzer_vars::SnapThreshold>(), saveVariable<analyzer_vars::SnapThreshold>());
-        // Appended LAST (order-sensitive parser).
+        
         configConversion.boolean(u8"VoiceProbe", loadVariable<analyzer_vars::VoiceProbe>(), saveVariable<analyzer_vars::VoiceProbe>());
         configConversion.boolean(u8"VoiceLog", loadVariable<analyzer_vars::VoiceLog>(), saveVariable<analyzer_vars::VoiceLog>());
         configConversion.boolean(u8"Callout", loadVariable<analyzer_vars::Callout>(), saveVariable<analyzer_vars::Callout>());
@@ -184,18 +185,20 @@ private:
         configConversion.boolean(u8"SpreadCompensation", loadVariable<triggerbot_vars::SpreadCompensation>(), saveVariable<triggerbot_vars::SpreadCompensation>());
         configConversion.uint(u8"HoldKey", loadVariable<triggerbot_vars::HoldKey>(), saveVariable<triggerbot_vars::HoldKey>());
         configConversion.boolean(u8"SeededFire", loadVariable<triggerbot_vars::SeededFire>(), saveVariable<triggerbot_vars::SeededFire>());
-        // Removed setting (the 2026-09-13 [tb] decision-path telemetry - the triggerbot is verified
-        // healthy so the harness went away). Still PARSED AND DISCARDED in its original position:
-        // dropping the key would stall every later key on old config files that still contain it.
+        
+        
+        
         configConversion.boolean(u8"DebugLog", [](bool) {}, [] { return false; });
         configConversion.endObject();
 
         configConversion.beginObject(u8"Aimbot");
         configConversion.boolean(u8"Enabled", loadVariable<aimbot_vars::Enabled>(), saveVariable<aimbot_vars::Enabled>());
-        // Removed settings (the old user-settable FOV slider and rage fov circle - the rage aimbot now
-        // uses velocity's fixed max_fov gate). They are still PARSED AND DISCARDED in their original
-        // positions because the config loader is an order-sensitive streaming parser: dropping the keys
-        // would stall every later key on old config files that still contain them.
+        configConversion.uint(u8"TargetSelection", loadVariable<aimbot_vars::TargetSelection>(), saveVariable<aimbot_vars::TargetSelection>());
+        configConversion.boolean(u8"TargetLock", loadVariable<aimbot_vars::TargetLock>(), saveVariable<aimbot_vars::TargetLock>());
+        
+        
+        
+        
         configConversion.uint(u8"Fov", [](std::uint64_t) {}, [] { return 0; });
         configConversion.boolean(u8"DrawFov", [](bool) {}, [] { return false; });
         configConversion.uint(u8"FovCircleHue", [](std::uint64_t) {}, [] { return 0; });
@@ -216,14 +219,14 @@ private:
         configConversion.boolean(u8"Multipoint", loadVariable<aimbot_vars::Multipoint>(), saveVariable<aimbot_vars::Multipoint>());
         configConversion.boolean(u8"Backtrack", loadVariable<aimbot_vars::Backtrack>(), saveVariable<aimbot_vars::Backtrack>());
         configConversion.uint(u8"BacktrackTicks", loadVariable<aimbot_vars::BacktrackTicks>(), saveVariable<aimbot_vars::BacktrackTicks>());
-        // NEW keys go LAST in an object (see the config-loader ordering rule at the top of this file's history:
-        // appending is backwards-compatible, inserting mid-object desyncs old files).
+        
+        
         configConversion.boolean(u8"SpreadCircleFov", loadVariable<aimbot_vars::SpreadCircleFov>(), saveVariable<aimbot_vars::SpreadCircleFov>());
-        // SeedCorrectionMode was removed (not the behavior the user wanted) - its config key is kept
-        // as a parse-and-discard placeholder so existing config files keep loading; see the Aimbot
-        // object's other removed keys above.
+        
+        
+        
         configConversion.boolean(u8"SeedCorrectionMode", [](bool) {}, [] { return false; });
-        // NEW keys go LAST in an object - appending keeps old config files parsing.
+        
         configConversion.uint(u8"PointScale", loadVariable<aimbot_vars::PointScale>(), saveVariable<aimbot_vars::PointScale>());
         configConversion.boolean(u8"DynamicPointscale", loadVariable<aimbot_vars::DynamicPointscale>(), saveVariable<aimbot_vars::DynamicPointscale>());
         configConversion.boolean(u8"WallCheck", loadVariable<aimbot_vars::WallCheck>(), saveVariable<aimbot_vars::WallCheck>());
@@ -236,7 +239,24 @@ private:
         configConversion.endObject();
 
         configConversion.beginObject(u8"LegitAimbot");
+        configConversion.boolean(u8"VisibleAim", loadVariable<legit_aimbot_vars::VisibleAim>(), saveVariable<legit_aimbot_vars::VisibleAim>());
+        configConversion.uint(u8"Mode", loadVariable<legit_aimbot_vars::Mode>(), saveVariable<legit_aimbot_vars::Mode>());
+        configConversion.boolean(u8"AlwaysOn", loadVariable<legit_aimbot_vars::AlwaysOn>(), saveVariable<legit_aimbot_vars::AlwaysOn>());
+        configConversion.boolean(u8"OnlyWhileFiring", loadVariable<legit_aimbot_vars::OnlyWhileFiring>(), saveVariable<legit_aimbot_vars::OnlyWhileFiring>());
+        configConversion.boolean(u8"RequireMouseMovement", loadVariable<legit_aimbot_vars::RequireMouseMovement>(), saveVariable<legit_aimbot_vars::RequireMouseMovement>());
+        configConversion.boolean(u8"IgnoreFlash", loadVariable<legit_aimbot_vars::IgnoreFlash>(), saveVariable<legit_aimbot_vars::IgnoreFlash>());
+        configConversion.boolean(u8"RecoilCompensation", loadVariable<legit_aimbot_vars::RecoilCompensation>(), saveVariable<legit_aimbot_vars::RecoilCompensation>());
+        configConversion.uint(u8"Strength", loadVariable<legit_aimbot_vars::Strength>(), saveVariable<legit_aimbot_vars::Strength>());
+        configConversion.floating(u8"Deadzone", loadVariable<legit_aimbot_vars::Deadzone>(), saveVariable<legit_aimbot_vars::Deadzone>());
+        configConversion.floating(u8"MaxSpeed", loadVariable<legit_aimbot_vars::MaxSpeed>(), saveVariable<legit_aimbot_vars::MaxSpeed>());
+        configConversion.uint(u8"ReactionMs", loadVariable<legit_aimbot_vars::ReactionMs>(), saveVariable<legit_aimbot_vars::ReactionMs>());
+        configConversion.uint(u8"SwitchDelayMs", loadVariable<legit_aimbot_vars::SwitchDelayMs>(), saveVariable<legit_aimbot_vars::SwitchDelayMs>());
+        configConversion.floating(u8"SnapFov", loadVariable<legit_aimbot_vars::SnapFov>(), saveVariable<legit_aimbot_vars::SnapFov>());
+
+        configConversion.boolean(u8"WallCheck", loadVariable<legit_aimbot_vars::WallCheck>(), saveVariable<legit_aimbot_vars::WallCheck>());
         configConversion.boolean(u8"Enabled", loadVariable<legit_aimbot_vars::Enabled>(), saveVariable<legit_aimbot_vars::Enabled>());
+        configConversion.uint(u8"TargetSelection", loadVariable<legit_aimbot_vars::TargetSelection>(), saveVariable<legit_aimbot_vars::TargetSelection>());
+        configConversion.boolean(u8"TargetLock", loadVariable<legit_aimbot_vars::TargetLock>(), saveVariable<legit_aimbot_vars::TargetLock>());
         configConversion.uint(u8"Fov", loadVariable<legit_aimbot_vars::Fov>(), saveVariable<legit_aimbot_vars::Fov>());
         configConversion.uint(u8"Smooth", loadVariable<legit_aimbot_vars::Smooth>(), saveVariable<legit_aimbot_vars::Smooth>());
         configConversion.boolean(u8"HitHead", loadVariable<legit_aimbot_vars::HitHead>(), saveVariable<legit_aimbot_vars::HitHead>());
@@ -244,15 +264,15 @@ private:
         configConversion.boolean(u8"HitStomach", loadVariable<legit_aimbot_vars::HitStomach>(), saveVariable<legit_aimbot_vars::HitStomach>());
         configConversion.boolean(u8"HitArms", loadVariable<legit_aimbot_vars::HitArms>(), saveVariable<legit_aimbot_vars::HitArms>());
         configConversion.boolean(u8"HitLegs", loadVariable<legit_aimbot_vars::HitLegs>(), saveVariable<legit_aimbot_vars::HitLegs>());
-        // NEW keys go LAST in an object: appending keeps old config files parsing (a missing trailing
-        // key just keeps its default), while inserting mid-object would desync the streaming parser.
+        
+        
         configConversion.boolean(u8"DrawFov", loadVariable<legit_aimbot_vars::DrawFov>(), saveVariable<legit_aimbot_vars::DrawFov>());
-        // FovCircleHue was replaced by the full RGBA FovCircleColor (appended LAST below); the old
-        // hue key stays as a parse-and-discard placeholder in its original position so existing
-        // config files keep loading (the loader is an order-sensitive streaming parser - see the
-        // Aimbot object's note).
+        
+        
+        
+        
         configConversion.uint(u8"FovCircleHue", [](std::uint64_t) {}, [] { return 0; });
-        // NEW keys go LAST in an object - appending keeps old config files parsing.
+        
         configConversion.boolean(u8"SpreadCircleFov", loadVariable<legit_aimbot_vars::SpreadCircleFov>(), saveVariable<legit_aimbot_vars::SpreadCircleFov>());
         configConversion.uint(u8"AimKey", loadVariable<legit_aimbot_vars::AimKey>(), saveVariable<legit_aimbot_vars::AimKey>());
         configConversion.uint(u8"FovCircleColor", loadVariable<legit_aimbot_vars::FovCircleColor>(), saveVariable<legit_aimbot_vars::FovCircleColor>());
@@ -263,8 +283,8 @@ private:
         configConversion.uint(u8"Strength", loadVariable<rcs_vars::Strength>(), saveVariable<rcs_vars::Strength>());
         configConversion.endObject();
 
-        // NEW objects go LAST in their parent - appending keeps old config files parsing (a missing
-        // object just keeps its defaults), while inserting earlier would desync old files.
+        
+        
         configConversion.beginObject(u8"SpreadCircleVis");
         configConversion.boolean(u8"Enabled", loadVariable<spread_circle_vars::Enabled>(), saveVariable<spread_circle_vars::Enabled>());
         configConversion.uint(u8"Color", loadVariable<spread_circle_vars::SpreadCircleColor>(), saveVariable<spread_circle_vars::SpreadCircleColor>());
@@ -281,8 +301,8 @@ private:
 #define NS_SKIN_CHANGER_F(base) configConversion.uint(u8"" #base, loadVariable<skin_changer_vars::base>(), saveVariable<skin_changer_vars::base>());
         NS_SKIN_CHANGER_GUNS(NS_SKIN_CHANGER_F)
 #undef NS_SKIN_CHANGER_F
-        // NEW keys go LAST in an object (order-sensitive streaming parser): per-weapon wear
-        // (permille) and pattern seed, then the global StatTrak settings.
+        
+        
         configConversion.uint(u8"KnifeSkinWear", loadVariable<skin_changer_vars::KnifeSkinWear>(), saveVariable<skin_changer_vars::KnifeSkinWear>());
         configConversion.uint(u8"KnifeSkinSeed", loadVariable<skin_changer_vars::KnifeSkinSeed>(), saveVariable<skin_changer_vars::KnifeSkinSeed>());
         configConversion.boolean(u8"StatTrakEnabled", loadVariable<skin_changer_vars::StatTrakEnabled>(), saveVariable<skin_changer_vars::StatTrakEnabled>());
@@ -321,7 +341,7 @@ private:
 
         configConversion.beginObject(u8"Watermark");
         configConversion.boolean(u8"Enabled", loadVariable<watermark_vars::Enabled>(), saveVariable<watermark_vars::Enabled>());
-        // appended last (order-sensitive streaming parser): segment toggles + box offset
+        
         configConversion.boolean(u8"ShowFps", loadVariable<watermark_vars::ShowFps>(), saveVariable<watermark_vars::ShowFps>());
         configConversion.boolean(u8"ShowSpeed", loadVariable<watermark_vars::ShowSpeed>(), saveVariable<watermark_vars::ShowSpeed>());
         configConversion.boolean(u8"ShowPing", loadVariable<watermark_vars::ShowPing>(), saveVariable<watermark_vars::ShowPing>());
@@ -331,11 +351,11 @@ private:
         configConversion.uint(u8"OffsetY", loadVariable<watermark_vars::OffsetY>(), saveVariable<watermark_vars::OffsetY>());
         configConversion.endObject();
 
-        // appended last (order-sensitive streaming parser)
+        
         configConversion.beginObject(u8"BindsList");
         configConversion.boolean(u8"Enabled", loadVariable<binds_list_vars::Enabled>(), saveVariable<binds_list_vars::Enabled>());
-        // position offsets from the default top-right anchor (the list is mouse-draggable in
-        // game; the drag writes these same offsets) - appended last within the object
+        
+        
         configConversion.floating(u8"OffsetX", loadVariable<binds_list_vars::OffsetX>(), saveVariable<binds_list_vars::OffsetX>());
         configConversion.floating(u8"OffsetY", loadVariable<binds_list_vars::OffsetY>(), saveVariable<binds_list_vars::OffsetY>());
         configConversion.endObject();
@@ -360,9 +380,9 @@ private:
         configConversion.beginObject(u8"Players");
         configConversion.boolean(u8"Enabled", loadVariable<model_glow_vars::GlowPlayers>(), saveVariable<model_glow_vars::GlowPlayers>());
         configConversion.boolean(u8"OnlyEnemies", loadVariable<model_glow_vars::GlowOnlyEnemies>(), saveVariable<model_glow_vars::GlowOnlyEnemies>());
-        // players always glow with the EnemyColor/AllyColor RGBA pickers now; ColorMode is a
-        // parse-and-discard placeholder so older config files keep loading (order-sensitive
-        // streaming parser - see the Aimbot object's note)
+        
+        
+        
         configConversion.uint(u8"ColorMode", [](std::uint64_t) {}, [] { return 0; });
         configConversion.endObject();
         configConversion.boolean(u8"Weapons", loadVariable<model_glow_vars::GlowWeapons>(), saveVariable<model_glow_vars::GlowWeapons>());
@@ -371,8 +391,8 @@ private:
         configConversion.boolean(u8"DefuseKits", loadVariable<model_glow_vars::GlowDefuseKits>(), saveVariable<model_glow_vars::GlowDefuseKits>());
         configConversion.boolean(u8"GrenadeProjectiles", loadVariable<model_glow_vars::GlowGrenadeProjectiles>(), saveVariable<model_glow_vars::GlowGrenadeProjectiles>());
         configConversion.beginObject(u8"Hues");
-        // the player/team/health hue keys are parse-and-discard placeholders (player colors are
-        // the EnemyColor/AllyColor RGBA pickers now) so older config files keep loading
+        
+        
         configConversion.uint(u8"PlayerBlue", [](std::uint64_t) {}, [] { return 0; });
         configConversion.uint(u8"PlayerGreen", [](std::uint64_t) {}, [] { return 0; });
         configConversion.uint(u8"PlayerYellow", [](std::uint64_t) {}, [] { return 0; });
@@ -382,9 +402,9 @@ private:
         configConversion.uint(u8"TeamCT", [](std::uint64_t) {}, [] { return 0; });
         configConversion.uint(u8"LowHealth", [](std::uint64_t) {}, [] { return 0; });
         configConversion.uint(u8"HighHealth", [](std::uint64_t) {}, [] { return 0; });
-        // Enemy/Ally are full RGBA colors now (see EnemyColor/AllyColor appended below); the old
-        // hue keys stay as parse-and-discard placeholders so older config files keep loading
-        // (the loader is an order-sensitive streaming parser - see the Aimbot object's note).
+        
+        
+        
         configConversion.uint(u8"Enemy", [](std::uint64_t) {}, [] { return 0; });
         configConversion.uint(u8"Ally", [](std::uint64_t) {}, [] { return 0; });
         configConversion.uint(u8"Molotov", loadVariable<model_glow_vars::MolotovHue>(), saveVariable<model_glow_vars::MolotovHue>());
@@ -394,10 +414,10 @@ private:
         configConversion.uint(u8"DroppedBomb", loadVariable<model_glow_vars::DroppedBombHue>(), saveVariable<model_glow_vars::DroppedBombHue>());
         configConversion.uint(u8"TickingBomb", loadVariable<model_glow_vars::TickingBombHue>(), saveVariable<model_glow_vars::TickingBombHue>());
         configConversion.uint(u8"DefuseKit", loadVariable<model_glow_vars::DefuseKitHue>(), saveVariable<model_glow_vars::DefuseKitHue>());
-        // NEW keys go LAST in an object - appending keeps old config files parsing.
+        
         configConversion.uint(u8"EnemyColor", loadVariable<model_glow_vars::EnemyColor>(), saveVariable<model_glow_vars::EnemyColor>());
         configConversion.uint(u8"AllyColor", loadVariable<model_glow_vars::AllyColor>(), saveVariable<model_glow_vars::AllyColor>());
-        // Color-picker replacements for the legacy hue sliders (appended last).
+        
         configConversion.uint(u8"FlashbangColor", loadVariable<model_glow_vars::FlashbangColor>(), saveVariable<model_glow_vars::FlashbangColor>());
         configConversion.uint(u8"HEGrenadeColor", loadVariable<model_glow_vars::HEGrenadeColor>(), saveVariable<model_glow_vars::HEGrenadeColor>());
         configConversion.uint(u8"SmokeGrenadeColor", loadVariable<model_glow_vars::SmokeGrenadeColor>(), saveVariable<model_glow_vars::SmokeGrenadeColor>());
@@ -414,8 +434,8 @@ private:
         configConversion.beginObject(u8"Players");
         configConversion.boolean(u8"Enabled", loadVariable<outline_glow_vars::GlowPlayers>(), saveVariable<outline_glow_vars::GlowPlayers>());
         configConversion.boolean(u8"OnlyEnemies", loadVariable<outline_glow_vars::GlowOnlyEnemies>(), saveVariable<outline_glow_vars::GlowOnlyEnemies>());
-        // players always glow with the EnemyColor/AllyColor RGBA pickers now; ColorMode is a
-        // parse-and-discard placeholder (order-sensitive streaming parser - see the Aimbot note)
+        
+        
         configConversion.uint(u8"ColorMode", [](std::uint64_t) {}, [] { return 0; });
         configConversion.endObject();
         configConversion.boolean(u8"Weapons", loadVariable<outline_glow_vars::GlowWeapons>(), saveVariable<outline_glow_vars::GlowWeapons>());
@@ -425,8 +445,8 @@ private:
         configConversion.boolean(u8"Hostages", loadVariable<outline_glow_vars::GlowHostages>(), saveVariable<outline_glow_vars::GlowHostages>());
         configConversion.boolean(u8"GrenadeProjectiles", loadVariable<outline_glow_vars::GlowGrenadeProjectiles>(), saveVariable<outline_glow_vars::GlowGrenadeProjectiles>());
         configConversion.beginObject(u8"Hues");
-        // the player/team/health hue keys are parse-and-discard placeholders (player colors are
-        // the EnemyColor/AllyColor RGBA pickers now) so older config files keep loading
+        
+        
         configConversion.uint(u8"PlayerBlue", [](std::uint64_t) {}, [] { return 0; });
         configConversion.uint(u8"PlayerGreen", [](std::uint64_t) {}, [] { return 0; });
         configConversion.uint(u8"PlayerYellow", [](std::uint64_t) {}, [] { return 0; });
@@ -436,9 +456,9 @@ private:
         configConversion.uint(u8"TeamCT", [](std::uint64_t) {}, [] { return 0; });
         configConversion.uint(u8"LowHealth", [](std::uint64_t) {}, [] { return 0; });
         configConversion.uint(u8"HighHealth", [](std::uint64_t) {}, [] { return 0; });
-        // Enemy/Ally are full RGBA colors now (see EnemyColor/AllyColor appended below); the old
-        // hue keys stay as parse-and-discard placeholders so older config files keep loading
-        // (the loader is an order-sensitive streaming parser - see the Aimbot object's note).
+        
+        
+        
         configConversion.uint(u8"Enemy", [](std::uint64_t) {}, [] { return 0; });
         configConversion.uint(u8"Ally", [](std::uint64_t) {}, [] { return 0; });
         configConversion.uint(u8"Molotov", loadVariable<outline_glow_vars::MolotovHue>(), saveVariable<outline_glow_vars::MolotovHue>());
@@ -449,10 +469,10 @@ private:
         configConversion.uint(u8"TickingBomb", loadVariable<outline_glow_vars::TickingBombHue>(), saveVariable<outline_glow_vars::TickingBombHue>());
         configConversion.uint(u8"DefuseKit", loadVariable<outline_glow_vars::DefuseKitHue>(), saveVariable<outline_glow_vars::DefuseKitHue>());
         configConversion.uint(u8"Hostage", loadVariable<outline_glow_vars::HostageHue>(), saveVariable<outline_glow_vars::HostageHue>());
-        // NEW keys go LAST in an object - appending keeps old config files parsing.
+        
         configConversion.uint(u8"EnemyColor", loadVariable<outline_glow_vars::EnemyColor>(), saveVariable<outline_glow_vars::EnemyColor>());
         configConversion.uint(u8"AllyColor", loadVariable<outline_glow_vars::AllyColor>(), saveVariable<outline_glow_vars::AllyColor>());
-        // Color-picker replacements for the legacy hue sliders (appended last).
+        
         configConversion.uint(u8"FlashbangColor", loadVariable<outline_glow_vars::FlashbangColor>(), saveVariable<outline_glow_vars::FlashbangColor>());
         configConversion.uint(u8"HEGrenadeColor", loadVariable<outline_glow_vars::HEGrenadeColor>(), saveVariable<outline_glow_vars::HEGrenadeColor>());
         configConversion.uint(u8"SmokeGrenadeColor", loadVariable<outline_glow_vars::SmokeGrenadeColor>(), saveVariable<outline_glow_vars::SmokeGrenadeColor>());
@@ -490,8 +510,8 @@ private:
         configConversion.endObject();
 
         configConversion.beginObject(u8"ViewmodelMod");
-        // MasterSwitch removed (the FOV toggle gates its own feature now) - kept as a
-        // parse-and-discard placeholder per the config-loader ordering rule.
+        
+        
         configConversion.boolean(u8"Enabled", [](bool) {}, [] { return false; });
         configConversion.boolean(u8"ModifyFov", loadVariable<viewmodel_mod_vars::ModifyFov>(), saveVariable<viewmodel_mod_vars::ModifyFov>());
         configConversion.uint(u8"Fov", loadVariable<viewmodel_mod_vars::Fov>(), saveVariable<viewmodel_mod_vars::Fov>());
@@ -499,10 +519,12 @@ private:
         configConversion.floating(u8"OffsetX", loadVariable<viewmodel_mod_vars::OffsetX>(), saveVariable<viewmodel_mod_vars::OffsetX>());
         configConversion.floating(u8"OffsetY", loadVariable<viewmodel_mod_vars::OffsetY>(), saveVariable<viewmodel_mod_vars::OffsetY>());
         configConversion.floating(u8"OffsetZ", loadVariable<viewmodel_mod_vars::OffsetZ>(), saveVariable<viewmodel_mod_vars::OffsetZ>());
+        configConversion.floating(u8"Pitch", loadVariable<viewmodel_mod_vars::Pitch>(), saveVariable<viewmodel_mod_vars::Pitch>());
+        configConversion.floating(u8"Roll", loadVariable<viewmodel_mod_vars::Roll>(), saveVariable<viewmodel_mod_vars::Roll>());
         configConversion.endObject();
 
-        // FrameworkCS2 port batch (appended LAST - the loader is an order-sensitive streaming
-        // parser and removed keys stay as parse-and-discard placeholders).
+        
+        
         configConversion.beginObject(u8"Hitmarker");
         configConversion.boolean(u8"Enabled", loadVariable<HitmarkerEnabled>(), saveVariable<HitmarkerEnabled>());
         configConversion.floating(u8"Length", loadVariable<HitmarkerLength>(), saveVariable<HitmarkerLength>());
@@ -544,15 +566,15 @@ private:
 
         configConversion.beginObject(u8"PlayerList");
         configConversion.boolean(u8"Enabled", loadVariable<PlayerListEnabled>(), saveVariable<PlayerListEnabled>());
-        // absolute PosX/PosY replaced by OffsetX/Y (the watermark slider pattern) - the old keys
-        // stay as parse-and-discard placeholders per the config-loader ordering rule
+        
+        
         configConversion.floating(u8"PosX", [](float) {}, [] { return 0.0f; });
         configConversion.floating(u8"PosY", [](float) {}, [] { return 0.0f; });
         configConversion.floating(u8"OffsetX", loadVariable<PlayerListOffsetX>(), saveVariable<PlayerListOffsetX>());
         configConversion.floating(u8"OffsetY", loadVariable<PlayerListOffsetY>(), saveVariable<PlayerListOffsetY>());
         configConversion.endObject();
 
-        // NEW keys go LAST in an object - appending keeps old config files parsing.
+        
         configConversion.beginObject(u8"GrenadeTimers");
         configConversion.boolean(u8"Enabled", loadVariable<grenade_timers_vars::Enabled>(), saveVariable<grenade_timers_vars::Enabled>());
         configConversion.boolean(u8"SmokeTimers", loadVariable<grenade_timers_vars::SmokeTimers>(), saveVariable<grenade_timers_vars::SmokeTimers>());
@@ -562,7 +584,7 @@ private:
         configConversion.endObject();
     }
 
-    // Menu UI theme (Neverlose menu colors). Own top-level object, appended LAST.
+    
     void menuObject(auto&& configConversion)
     {
         configConversion.beginObject(u8"Menu");
@@ -582,8 +604,8 @@ private:
         configConversion.endObject();
     }
 
-    // Experiment instrumentation, kept in its own top-level object so features added here later
-    // don't have to be shoehorned into Sound/Visuals just to be persisted.
+    
+    
     void gameObject(auto&& configConversion)
     {
         configConversion.beginObject(u8"Game");
@@ -619,17 +641,21 @@ private:
         configConversion.beginObject(u8"FakeLevel");
         configConversion.boolean(u8"Enabled", loadVariable<FakeLevelEnabled>(), saveVariable<FakeLevelEnabled>());
         configConversion.uint(u8"Level", loadVariable<FakeLevelValue>(), saveVariable<FakeLevelValue>());
-        // Appended LAST (order-sensitive parser).
+        
         configConversion.uint(u8"Xp", loadVariable<FakeLevelXp>(), saveVariable<FakeLevelXp>());
         configConversion.endObject();
 
         configConversion.beginObject(u8"Bunnyhop");
+        configConversion.uint(u8"AutoStrafeMode", loadVariable<AutoStrafeMode>(), saveVariable<AutoStrafeMode>());
+        configConversion.uint(u8"LegitStrafeStrength", loadVariable<LegitStrafeStrength>(), saveVariable<LegitStrafeStrength>());
+        configConversion.uint(u8"LegitStrafeMouseThreshold", loadVariable<LegitStrafeMouseThreshold>(), saveVariable<LegitStrafeMouseThreshold>());
+
         configConversion.boolean(u8"Enabled", loadVariable<BunnyhopEnabled>(), saveVariable<BunnyhopEnabled>());
         configConversion.boolean(u8"AutoStrafe", loadVariable<AutoStrafeEnabled>(), saveVariable<AutoStrafeEnabled>());
         configConversion.boolean(u8"TestStrafer", loadVariable<TestStraferEnabled>(), saveVariable<TestStraferEnabled>());
         configConversion.endObject();
 
-        // NEW keys go LAST in an object - appending keeps old config files parsing.
+        
         configConversion.beginObject(u8"Movement");
         configConversion.boolean(u8"EdgeJump", loadVariable<movement_vars::EdgeJump>(), saveVariable<movement_vars::EdgeJump>());
         configConversion.boolean(u8"EdgeStop", loadVariable<movement_vars::EdgeStop>(), saveVariable<movement_vars::EdgeStop>());
@@ -676,7 +702,7 @@ private:
 
         configConversion.boolean(u8"ValveDsSpoof", loadVariable<ValveDsSpoofEnabled>(), saveVariable<ValveDsSpoofEnabled>());
 
-        // NET LAG (own-server experiment; appended LAST per the ordering rule).
+        
         configConversion.beginObject(u8"NetLag");
         configConversion.boolean(u8"Enabled", loadVariable<net_lag_vars::Enabled>(), saveVariable<net_lag_vars::Enabled>());
         configConversion.boolean(u8"FakelagAlways", loadVariable<net_lag_vars::FakelagAlways>(), saveVariable<net_lag_vars::FakelagAlways>());
@@ -693,7 +719,7 @@ private:
         configConversion.uint(u8"ConnlessKey", loadVariable<net_lag_vars::ConnlessKeyBind>(), saveVariable<net_lag_vars::ConnlessKeyBind>());
         configConversion.endObject();
 
-        // NAME ANIMATOR (live animated name; appended LAST per the ordering rule).
+        
         configConversion.beginObject(u8"NameAnimator");
         configConversion.boolean(u8"Enabled", loadVariable<name_animator_vars::Enabled>(), saveVariable<name_animator_vars::Enabled>());
         configConversion.uint(u8"Mode", loadVariable<name_animator_vars::Mode>(), saveVariable<name_animator_vars::Mode>());
@@ -701,7 +727,7 @@ private:
         configConversion.boolean(u8"DirectSend", loadVariable<name_animator_vars::DirectSend>(), saveVariable<name_animator_vars::DirectSend>());
         configConversion.endObject();
 
-        // USERINFO FLOOD (multi-field setinfo churn; appended LAST per the ordering rule).
+        
         configConversion.beginObject(u8"UserinfoFlood");
         configConversion.boolean(u8"Enabled", loadVariable<userinfo_flood_vars::Enabled>(), saveVariable<userinfo_flood_vars::Enabled>());
         configConversion.boolean(u8"HeavyMode", loadVariable<userinfo_flood_vars::HeavyMode>(), saveVariable<userinfo_flood_vars::HeavyMode>());
@@ -719,45 +745,45 @@ private:
         configConversion.boolean(u8"FloodXhSniper", loadVariable<userinfo_flood_vars::FloodXhSniper>(), saveVariable<userinfo_flood_vars::FloodXhSniper>());
         configConversion.boolean(u8"FloodLoadout", loadVariable<userinfo_flood_vars::FloodLoadout>(), saveVariable<userinfo_flood_vars::FloodLoadout>());
         configConversion.boolean(u8"FloodTeamId", loadVariable<userinfo_flood_vars::FloodTeamId>(), saveVariable<userinfo_flood_vars::FloodTeamId>());
-        // Appended LAST within the object (order-sensitive parser): the teamid cvar was replaced
-        // by more crosshair fields (cl_teamid_overhead_mode = new-cvar-system, unpatchable).
+        
+        
         configConversion.boolean(u8"FloodXhColorR", loadVariable<userinfo_flood_vars::FloodXhColorR>(), saveVariable<userinfo_flood_vars::FloodXhColorR>());
         configConversion.boolean(u8"FloodXhColorG", loadVariable<userinfo_flood_vars::FloodXhColorG>(), saveVariable<userinfo_flood_vars::FloodXhColorG>());
         configConversion.boolean(u8"FloodXhColorB", loadVariable<userinfo_flood_vars::FloodXhColorB>(), saveVariable<userinfo_flood_vars::FloodXhColorB>());
         configConversion.uint(u8"SendsPerTick", loadVariable<userinfo_flood_vars::SendsPerTick>(), saveVariable<userinfo_flood_vars::SendsPerTick>());
         configConversion.uint(u8"EveryTicks", loadVariable<userinfo_flood_vars::EveryTicks>(), saveVariable<userinfo_flood_vars::EveryTicks>());
-        // Appended LAST (config-loader ordering rule: appending is backwards-compatible, inserting
-        // mid-object desyncs old files - I learned this twice on 2026-09-13).
+        
+        
         configConversion.boolean(u8"DirectMode", loadVariable<userinfo_flood_vars::DirectMode>(), saveVariable<userinfo_flood_vars::DirectMode>());
         configConversion.endObject();
 
-        // SERVER LAGGER (voice-datagram flood through the game's own net channel; appended LAST
-        // per the ordering rule).
+        
+        
         configConversion.beginObject(u8"ServerLagger");
-        // "Mode" (old preset selector) is a placeholder now - replaced by MsgsPerBatch/AudioKB
-        // (user-tuned profile). Order-sensitive parser: keep the key position, discard the value.
+        
+        
         configConversion.uint(u8"Mode", [](unsigned) {}, [] { return 0u; });
         configConversion.boolean(u8"Enabled", loadVariable<server_lagger_vars::Enabled>(), saveVariable<server_lagger_vars::Enabled>());
         configConversion.uint(u8"MsgsPerBatch", loadVariable<server_lagger_vars::MsgsPerBatch>(), saveVariable<server_lagger_vars::MsgsPerBatch>());
         configConversion.uint(u8"AudioKB", loadVariable<server_lagger_vars::AudioKB>(), saveVariable<server_lagger_vars::AudioKB>());
         configConversion.uint(u8"Amount", loadVariable<server_lagger_vars::Amount>(), saveVariable<server_lagger_vars::Amount>());
         configConversion.uint(u8"PayloadMode", loadVariable<server_lagger_vars::PayloadMode>(), saveVariable<server_lagger_vars::PayloadMode>());
-        // Lag-O-Meter HUD window (toggle + position offsets) - appended last within the object
+        
         configConversion.boolean(u8"MeterEnabled", loadVariable<server_lagger_vars::MeterEnabled>(), saveVariable<server_lagger_vars::MeterEnabled>());
         configConversion.floating(u8"MeterOffsetX", loadVariable<server_lagger_vars::MeterOffsetX>(), saveVariable<server_lagger_vars::MeterOffsetX>());
         configConversion.floating(u8"MeterOffsetY", loadVariable<server_lagger_vars::MeterOffsetY>(), saveVariable<server_lagger_vars::MeterOffsetY>());
-        // Appended LAST within the object (order-sensitive parser).
+        
         configConversion.uint(u8"Preset", loadVariable<server_lagger_vars::Preset>(), saveVariable<server_lagger_vars::Preset>());
         configConversion.boolean(u8"DatagramMode", loadVariable<server_lagger_vars::DatagramMode>(), saveVariable<server_lagger_vars::DatagramMode>());
         configConversion.boolean(u8"LoopFreeze", loadVariable<server_lagger_vars::LoopFreeze>(), saveVariable<server_lagger_vars::LoopFreeze>());
         configConversion.uint(u8"FreezeTicks", loadVariable<server_lagger_vars::FreezeTicks>(), saveVariable<server_lagger_vars::FreezeTicks>());
         configConversion.boolean(u8"AutoStop", loadVariable<server_lagger_vars::AutoStop>(), saveVariable<server_lagger_vars::AutoStop>());
-        // Appended LAST (order-sensitive parser) - friend v2 parity batch.
+        
         configConversion.boolean(u8"SlowRamp", loadVariable<server_lagger_vars::SlowRamp>(), saveVariable<server_lagger_vars::SlowRamp>());
         configConversion.uint(u8"RampInterval", loadVariable<server_lagger_vars::RampInterval>(), saveVariable<server_lagger_vars::RampInterval>());
         configConversion.uint(u8"LaggerKey", loadVariable<server_lagger_vars::LaggerKey>(), saveVariable<server_lagger_vars::LaggerKey>());
         configConversion.boolean(u8"NumPackets", loadVariable<server_lagger_vars::NumPackets>(), saveVariable<server_lagger_vars::NumPackets>());
-        // Appended LAST (order-sensitive parser) - parity batch 2.
+        
         configConversion.boolean(u8"PulseMode", loadVariable<server_lagger_vars::PulseMode>(), saveVariable<server_lagger_vars::PulseMode>());
         configConversion.uint(u8"PulseOn", loadVariable<server_lagger_vars::PulseOn>(), saveVariable<server_lagger_vars::PulseOn>());
         configConversion.uint(u8"PulseOff", loadVariable<server_lagger_vars::PulseOff>(), saveVariable<server_lagger_vars::PulseOff>());
@@ -766,8 +792,8 @@ private:
         configConversion.boolean(u8"Misattribute", loadVariable<server_lagger_vars::Misattribute>(), saveVariable<server_lagger_vars::Misattribute>());
         configConversion.endObject();
 
-        // SPECTATE ENEMIES (the game's spec_next/prev keys ride alive enemies while dead;
-        // appended LAST within the object per the ordering rule).
+        
+        
         configConversion.beginObject(u8"SpectateEnemies");
         configConversion.boolean(u8"Enabled", loadVariable<spectate_vars::Enabled>(), saveVariable<spectate_vars::Enabled>());
         configConversion.endObject();
@@ -786,23 +812,28 @@ private:
         configConversion.beginObject(u8"Radio");
         configConversion.uint(u8"Volume", loadVariable<radio_vars::Volume>(), saveVariable<radio_vars::Volume>());
         configConversion.boolean(u8"MicBroadcast", loadVariable<radio_vars::MicBroadcast>(), saveVariable<radio_vars::MicBroadcast>());
-        // Appended LAST (order-sensitive parser): soundboard keys + routing toggle.
-        // Soundboard removed (replaced by the event-triggered airhorn) - keys stay as
-        // parse-and-discard placeholders because the config loader is an order-sensitive parser.
+        
+        
+        
         configConversion.boolean(u8"BoardEnabled", [](bool) {}, [] { return false; });
         configConversion.uint(u8"BoardKey1", [](unsigned) {}, [] { return 0; });
         configConversion.uint(u8"BoardKey2", [](unsigned) {}, [] { return 0; });
         configConversion.uint(u8"BoardKey3", [](unsigned) {}, [] { return 0; });
         configConversion.uint(u8"BoardKey4", [](unsigned) {}, [] { return 0; });
-        // Airhorn appended LAST (order-sensitive parser).
+        
         configConversion.boolean(u8"AirhornEnabled", loadVariable<radio_vars::AirhornEnabled>(), saveVariable<radio_vars::AirhornEnabled>());
         configConversion.boolean(u8"AirhornFirstBlood", loadVariable<radio_vars::AirhornFirstBlood>(), saveVariable<radio_vars::AirhornFirstBlood>());
         configConversion.boolean(u8"AirhornHeadshot", loadVariable<radio_vars::AirhornHeadshot>(), saveVariable<radio_vars::AirhornHeadshot>());
         configConversion.boolean(u8"AirhornRoundWin", loadVariable<radio_vars::AirhornRoundWin>(), saveVariable<radio_vars::AirhornRoundWin>());
         configConversion.uint(u8"VoiceKey", loadVariable<radio_vars::VoiceKeyBind>(), saveVariable<radio_vars::VoiceKeyBind>());
+        
+        configConversion.boolean(u8"ShowNowPlaying", loadVariable<radio_vars::ShowNowPlaying>(), saveVariable<radio_vars::ShowNowPlaying>());
+        configConversion.boolean(u8"ShowMediaPlayers", loadVariable<radio_vars::ShowMediaPlayers>(), saveVariable<radio_vars::ShowMediaPlayers>());
+        configConversion.floating(u8"BoxOffsetX", loadVariable<radio_vars::NowPlayingOffsetX>(), saveVariable<radio_vars::NowPlayingOffsetX>());
+        configConversion.floating(u8"BoxOffsetY", loadVariable<radio_vars::NowPlayingOffsetY>(), saveVariable<radio_vars::NowPlayingOffsetY>());
         configConversion.endObject();
 
-        // SOUND BOARD (in-process voice injection; appended LAST per the ordering rule).
+        
         configConversion.beginObject(u8"Soundboard");
         configConversion.uint(u8"ClipIndex", loadVariable<soundboard_vars::ClipIndex>(), saveVariable<soundboard_vars::ClipIndex>());
         configConversion.uint(u8"SoundKey", loadVariable<soundboard_vars::SoundKeyBind>(), saveVariable<soundboard_vars::SoundKeyBind>());
@@ -815,9 +846,9 @@ private:
 
         configConversion.beginObject(u8"Visualizations");
 
-        // ImpactMarkers / BulletTracers / GrenadeTrajectory / OffScreenArrows (velocity visual
-        // ports, removed with the Velocity ESP tab) stay as parse-and-discard placeholders
-        // because the config loader is an order-sensitive streaming parser.
+        
+        
+        
         configConversion.beginObject(u8"ImpactMarkers");
         configConversion.boolean(u8"Enabled", [](bool) {}, [] { return false; });
         configConversion.endObject();
@@ -834,10 +865,22 @@ private:
         configConversion.boolean(u8"Enabled", [](bool) {}, [] { return false; });
         configConversion.endObject();
 
-        // Chams revived for the skeet-parity enemy chams (the parse-and-discard placeholder kept
-        // the object's position while the feature was gone). EnemyColor appended LAST per the
-        // ordering rule.
+        
+        
+        
+        configConversion.beginObject(u8"AnimationMods");
+        configConversion.boolean(u8"Freeze", loadVariable<animation_mod_vars::Freeze>(), saveVariable<animation_mod_vars::Freeze>());
+        configConversion.boolean(u8"DisableIK", loadVariable<animation_mod_vars::DisableIK>(), saveVariable<animation_mod_vars::DisableIK>());
+        configConversion.boolean(u8"DisableRagdolls", loadVariable<animation_mod_vars::DisableRagdolls>(), saveVariable<animation_mod_vars::DisableRagdolls>());
+        configConversion.boolean(u8"ModifyRagdollScale", loadVariable<animation_mod_vars::ModifyRagdollScale>(), saveVariable<animation_mod_vars::ModifyRagdollScale>());
+        configConversion.floating(u8"RagdollScale", loadVariable<animation_mod_vars::RagdollScale>(), saveVariable<animation_mod_vars::RagdollScale>());
+        configConversion.boolean(u8"AnimateViewmodel", loadVariable<animation_mod_vars::AnimateViewmodel>(), saveVariable<animation_mod_vars::AnimateViewmodel>());
+        configConversion.floating(u8"ViewmodelSpinSpeed", loadVariable<animation_mod_vars::ViewmodelSpinSpeed>(), saveVariable<animation_mod_vars::ViewmodelSpinSpeed>());
+        configConversion.floating(u8"ViewmodelPitchSway", loadVariable<animation_mod_vars::ViewmodelPitchSway>(), saveVariable<animation_mod_vars::ViewmodelPitchSway>());
+        configConversion.endObject();
         configConversion.beginObject(u8"Chams");
+        configConversion.boolean(u8"HideEnemies", loadVariable<chams_vars::HideEnemies>(), saveVariable<chams_vars::HideEnemies>());
+        configConversion.boolean(u8"HideLocalPlayer", loadVariable<chams_vars::HideLocalPlayer>(), saveVariable<chams_vars::HideLocalPlayer>());
         configConversion.boolean(u8"Enabled", loadVariable<chams_vars::Enabled>(), saveVariable<chams_vars::Enabled>());
         configConversion.uint(u8"EnemyColor", loadVariable<chams_vars::EnemyColor>(), saveVariable<chams_vars::EnemyColor>());
         configConversion.endObject();
@@ -914,7 +957,8 @@ private:
     {
         if constexpr (IsRangeConstrained<typename ConfigVariable::ValueType>::value) {
             return [this] {
-                return static_cast<typename ConfigVariable::ValueType::ValueType>(GET_CONFIG_VAR(ConfigVariable));
+                return config_overrides::valueForSave(ConfigVariableTypes::indexOf<ConfigVariable>(),
+                    static_cast<typename ConfigVariable::ValueType::ValueType>(GET_CONFIG_VAR(ConfigVariable)));
             };
         } else if constexpr (std::is_enum_v<typename ConfigVariable::ValueType>) {
             return [this] {
@@ -922,7 +966,7 @@ private:
             };
         } else {
             return [this] {
-                return GET_CONFIG_VAR(ConfigVariable);
+                return config_overrides::valueForSave(ConfigVariableTypes::indexOf<ConfigVariable>(), GET_CONFIG_VAR(ConfigVariable));
             };
         }
     }

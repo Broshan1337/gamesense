@@ -1,9 +1,12 @@
 #include "GUI.h"
+#include <CS2/Constants/DllNames.h>
+#include "MenuInput.h"
 
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <cmath>
@@ -35,21 +38,36 @@
 namespace
 {
 
-// ---------------------------------------------------------------------------
-// Event queue. Producers: game threads inside SDLHook_PeepEvents. Consumer: the present thread
-// in GUI::render (flushed before ImGui::NewFrame). ImGui's io.Add*Event functions are not
-// thread-safe against NewFrame, so raw SDL events are staged here - the same reason the donor
-// keeps a queue (ocornut/imgui#6895). SDL3 keeps text/editing payload in fixed inline arrays,
-// so a plain struct copy is self-contained and allocation-free.
+
+
+
+
+
+
+constexpr std::uint32_t kAimMotionTag = 0x4e534149;
+using PushEventFn = bool (*)(SDL_Event*);
+using TicksFn = std::uint64_t (*)();
+PushEventFn pushAimEvent{};
+TicksFn aimTicks{};
+std::atomic<std::uint64_t> lastPhysicalMotion{};
+std::atomic<std::uint32_t> physicalMouseId{};
+
+void resolveAimInput() noexcept
+{
+    const DynamicLibrary sdl{cs2::SDL_DLL};
+    if (!pushAimEvent) pushAimEvent = sdl.getFunctionAddress("SDL_PushEvent").as<PushEventFn>();
+    if (!aimTicks) aimTicks = sdl.getFunctionAddress("SDL_GetTicksNS").as<TicksFn>();
+}
+
 constexpr int kEventQueueCapacity = 256;
 
 SpinLock eventQueueLock;
 constinit SDL_Event eventQueue[kEventQueueCapacity]{};
-int eventQueueHead = 0; // consumer position
+int eventQueueHead = 0; 
 int eventQueueCount = 0;
 
-// Input diagnostics for the glitch hunt (producers update these under the lock; flushEvents
-// reads+resets them on the present thread and does the actual logging).
+
+
 int queueWheelQueued = 0;
 int queueWheelDropped = 0;
 int queueHighWater = 0;
@@ -61,8 +79,8 @@ inline void queueEvent(const SDL_Event& event) noexcept
     if (event.type == SDL_EVENT_MOUSE_WHEEL)
         ++queueWheelQueued;
 
-    // Coalesce mouse motion: ImGui only needs the latest position, and high-report-rate mice
-    // (500-8000 Hz) would otherwise flood the ring and starve fresher events.
+    
+    
     if (event.type == SDL_EVENT_MOUSE_MOTION && eventQueueCount > 0) {
         auto& last = eventQueue[(eventQueueHead + eventQueueCount - 1) % kEventQueueCapacity];
         if (last.type == SDL_EVENT_MOUSE_MOTION) {
@@ -72,8 +90,8 @@ inline void queueEvent(const SDL_Event& event) noexcept
     }
 
     if (eventQueueCount == kEventQueueCapacity) {
-        // Overrun: drop the OLDEST event. Dropping the newest would keep a rolling window of
-        // stale input - the sluggish, lagging cursor seen at high mouse report rates.
+        
+        
         if (eventQueue[eventQueueHead].type == SDL_EVENT_MOUSE_WHEEL)
             ++queueWheelDropped;
         eventQueueHead = (eventQueueHead + 1) % kEventQueueCapacity;
@@ -105,7 +123,7 @@ inline void flushEvents() noexcept
         queueHighWater = 0;
     }
 
-    // Anomaly-only logging: a healthy session never writes these lines.
+    
     if (wheelDropped > 0)
         gui_log::write("[perf] input queue overflow: dropped %d wheel event(s) (high-water %d, %d wheel queued)", wheelDropped, highWater, wheelQueued);
     else if (highWater >= 32)
@@ -115,10 +133,10 @@ inline void flushEvents() noexcept
         gui_sdl::processEvent(&batch[i]);
 }
 
-// ---------------------------------------------------------------------------
-// State.
+
+
 inline std::atomic<bool> initialized{false};
-inline std::atomic<bool> menuOpen{false}; // closed by default; INSERT / ALT+I toggles
+inline std::atomic<bool> menuOpen{false}; 
 inline std::atomic<bool> backendReady{false};
 inline std::atomic<bool> backendInitStarted{false};
 inline std::atomic<bool> unloadRequested{false};
@@ -128,8 +146,8 @@ inline int noWindowLogs = 0;
 
 [[NOINLINE]] void createFont() noexcept;
 
-// Boots the SDL side of the backend once - safe to call from any thread, exactly one wins the
-// CAS and runs the (idempotent) font + window setup while the others fall through.
+
+
 inline void tryInitBackend(SDL_Window* window) noexcept
 {
     bool expected = false;
@@ -141,22 +159,22 @@ inline void tryInitBackend(SDL_Window* window) noexcept
         backendReady.store(true, std::memory_order_release);
         gui_log::write("window captured: %p (backend ready)", static_cast<void*>(window));
     } else {
-        backendInitStarted.store(false, std::memory_order_release); // allow a retry with a real window
+        backendInitStarted.store(false, std::memory_order_release); 
     }
 }
 
-// Same fade the donor uses for menu open/close (b + (a - b) * exp(-decay * dt)).
-constexpr float kAlphaDecay = 45.0f; // close fade: ~120ms to invisible (25 left the shell hanging ~300ms)
+
+constexpr float kAlphaDecay = 45.0f; 
 constexpr float kAlphaEpsilon = 0.001f;
 
-// Present-thread frame diagnostics for the glitch hunt. GUI::render runs inside
-// hkQueuePresentKHR, so:
-//   * gapMs  - interval since the previous menu frame == the present rate. A burst of large
-//              gaps means the GAME stopped/overslowed presenting (game-side stall), not us.
-//   * frameMs- time our own frame work took (NewFrame -> RenderDrawData). Spikes here point at
-//              our per-frame cost - e.g. upload-buffer resizes inside the ImGui Vulkan backend.
-// Anomalies log rate-limited (250 ms), so a multi-second stall shows as a burst of lines whose
-// timestamps reveal the true duration. Healthy sessions write nothing.
+
+
+
+
+
+
+
+
 inline std::uint64_t lastRenderStart = 0;
 inline std::uint64_t lastPerfLog = 0;
 inline int vtxHighWater = 0;
@@ -186,27 +204,24 @@ constexpr float expDecay(float current, float target, float decay, float dt) noe
     return target + (current - target) * std::exp(-decay * dt);
 }
 
-// The menu opens with INSERT; on keyboards without one, ALT+I works too (donor parity).
-[[nodiscard]] bool isMenuToggleKey(const SDL_Event& event) noexcept
-{
-    return event.key.key == SDLK_INSERT || (event.key.mod == SDL_KMOD_LALT && event.key.key == SDLK_I);
-}
 
-// --- game-side input desync (menu-open swallow) ---------------------------------------
-//
-// While the menu is open, SDLHook_PeepEvents swallows every fetched batch, so key-ups and
-// mouse-ups the game misses leave the game's internal input state stuck "down": space held
-// at menu-open, released behind the menu, still reads as held afterwards - the game then
-// auto-jumps on every landing with OUR bhop disabled (reported as "bhop stays on after
-// disabling it"), and stale mouse buttons cause the same class of ghosts.
-//
-// gameKeyDown/gameMouseDown mirror what the GAME received: updated only from batches that
-// are delivered to it (menu closed), untouched while the menu swallows everything. On the
-// close edge, one synthetic key-up / mouse-button-up per key the game still thinks is held
-// is pushed into SDL's queue through the REAL SDL_PeepEvents (dlsym'd entry point - the
-// game's poll path goes through our hook, SDL_ADDEVENT through the real function bypasses
-// it and lands in the same queue the game polls next). A synthetic up for a key SDL already
-// considers up is a no-op, so this is idempotent and safe to fire on every close.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 inline bool gameKeyDown[256] = {};
 inline bool gameMouseDown[6] = {};
 
@@ -241,14 +256,14 @@ void synthesizeMenuCloseInput() noexcept
     }
 }
 
-// Font setup: the Neverlose design ships its own fonts (Inter + FontAwesome), embedded into
-// the binary and loaded by the menu layer. No Noto fallback chain needed anymore.
+
+
 [[NOINLINE]] void createFont() noexcept
 {
     neverlose::loadFonts();
 }
 
-} // namespace
+} 
 
 bool GUI::init() noexcept
 {
@@ -257,10 +272,16 @@ bool GUI::init() noexcept
 
     gui_log::write("init: begin");
 
-    // STALE-REQUEST GUARD: an /tmp/ns_unload_request left over from a PREVIOUS module lifetime
-    // (e.g. an unload that failed against an older build) must not unload this fresh instance
-    // on its first frame. Wipe it here - anything written AFTER this point is a genuine request.
-    ::unlink("/tmp/ns_unload_request");
+    
+    
+    
+    
+    {
+        char unloadRequestPath[192];
+        if (ns_paths::join(unloadRequestPath, sizeof(unloadRequestPath), "ns_unload_request"))
+            ::unlink(unloadRequestPath);
+        ::unlink("/tmp/ns_unload_request");
+    }
 
     if (!gui_sdl::resolveFunctions()) {
         StatusReport::record("GUI: SDL3 function resolution failed - menu disabled", false);
@@ -308,77 +329,101 @@ bool GUI::isMenuOpen() noexcept
     return menuOpen.load(std::memory_order_acquire);
 }
 
+void GUI::hideMenuNow() noexcept
+{
+    if (!menuOpen.exchange(false, std::memory_order_acq_rel))
+        return;
+    gui_log::write("menu CLOSE via escape/delete");
+    synthesizeMenuCloseInput(); 
+}
+
 bool GUI::isInitialized() noexcept
 {
     return initialized.load(std::memory_order_acquire);
 }
 
-bool GUI::polledEvents(const SDL_Event* events, int count) noexcept
+bool GUI::applyAimMotion(float dx, float dy) noexcept
 {
-    if (!initialized.load(std::memory_order_acquire))
-        return false;
+    if (!isInitialized() || isMenuOpen() || !gui_sdl::windowId
+        || !std::isfinite(dx) || !std::isfinite(dy) || (dx == 0 && dy == 0)) return false;
+    resolveAimInput();
+    if (!pushAimEvent || !aimTicks || !gui_sdl::window
+        || !gui_sdl::functions.getWindowFlags
+        || !(gui_sdl::functions.getWindowFlags(gui_sdl::window) & SDL_WINDOW_INPUT_FOCUS)) return false;
+    SDL_Event event{};
+    event.motion.type = SDL_EVENT_MOUSE_MOTION;
+    event.motion.reserved = kAimMotionTag;
+    event.motion.timestamp = aimTicks();
+    event.motion.windowID = gui_sdl::windowId;
+    event.motion.which = physicalMouseId.load(std::memory_order_relaxed);
+    if (gui_sdl::functions.getMouseState)
+        event.motion.state = gui_sdl::functions.getMouseState(&event.motion.x, &event.motion.y);
+    event.motion.xrel = std::clamp(dx, -16384.0f, 16384.0f);
+    event.motion.yrel = std::clamp(dy, -16384.0f, 16384.0f);
+    return pushAimEvent(&event);
+}
+
+bool GUI::hasRecentPhysicalMouseMotion() noexcept
+{
+    resolveAimInput();
+    const auto last = lastPhysicalMotion.load(std::memory_order_relaxed);
+    const auto now = aimTicks ? aimTicks() : 0;
+    return last && now >= last && now - last <= 40000000;
+}
+
+int GUI::polledEvents(SDL_Event* events, int count) noexcept
+{
+    if (!initialized.load(std::memory_order_acquire) || !events)
+        return count;
 
     if (!loggedFirstPoll) {
         loggedFirstPoll = true;
         gui_log::write("polledEvents: first batch, %d event(s)", count);
     }
 
-    bool sawToggleKey = false;
-
+    int kept = 0;
     for (int i = 0; i < count; ++i) {
-        const SDL_Event& event = events[i];
-
-        // Same range the donor feeds to ImGui: keyboard, mouse, text, window and drop events.
-        if (event.type < SDL_EVENT_KEY_DOWN || event.type > SDL_EVENT_DROP_POSITION)
-            continue;
-        if (event.type == SDL_EVENT_USER)
-            continue;
-
-        if (event.type == SDL_EVENT_KEY_DOWN && isMenuToggleKey(event))
-            sawToggleKey = true;
-
+        const SDL_Event event = events[i];
+        if (event.type == SDL_EVENT_MOUSE_MOTION && event.motion.reserved != kAimMotionTag
+            && (event.motion.xrel != 0 || event.motion.yrel != 0)) {
+            physicalMouseId.store(event.motion.which, std::memory_order_relaxed);
+            resolveAimInput();
+            if (aimTicks) lastPhysicalMotion.store(aimTicks(), std::memory_order_relaxed);
+        }
+        if (menu_input::toggles(event)) {
+            const bool wasOpen = menuOpen.load(std::memory_order_acquire);
+            menuOpen.store(!wasOpen, std::memory_order_release);
+            if (wasOpen)
+                synthesizeMenuCloseInput();
+        }
+        const bool open = menuOpen.load(std::memory_order_acquire);
         queueEvent(event);
-    }
-
-    bool menuWasOpen = false;
-    if (sawToggleKey) {
-        menuWasOpen = menuOpen.load(std::memory_order_acquire);
-        menuOpen.store(!menuWasOpen, std::memory_order_release);
-        if (menuWasOpen)
-            synthesizeMenuCloseInput(); // game-side keys stuck down behind the swallow
-    }
-
-    // Mirror what the GAME receives into gameKeyDown/gameMouseDown: the swallow decision in
-    // SDLHook_PeepEvents uses the menuOpen state AFTER this flip, so this batch is delivered
-    // to the game exactly when the menu is (now) closed - which includes the closing toggle
-    // batch itself. While the menu is open the batch is swallowed: do not update the mirror.
-    if (!menuOpen.load(std::memory_order_acquire)) {
-        for (int i = 0; i < count; ++i) {
-            const SDL_Event& event = events[i];
-            switch (event.type) {
-            case SDL_EVENT_KEY_DOWN:
-            case SDL_EVENT_KEY_UP: {
-                const auto scancode = static_cast<int>(event.key.scancode);
-                if (scancode >= 0 && scancode < 256)
-                    gameKeyDown[scancode] = event.type == SDL_EVENT_KEY_DOWN;
-                break;
-            }
-            case SDL_EVENT_MOUSE_BUTTON_DOWN:
-            case SDL_EVENT_MOUSE_BUTTON_UP:
-                if (event.button.button >= 1 && event.button.button <= 5)
-                    gameMouseDown[event.button.button] = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
-                break;
-            default:
-                break;
-            }
+        if (menu_input::captured(event, open))
+            continue;
+        events[kept++] = event;
+        switch (event.type) {
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_UP: {
+            const auto scancode = static_cast<int>(event.key.scancode);
+            if (scancode >= 0 && scancode < 256)
+                gameKeyDown[scancode] = event.type == SDL_EVENT_KEY_DOWN;
+            break;
+        }
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            if (event.button.button >= 1 && event.button.button <= 5)
+                gameMouseDown[event.button.button] = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
+            break;
+        default:
+            break;
         }
     }
 
     if (!backendReady.load(std::memory_order_acquire)) {
-        // Capture the game's main window. Primary path: a window event in this batch (the game
-        // window usually exists long before injection, so periodic focus/enter events and the
-        // render-thread fallback below both matter).
-        for (int i = 0; i < count; ++i) {
+        
+        
+        
+        for (int i = 0; i < kept; ++i) {
             const SDL_Event& event = events[i];
             if (event.type >= SDL_EVENT_WINDOW_FIRST && event.type <= SDL_EVENT_WINDOW_LAST) {
                 if (SDL_Window* window = gui_sdl::functions.getWindowFromID(event.window.windowID))
@@ -392,7 +437,7 @@ bool GUI::polledEvents(const SDL_Event* events, int count) noexcept
         }
     }
 
-    return menuOpen.load(std::memory_order_acquire);
+    return kept;
 }
 
 void GUI::requestUnload() noexcept
@@ -418,13 +463,13 @@ bool GUI::render(VkCommandBuffer commandBuffer) noexcept
     }
     lastRenderStart = renderStart;
 
-    // self-integrity watchdog (.text checksum drift + attached-tracer detection), internally
-    // throttled to one pass every ~15 s - see SelfIntegrity.h
+    
+    
     self_integrity::tick();
 
     if (!backendReady.load(std::memory_order_acquire)) {
-        // Fallback window capture: if no window event was seen yet, take whatever window holds
-        // keyboard/mouse focus right now (the game window in practice).
+        
+        
         SDL_Window* focused = gui_sdl::functions.getKeyboardFocus ? gui_sdl::functions.getKeyboardFocus() : nullptr;
         if (!focused)
             focused = gui_sdl::functions.getMouseFocus ? gui_sdl::functions.getMouseFocus() : nullptr;
@@ -441,13 +486,13 @@ bool GUI::render(VkCommandBuffer commandBuffer) noexcept
     ImGuiIO& io = ImGui::GetIO();
     io.MouseDrawCursor = isMenuOpen() && gui_sdl::functions.getWindowMouseGrab(gui_sdl::window);
 
-    // Release the game's mouse grab + relative mode while the menu is open - relative mode
-    // reports deltas as positions and made the cursor crawl.
+    
+    
     gui_sdl::updateMouseMode(isMenuOpen());
 
-    neverlose::processDeferred(); // menu-scale changes: font reload happens outside the frame
+    neverlose::processDeferred(); 
 
-    // menu-open/close edges: arm the cinematic reveal / its mirror-image dismissal
+    
     {
         static bool menuWasOpen = false;
         if (isMenuOpen() && !menuWasOpen)
@@ -462,7 +507,7 @@ bool GUI::render(VkCommandBuffer commandBuffer) noexcept
     gui_sdl::newFrame(isMenuOpen());
     CrashLogger::trace(0x202);
 
-    // Minimized window: nothing to draw into this frame (0-sized render passes are invalid).
+    
     if (io.DisplaySize.x <= 0.0f || io.DisplaySize.y <= 0.0f)
         return false;
 
@@ -470,23 +515,23 @@ bool GUI::render(VkCommandBuffer commandBuffer) noexcept
     CrashLogger::trace(0x203);
 
     const float target = isMenuOpen() ? 1.0f : 0.0f;
-    static float alpha = 0.0f; // present-thread only state
-    alpha = expDecay(alpha, target, kAlphaDecay, io.DeltaTime);
+    static float alpha = 0.0f; 
+    alpha = isMenuOpen() ? expDecay(alpha, target, kAlphaDecay, io.DeltaTime) : 0.0f;
 
     if (!isMenuOpen())
-        neverlose::cancelKeybindCapture(); // never bind gameplay keys while the menu is closed
+        neverlose::cancelKeybindCapture(); 
 
-    // Game-anchored HUD (hitmarker, player list) draws EVERY frame -
-    // it must not disappear with the menu (it did when it lived inside neverlose::render,
-    // which is alpha-gated on menu visibility).
+    
+    
+    
     neverlose::renderGameOverlay();
 
-    // The outer glow fades with the shell (menuAlpha), like the shell itself.
+    
     neverlose::drawMenuGlow(alpha);
 
-    // The dismissal keeps calling render() past the alpha fade so its scale/slide transform
-    // lands visibly instead of being cut off when alpha hits zero.
-    if (alpha > kAlphaEpsilon || neverlose::isDismissing()) {
+    
+    
+    if (isMenuOpen() && alpha > kAlphaEpsilon) {
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
         neverlose::render();
         ImGui::PopStyleVar();
@@ -496,19 +541,19 @@ bool GUI::render(VkCommandBuffer commandBuffer) noexcept
     ImGui::Render();
     CrashLogger::trace(0x205);
 
-    // Vertex high-water tracking. The ImGui Vulkan backend grows its upload buffers
-    // geometrically, so a slowly climbing content max (normal interaction) is irrelevant - it
-    // only logs on a DOUBLING or a +8k jump, which is what a resize storm (content size
-    // oscillation between two large maxima) produces frame after frame. Healthy sessions write
-    // nothing; a storm shows as repeated lines. A one-line note at a brand-new maximum is
-    // suppressed unless it doubles - the climb itself is not the anomaly.
+    
+    
+    
+    
+    
+    
     if (const ImDrawData* drawData = ImGui::GetDrawData()) {
         if (vtxHighWater > 0
             && (drawData->TotalVtxCount > vtxHighWater * 2 || drawData->TotalVtxCount > vtxHighWater + 8192)) {
             vtxHighWater = drawData->TotalVtxCount;
             gui_log::write("[perf] vertex high-water %d (jump - oscillating content would resize upload buffers)", vtxHighWater);
         } else if (drawData->TotalVtxCount > vtxHighWater) {
-            vtxHighWater = drawData->TotalVtxCount; // track silently until a real jump happens
+            vtxHighWater = drawData->TotalVtxCount; 
         }
     }
 

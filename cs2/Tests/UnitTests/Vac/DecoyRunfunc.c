@@ -1,4 +1,4 @@
-// Hunter-test decoy WITH a runfunc export: must be flagged.
+
 __attribute__((visibility("default"))) void runfunc(void)
 {
 }

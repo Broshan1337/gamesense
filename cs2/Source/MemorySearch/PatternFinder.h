@@ -57,6 +57,17 @@ public:
                 resultToStore = result.abs2(operation == CodePatternOperation::Abs4 ? 4 : 5);
             } else if (operation == CodePatternOperation::Read) {
                 resultToStore = result.read();
+            } else if (operation == CodePatternOperation::Read8) {
+                
+                
+                
+                
+                
+                
+                resultToStore = result.read8();
+            } else {
+                
+                assert(false && "unhandled CodePatternOperation in findPatterns");
             }
             results.store(patternIndex, resultToStore);
             ++patternIndex;
@@ -67,10 +78,10 @@ public:
     {
         auto patternFinder = HybridPatternFinder{bytes, pattern};
         const auto found = patternFinder.findNextOccurrence();
-        // Uniqueness is enforced in EVERY build, not just debug: a non-unique pattern after an
-        // update means we matched a decoy site whose .read()/abs2() yields plausible-looking
-        // garbage - silently calling that is deadlier than failing loud. Treat duplicates exactly
-        // like a miss (zeroed result + the not-found handler).
+        
+        
+        
+        
         if (patternFinder.findNextOccurrence() != nullptr) {
             NotFoundHandler::onPatternNotFound(pattern);
             return {};

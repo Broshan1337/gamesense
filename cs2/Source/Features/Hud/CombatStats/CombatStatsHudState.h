@@ -6,26 +6,26 @@
 
 #include <Utils/SpinLock.h>
 
-// COMBAT HUD shared state (hit counters + hit feed). The counters and feed lines are ONLY
-// touched on the game thread (CombatStats event bookkeeping + its run() publish); the present
-// thread draws them through the publish/snapshot spinlock pair - the same shape as
-// cheat_ometer's HUD snapshot and SpectatorSnapshot.
+
+
+
+
 namespace combat_stats_hud
 {
 
-// One feed line, rendered as colored segments: faint verb + accent name + accent damage +
-// faint suffix ("hit <name> for <dmg> in head" / "killed <name>" / "missed xN").
+
+
 struct FeedEntry {
-    char kind{0};        // 0 = empty slot, 'h' hit, 'k' kill, 'm' miss
+    char kind{0};        
     char name[44]{};
     int damage{0};
     bool headshot{false};
     int missCount{0};
-    double spawnTime{0.0}; // monotonic seconds - drives the slide/fade entrance
+    double spawnTime{0.0}; 
 };
 
-// Entrance animation: seconds from spawn to full opacity, and the px slide distance. Kept here
-// because the semantics belong to the entry lifecycle, while the drawing happens present-side.
+
+
 inline constexpr double kFeedSlideSeconds = 0.3;
 inline constexpr float kFeedSlidePixels = 6.0f;
 
@@ -36,9 +36,9 @@ inline std::uint32_t shotsFired{0};
 inline std::uint32_t hitsLanded{0};
 inline FeedEntry feedEntries[kFeedLines]{};
 
-// "a session is running" gate, published by CombatStats::run() (game thread) - the old
-// Panorama boxes had it for free (their HUD root only existed in-match); the draw side uses
-// it so the boxes never float over the main menu.
+
+
+
 inline std::atomic<bool> hudLive{false};
 
 inline void publish(std::uint32_t shots, std::uint32_t hits, const FeedEntry* entries, int count) noexcept

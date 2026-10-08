@@ -82,11 +82,11 @@ public:
     {
         const auto partialContext = deferredCompleteContext.partial();
 
-        // Resolve the return address spoofer's `pop rcx; ret` gadget out of libclient.so's
-        // executable section (and self-verify a spoofed invocation). Once resolved, EVERY spoofable
-        // game function reached via patternSearchResults().get<...>() is called through the spoofer
-        // (AllMemoryPatternSearchResults::get() wraps them), so a stack walk from inside a game
-        // function sees a return address in libclient.so instead of ours.
+        
+        
+        
+        
+        
         RetAddrSpoofer::init(partialContext.clientDLL.getCodeSection().raw());
 
         deferredCompleteContext.makeComplete(

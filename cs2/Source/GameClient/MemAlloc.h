@@ -20,7 +20,7 @@ public:
             return nullptr;
 
         if (const auto fn = hookContext.patternSearchResults().template get<OffsetAllocVirtualMethod>().of((*deps().thisptr)->vmt).get())
-            return RetAddrSpoofer::spoof(*fn)(*deps().thisptr, size); // spoofed VMT-slot call into libclient.so
+            return RetAddrSpoofer::spoof(*fn)(*deps().thisptr, size); 
 
         return nullptr;
     }

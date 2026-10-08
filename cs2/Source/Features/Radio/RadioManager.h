@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <cerrno>
+#include <ctime>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -15,6 +17,7 @@
 #include <CS2/Constants/TeamNumberConstants.h>
 #include <CS2/Constants/DllNames.h>
 #include <Features/Radio/RadioConfigVariables.h>
+#include <Features/Radio/RadioNowPlayingParser.h>
 #include <Features/Radio/RadioStationParser.h>
 #include <GameClient/Bind.h>
 #include <GameClient/ConVars/CvarSystem.h>
@@ -23,6 +26,7 @@
 #include <GameClient/GameEvents/GameEventFields.h>
 #include <HookContext/HookContextMacros.h>
 #include <Platform/Linux/LinuxDynamicLibrary.h>
+#include <Utils/NsPaths.h>
 #include <Utils/NsStr.h>
 #include <UI/ImGui/GuiLog.h>
 #include <Utils/CrashLogger.h>
@@ -30,20 +34,23 @@
 #include <Utils/VerifyConsole.h>
 
 
-// Web radio backed by the RadioTime / TuneIn OPML API - the same endpoints the reference implementation
-// uses (Browse.ashx?c=local for the region's local stations, Search.ashx for queries, Tune.ashx to turn
-// a station id into a playable stream URL). We don't decode audio ourselves: ffplay does, ON THE HOST,
-// because CS2 runs inside the Steam Linux Runtime container (pressure-vessel) where ffplay does not exist
-// and only /usr/bin:/bin are on PATH. Everything therefore runs through `steam-runtime-launch-client
-// --host`, which executes on the host (host PATH, host libraries, host network, host audio proxied back
-// in via PULSE_SERVER). curl also runs host-side. /tmp is shared between the container and the host, so
-// the container-side game reads the JSON that host-side curl writes there.
-//
-// Fetches are asynchronous and non-blocking: startBrowseLocal()/startSearch() fire a detached host
-// `curl ... -o file.part && mv file.part file` (the rename makes the finished file appear atomically),
-// and poll() - driven each GUI frame by RadioTab - reads and parses it once it lands. Playback is
-// resolved entirely host-side in one shell command (curl Tune.ashx | grep first stream URL | exec
-// ffplay), so there is no second round trip through the game.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 extern "C" char** environ;
 
 template <typename HookContext>
@@ -56,15 +63,15 @@ public:
 
     static constexpr int kMaxResults = 40;
 
-    // --- station list fetching (async) ---
+    
 
     void startBrowseLocal() const noexcept
     {
         beginFetch("https://opml.radiotime.com/Browse.ashx?c=local&render=json&formats=mp3,aac");
     }
 
-    // `query` is already URL-safe (the Panorama side percent-encodes it into a single token, so it never
-    // contains spaces or quotes). An empty query falls back to the local browse.
+    
+    
     void startSearch(std::string_view query) const noexcept
     {
         if (query.empty()) {
@@ -77,8 +84,8 @@ public:
         beginFetch(builder.cstring());
     }
 
-    // Reads and parses the fetched station list if it has landed. Cheap when idle (a single failing
-    // open() while the fetch is still in flight). Sets the dirty flag so the UI repaints the rows.
+    
+    
     void poll() const noexcept
     {
         bool fetchProcessDone = false;
@@ -86,18 +93,18 @@ public:
             int status;
             if (::waitpid(fetchPid, &status, WNOHANG) == fetchPid) {
                 fetchPid = 0;
-                fetchProcessDone = true; // the shell (curl && mv) has finished; the file is final now
+                fetchProcessDone = true; 
             }
         }
 
         if (!fetchPending)
             return;
 
-        NS_DEC(kResultsPath, kResultsPathEnc);
-        const int fd = ::open(kResultsPath, O_RDONLY);
+        resolveRadioPaths();
+        const int fd = ::open(resultsPath, O_RDONLY);
         if (fd < 0) {
-            // Process exited and no result file landed: the fetch failed (offline, timeout) -
-            // clear the pending flag so the UI's loading indicator does not stick forever.
+            
+            
             if (fetchProcessDone)
                 fetchPending = false;
             return;
@@ -113,8 +120,7 @@ public:
                 break;
         }
         ::close(fd);
-        NS_DEC(kResultsPath2, kResultsPathEnc);
-        ::unlink(kResultsPath2);
+        ::unlink(resultsPath);
         fetchBuffer[total] = '\0';
         fetchPending = false;
 
@@ -126,18 +132,117 @@ public:
     [[nodiscard]] const RadioStation& station(int index) const noexcept { return results[index]; }
     [[nodiscard]] const char* header() const noexcept { return resultsHeader; }
 
-    // True while a station-list fetch is in flight (UI shows a loading state).
+    
     [[nodiscard]] bool fetching() const noexcept { return fetchPending; }
 
-    // Id of the station passed to the most recent play (UI highlights the matching row).
+    
     [[nodiscard]] const char* lastPlayed() const noexcept { return lastPlayedId; }
 
-    // Display name of the station passed to the most recent play (for the now-playing row);
-    // survives across result list changes.
+    
+    
     [[nodiscard]] const char* lastPlayedName() const noexcept { return lastPlayedNameBuf; }
 
-    // Returns true (once) after new results have been parsed, so the UI only repaints when something
-    // actually changed.
+    
+
+    
+    
+    
+    
+    
+    
+    
+    void updateNowPlaying() const noexcept
+    {
+        const int volume = static_cast<int>(GET_CONFIG_VAR(radio_vars::Volume));
+        if (currentPid > 0 && volume != appliedVolume && ++volumeApplyCounter >= 9) {
+            volumeApplyCounter = 0;
+            appliedVolume = volume;
+            writeVolumeScriptOnce();
+            StringBuilderStorage<320> storage;
+            auto builder = storage.builder();
+            builder.put("exec python3 ", volScriptPath, ' ', radioSocketPath, ' ', volume);
+            if (volPid > 0)
+                ::waitpid(volPid, nullptr, WNOHANG);
+            volPid = spawnHostShell(builder.cstring());
+        }
+
+        // Poll by elapsed time so the widget still works with low FPS or a closed menu.
+        timespec timestamp{};
+        if (::clock_gettime(CLOCK_MONOTONIC, &timestamp) != 0)
+            return;
+        const double now = static_cast<double>(timestamp.tv_sec) + timestamp.tv_nsec / 1.0e9;
+        if (now < nextNowPlayingPoll)
+            return;
+        nextNowPlayingPoll = now + 0.5;
+        resolveRadioPaths();
+
+        
+        if (mprisPid > 0) {
+            const auto reaped = ::waitpid(mprisPid, nullptr, WNOHANG);
+            if (reaped == mprisPid || (reaped < 0 && errno == ECHILD))
+                mprisPid = 0;
+        }
+        if (volPid > 0 && ::waitpid(volPid, nullptr, WNOHANG) == volPid)
+            volPid = 0;
+
+        if (isPlaying()) {
+            static_cast<void>(readFileInto(nowPlayingTrackBuf, sizeof(nowPlayingTrackBuf), metaFilePath));
+            // The radio itself can be the active MPRIS player. Keep probing metadata.
+        }
+
+        
+        if (!GET_CONFIG_VAR(radio_vars::ShowMediaPlayers)) {
+            clearMpris();
+            return;
+        }
+        if (mprisPid == 0) {
+            StringBuilderStorage<2048> storage;
+            auto builder = storage.builder();
+            builder.put("export PATH=\"$HOME/.nix-profile/bin:/etc/profiles/per-user/$(id -un)/bin:/run/current-system/sw/bin:/usr/bin:/bin:$PATH\"; ",
+                        "export XDG_RUNTIME_DIR=\"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}\"; ",
+                        "export DBUS_SESSION_BUS_ADDRESS=\"${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}\"; ",
+                        "timeout 2s playerctl --all-players metadata --format '{{playerName}}", '\x1f', "{{title}}", '\x1f',
+                        "{{artist}}", '\x1f', "{{status}}", '\x1f', "{{mpris:artUrl}}", "' > ");
+            appendShellPath(builder, mprisPartPath);
+            builder.put(" 2>/dev/null && mv -f ");
+            appendShellPath(builder, mprisPartPath);
+            builder.put(' ');
+            appendShellPath(builder, mprisFilePath);
+            builder.put(" || rm -f ");
+            appendShellPath(builder, mprisFilePath);
+            mprisPid = spawnHostShell(builder.cstring());
+        }
+        char fileBuffer[8192];
+        if (!readFileInto(fileBuffer, sizeof(fileBuffer), mprisFilePath)) {
+            clearMpris();
+            return;
+        }
+        MprisNowPlaying playing{};
+        if (RadioNowPlayingParser::parseMprisOutput(fileBuffer, playing)) {
+            copyText(mprisPlayerBuf, playing.player, static_cast<int>(sizeof(mprisPlayerBuf)));
+            copyText(mprisTitleBuf, playing.title, static_cast<int>(sizeof(mprisTitleBuf)));
+            copyText(mprisArtistBuf, playing.artist, static_cast<int>(sizeof(mprisArtistBuf)));
+            mprisPaused = playing.paused;
+            copyText(mprisArtworkBuf, playing.artwork, sizeof(mprisArtworkBuf));
+            updateArtwork();
+        } else {
+            clearMpris();
+        }
+    }
+
+    [[nodiscard]] const char* nowPlayingTrack() const noexcept { return nowPlayingTrackBuf; }
+    [[nodiscard]] const char* mprisPlayerName() const noexcept { return mprisPlayerBuf; }
+    [[nodiscard]] const char* mprisTrack() const noexcept { return mprisTitleBuf; }
+    [[nodiscard]] const char* mprisArtist() const noexcept { return mprisArtistBuf; }
+    [[nodiscard]] const char* mprisArtwork() const noexcept { return mprisArtworkBuf; }
+    [[nodiscard]] const char* mprisArtworkFile() const noexcept
+    {
+        return mprisArtworkBuf[0] && std::strcmp(mprisArtworkBuf, readyArtworkUrl) == 0 ? artworkFilePath : nullptr;
+    }
+    [[nodiscard]] bool mprisIsPaused() const noexcept { return mprisPaused; }
+
+    
+    
     [[nodiscard]] bool consumeDirty() const noexcept
     {
         if (!resultsDirty)
@@ -146,7 +251,7 @@ public:
         return true;
     }
 
-    // --- playback ---
+    
 
     void playResult(int index) const noexcept
     {
@@ -164,9 +269,10 @@ public:
             playId(lastPlayedId);
     }
 
-    // Stops any current stream. Kills the host ffplay by its marker (the container-side launch-client
-    // cannot reach it), then reaps our tracked launch-client. The pkill runs synchronously so a
-    // following play cannot race it.
+    
+    
+    
+    
     void stop() const noexcept
     {
         NS_DEC(kMarker, kMarkerEnc);
@@ -189,9 +295,17 @@ public:
             ::waitpid(currentPid, nullptr, 0);
             currentPid = 0;
         }
+        if (metaPid > 0) {
+            ::kill(metaPid, SIGKILL);
+            ::waitpid(metaPid, nullptr, 0);
+            metaPid = 0;
+        }
+        nowPlayingTrackBuf[0] = '\0';
+        resolveRadioPaths();
+        ::unlink(metaFilePath);
     }
 
-    // --- favorites + recents ---
+    
 
     static constexpr int kMaxFavorites = 16;
     static constexpr int kMaxRecent = 8;
@@ -211,7 +325,7 @@ public:
         return favoriteIndexFor(id) >= 0;
     }
 
-    // Adds/removes a station from the persisted favorites list and rewrites the file.
+    
     void toggleFavorite(const char* id, const char* name) const noexcept
     {
         loadFavoritesOnce();
@@ -225,12 +339,12 @@ public:
             copyText(favoriteStations[favoriteStationCount].name, name, sizeof(SavedStation::name));
             ++favoriteStationCount;
         } else {
-            return; // list full - nothing changes (and no pointless rewrite)
+            return; 
         }
         saveFavorites();
     }
 
-    // Plays a persisted favorite directly (Tune.ashx resolves by id - no result list needed).
+    
     void playFavorite(int index) const noexcept
     {
         loadFavoritesOnce();
@@ -242,7 +356,7 @@ public:
         playId(favoriteStations[index].id);
     }
 
-    // Same as playFavorite but for the session "recently played" ring.
+    
     void playRecent(int index) const noexcept
     {
         if (index < 0 || index >= recentStationCount)
@@ -262,33 +376,34 @@ public:
         micBroadcastHardOff();
     }
 
-    // --- mic broadcast (radio -> voice chat) ---
-    //
-    // While the menu toggle is on AND a station is playing, the game's microphone capture is
-    // routed to a virtual source: the switch script (written once to /tmp/ns_mic_radio.sh,
-    // executed ON THE HOST via spawnHostShell) creates a module-pipe-source, feeds it with a
-    // second ffmpeg streaming the same station at s16le/48k mono, and `pactl
-    // move-source-output`s the cs2 capture stream (matched by application.name = "cs2") to it.
-    // When the radio stops or the toggle goes off, the capture is moved back to the remembered
-    // original source and the user can talk normally. Nothing in the game is touched - this is
-    // purely at the audio-server level, so it works regardless of which layer captures the mic.
-    //
-    // On top of the routing, the voice key is held for the whole broadcast: `+voicerecord` is
-    // queued through the console when the broadcast engages and `-voicerecord` when it
-    // disengages. The plus command latches the button down exactly like a physical key press,
-    // so the routed radio audio is transmitted CONTINUOUSLY without the user holding anything
-    // (CS2 only sends voice while the key is down). If the user is dead or between matches the
-    // press just does nothing and broadcasting resumes automatically once it would work again.
-    //
-    // Called every frame from the present thread (renderGameOverlay) so the routing follows
-    // play/stop transitions even while the user is on another menu tab.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     [[nodiscard]] bool isPlaying() const noexcept
     {
         if (currentPid <= 0)
             return false;
         int status;
         if (::waitpid(currentPid, &status, WNOHANG) == currentPid) {
-            currentPid = 0; // ffplay exited (stream ended / -autoexit)
+            currentPid = 0; 
             return false;
         }
         return true;
@@ -296,25 +411,28 @@ public:
 
     void updateMicBroadcast() const noexcept
     {
-        // keep OUR crash handlers installed: the game/breakpad re-installs its own lazily per
-        // subsystem and would silently steal SIGABRT from us (the 2026-09-13 silent deaths).
+        
+        
         CrashLogger::reassert();
         writeBroadcastScriptOnce();
         const bool want = isPlaying() && GET_CONFIG_VAR(radio_vars::MicBroadcast);
         const bool stationChanged = micBroadcastActive && std::strcmp(micBroadcastStation, lastPlayedId) != 0;
         if (want == micBroadcastActive && !stationChanged) {
-            // While broadcasting: re-assert the synthetic press (window focus changes and other
-            // transitions clear SDL's key state), re-apply the capture-stream move (the stream
-            // only exists while voice is engaged, so the first move may have had nothing to
-            // move - and re-created streams land back on the default mic), and probe the
-            // capture level. Same ~2s cadence for all three.
+            
+            
+            
+            
+            
             if (micBroadcastActive && ++voiceKeyReassertCounter >= 128) {
                 voiceKeyReassertCounter = 0;
                 synthVoiceKey(true, true);
-                static_cast<void>(spawnHostShell("exec sh /tmp/ns_mic_radio.sh keepalive"));
-                // Anomaly-only probe (gui log contract: silence = healthy): if the game's voice
-                // capture reports no signal level for ~6s straight while the FIFO is being fed,
-                // the routing failed - say so once instead of failing silently.
+                resolveRadioPaths();
+                char keepaliveCommand[288];
+                if (std::snprintf(keepaliveCommand, sizeof(keepaliveCommand), "exec sh %s keepalive", micScriptPath) > 0)
+                    static_cast<void>(spawnHostShell(keepaliveCommand));
+                
+                
+                
                 if (const auto peak = hookContext.template make<CvarSystem>().readFloatConVar("voice_vox_current_peak")) {
                     if (*peak > 0.0f) {
                         capturePeakZeroStreak = 0;
@@ -327,15 +445,16 @@ public:
             }
             return;
         }
-        StringBuilderStorage<96> storage;
+        resolveRadioPaths();
+        StringBuilderStorage<384> storage;
         auto builder = storage.builder();
         if (want) {
-            builder.put("exec sh /tmp/ns_mic_radio.sh on ", lastPlayedId);
+            builder.put("exec sh ", micScriptPath, " on ", lastPlayedId);
             copyId(micBroadcastStation, lastPlayedId);
             micBroadcastActive = true;
             armTransmission();
         } else {
-            builder.put("exec sh /tmp/ns_mic_radio.sh off");
+            builder.put("exec sh ", micScriptPath, " off");
             micBroadcastStation[0] = '\0';
             micBroadcastActive = false;
             disarmTransmission();
@@ -355,24 +474,24 @@ public:
     }
 
 
-        // FrameStageNotify-6 consumer: the ONLY place this feature touches the engine console.
-    // Called from the FSN hook (game thread, ticks in menus too). Drains the bind/unbind and
-    // voice-enable requests queued by the present-thread updates. Single-slot last-wins is
-    // correct: all three operations are idempotent.
+        
+    
+    
+    
     void runFrameStageNotify() const noexcept
     {
         if (pendingModenable.exchange(false, std::memory_order_relaxed)) {
             auto&& executor = hookContext.template make<EngineCommandExecutor>();
             executor.execute("voice_modenable 1");
-            // THE SOUNDBOARD'S MIC-OPEN LEVER (the 2026-09-13 "no capture stream at all"
-            // route report): CS2 only opens the mic capture stream while voice is engaged -
-            // and if the user's voice chat is off/unengaged, nothing we synth creates a
-            // capture for the virtual-source move to redirect. voice_always_sample_mic
-            // forces the engine to sample the mic PERMANENTLY (capture stream always exists),
-            // while +voicerecord keeps gating transmission (which we synth per-clip). One-way
-            // per session: sampling is not transmitting, and the airhorn/radio depend on the
-            // stream existing. (If the cvar were ever renamed the exec just warns in console
-            // - the same harmless unknown-command shape as the playerchatwheel precedent.)
+            
+            
+            
+            
+            
+            
+            
+            
+            
             if (!micAlwaysSampled) {
                 micAlwaysSampled = true;
                 executor.execute("voice_always_sample_mic 1");
@@ -394,34 +513,34 @@ public:
     }
 
 private:
-    // --- synthetic push-to-talk -------------------------------------------------------------
-    //
-    // The transmission story, after two failed experiments:
-    //   1. `+voicerecord` latching - does NOT transmit: the push-to-talk gate polls the PHYSICAL
-    //      bound key, a queued +command only lights the local indicator.
-    //   2. `voice_vox` + threshold clamping - the gate kept closing (icon dropped on BOTH
-    //      screens, i.e. CS2 stopped sending entirely).
-    //   3. Queued SDL key events (SDL_PeepEvents ADDEVENT) - pushed events are DATA in the queue;
-    //      they do NOT update SDL's keyboard-state array, so a state-polling gate never sees them.
-    //      NEVER re-add: they also crashed inside libclient's gameui/bind path (null deref at
-    //      libclient+0x1a8ad05, input-system frames on the stack).
-    // (A `voice_device_override` redesign was considered; the live routing stays
-    // move-source-output - it delivers, only the VOX gate was broken.)
-    // What remains is the only lever that ever worked:
-    //   SDL's keyboard-state array: SDL_GetKeyboardState returns SDL's OWN persistent per-
-    //   scancode bytes - the same array the game's binds read (our Bind::isDown reads it too).
-    //   Writing array[scancode] is exactly what SDL does for a real press: instant, no queue
-    //   round-trip, no game-thread event processing.
-    //
-    // hands-free auto-key: the lever above only opens the gate for the scancode the ENGINE has
-    // bound to +voicerecord, and the Voice Key row defaults to Off (silent no-transmit) while
-    // mouse binds have no writable state array at all. So when no usable keyboard bind is
-    // configured, the cheat binds a spare key itself (`bind f9 +voicerecord`, once per need)
-    // and synths THAT - one Broadcast checkbox transmits with zero setup, mouse-voice users
-    // included, and nobody's own binds are touched. The bind is released (`unbind f9`) as soon
-    // as neither broadcast nor airhorn needs it; a crash mid-broadcast can leave it behind
-    // (harmless spare PTT key - `unbind f9` in console removes it).
-    static constexpr int kAutoVoiceScancode = 66; // F9, USB HID 0x42 - stable across SDL2/SDL3
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    static constexpr int kAutoVoiceScancode = 66; 
     static constexpr const char* kAutoVoiceKeyName = "f9";
 
     void ensureAutoVoiceBind() const noexcept
@@ -429,10 +548,10 @@ private:
         if (autoVoiceEngaged)
             return;
         autoVoiceEngaged = true;
-        // Queued for the frame thread (runFrameStageNotify), NOT executed here: the engine
-        // command buffer is not thread-safe and this runs on the present thread. Draining on
-        // FrameStageNotify-6 is ChatTools-proven (their say/name/color commands run there every
-        // session, in menus too) and costs ~a frame.
+        
+        
+        
+        
         pendingBindAction.store(1, std::memory_order_relaxed);
         if (!autoVoiceHinted) {
             autoVoiceHinted = true;
@@ -448,14 +567,14 @@ private:
             return;
         autoVoiceEngaged = false;
         if (synthedKey == kAutoVoiceScancode) {
-            // Release the array slot directly: synthVoiceKey(false) would re-bind first.
+            
             const LinuxDynamicLibrary sdl{cs2::SDL_DLL};
             if (const auto getState = sdl.getFunctionAddress("SDL_GetKeyboardState").as<sdl3::SDL_GetKeyboardState*>())
                 const_cast<std::uint8_t*>(getState(nullptr))[kAutoVoiceScancode] = 0;
             synthedKey = 0;
             voiceKeySynthed = false;
         }
-        pendingBindAction.store(2, std::memory_order_relaxed); // drained on the frame thread
+        pendingBindAction.store(2, std::memory_order_relaxed); 
     }
 
     void synthVoiceKey(bool down, bool force = false) const noexcept
@@ -463,7 +582,7 @@ private:
         const int configured = GET_CONFIG_VAR(radio_vars::VoiceKeyBind);
         int key = 0;
         if (configured > Bind::kOff && configured <= Bind::kMaxScancode) {
-            key = configured; // manual override: the user's own keyboard voice key
+            key = configured; 
         } else {
             if (configured > Bind::kMaxScancode && !mouseKeyHinted) {
                 mouseKeyHinted = true;
@@ -481,16 +600,16 @@ private:
         if (const auto getState = sdl.getFunctionAddress("SDL_GetKeyboardState").as<sdl3::SDL_GetKeyboardState*>()) {
             auto* state = const_cast<std::uint8_t*>(getState(nullptr));
             if (synthedKey != 0 && synthedKey != key)
-                state[synthedKey] = 0; // key changed under us - release the stale slot
+                state[synthedKey] = 0; 
             state[key] = down ? 1 : 0;
             synthedKey = down ? key : 0;
         }
         voiceKeySynthed = down;
     }
 
-    // Transmission arming: voice enabled + the capture stream routed to the virtual source
-    // (the caller's script "on"/keepalive does the move) + synthetic key held. The console
-    // command is queued for the frame thread (see runFrameStageNotify) - never executed here.
+    
+    
+    
     void armTransmission() const noexcept
     {
         pendingModenable.store(true, std::memory_order_relaxed);
@@ -503,24 +622,27 @@ private:
     }
 
 
-    // The switch script must live on disk (too long for the spawnHostShell command buffer and
-    // easier to keep idempotent as a standalone file). Written once per process; /tmp is shared
-    // with the host the same way the radio results file is.
+    
+    
+    
+    
+    
     static void writeBroadcastScriptOnce() noexcept
     {
         if (broadcastScriptWritten)
             return;
         broadcastScriptWritten = true;
+        resolveRadioPaths();
 
-        // $1 = on|off|hardoff, $2 = station id (on only). Ids are alphanumeric (TuneIn), so the
-        // interpolation into the curl URL is safe.
-        //
-        // The move-source-output is back (round-1 routing DID deliver audio; only the VOX gate
-        // was broken, and the keymap press now holds the gate). The capture stream may only
-        // exist while voice is engaged, so "keepalive" re-applies the move every ~2s from the
-        // game while broadcasting - also catching re-created streams landing on the default mic.
-        // Matcher matches BOTH application.name and application.process.binary = "cs2" (the
-        // container may set either).
+        
+        
+        
+        
+        
+        
+        
+        
+        
         static constexpr char kScript[] =
             "#!/bin/sh\n"
             "# mic broadcast: feed the virtual mic and move the game's capture to it.\n"
@@ -582,7 +704,7 @@ private:
             "\t;;\n"
             "esac\n";
 
-        const int fd = ::open("/tmp/ns_mic_radio.sh", O_CREAT | O_WRONLY | O_TRUNC, 0755);
+        const int fd = ::open(micScriptPath, O_CREAT | O_WRONLY | O_TRUNC, 0755);
         if (fd < 0)
             return;
         constexpr std::size_t length = sizeof(kScript) - 1;
@@ -596,38 +718,241 @@ private:
         ::close(fd);
     }
 
-    // Resolves a station id to a stream URL and plays it, entirely host-side: curl the Tune.ashx playlist,
-    // take the first http(s) line, and exec ffplay on it. The id comes from TuneIn and is alphanumeric
-    // (e.g. "s307738"), so interpolating it into the shell command is safe.
+    
+    
+    
+    
+    
+    
+    
+    
     void playId(const char* id) const noexcept
     {
         stop();
 
-        StringBuilderStorage<512> storage;
-        auto builder = storage.builder();
         NS_DEC(kMarkerPlay, kMarkerEnc);
+        writeMetaProbeOnce();
+        StringBuilderStorage<512> probeStorage;
+        auto probeBuilder = probeStorage.builder();
+        probeBuilder.put("exec python3 ", metaScriptPath, ' ', id, ' ', kMarkerPlay.c_str(), ' ', metaFilePath);
+        if (metaPid > 0) {
+            ::waitpid(metaPid, nullptr, WNOHANG);
+            metaPid = 0;
+        }
+        metaPid = spawnHostShell(probeBuilder.cstring());
+
+        resolveRadioPaths();
+        ::unlink(radioSocketPath); 
+        const int volume = static_cast<int>(GET_CONFIG_VAR(radio_vars::Volume));
+        appliedVolume = volume; 
+
+        StringBuilderStorage<768> storage;
+        auto builder = storage.builder();
         builder.put("U=$(curl -s --max-time 15 'https://opml.radiotime.com/Tune.ashx?id=", id,
-                    "' | grep -m1 -E '^https?://'); [ -n \"$U\" ] && exec ffplay -nodisp -autoexit -loglevel quiet -window_title ",
-                    kMarkerPlay.c_str(), " -volume ", static_cast<int>(GET_CONFIG_VAR(radio_vars::Volume)), " \"$U\"");
+                    "' | grep -m1 -E '^https?://'); [ -n \"$U\" ] && { rm -f ", radioSocketPath, "; "
+                    "if command -v mpv >/dev/null 2>&1; then "
+                    "exec mpv --config=no --no-video --really-quiet --no-terminal --input-ipc-server=", radioSocketPath,
+                    " --title=", kMarkerPlay.c_str(), " --volume=", volume, " \"$U\"; "
+                    "else exec ffplay -nodisp -autoexit -loglevel quiet -window_title ", kMarkerPlay.c_str(),
+                    " -volume ", volume, " \"$U\"; fi; }");
 
         const pid_t pid = spawnHostShell(builder.cstring());
         if (pid > 0)
             currentPid = pid;
     }
 
-    // Deletes any stale result file, then fires a detached host curl that writes the new one atomically.
+    
+    
+    
+    
+    static void writeMetaProbeOnce() noexcept
+    {
+        if (metaScriptWritten)
+            return;
+        metaScriptWritten = true;
+        resolveRadioPaths();
+
+        static constexpr char kScript[] =
+            "#!/usr/bin/env python3\n"
+            "# Radio now-playing burst probe (written by the game module): resolve the station's\n"
+            "# stream URL from TuneIn, connect ONCE with Icy-MetaData, read only the first metadata\n"
+            "# block (~2 KB - the title rides the top of the stream), write it out, disconnect.\n"
+            "# Repeats once a minute while the player lives: ~130 KB/hour, vs ~56 MB/hour for a\n"
+            "# second persistent stream connection. Self-terminates with the player (pgrep of the\n"
+            "# playback marker, which this script also carries in argv so stop()'s pkill finds it).\n"
+            "import os, re, socket, ssl, subprocess, sys, time\n"
+            "station_id, marker, out_path = sys.argv[1], sys.argv[2], sys.argv[3]\n"
+            "deadline = time.time() + 4 * 3600\n"
+            "current = None\n"
+            "def player_alive():\n"
+            "    for pat in (\"mpv.*\" + marker, \"ffplay.*\" + marker):\n"
+            "        try:\n"
+            "            if subprocess.run([\"pgrep\", \"-f\", pat], stdout=subprocess.DEVNULL,\n"
+            "                              stderr=subprocess.DEVNULL).returncode == 0:\n"
+            "                return True\n"
+            "        except OSError:\n"
+            "            return True  # cannot check - assume alive; the hard cap still bounds this\n"
+            "    return False\n"
+            "def fetch_title():\n"
+            "    try:\n"
+            "        import urllib.request\n"
+            "        page = urllib.request.urlopen(\"https://opml.radiotime.com/Tune.ashx?id=\" + station_id,\n"
+            "                                      timeout=12).read(4096).decode(\"utf-8\", \"replace\")\n"
+            "    except Exception:\n"
+            "        return None\n"
+            "    m = re.search(r\"https?://\\S+\", page)\n"
+            "    if not m:\n"
+            "        return None\n"
+            "    url = m.group(0)\n"
+            "    try:\n"
+            "        scheme, _, rest = url.partition(\"://\")\n"
+            "        host, _, path = rest.partition(\"/\")\n"
+            "        raw = socket.create_connection((host, 443 if scheme == \"https\" else 80), timeout=10)\n"
+            "        if scheme == \"https\":\n"
+            "            raw = ssl.create_default_context().wrap_socket(raw, server_hostname=host)\n"
+            "        raw.sendall((\"GET /%s HTTP/1.1\\r\\nHost: %s\\r\\nIcy-MetaData: 1\\r\\n\"\n"
+            "                     \"Connection: close\\r\\nUser-Agent: Mozilla/5.0\\r\\n\\r\\n\" % (path, host)).encode())\n"
+            "        buf = b\"\"\n"
+            "        while b\"\\r\\n\\r\\n\" not in buf:\n"
+            "            chunk = raw.recv(4096)\n"
+            "            if not chunk:\n"
+            "                return None\n"
+            "            buf += chunk\n"
+            "        head, buf = buf.split(b\"\\r\\n\\r\\n\", 1)\n"
+            "        metaint = 0\n"
+            "        for line in head.decode(\"latin1\").split(\"\\r\\n\"):\n"
+            "            if line.lower().startswith(\"icy-metaint:\"):\n"
+            "                try:\n"
+            "                    metaint = int(line.split(\":\", 1)[1].strip())\n"
+            "                except ValueError:\n"
+            "                    metaint = 0\n"
+            "        if not metaint:\n"
+            "            return None  # station publishes no in-band titles - stay station-only\n"
+            "        for _ in range(96):  # the title is near the top; a handful of blocks is plenty\n"
+            "            while len(buf) < metaint + 1:\n"
+            "                chunk = raw.recv(65536)\n"
+            "                if not chunk:\n"
+            "                    return None\n"
+            "                buf += chunk\n"
+            "            buf = buf[metaint:]\n"
+            "            ln = buf[0]\n"
+            "            buf = buf[1:]\n"
+            "            if ln:\n"
+            "                while len(buf) < ln * 16:\n"
+            "                    chunk = raw.recv(65536)\n"
+            "                    if not chunk:\n"
+            "                        return None\n"
+            "                    buf += chunk\n"
+            "                block, buf = buf[:ln * 16], buf[ln * 16:]\n"
+            "                t = re.search(r\"StreamTitle='([^']*)'\", block.decode(\"latin1\"))\n"
+            "                if t and t.group(1):\n"
+            "                    return t.group(1)\n"
+            "        return None\n"
+            "    except Exception:\n"
+            "        return None\n"
+            "def store(title):\n"
+            "    global current\n"
+            "    if title == current:\n"
+            "        return\n"
+            "    current = title\n"
+            "    try:\n"
+            "        tmp = out_path + \".part\"\n"
+            "        with open(tmp, \"w\") as f:\n"
+            "            f.write(title)\n"
+            "        os.replace(tmp, out_path)\n"
+            "    except OSError:\n"
+            "        pass\n"
+            "time.sleep(15)  # playback startup grace (Tune resolve + stream connect)\n"
+            "while time.time() < deadline:\n"
+            "    if not player_alive():\n"
+            "        break\n"
+            "    t = fetch_title()\n"
+            "    if t:\n"
+            "        store(t)\n"
+            "    time.sleep(60)\n";
+
+        writeScriptFile(metaScriptPath, kScript, sizeof(kScript) - 1);
+    }
+
+    
+    
+    
+    static void writeVolumeScriptOnce() noexcept
+    {
+        if (volScriptWritten)
+            return;
+        volScriptWritten = true;
+        resolveRadioPaths();
+
+        static constexpr char kScript[] =
+            "#!/usr/bin/env python3\n"
+            "# Radio live-volume one-shot (written by the game module): push one set_property\n"
+            "# into mpv's IPC socket. A failed connect means ffplay fallback or a dead player -\n"
+            "# volume then applies at the next play.\n"
+            "import json, socket, sys\n"
+            "sock_path, volume = sys.argv[1], float(sys.argv[2])\n"
+            "try:\n"
+            "    s = socket.socket(socket.AF_UNIX)\n"
+            "    s.settimeout(2)\n"
+            "    s.connect(sock_path)\n"
+            "    s.send((json.dumps({\"command\": [\"set_property\", \"volume\", volume]}) + \"\\n\").encode())\n"
+            "    s.close()\n"
+            "except OSError:\n"
+            "    pass\n";
+
+        writeScriptFile(volScriptPath, kScript, sizeof(kScript) - 1);
+    }
+
+    static void writeScriptFile(const char* path, const char* data, std::size_t length) noexcept
+    {
+        const int fd = ::open(path, O_CREAT | O_WRONLY | O_TRUNC, 0755);
+        if (fd < 0)
+            return;
+        std::size_t written = 0;
+        while (written < length) {
+            const ssize_t chunk = ::write(fd, data + written, length - written);
+            if (chunk <= 0)
+                break;
+            written += static_cast<std::size_t>(chunk);
+        }
+        ::close(fd);
+    }
+
+    
+    
+    [[nodiscard]] static bool readFileInto(char* buffer, std::size_t cap, const char* path) noexcept
+    {
+        const int fd = ::open(path, O_RDONLY);
+        if (fd < 0)
+            return false;
+        const auto readBytes = ::pread(fd, buffer, cap - 1, 0);
+        ::close(fd);
+        if (readBytes <= 0)
+            return false;
+        buffer[readBytes] = '\0';
+        return true;
+    }
+
+    static void clearMpris() noexcept
+    {
+        mprisPlayerBuf[0] = '\0';
+        mprisTitleBuf[0] = '\0';
+        mprisArtistBuf[0] = '\0';
+        mprisArtworkBuf[0] = '\0';
+        mprisPaused = false;
+    }
+
+    
     void beginFetch(const char* url) const noexcept
     {
-        NS_DEC(kResultsPathUnlink, kResultsPathEnc);
-        ::unlink(kResultsPathUnlink);
+        resolveRadioPaths();
+        ::unlink(resultsPath);
 
-        StringBuilderStorage<768> storage;
+        StringBuilderStorage<1024> storage;
         auto builder = storage.builder();
-        NS_DEC(kResultsPart, kResultsPartPathEnc);
-        NS_DEC(kResults, kResultsPathEnc);
-        builder.put("curl -s --max-time 20 '", url, "' -o ", kResultsPart.c_str(), " && mv -f ", kResultsPart.c_str(), ' ', kResults.c_str());
+        builder.put("curl -s --max-time 20 '", url, "' -o ", resultsPartPath, " && mv -f ", resultsPartPath, ' ', resultsPath);
 
-        // Reap any previous fetch shell before we lose its pid.
+        
         if (fetchPid > 0) {
             ::waitpid(fetchPid, nullptr, WNOHANG);
             fetchPid = 0;
@@ -651,7 +976,55 @@ private:
         pid_t pid{};
         if (::posix_spawn(&pid, kLaunchClientPath, nullptr, nullptr, argv, environ) == 0)
             return pid;
+        // Native launches do not always include the Steam pressure-vessel helper.
+        if (::access(kLaunchClientPath, X_OK) != 0) {
+            char* const nativeArgv[] = {const_cast<char*>("sh"), const_cast<char*>("-c"), const_cast<char*>(script), nullptr};
+            if (::posix_spawnp(&pid, "sh", nullptr, nullptr, nativeArgv, environ) == 0)
+                return pid;
+        }
         return 0;
+    }
+
+    static void updateArtwork() noexcept
+    {
+        if (artworkPid > 0) {
+            int status{};
+            const auto reaped = ::waitpid(artworkPid, &status, WNOHANG);
+            if (reaped == artworkPid) {
+                artworkPid = 0;
+                if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+                    copyText(readyArtworkUrl, requestedArtworkUrl, sizeof(readyArtworkUrl));
+            } else if (reaped < 0 && errno == ECHILD) {
+                artworkPid = 0;
+            }
+        }
+        if (artworkPid > 0 || !mprisArtworkBuf[0] || std::strcmp(mprisArtworkBuf, requestedArtworkUrl) == 0)
+            return;
+        readyArtworkUrl[0] = '\0';
+        copyText(requestedArtworkUrl, mprisArtworkBuf, sizeof(requestedArtworkUrl));
+        StringBuilderStorage<2048> storage;
+        auto builder = storage.builder();
+        builder.put("curl -fsSL --max-time 3 --max-filesize 2097152 --proto '=http,https,file' --proto-redir '=http,https' --url ");
+        appendShellPath(builder, requestedArtworkUrl);
+        builder.put(" -o ");
+        appendShellPath(builder, artworkPartPath);
+        builder.put(" && mv -f ");
+        appendShellPath(builder, artworkPartPath);
+        builder.put(' ');
+        appendShellPath(builder, artworkFilePath);
+        artworkPid = spawnHostShell(builder.cstring());
+    }
+
+    static void appendShellPath(auto& builder, const char* path) noexcept
+    {
+        builder.put('\'');
+        for (; *path; ++path) {
+            if (*path == '\'')
+                builder.put("'\\''");
+            else
+                builder.put(*path);
+        }
+        builder.put('\'');
     }
 
     static void copyId(char* dst, const char* src) noexcept
@@ -670,7 +1043,7 @@ private:
         dst[i] = '\0';
     }
 
-    // --- favorites storage (<configDir>/radio_favorites.txt, "<id> <name>" per line) ---
+    
 
     struct SavedStation {
         char id[sizeof(RadioStation::id)]{};
@@ -711,7 +1084,7 @@ private:
             return;
         const int fd = ::open(path, O_RDONLY);
         if (fd < 0)
-            return; // no file yet - empty list is the correct state
+            return; 
 
         char fileBuffer[4096];
         const auto readBytes = ::pread(fd, fileBuffer, sizeof(fileBuffer) - 1, 0);
@@ -727,7 +1100,7 @@ private:
                 ++lineLength;
             const auto next = offset + lineLength + 1;
 
-            // "<id> <name>"; '#' comments and blank lines are skipped
+            
             if (lineLength > 0 && fileBuffer[offset] != '#') {
                 std::size_t idLength = 0;
                 while (idLength < lineLength && fileBuffer[offset + idLength] != ' ')
@@ -772,7 +1145,7 @@ private:
         ::close(fd);
     }
 
-    // Session-scoped "recently played" ring, most recent first, deduplicated by id.
+    
     void pushRecent(const char* id, const char* name) const noexcept
     {
         int existing = -1;
@@ -797,13 +1170,48 @@ private:
         copyText(recentStations[0].name, name, sizeof(SavedStation::name));
     }
 
-    // Identity-bearing literals are kept encrypted (Utils/NsStr.h); decrypt to the stack at use.
+    
     static constexpr ns_str::Encrypted<sizeof("/usr/bin/steam-runtime-launch-client")> kLaunchClientPathEnc{"/usr/bin/steam-runtime-launch-client"};
     static constexpr ns_str::Encrypted<sizeof("osiris-radio")> kMarkerEnc{"osiris-radio"};
-    static constexpr ns_str::Encrypted<sizeof("/tmp/osiris-radio-results.json")> kResultsPathEnc{"/tmp/osiris-radio-results.json"};
-    static constexpr ns_str::Encrypted<sizeof("/tmp/osiris-radio-results.json.part")> kResultsPartPathEnc{"/tmp/osiris-radio-results.json.part"};
 
-    // Feature objects are rebuilt per command, so all cross-call state is static.
+    
+    
+    
+    
+    inline static char resultsPath[192];
+    inline static char resultsPartPath[192];
+    inline static char micScriptPath[192];
+    inline static char metaScriptPath[192];
+    inline static char metaFilePath[192];
+    inline static char volScriptPath[192];
+    inline static char artworkFilePath[192], artworkPartPath[192];
+    inline static pid_t artworkPid{};
+    inline static char requestedArtworkUrl[512]{}, readyArtworkUrl[512]{};
+    inline static char mprisArtworkBuf[512]{};
+    inline static char mprisFilePath[192];
+    inline static char mprisPartPath[192];
+    inline static char radioSocketPath[192];
+    inline static bool radioPathsResolved = false;
+
+    static void resolveRadioPaths() noexcept
+    {
+        if (radioPathsResolved)
+            return;
+        radioPathsResolved = true;
+        static_cast<void>(ns_paths::join(resultsPath, sizeof(resultsPath), "osiris-radio-results.json"));
+        static_cast<void>(ns_paths::join(resultsPartPath, sizeof(resultsPartPath), "osiris-radio-results.json.part"));
+        static_cast<void>(ns_paths::join(micScriptPath, sizeof(micScriptPath), "ns_mic_radio.sh"));
+        static_cast<void>(ns_paths::join(metaScriptPath, sizeof(metaScriptPath), "ns_radio_meta.py"));
+        static_cast<void>(ns_paths::join(metaFilePath, sizeof(metaFilePath), "osiris-radio-meta.txt"));
+        static_cast<void>(ns_paths::join(volScriptPath, sizeof(volScriptPath), "ns_radio_vol.py"));
+        static_cast<void>(ns_paths::join(artworkFilePath, sizeof(artworkFilePath), "osiris-mpris-art"));
+        static_cast<void>(ns_paths::join(artworkPartPath, sizeof(artworkPartPath), "osiris-mpris-art.part"));
+        static_cast<void>(ns_paths::join(mprisFilePath, sizeof(mprisFilePath), "osiris-mpris.txt"));
+        static_cast<void>(ns_paths::join(mprisPartPath, sizeof(mprisPartPath), "osiris-mpris.txt.part"));
+        static_cast<void>(ns_paths::join(radioSocketPath, sizeof(radioSocketPath), "osiris-radio.sock"));
+    }
+
+    
     inline static pid_t currentPid{0};
     inline static pid_t fetchPid{0};
     inline static bool fetchPending{false};
@@ -813,6 +1221,21 @@ private:
     inline static char resultsHeader[128]{};
     inline static char lastPlayedId[sizeof(RadioStation::id)]{};
     inline static char lastPlayedNameBuf[sizeof(RadioStation::text)]{};
+    
+    
+    inline static pid_t metaPid{0};
+    inline static pid_t mprisPid{0};
+    inline static pid_t volPid{0};
+    inline static char nowPlayingTrackBuf[128]{};
+    inline static char mprisPlayerBuf[48]{};
+    inline static char mprisTitleBuf[128]{};
+    inline static char mprisArtistBuf[128]{};
+    inline static bool mprisPaused{false};
+    inline static double nextNowPlayingPoll{0.0};
+    inline static int volumeApplyCounter{0};
+    inline static int appliedVolume{-1};
+    inline static bool metaScriptWritten{false};
+    inline static bool volScriptWritten{false};
     inline static bool micBroadcastActive{false};
     inline static char micBroadcastStation[sizeof(RadioStation::id)]{};
     inline static bool broadcastScriptWritten{false};
@@ -820,8 +1243,8 @@ private:
     inline static int synthedKey{0};
     inline static bool autoVoiceEngaged{false};
     inline static bool autoVoiceHinted{false};
-        // Present-thread -> frame-thread console handoff (engine command buffer is not
-    // thread-safe): 0 = none, 1 = `bind f9 +voicerecord`, 2 = `unbind f9`.
+        
+    
     inline static std::atomic<int> pendingBindAction{0};
     inline static std::atomic<bool> pendingModenable{false};
     inline static bool micAlwaysSampled{false};

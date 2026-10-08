@@ -16,32 +16,32 @@ namespace ns_tf2 {
 
 namespace {
 
-// Loader vkQueuePresentKHR prologue, libvulkan.so.1.4.341 (the copy the game maps through
-// /run/host), captured 2026-09-14 from /usr/lib64/libvulkan.so.1.4.341:
-//   43a60  f3 0f 1e fa        endbr64
-//   43a64  48 85 ff           test   %rdi,%rdi
-//   43a67  74 27              je     43a90        ; abort stub (rel8)
-//   43a69  48 8b 07           mov    (%rdi),%rax  ; queue -> loader wrapper
-//   43a6c  48 85 c0           test   %rax,%rax
-//   43a6f  74 1f              je     43a90        ; abort stub (rel8)
-//   43a71  48 ba <magic>      movabs $0x10aded040410aded,%rdx
-//   43a7b  48 39 10           cmp    %rdx,(%rax)
-//   43a7e  75 10              jne    43a90
-//   43a80  ff a0 90 06 00 00  jmp    *0x690(%rax) ; dispatch slot, tail call
-// The hook patch replaces 43a60..43a70 (17 bytes: everything before the movabs) with a
-// 12-byte absolute jump. The trampoline re-emits the full checked body with every internal
-// rel8 rewritten as an absolute jump, then tail-jumps to 43a80 with the original arguments
-// untouched (rdi=queue, rsi=pPresentInfo survive the whole detour).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 constexpr uint8_t kPrologue[17] = {
-    0xf3, 0x0f, 0x1e, 0xfa,                                    // endbr64
-    0x48, 0x85, 0xff,                                          // test %rdi,%rdi
-    0x74, 0x27,                                                // je abort
-    0x48, 0x8b, 0x07,                                          // mov (%rdi),%rax
-    0x48, 0x85, 0xc0,                                          // test %rax,%rax
-    0x74, 0x1f,                                                // je abort
+    0xf3, 0x0f, 0x1e, 0xfa,                                    
+    0x48, 0x85, 0xff,                                          
+    0x74, 0x27,                                                
+    0x48, 0x8b, 0x07,                                          
+    0x48, 0x85, 0xc0,                                          
+    0x74, 0x1f,                                                
 };
-constexpr uintptr_t kAbortTarget = 0x43a90;   // loader abort stub (inside the function)
-constexpr uintptr_t kTailCallTarget = 0x43a80; // jmp *0x690(%rax)
+constexpr uintptr_t kAbortTarget = 0x43a90;   
+constexpr uintptr_t kTailCallTarget = 0x43a80; 
 
 using QueuePresentFn = int (*)(void *queue, const void *presentInfo);
 
@@ -54,8 +54,8 @@ int hookedQueuePresent(void *queue, const void *presentInfo)
     ++g_presentCount;
     if (g_loggedPresents < 12) {
         ++g_loggedPresents;
-        // VkPresentInfoKHR: sType(4) pad(4) pNext(8) waitSemaphoreCount(4) pad(4)
-        //                   pWaitSemaphores(8*wait) swapchainCount(4) pad(4) pSwapchains...
+        
+        
         uint32_t swapchainCount = 0;
         const void *firstSwapchain = nullptr;
         if (presentInfo) {
@@ -77,7 +77,7 @@ int hookedQueuePresent(void *queue, const void *presentInfo)
     return trampoline(queue, presentInfo);
 }
 
-// abs jump to an absolute address: movabs %rax,imm64 (10) ; jmp *%rax (2) = 14 bytes
+
 void emitAbsJump(uint8_t *out, uintptr_t target)
 {
     out[0] = 0x48;
@@ -87,15 +87,15 @@ void emitAbsJump(uint8_t *out, uintptr_t target)
     out[11] = 0xE0;
 }
 
-} // namespace
+} 
 
 bool installVkPresentHook()
 {
     void *loader = dlsym(RTLD_DEFAULT, "vkQueuePresentKHR");
     if (!loader) {
-        // libvulkan may live outside the global scope (loaded via dlopen by dxvk /
-        // shaderapivk inside the steam runtime). Locate the mapped file and grab a
-        // NOLOAD handle on it - same maps-scan trick the diagnostics use.
+        
+        
+        
         log("[vk] not in global scope - resolving via /proc/self/maps");
         if (FILE *maps = fopen("/proc/self/maps", "r")) {
             char lineBuf[512];
@@ -115,8 +115,8 @@ bool installVkPresentHook()
                 }
                 if (!len)
                     continue;
-                // The loader file carries a full version suffix (libvulkan.so.1.4.341),
-                // so match the basename PREFIX, not an exact suffix.
+                
+                
                 const char *base = std::strrchr(path, '/');
                 base = base ? base + 1 : path;
                 if (std::strncmp(base, "libvulkan.so", 12) != 0)
@@ -148,20 +148,20 @@ bool installVkPresentHook()
     }
     const uintptr_t base = reinterpret_cast<uintptr_t>(fn);
 
-    // Trampoline: one page, built as exact code with constant displacements.
-    //   0x00 endbr64
-    //   0x04 test %rdi,%rdi
-    //   0x07 jne +14                -> skips the 14B abs jump below
-    //   0x09 jmp ABORT              (14B)
-    //   0x17 mov (%rdi),%rax
-    //   0x1A test %rax,%rax
-    //   0x1D jne +14
-    //   0x1F jmp ABORT              (14B)
-    //   0x2D movabs magic,%rdx
-    //   0x37 cmp %rdx,(%rax)
-    //   0x3A jne +14                -> skips to the tail jump
-    //   0x3C jmp ABORT              (14B)
-    //   0x4A jmp TAILCALL(43a80)    (14B) - args untouched, original takes over
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     g_trampoline = static_cast<uint8_t *>(
         mmap(nullptr, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
     if (g_trampoline == MAP_FAILED) {
@@ -199,8 +199,8 @@ bool installVkPresentHook()
     }
     __builtin___clear_cache(reinterpret_cast<char *>(c), reinterpret_cast<char *>(c) + o);
 
-    // Patch: movabs %rax, hookAddr ; jmp *%rax ; nops (12 + 5 = 17 bytes)
-    // mprotect requires a page-aligned address.
+    
+    
     const long pageSize = sysconf(_SC_PAGESIZE);
     uint8_t *pageStart = reinterpret_cast<uint8_t *>(
         reinterpret_cast<uintptr_t>(fn) & ~static_cast<uintptr_t>(pageSize - 1));
@@ -227,4 +227,4 @@ bool installVkPresentHook()
     return true;
 }
 
-} // namespace ns_tf2
+} 

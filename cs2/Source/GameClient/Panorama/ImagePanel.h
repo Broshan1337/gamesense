@@ -9,6 +9,7 @@
 #include <CS2/Classes/Color.h>
 #include <CS2/Panorama/CImagePanel.h>
 #include <MemoryPatterns/PatternTypes/PanoramaImagePanelPatternTypes.h>
+#include <UI/ImGui/GuiLog.h>
 
 struct SvgImageParams {
     const char* imageUrl;
@@ -68,10 +69,23 @@ public:
     }
 
 private:
-    [[nodiscard]] decltype(auto) uiScaleFactor() const
+    
+    
+    
+    
+    
+    
+    [[nodiscard]] float uiScaleFactor() const
     {
         const auto scale = uiPanel().getUiScaleFactor().valueOr(1.0f);
-        assert(scale >= 0.1f && scale <= 10.0f && "Invalid UI scale factor");
+        if (scale < 0.1f || scale > 10.0f) {
+            static bool logged = false;
+            if (!logged) {
+                logged = true;
+                gui_log::write("[panorama] invalid UI scale factor %f - falling back to 1.0 (UiScaleFactorOffset pattern likely stale)", static_cast<double>(scale));
+            }
+            return 1.0f;
+        }
         return scale;
     }
 

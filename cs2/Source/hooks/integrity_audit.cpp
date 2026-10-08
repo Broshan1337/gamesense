@@ -84,10 +84,10 @@ std::uint32_t calculate_crc32(const std::uint8_t* data, std::size_t size) noexce
     return crc ^ 0xFFFFFFFF;
 }
 
-// Own module name + diagnostic formats live XOR-encrypted (vac_str.h): the
-// module name must not sit in .rodata as a scannable byte string, and the
-// diagnostics describe evasion outright. Plaintext exists only in transient
-// stack buffers (and our own log file, which is the point of logging).
+
+
+
+
 namespace
 {
 VAC_XSTR(kModName, "libMangoHud.so");
@@ -111,8 +111,8 @@ void int_log(const vac_str::Encrypted<N>& msg)
 template <std::size_t N, typename... Args>
 void int_log_fmt(const vac_str::Encrypted<N>& fmt, Args... args)
 {
-    // gui_log::write carries no __attribute__((format)): a decrypted runtime
-    // format keeps -Wformat-security quiet while staying out of .rodata.
+    
+    
     char plain[192];
     static_assert(N <= sizeof(plain), "integrity log line too long");
     fmt.decrypt(plain);
@@ -126,7 +126,7 @@ void mod_name(char* out, std::size_t n) noexcept
     else if (n)
         out[0] = '\0';
 }
-} // namespace
+} 
 
 struct FakeFile {
     int fd{-1};
@@ -192,8 +192,8 @@ bool is_cheat_path_raw(const char* path)
 {
     if (!path) return false;
 
-    // Note: the old "/tmp/libMangoHud.so" special case is subsumed by the
-    // module-name check (it contains the same substring), so one check does it.
+    
+    
     char mod[32];
     mod_name(mod, sizeof(mod));
     if (std::strstr(path, mod)) return true;
@@ -245,11 +245,11 @@ int open_spoofed_file(const char* path, int flags, mode_t mode)
     if (!g_spoofing_ready || !is_cheat_path_raw(path))
         return -1;
 
-    // memfd-backed, not pipe: the fd is seekable, pread-able and mmap-able, so
-    // fread/lseek/mmap/fstat on it behave like a real (tiny) ELF file instead
-    // of failing with ESPIPE or reporting S_FIFO. Plain reads work through the
-    // kernel with no hook involvement, so consumer-side lseek stays coherent
-    // (no userspace offset shadow to drift).
+    
+    
+    
+    
+    
     char memfd_name[32];
     mod_name(memfd_name, sizeof(memfd_name));
     int memfd = ::memfd_create(memfd_name, MFD_CLOEXEC);
@@ -459,4 +459,4 @@ bool is_ready() noexcept
     return g_spoofing_ready;
 }
 
-} // namespace security::integrity
+} 

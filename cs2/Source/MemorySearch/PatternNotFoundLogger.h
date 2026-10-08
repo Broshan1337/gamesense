@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cassert>
 
 #include <MemorySearch/BytePattern.h>
@@ -10,6 +11,12 @@
 struct PatternNotFoundLogger {
     static void onPatternNotFound(BytePattern pattern) noexcept
     {
+        
+        
+        
+        
+        static std::atomic<bool> boxShown{false};
+        const bool showBox = !boxShown.exchange(true);
         StringBuilderStorage<500> storage;
         auto builder = storage.builder();
 
@@ -34,11 +41,12 @@ struct PatternNotFoundLogger {
         builder.put('\n');
 
         NS_STR(patternBrand, "Neversnooze");
-        // The message box (with the pattern bytes) must show BEFORE the debug assert aborts -
-        // assert only stringifies its expression, so the runtime pattern bytes would never
-        // reach the journal otherwise (2026-09-25 update spent a session finding WHICH of
-        // 162 patterns died because the assert fired first).
-        SimpleMessageBox{}.showWarning(patternBrand, builder.cstring());
+        
+        
+        
+        
+        if (showBox)
+            SimpleMessageBox{}.showWarning(patternBrand, builder.cstring());
 
         assert(false && "Pattern needs to be updated!");
     }

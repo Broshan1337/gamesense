@@ -14,9 +14,9 @@ public:
         : originalVmt{ vmt }
         , replacementVmtWithTypeInfo{ mem::makeUniqueForOverwrite<std::uintptr_t[]>(static_cast<std::size_t>(length) + platform::lengthOfTypeInfoPrecedingVmt) }
     {
-        // Zero first: if the computed length turns out shorter than a later-hooked slot, that slot
-        // must be a deterministic nullptr call (SIGSEGV) - never uninitialized garbage (silent
-        // wild jumps). Slots within the copied range are overwritten below anyway.
+        
+        
+        
         if (replacementVmtWithTypeInfo)
             std::fill_n(replacementVmtWithTypeInfo.get(), lengthWithTypeInfo(), std::uintptr_t{0});
         copyOriginalVmt();
@@ -34,7 +34,7 @@ public:
         return originalVmt;
     }
 
-    // Number of valid FUNCTION entries in this vtable copy (excludes the type-info prefix).
+    
     [[nodiscard]] std::size_t getLength() const noexcept
     {
         return lengthWithTypeInfo() - platform::lengthOfTypeInfoPrecedingVmt;

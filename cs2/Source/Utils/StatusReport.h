@@ -4,11 +4,11 @@
 #include <cstddef>
 #include <cstring>
 
-// Session-level init health ledger. Feature modules that validate runtime prerequisites
-// (signature-checked hardcoded offsets, pattern-resolved functions...) record one line here,
-// pass or fail. The first render frame after init dumps the whole list into the game console
-// under [status] - open ~ right after injection and everything that decided to fail closed is
-// visible immediately instead of being debugged as "the feature mysteriously does nothing".
+
+
+
+
+
 namespace StatusReport
 {
     inline constexpr int kMaxEntries = 32;
@@ -20,7 +20,7 @@ namespace StatusReport
 
     inline Entry entries[kMaxEntries];
     inline std::atomic<int> count{0};
-    // Guarded by count transitions; dumping happens once, from a single thread.
+    
     inline std::atomic<bool> dumped{false};
 
     inline void record(const char* message, bool ok) noexcept
@@ -30,8 +30,8 @@ namespace StatusReport
             entries[index] = Entry{message, ok};
     }
 
-    // The console write itself needs engine readiness - iterate lazily via callback from the
-    // caller (ViewRenderHook_onRenderStart), keeping this header free of game dependencies.
+    
+    
     template <typename Printer>
     inline bool dumpOnce(Printer&& print) noexcept
     {

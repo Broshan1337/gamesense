@@ -19,7 +19,7 @@ constinit ManuallyDestructible<GlobalContext> GlobalContext::globalContext;
 
 void operator delete(void*, std::size_t) noexcept
 {
-    // for 'placement new' to work
+    
 }
 
 extern "C" std::size_t DllMain(HMODULE, DWORD reason, LPVOID) noexcept

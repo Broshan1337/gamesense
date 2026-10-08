@@ -1,11 +1,11 @@
-// GENERATED from the game's own shipped item schema
-// (csgo/pak01_dir.vpk -> scripts/items/items_game.txt, joined against
-// resource/csgo_english.txt). Do not edit by hand - regenerate instead.
-//
-// Kit ids and per-weapon compatibility come from the [kit]weapon loot-list entries;
-// knife finishes from the paint kits referenced only by rare-item loot lists plus
-// per-model finish kits (Lore / Black Laminate / Autotronic / Ultraviolet); glove
-// finishes from the paints_gloves vmt_path kit blocks (prefix -> glove model).
+
+
+
+
+
+
+
+
 #pragma once
 
 #include <cstdint>
@@ -1458,7 +1458,7 @@ inline constexpr PaintKitEntry kPaintKits[] = {
     {10088, "Unhinged", 0.00f, 1.00f},
 };
 
-// Per-weapon lists of indices into kPaintKits, each sorted alphabetically by name.
+
 struct WeaponPaintKitList {
     std::uint16_t defIndex;
     const char* weaponName;

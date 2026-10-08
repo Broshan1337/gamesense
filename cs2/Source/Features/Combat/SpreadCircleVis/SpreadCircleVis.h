@@ -9,13 +9,13 @@
 #include "SpreadCircleVisConfigVariables.h"
 #include "SpreadCircleVisState.h"
 
-// Draws the CURRENT weapon's live spread circle - the same round-panel technique as the no-scope
-// inaccuracy visual, but for EVERY weapon: the panel's projected size is bulletInaccuracy()
-// (GetInaccuracy + GetSpread, a tangent slope) pushed through the view->projection matrix, so the
-// circle always shows exactly where this gun can put bullets RIGHT NOW - it tightens as you stop,
-// widens while moving/jumping/spraying. This is the visual half of "fov = the spread circle"; the
-// aimbots use the same value (converted to degrees) as their target-acceptance region when their
-// SpreadCircleFov toggles are on.
+
+
+
+
+
+
+
 template <typename HookContext>
 class SpreadCircleVis {
 public:
@@ -36,7 +36,7 @@ public:
         panel.setVisible(visible);
         if (visible) {
             panel.setHeight(computeHeightFromCone());
-            // custom color when its alpha is set, otherwise follow the in-game crosshair color
+            
             const auto custom = GET_CONFIG_VAR(spread_circle_vars::SpreadCircleColor);
             const auto color = custom.a() > 0
                 ? cs2::Color{custom.r(), custom.g(), custom.b()}
@@ -62,8 +62,8 @@ private:
         return GET_CONFIG_VAR(spread_circle_vars::Enabled);
     }
 
-    // Show only when the local player is alive AND the active weapon actually has a readable,
-    // non-zero cone (knives have neither spread nor inaccuracy - nothing meaningful to draw).
+    
+    
     [[nodiscard]] bool shouldShow() const
     {
         auto&& localPlayerPawn = hookContext.activeLocalPlayerPawn();

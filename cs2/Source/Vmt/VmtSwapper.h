@@ -24,8 +24,8 @@ public:
         return vmt == vmtCopy->getReplacementVmt();
     }
 
-    // minSlots = highest hooked slot + 1 (see vmtCopyLength: the length scan alone truncates on
-    // multi-inheritance composite vtables, and the game indexes the table positionally).
+    
+    
     bool install(const VmtLengthCalculator& vmtLengthCalculator, std::uintptr_t*& vmt, std::size_t minSlots) noexcept
     {
         const auto justInitialized = initializeVmtCopy(vmtLengthCalculator, vmt, minSlots);
@@ -44,9 +44,9 @@ public:
     {
         assert(wasEverInstalled());
         if (const auto replacementVmt = vmtCopy->getReplacementVmt()) {
-            // Belt-and-braces against a minSlots mistake: better a loud disabled hook than a
-            // pool-corrupting write. The original is returned as null so the failure is visible
-            // in a crash log instead of silently calling a slot we never copied.
+            
+            
+            
             if (index >= vmtCopy->getLength()) [[unlikely]] {
                 StatusReport::record("VmtSwapper: hook slot beyond copy length - hook disabled", false);
                 return GenericFunctionPointer{static_cast<void(*)()>(nullptr)};

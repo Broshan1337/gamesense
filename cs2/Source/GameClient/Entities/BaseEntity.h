@@ -58,7 +58,7 @@ public:
     template <template <typename...> typename EntityType>
     [[nodiscard]] bool is() const noexcept
     {
-        return entity && hookContext.entityClassifier().template entityIs<typename EntityType<HookContext>::RawType>(entity->identity->entityClass);
+        return entity && entity->identity && hookContext.entityClassifier().template entityIs<typename EntityType<HookContext>::RawType>(entity->identity->entityClass);
     }
 
     template <template <typename...> typename EntityType>
@@ -101,8 +101,8 @@ public:
     void applyGlow(cs2::Color color, int glowRange = 0) const noexcept
     {
         renderComponent().sceneObjectUpdaters().forEachSceneObject([this, color, glowRange](auto&& sceneObject) {
-            // this will still show glow for 1 frame when switching spectators as the flags aren't updated yet
-            // todo: do player glow in player scene object updater hook to fix it
+            
+            
             if (!sceneObject.isCulledByFirstPersonView().valueOr(false) && !sceneObject.isPartOfViewmodel().valueOr(false)) {
                 auto&& glowSceneObject = hookContext.template make<GlowSceneObjects>().getGlowSceneObject(sceneObject);
                 glowSceneObject.apply(sceneObject, color, glowRange);
@@ -156,13 +156,13 @@ public:
         hookContext.patternSearchResults().template get<OffsetToOwnerEntity>().of(entity) = handle;
     }
 
-    // EXPERIMENTAL - toggles m_hOwnerEntity to invalid and immediately back to its real value,
-    // a classic "force the engine's network-var change-callback to fire" trick ported from the
-    // reference's CycleWeaponOwners() (used there to force player-model changes to
-    // re-evaluate). Being tried here as the last untried lead for the knife holding-animation
-    // bug: if animation-graph/pose selection is only evaluated once, at equip time, and never
-    // re-checked for an already-equipped weapon, toggling ownership might force a fresh
-    // re-evaluation without needing a real weapon deselect/reselect.
+    
+    
+    
+    
+    
+    
+    
     void cycleOwnerHandle() const noexcept
     {
         const auto saved = ownerHandle().valueOr(cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX});

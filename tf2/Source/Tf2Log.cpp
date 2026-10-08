@@ -2,9 +2,13 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <ctime>
 
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 namespace ns_tf2 {
@@ -12,6 +16,36 @@ namespace ns_tf2 {
 namespace {
 
 int g_fd = -1;
+
+
+
+
+char logPath[320] = "/tmp/gamesense_tf2.log";
+bool logPathResolved = false;
+
+void resolveLogPath()
+{
+    if (logPathResolved)
+        return;
+    logPathResolved = true;
+    const char *home = ::getenv("HOME");
+    if (!home || !home[0])
+        return;
+    char candidate[320];
+    const int dirLen = snprintf(candidate, sizeof(candidate), "%s/OsirisCS2", home);
+    if (dirLen <= 0 || size_t(dirLen) + 32 >= sizeof(candidate))
+        return; 
+    if (::mkdir(candidate, 0777) != 0 && errno != EEXIST)
+        return;
+    char logsDir[320];
+    if (snprintf(logsDir, sizeof(logsDir), "%s/logs", candidate) <= 0)
+        return;
+    if (::mkdir(logsDir, 0777) != 0 && errno != EEXIST)
+        return;
+    if (snprintf(candidate, sizeof(candidate), "%s/gamesense_tf2.log", logsDir) <= 0)
+        return;
+    std::memcpy(logPath, candidate, sizeof(logPath));
+}
 
 void writeAll(const char *data, size_t len)
 {
@@ -24,13 +58,14 @@ void writeAll(const char *data, size_t len)
     }
 }
 
-} // namespace
+} 
 
 void logInit()
 {
     if (g_fd >= 0)
         return;
-    g_fd = ::open("/tmp/gamesense_tf2.log", O_WRONLY | O_APPEND | O_CREAT, 0644);
+    resolveLogPath();
+    g_fd = ::open(logPath, O_WRONLY | O_APPEND | O_CREAT, 0644);
     if (g_fd < 0)
         return;
     char header[96];
@@ -76,4 +111,4 @@ void logShutdown()
     g_fd = -1;
 }
 
-} // namespace ns_tf2
+} 

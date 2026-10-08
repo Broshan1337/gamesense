@@ -15,18 +15,18 @@ public:
     {
     }
 
-    // 2026-09-26 5GB update: OffsetToConVarValueType's pattern is GONE (its site drifted into
-    // mid-instruction garbage; this build has no [conVar+0x28] anchor in tier0 - the type
-    // dispatch is virtual). The type check uses the friend-verified CConVar layout constant
-    // instead - the SAME contract patchUserInfoFlagAny below already trusts (type u32 @0x28,
-    // flags u32 @0x30, value union @0x58 - the value offset stays pattern-anchored). The
-    // enum-range gate fails closed on a shifted layout.
+    
+    
+    
+    
+    
+    
     [[nodiscard]] bool conVarTypeIs(cs2::ConVar* conVar, cs2::ConVarValueType type) const noexcept
     {
         constexpr std::uintptr_t kTypeOffset = 0x28;
         const auto value = *reinterpret_cast<const std::uint32_t*>(reinterpret_cast<std::uintptr_t>(conVar) + kTypeOffset);
         if (value > static_cast<std::uint32_t>(cs2::ConVarValueType::string))
-            return false; // not a valid type slot - layout shifted, fail closed
+            return false; 
         return value == static_cast<std::uint32_t>(type);
     }
 
@@ -46,9 +46,9 @@ public:
         return nullptr;
     }
 
-    // Reads a float cvar by name at runtime - for game-balance values a feature must MATCH but never
-    // register or write (e.g. sv_maxunlag for the lag-comp validity budget). {} if the cvar does not
-    // exist or is not a float32.
+    
+    
+    
     [[nodiscard]] std::optional<float> readFloatConVar(const char* name) const noexcept
     {
         const auto conVar = findConVar(name);
@@ -59,8 +59,8 @@ public:
         return readValueAs<float>(conVar);
     }
 
-    // The bool counterpart, for gating on a server setting a feature must MATCH but never write
-    // (e.g. sv_quantize_movement_input for the quantized strafer). {} if absent or not a bool.
+    
+    
     [[nodiscard]] std::optional<bool> readBoolConVar(const char* name) const noexcept
     {
         const auto conVar = findConVar(name);
@@ -71,8 +71,8 @@ public:
         return readValueAs<bool>(conVar);
     }
 
-    // The int32 counterpart to readFloatConVar (e.g. game_type / game_mode for the Discord RPC's
-    // match-kind line). {} if the cvar does not exist or is not an int32.
+    
+    
     [[nodiscard]] std::optional<int> readIntConVar(const char* name) const noexcept
     {
         const auto conVar = findConVar(name);
@@ -83,12 +83,12 @@ public:
         return readValueAs<int>(conVar);
     }
 
-    // Forces a bool cvar to `value` every call - the write counterpart to readBoolConVar, used for
-    // the FVA-style per-tick suppression of analysis cvars (cl_showusercmd / cl_pred_print_every_cmd
-    // dump the exact fields the view-angle chains rewrite, straight into a log a reviewer could
-    // diff). Same flow as the reader: find by name, verify the type slot through the resolved
-    // pattern, then write through the resolved value pointer - never a blind offset. False means
-    // "not found / not a bool / value pointer unresolved", i.e. nothing was touched.
+    
+    
+    
+    
+    
+    
     [[nodiscard]] bool forceBoolConVar(const char* name, bool value) const noexcept
     {
         const auto conVar = findConVar(name);
@@ -106,10 +106,10 @@ public:
         return true;
     }
 
-    // The float counterpart of forceBoolConVar, for post-process knobs a visual feature owns
-    // (r_csgo_render_post_bloom_strength for the Sky Bloom look). Same contract: find by name,
-    // verify the type slot through the resolved pattern, write through the resolved value
-    // pointer. False = not found / not a float32 / value pointer unresolved - nothing touched.
+    
+    
+    
+    
     [[nodiscard]] bool forceFloatConVar(const char* name, float value) const noexcept
     {
         const auto conVar = findConVar(name);
@@ -127,22 +127,22 @@ public:
         return true;
     }
 
-    // ---- flags patching (live `name` renames) --------------------------------------------
-    //
-    // CS2 registers the `name` convar WITHOUT FCVAR_USERINFO (hidden/dev/protected instead), so
-    // `name "x"` never reaches the server - mid-match renames silently do nothing. The fix:
-    // patch the flags (|= USERINFO, clear DEV|PROTECTED - friend-verified layout below), then
-    // `setinfo name "x"` pushes a real userinfo update: live rename, no Steam, no rate limit.
-    //
-    // CConVar layout (friend's Windows dump, cross-checked: nType@0x28 is the SAME offset our
-    // OffsetToConVarValueType pattern resolves, and the enum ordering matches our
-    // ConVarValueType exactly):
-    //   name@0x00, defaultValue@0x08, description@0x20, type u32@0x28, registered u32@0x2C,
-    //   flags u32@0x30, value union@0x58
-    //
-    // Sanity gate before touching anything: `name` is a STRING cvar, so the type field at 0x28
-    // must read ConVarValueType::string (9). Flag values (S1-style enum CS2 kept):
-    //   DEVELOPMENTONLY = (1<<1), PROTECTED = (1<<5), USERINFO = (1<<9).
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     [[nodiscard]] bool patchUserInfoFlag(const char* name) const noexcept
     {
         const auto conVar = findConVar(name);
@@ -153,22 +153,22 @@ public:
         constexpr std::uintptr_t kFlagsOffset = 0x30;
         const auto* type = reinterpret_cast<const std::uint32_t*>(reinterpret_cast<std::uintptr_t>(conVar) + kTypeOffset);
         if (*type != static_cast<std::uint32_t>(cs2::ConVarValueType::string))
-            return false; // not a string cvar - layout shifted, fail closed
+            return false; 
 
         auto* flags = reinterpret_cast<std::uint32_t*>(reinterpret_cast<std::uintptr_t>(conVar) + kFlagsOffset);
-        constexpr std::uint32_t kFlagDevelopmentOnly = 0x2;  // (1 << 1)
-        constexpr std::uint32_t kFlagProtected = 0x20;       // (1 << 5)
-        constexpr std::uint32_t kFlagUserInfo = 0x200;       // (1 << 9)
+        constexpr std::uint32_t kFlagDevelopmentOnly = 0x2;  
+        constexpr std::uint32_t kFlagProtected = 0x20;       
+        constexpr std::uint32_t kFlagUserInfo = 0x200;       
         *flags |= kFlagUserInfo;
         *flags &= ~(kFlagDevelopmentOnly | kFlagProtected);
         return true;
     }
 
-    // Generalized counterpart of patchUserInfoFlag for the userinfo flood: same layout contract
-    // (type@0x28 / flags@0x30, both friend-verified), but ANY value type passes - the flood
-    // churns int/float/bool userinfo cvars too, not just strings. The gate still fails closed
-    // on a shifted layout: the type slot must read a value inside the ConVarValueType enum range
-    // (boolean..string), otherwise the flags write is skipped entirely.
+    
+    
+    
+    
+    
     [[nodiscard]] bool patchUserInfoFlagAny(const char* name) const noexcept
     {
         const auto conVar = findConVar(name);
@@ -179,20 +179,20 @@ public:
         constexpr std::uintptr_t kFlagsOffset = 0x30;
         const auto* type = reinterpret_cast<const std::uint32_t*>(reinterpret_cast<std::uintptr_t>(conVar) + kTypeOffset);
         if (*type > static_cast<std::uint32_t>(cs2::ConVarValueType::string))
-            return false; // not a valid type slot - layout shifted, fail closed
+            return false; 
 
         auto* flags = reinterpret_cast<std::uint32_t*>(reinterpret_cast<std::uintptr_t>(conVar) + kFlagsOffset);
-        constexpr std::uint32_t kFlagDevelopmentOnly = 0x2;  // (1 << 1)
-        constexpr std::uint32_t kFlagProtected = 0x20;       // (1 << 5)
-        constexpr std::uint32_t kFlagUserInfo = 0x200;       // (1 << 9)
+        constexpr std::uint32_t kFlagDevelopmentOnly = 0x2;  
+        constexpr std::uint32_t kFlagProtected = 0x20;       
+        constexpr std::uint32_t kFlagUserInfo = 0x200;       
         *flags |= kFlagUserInfo;
         *flags &= ~(kFlagDevelopmentOnly | kFlagProtected);
         return true;
     }
 
-    // Whether a convar currently carries the USERINFO flag - the flood's engagement check reads
-    // this before deciding a field needs a flag patch at all (fields registered with USERINFO
-    // natively are left untouched).
+    
+    
+    
     [[nodiscard]] bool hasUserInfoFlag(const char* name) const noexcept
     {
         const auto conVar = findConVar(name);

@@ -57,17 +57,17 @@ public:
         decreaseNestingLevel();
     }
 
-    void boolean(const char8_t* key, auto&& /* valueSetter */, auto&& valueGetter)
+    void boolean(const char8_t* key, auto&& , auto&& valueGetter)
     {
         writeBool(key, valueGetter());
     }
 
-    void uint(const char8_t* key, auto&& /* valueSetter */, auto&& valueGetter)
+    void uint(const char8_t* key, auto&& , auto&& valueGetter)
     {
         writeUint(key, valueGetter());
     }
 
-    void floating(const char8_t* key, auto&& /* valueSetter */, auto&& valueGetter)
+    void floating(const char8_t* key, auto&& , auto&& valueGetter)
     {
         writeFloat(key, valueGetter());
     }
@@ -178,8 +178,8 @@ private:
         return writeString(value ? u8"true" : u8"false");
     }
 
-    // JSON number with 2 decimals - enough precision for UI range floats (0..1, 0..100) and
-    // round-trips exactly through the decimal parser in ConfigFromString.
+    
+    
     void writeFloat(const char8_t* key, float value) noexcept
     {
         if (shouldWriteMe()) {

@@ -13,21 +13,21 @@
 #include <Utils/Optional.h>
 #include <Utils/VerifyConsole.h>
 
-// Who is watching my POV right now? Velocity-style spectator list (the friend-client port):
-//
-//   * POV resolution - normally the LOCAL pawn; when we are DEAD and spectating someone, the
-//     pawn we watch becomes the POV (m_pObserverServices->m_hObserverTarget), and the list
-//     shows who is watching THEM. This is the part the old list missed: while dead, its
-//     handle comparison kept targeting our own corpse's handle.
-//   * detection - every player pawn carries an observer-services component (null while alive)
-//     whose m_hObserverTarget is the entity handle currently being spectated. A pawn whose
-//     target handle equals the POV handle is watching the POV - the handle is index+serial,
-//     so no recycled-pointer confusion. Both offsets are schema-resolved; the component is a
-//     POINTER field on the pawn (declared on C_BasePlayerPawn, not C_CSPlayerPawn - the
-//     schema iterator does not walk parents).
-//
-// The names are published to SpectatorSnapshot for the present thread (Neverlose render pass
-// draws the box) - entity iteration stays on the game thread, exactly like the player list.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 template <typename HookContext>
 class SpectatorList {
 public:
@@ -54,9 +54,9 @@ private:
         count = 0;
         spectatingOthers = false;
 
-        // NOTE the declaring class: m_pObserverServices is declared on C_BasePlayerPawn (the
-        // pawn's base), NOT C_CSPlayerPawn - the schema iterator only reads the requested
-        // class's own fields, so asking the derived class silently returns nothing.
+        
+        
+        
         const auto servicesOffset = hookContext.schemaSystem().getFieldOffset("C_BasePlayerPawn", "m_pObserverServices");
         const auto targetOffset = hookContext.schemaSystem().getFieldOffset("CPlayer_ObserverServices", "m_hObserverTarget");
         const auto nameOffset = hookContext.schemaSystem().getFieldOffset("CCSPlayerController", "m_iszPlayerName");
@@ -74,8 +74,8 @@ private:
         if (povHandle == 0)
             return;
 
-        // DEAD + spectating someone: the POV is the pawn we watch, not our corpse. Their
-        // spectators are the ones watching the view we are actually seeing.
+        
+        
         const auto* const localEntity = reinterpret_cast<const std::byte*>(static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity()));
         int localHealth{};
         std::memcpy(&localHealth, localEntity + *healthOffset, sizeof(localHealth));
@@ -109,7 +109,7 @@ private:
             void* observerServices{};
             std::memcpy(&observerServices, reinterpret_cast<const std::byte*>(pawnEntity) + *servicesOffset, sizeof(observerServices));
             if (!observerServices)
-                return;   // alive - alive players do not spectate
+                return;   
 
             std::uint32_t targetHandleValue{};
             std::memcpy(&targetHandleValue, reinterpret_cast<const std::byte*>(observerServices) + *targetOffset, sizeof(targetHandleValue));
@@ -124,8 +124,8 @@ private:
             if (looksLikeName(controllerName))
                 name = controllerName;
 
-            // Player names are attacker-controlled bytes; bounded copy with the same sanity
-            // check the old Panorama list used.
+            
+            
             std::size_t i = 0;
             for (; name[i] != '\0' && i < sizeof(names[0]) - 1; ++i)
                 names[count][i] = name[i];
@@ -134,7 +134,7 @@ private:
         });
     }
 
-    // Player names are attacker-controlled bytes; same sanity idea as PlayerSlotLookup's check.
+    
     [[nodiscard]] static bool looksLikeName(const char* name) noexcept
     {
         if (!name || name[0] == '\0')

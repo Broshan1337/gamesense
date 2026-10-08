@@ -9,32 +9,32 @@
 #include <CS2/Constants/DllNames.h>
 #include <Platform/DynamicLibrary.h>
 
-// Entity classes (C_EconEntity, C_BaseEntity, ...) live in client.dll's own per-module
-// CSchemaSystemTypeScope, not the "!GlobalTypes" aggregate scope (see GlobalTypeScopePointer
-// in SchemaSystemPatternTypes.h) - classes only get promoted to the global scope when
-// explicitly marked MGlobalTypeScope, which most entity classes are not.
-//
-// HISTORY (2026-08-14): an earlier version of this file assumed InstallSchemaBindings's own
-// 2nd parameter (cached into a persistent client.dll-local global at a fixed +0x40 LEA inside
-// that function) WAS the module's CSchemaSystemTypeScope*. That crashed the game repeatedly
-// (6 times across several hardening attempts - see project memory for the full history).
-// Static analysis of InstallSchemaBindings's actual caller (decompiled via IDA) proved this
-// premise wrong: InstallSchemaBindings is a generic per-interface registration callback every
-// module implements, and libclient.so's implementation only reacts when the interface name is
-// "SchemaSystem_001" - i.e. it grabs a handle to the *global CSchemaSystem interface itself*,
-// not a per-module scope. The pointer at the cached global is a real, valid CSchemaSystem*
-// (which is exactly why it kept passing opcode/vtable-range validation despite being useless
-// for FindDeclaredClassOrEnum - it's a different, real object).
-//
-// THE ACTUAL MECHANISM (confirmed by decompiling a genuine call site in libclient.so at file
-// vaddr ~0xcaa0b0, which loads this same cached CSchemaSystem*, reads its vtable, and calls
-// slot 12 (byte offset 0x60) with a constant string argument decoded from the binary as
-// literally "libclient.so" - the platform-native module name, matching cs2::CLIENT_DLL):
-//   CSchemaSystemTypeScope* CSchemaSystem::FindTypeScopeForName(this, const char* name, size_t* outLen)
-// Disassembly of that function (libschemasystem.so vaddr 0x43120) matches this signature: it
-// hashes/bounds the name string, looks it up in an internal table at this+0x208, and on a hit
-// returns array[foundIndex] from this+0x1f8 (an array of per-module scope pointers) - exactly
-// the shape of a name-keyed scope registry, not a scope object itself.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 struct ClientTypeScopePointer {
     ClientTypeScopePointer() noexcept
         : pointer{resolve()}
@@ -91,8 +91,8 @@ private:
         return query.range;
     }
 
-    // Resolves the same cached CSchemaSystem* as before - this part was always correct, only
-    // how the result gets used was wrong. See file header for the full explanation.
+    
+    
     [[nodiscard]] static void* resolveSchemaSystemInterface() noexcept
     {
         const auto installSchemaBindings = DynamicLibrary{cs2::CLIENT_DLL}.getFunctionAddress("InstallSchemaBindings").as<std::byte*>();
@@ -118,7 +118,7 @@ private:
         if (!schemaSystem)
             return nullptr;
 
-        // A real CSchemaSystem's vtable is compiled into libschemasystem.so.
+        
         void* vtable = nullptr;
         std::memcpy(&vtable, schemaSystem, sizeof(vtable));
         if (!getModuleRange("libschemasystem.so").contains(vtable))
@@ -136,16 +136,16 @@ private:
         void* vtable = nullptr;
         std::memcpy(&vtable, schemaSystem, sizeof(vtable));
 
-        // FindTypeScopeForName is vtable slot 12 (byte offset 12*8 = 0x60), confirmed via
-        // decompile of both this vtable slot's own implementation and a genuine call site.
+        
+        
         constexpr std::size_t kFindTypeScopeForNameSlotOffset = 0x60;
         void* findTypeScopeForName = nullptr;
         std::memcpy(&findTypeScopeForName, static_cast<std::byte*>(vtable) + kFindTypeScopeForNameSlotOffset, sizeof(findTypeScopeForName));
         if (!findTypeScopeForName)
             return nullptr;
 
-        // The function pointer itself must live in libschemasystem.so's code before we call
-        // through it - same defensive standard as everywhere else this session.
+        
+        
         if (!getModuleRange("libschemasystem.so").contains(findTypeScopeForName))
             return nullptr;
 
@@ -155,9 +155,9 @@ private:
         if (!typeScope)
             return nullptr;
 
-        // Validate the returned CSchemaSystemTypeScope the same way the old (wrong) pointer
-        // was validated, since that check is legitimate regardless of how the pointer was
-        // obtained: a real scope's vtable lives in libschemasystem.so too.
+        
+        
+        
         void* typeScopeVtable = nullptr;
         std::memcpy(&typeScopeVtable, typeScope, sizeof(typeScopeVtable));
         if (!getModuleRange("libschemasystem.so").contains(typeScopeVtable))

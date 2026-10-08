@@ -1,12 +1,12 @@
-// GENERATED from the game's own shipped item schema
-// (csgo/pak01_dir.vpk -> scripts/items/items_game.txt, joined against
-// resource/csgo_english.txt). Do not edit by hand - regenerate instead
-// (scratchpad/gen_defs.py).
-//
-// Cases = defs with prefab "weapon_case"; keys = defs with prefab
-// "weapon_case_key" that are actual keys (several skins share that prefab).
-// NOTE: CS2's def space is reshuffled vs CSGO - 5001 is a Premier medal here,
-// the classic key is 1203. Always verify defs against items_game.txt.
+
+
+
+
+
+
+
+
+
 #pragma once
 
 #include <cstdint>
@@ -17,7 +17,7 @@ namespace cs2
 struct ItemDefEntry {
     std::uint16_t defIndex;
     const char* name;
-    const char* model; // "model_player" (agents only; empty elsewhere)
+    const char* model; 
 };
 
 inline constexpr ItemDefEntry kCaseItems[] = {

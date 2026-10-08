@@ -18,8 +18,8 @@ public:
             error("string must be null-terminated");
 
         TypedStaticStringPool<BufferSize + N, NumberOfStrings + 1, Types..., T> newPool;
-        // std::copy (not std::ranges::copy): libc++ 15's ranges support is incomplete and
-        // this must compile on BOTH toolchains (GCC/clang22 production + clang15/17 OLLVM).
+        
+        
         std::copy(buffer.begin(), buffer.end(), newPool.buffer.begin());
         std::copy(str, str + N, newPool.buffer.begin() + buffer.size());
         std::copy(stringLengths.begin(), stringLengths.end(), newPool.stringLengths.begin());

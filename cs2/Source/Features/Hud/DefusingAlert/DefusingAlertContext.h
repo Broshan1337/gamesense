@@ -80,7 +80,7 @@ private:
             R"(
 (function() {
   $.CreatePanel('Panel', $.GetContextPanel().FindChildInLayoutFile('ScoreAndTimeAndBomb'), 'DefusingAlertContainer', {
-    style: 'border-radius: 3px; world-blur: hudWorldBlur; background-image: url( "s2r://panorama/images/backgrounds/bluedots_large_png.vtex"); background-size: auto 390px; background-img-opacity: 0.04; background-color: #0000007f;'
+    style: 'border-radius: 3px; world-blur: hudWorldBlur; background-image: url( "s2r:
   });
 })();
 )");

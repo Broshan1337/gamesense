@@ -1,39 +1,4 @@
-/*
- * Stealthy memfd injector for CS2 (Linux).
- *
- * Creates the memfd INSIDE the target via a short remote-syscall round, writes
- * the library into it, then dlopen()s /proc/<pid>/fd/<n> on the target's main
- * thread. No file ever touches disk; the memfd stays alive in the target's fd
- * table after this injector exits.
- *
- * Remote-call mechanics:
- *  - every round lands on the alignment padding right after a `ret` inside the
- *    target's libc text (found by scanning the LIVE target memory; the byte is
- *    poked to 0xCC and restored afterwards). Compiler padding is never executed
- *    by any other thread, so the landing trap can never race a live
- *    getpid()-style call - the old design patched getpid's first byte and the
- *    Steam overlay's VulkanSteamOverlayPresent thread (which calls getpid
- *    itself) took the 0xCC mid-inject: SIGTRAP, core dump (2026-09-25 18:24)
- *  - the stack window we borrow below the interrupted rsp is saved before
- *    poking and written back before resuming (protects the interrupted
- *    function's red zone / locals)
- *  - GPRs and XSAVE state (NT_X86_XSTATE) are restored before detach
- *
- * dlopen/dlerror are resolved by parsing the .dynsym of the libc file
- * the TARGET actually has mapped (works for glibc >= 2.34 where libdl is
- * merged into libc, and for container-mapped libc like /run/host/...), and
- * falls back to libdl.so.2 for older glibc. A `syscall; ret` gadget is found
- * by scanning the target's libc text via /proc/pid/mem.
- *
- * Usage: inject_memfd <pid> <library.so>   (root)
- *        inject_memfd <pid> -              (root) read the library from stdin
- *
- * Serves BOTH target classes: x86-64 (CS2, TF2) and i386 (the steam main process -
- * remote rounds land on the i386 libc's own syscall() wrapper; see do_round32).
- *
- * The stdin form lets a loader stream a decrypted-in-memory payload without a
- * plaintext copy ever existing on disk.
- */
+
 
 #define _GNU_SOURCE
 #include <elf.h>
@@ -64,15 +29,7 @@ static pid_t g_pid;
 static struct user_regs_struct g_saved;
 static unsigned char g_xstate[XSTATE_BUF];
 static int g_xstate_valid;
-/* Remote-round landing: the first byte of the alignment padding that follows a
- * `ret` (0xC3) inside the target's libc text. This build of glibc pads with
- * multi-byte NOPs (0F 1F .. / 66 0F 1F .. / 66 90), so we poke a 0xCC over the
- * padding's first byte and restore it when done. Compiler alignment padding is
- * never executed by any thread, so the landing trap cannot race a live
- * getpid()-style call - the old design patched getpid's FIRST BYTE instead, and
- * the Steam overlay's VulkanSteamOverlayPresent thread (which calls getpid
- * itself) took the 0xCC mid-inject: SIGTRAP, core dump (2026-09-25 18:24,
- * coredump rip = __getpid+1, frames = gameoverlayrenderer.so). */
+
 static uint64_t g_landing_addr;
 static long g_landing_saved_word;
 static int g_landing_patched;
@@ -81,16 +38,10 @@ static unsigned char g_stack_backup[STACK_WINDOW + 8];
 static int g_stack_backup_valid;
 static uint64_t g_page;
 
-/* Target ELF class. The steam main process is i386 even on x86-64 Linux - memfd must
- * work there too (the 64-bit ABI hardcoded below silently failed at the gadget scan and
- * pushed steam onto the gdb fallback for its whole life). The 64-bit path is untouched;
- * the i386 path uses the same borrowed-stack remote-round mechanics with the i386
- * regset (NT_PRSTATUS = struct user_regs_struct, 17 x u32) and cdecl calls through the
- * target libc's own `syscall()` wrapper for the short rounds - no 'syscall; ret' gadget
- * exists in an i386 libc and none is needed. */
-static int g_arch32; /* 0 = x86-64 target, 1 = i386 target */
 
-/* i386 NT_PRSTATUS regset, exactly the kernel's user_regs_struct for a 32-bit task. */
+static int g_arch32; 
+
+
 struct i386_user_regs {
     uint32_t ebx, ecx, edx, esi, edi, ebp, eax;
     uint32_t xds, xes, xfs, xgs;
@@ -98,12 +49,12 @@ struct i386_user_regs {
 };
 static struct i386_user_regs g_saved32;
 
-/* i386 syscall numbers (x86-64 numbers come from <sys/syscall.h>). */
+
 #define SYS_I386_mmap2 192
 #define SYS_I386_munmap 91
 #define SYS_I386_memfd_create 356
 
-/* Read the ELF class of the target's executable. Returns 0 = 64-bit, 1 = 32-bit, -1. */
+
 static int target_elf_class(void)
 {
     char p[64];
@@ -116,14 +67,14 @@ static int target_elf_class(void)
     close(fd);
     if (n < 5)
         return -1;
-    return id[4] == 1; /* ELFCLASS32 */
+    return id[4] == 1; 
 }
 
 static void die_restore(void) __attribute__((noreturn));
 
-/* ---- maps parsing ------------------------------------------------------- */
 
-/* Find first r-xp text range + load base of a module substring in the target. */
+
+
 static int find_module(const char* substring, uint64_t* base, uint64_t* text_start, uint64_t* text_end, char* file_path, size_t path_sz)
 {
     char p[128];
@@ -161,11 +112,7 @@ static int find_module(const char* substring, uint64_t* base, uint64_t* text_sta
     return (*base && *text_start && file_path[0]) ? 0 : -1;
 }
 
-/* maps paths are NAMESPACED: a pressure-vessel/steam-runtime target shows container paths
- * ("/run/host/usr/lib/..." is the container's view of the host, and the container may map its
- * own libs from paths like /usr/lib32 that mean something different on our side). The only
- * authoritative resolution is the TARGET's own mount namespace: /proc/<pid>/root/<path>.
- * Direct-open and the old /run/host/ strip stay as fallbacks for the simple cases. */
+
 static int open_module_file(const char* maps_path)
 {
     int fd = open(maps_path, O_RDONLY);
@@ -182,9 +129,9 @@ static int open_module_file(const char* maps_path)
     return -1;
 }
 
-/* ---- ELF .dynsym lookup -------------------------------------------------- */
 
-/* Translate an image vaddr to a file offset via PT_LOAD headers. */
+
+
 static int vaddr_to_offset(const ElfW(Ehdr)* ehdr, uint64_t vaddr, uint64_t* off)
 {
     const ElfW(Phdr)* phdr = (const ElfW(Phdr)*)((const char*)ehdr + ehdr->e_phoff);
@@ -197,8 +144,7 @@ static int vaddr_to_offset(const ElfW(Ehdr)* ehdr, uint64_t vaddr, uint64_t* off
     return -1;
 }
 
-/* ELF32 variant: Phdr/Sym/Dyn layouts differ (32-bit fields, 16-byte syms, 32-bit
- * bloom words in GNU_HASH). */
+
 static int vaddr_to_offset32(const Elf32_Ehdr* ehdr, uint32_t vaddr, uint32_t* off)
 {
     const Elf32_Phdr* phdr = (const Elf32_Phdr*)((const char*)ehdr + ehdr->e_phoff);
@@ -249,8 +195,7 @@ static int elf_dynsym_lookup32(const void* map, size_t size, const char* name, u
         || vaddr_to_offset32(ehdr, gnuhash_v, &gnuhash_off))
         return -1;
 
-    /* GNU_HASH, ELF32 flavor: bloom words are u32. Symbol count from the highest bucket,
-     * then walk its chain to the terminator bit. */
+    
     const uint32_t* gh = (const uint32_t*)((const char*)ehdr + gnuhash_off);
     uint32_t nbuckets = gh[0], symoffset = gh[1], bloom_size = gh[2];
     const uint32_t* bloom = gh + 4;
@@ -284,8 +229,7 @@ static int elf_dynsym_lookup32(const void* map, size_t size, const char* name, u
     return -1;
 }
 
-/* st_value (image vaddr) of an exported symbol in an ELF file. Dispatches on the FILE's
- * ELF class - a 32-bit target maps a 32-bit libc. */
+
 static int elf_dynsym_lookup(int fd, const char* name, uint64_t* value)
 {
     struct stat st;
@@ -341,8 +285,7 @@ static int elf_dynsym_lookup(int fd, const char* name, uint64_t* value)
         || vaddr_to_offset(ehdr, gnuhash_v, &gnuhash_off))
         goto out;
 
-    /* symbol count from DT_GNU_HASH: highest bucket index, then walk its
-     * chain until the terminator bit */
+    
     const uint32_t* gh = (const uint32_t*)((const char*)ehdr + gnuhash_off);
     uint32_t nbuckets = gh[0], symoffset = gh[1], bloom_size = gh[2];
     const uint64_t* bloom = (const uint64_t*)(gh + 4);
@@ -378,7 +321,7 @@ out:
     return result;
 }
 
-/* Resolve a symbol against the module the TARGET has mapped. */
+
 static int resolve_sym(const char* module_substring, const char* name, uint64_t* addr)
 {
     uint64_t base, ts, te;
@@ -401,7 +344,7 @@ static int resolve_sym(const char* module_substring, const char* name, uint64_t*
     return 0;
 }
 
-/* ---- gadget scan --------------------------------------------------------- */
+
 
 static int find_syscall_gadget(uint64_t text_start, uint64_t text_end, uint64_t* gadget)
 {
@@ -423,7 +366,7 @@ static int find_syscall_gadget(uint64_t text_start, uint64_t text_end, uint64_t*
         return -1;
     }
     len = (size_t)got;
-    static const unsigned char pattern[] = {0x0f, 0x05, 0xc3}; /* syscall; ret */
+    static const unsigned char pattern[] = {0x0f, 0x05, 0xc3}; 
     for (size_t i = 0; i + 2 < len; ++i) {
         if (buf[i] == pattern[0] && buf[i + 1] == pattern[1] && buf[i + 2] == pattern[2]) {
             *gadget = text_start + i;
@@ -435,9 +378,9 @@ static int find_syscall_gadget(uint64_t text_start, uint64_t text_end, uint64_t*
     return -1;
 }
 
-/* ---- ptrace state --------------------------------------------------------- */
 
-/* Write 8 bytes to target memory via process_vm_writev (writable pages only). */
+
+
 static int write_remote(uint64_t addr, const void* data, size_t len)
 {
     struct iovec local = { (void*)data, len };
@@ -465,12 +408,7 @@ static int poke_word(uint64_t addr, unsigned long val)
     return errno == 0 ? 0 : -1;
 }
 
-/* Find a race-free landing pad in the target's libc text: a ret (0xC3) followed by
- * compiler alignment padding (int3 0xCC padding on older glibc, multi-byte NOPs
- * 0F 1F / 66 0F 1F / 66 90 on current ones). Padding after a ret is never executed
- * by any thread, so poking a 0xCC over its first byte traps ONLY the thread we
- * deliberately redirect into it. Reads the LIVE target memory (the bytes must
- * match what the loader mapped). */
+
 static int find_landing_pad(uint64_t text_start, uint64_t text_end)
 {
     size_t len = (size_t)(text_end - text_start);
@@ -525,25 +463,18 @@ static void unpatch_landing(void)
 }
 
 static uint64_t gadget_addr;
-static uint64_t syscall_fn_addr; /* i386: target libc `syscall()` for the short rounds */
+static uint64_t syscall_fn_addr; 
 
-/*
- * One remote round: set registers from the saved snapshot + call frame,
- * continue, wait for the stop at the landing int3, return rax.
- * Returns 0 on success (either SIGTRAP or SIGSEGV exactly at landing+1).
- * `sig_out` receives the stop signal; other signals are re-injected and
- * the round keeps waiting (mirrors GDB signal passing).
- */
+
 static int do_round(uint64_t rip, uint64_t landing, uint64_t rdi, uint64_t rsi,
     uint64_t rax, uint64_t rdx, uint64_t r10, uint64_t r8, uint64_t r9,
     uint64_t rax_out[1], const char* what)
 {
     struct user_regs_struct regs = g_saved;
     regs.rip = rip;
-    /* Same syscall-restart neutralization as the i386 path (see do_round32). */
+    
     regs.orig_rax = (unsigned long long)-1;
-    /* return address slot: entry rsp must be 8 mod 16 (as after a real call
-     * push) or the callee's aligned SSE stores movaps-fault */
+    
     regs.rsp = (g_saved.rsp - STACK_WINDOW) & ~0xfULL;
     regs.rsp -= 8;
     regs.rdi = rdi;
@@ -592,7 +523,7 @@ static int do_round(uint64_t rip, uint64_t landing, uint64_t rdi, uint64_t rsi,
                 (unsigned long long)regs.rbp);
             return -1;
         }
-        /* unrelated signal delivered to this thread mid-call: pass it through */
+        
         printf("[Injector] %s: passing signal %d through\n", what, sig);
         if (ptrace(PTRACE_CONT, g_pid, NULL, (void*)(long)sig) < 0)
             return -1;
@@ -605,36 +536,17 @@ static int round_syscall(uint64_t nr, uint64_t rdi, uint64_t rsi, uint64_t rdx, 
     return do_round(gadget_addr, g_landing_addr, rdi, rsi, nr, rdx, r10, r8, r9, rax_out, what);
 }
 
-/*
- * i386 variant of the round. The short calls land on the target libc's OWN syscall()
- * wrapper (cdecl: [esp] = return address / landing int3, then nr + up to 6 args above)
- * - no 'syscall; ret' gadget exists in an i386 libc, and no gadget is needed: the
- * wrapper establishes its own frame, does `int $0x80`, pops and returns into the
- * landing. The long dlopen call goes straight at dlopen() the same way (i386 PIC code
- * re-establishes its GOT pointer from its own return address, so a direct entry is
- * safe - the same landing-int3 protocol as the 64-bit path).
- * Borrowed-stack window identical to the 64-bit path; esp kept 16-byte aligned.
- */
+
 static int do_round32(uint32_t fn, uint32_t landing, const uint32_t* args, int nargs,
     uint32_t* eax_out, const char* what)
 {
     struct i386_user_regs regs = g_saved32;
     regs.eip = fn;
-    /* i386 SysV ABI: at function ENTRY (reached via a call push) esp must be 12 mod 16 -
-     * esp+4 is 16-aligned, which aligned SSE stores inside the callee (dlopen internals
-     * use movaps) assume. Entry esp == 0 mod 16 misaligned them -> SIGSEGV mid-dlopen
-     * (the live 18:41 steam test). Same discipline as the 64-bit path's rsp -= 8. */
+    
         regs.esp = ((g_saved32.esp - STACK_WINDOW) & ~0xfu) - 4;
-    /* CRITICAL: the target thread is typically stopped mid-cancellable-syscall
-     * (__syscall_cancel_arch - pause()/read() in steam's idle loop). On resume the kernel
-     * applies the syscall-RESTART fixup when the in-flight syscall has ERESTART* pending:
-     * eax = orig_eax (29 = pause) and eip -= 2 - TRAMPLING our injected call state (live
-     * 18:41: eax=0x1d, eip = dlopen-2, executing the `00 00` padding there). Setting
-     * orig_eax = -1 tells the kernel "not in a syscall" - no fixup. gdb does the same in
-     * its dummy frames; the original orig_eax rides home in g_saved32 on restore. */
+    
     regs.orig_eax = 0xffffffffu;
-    /* cdecl frame: [esp] = landing (return address), then up to 7 stack args
-     * (the syscall() wrapper case needs nr + 6 args). */
+    
     uint32_t frame[1 + 7];
     int n = 1 + (nargs > 7 ? 7 : nargs);
     frame[0] = landing;
@@ -688,8 +600,7 @@ static int do_round32(uint32_t fn, uint32_t landing, const uint32_t* args, int n
     }
 }
 
-/* Short syscall round on i386: call the target's syscall(nr, a1..a6) - mmap2 needs the
- * full 6 args after the number (arg6 rides in ebp inside the wrapper). */
+
 static int round_syscall32(uint32_t nr, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
     uint32_t a5, uint32_t a6, uint32_t* eax_out, const char* what)
 {
@@ -706,7 +617,7 @@ static void save_state(void)
         printf("[Injector] note: XSAVE state capture failed (errno %d), FPU regs won't be restored\n", errno);
 
     if (g_arch32) {
-        /* the do_round32 frame starts at window_end - 4 (the ABI push slot) */
+        
         g_stack_window_start = ((g_saved32.esp - STACK_WINDOW) & ~0xfu) - 4;
     } else {
         g_stack_window_start = ((g_saved.rsp - STACK_WINDOW) & ~0xfULL) - 8;
@@ -762,8 +673,7 @@ int main(int argc, char** argv)
 
     printf("[Injector] Target: %d, Library: %s\n", g_pid, lib_path);
 
-    /* Target ELF class: steam's main process is i386 even on x86-64 Linux - the memfd
-     * path must serve both. Everything below branches on this (64-bit path unchanged). */
+    
     int cls = target_elf_class();
     if (cls < 0) {
         fprintf(stderr, "[Injector] cannot read the target's ELF class (/proc/%d/exe)\n", g_pid);
@@ -785,7 +695,7 @@ int main(int argc, char** argv)
     uint64_t dlopen_addr = 0, dlerror_addr = 0;
     if (resolve_sym("libc.so.6", "dlopen", &dlopen_addr)
         || resolve_sym("libc.so.6", "dlerror", &dlerror_addr)) {
-        /* glibc < 2.34 keeps these in libdl */
+        
         if (resolve_sym("libdl.so.2", "dlopen", &dlopen_addr) || resolve_sym("libdl.so.2", "dlerror", &dlerror_addr)) {
             fprintf(stderr, "[Injector] could not resolve dlopen/dlerror in target\n");
             return 1;
@@ -795,9 +705,7 @@ int main(int argc, char** argv)
         (unsigned long long)dlopen_addr, (unsigned long long)dlerror_addr);
 
     if (g_arch32) {
-        /* i386: the short rounds call the target's own syscall() wrapper - no
-         * 'syscall; ret' gadget exists in an i386 libc (that is what killed the memfd
-         * attempt here for the whole life of the steam module). */
+        
         if (resolve_sym("libc.so.6", "syscall", &syscall_fn_addr)) {
             fprintf(stderr, "[Injector] cannot resolve syscall() in the i386 target libc\n");
             return 1;
@@ -810,7 +718,7 @@ int main(int argc, char** argv)
         printf("[Injector] syscall gadget: 0x%llx\n", (unsigned long long)gadget_addr);
     }
 
-    /* race-free landing pad (ret + int3 padding in libc text) for ALL short rounds */
+    
     if (find_landing_pad(libc_text_start, libc_text_end)) {
         fprintf(stderr, "[Injector] no ret+int3 padding landing pad found in target libc text\n");
         return 1;
@@ -818,7 +726,7 @@ int main(int argc, char** argv)
     printf("[Injector] landing pad: 0x%llx (alignment padding after a ret; other threads never execute it)\n",
         (unsigned long long)g_landing_addr);
 
-    /* sanity-check the resolved dlopen entry looks like a function prologue */
+    
     unsigned char probe[8];
     if (read_remote(dlopen_addr, probe, sizeof(probe))) {
         fprintf(stderr, "[Injector] cannot read target memory (pread /proc/%d/mem)\n", g_pid);
@@ -827,7 +735,7 @@ int main(int argc, char** argv)
     printf("[Injector] bytes at dlopen: %02x %02x %02x %02x %02x %02x %02x %02x\n",
         probe[0], probe[1], probe[2], probe[3], probe[4], probe[5], probe[6], probe[7]);
 
-    /* ---- attach ---- */
+    
     printf("[Injector] Attaching...\n");
     if (ptrace(PTRACE_ATTACH, g_pid, NULL, NULL) < 0) {
         perror("PTRACE_ATTACH");
@@ -861,17 +769,13 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    /* ---- remote mmap (RWX page: landing pad + strings) ---- */
+    
     if (patch_landing())
         die_restore();
     uint64_t rax = 0;
     if (g_arch32) {
         uint32_t eax = 0;
-        /* mmap2(0, 0x1000, RWX, MAP_PRIVATE|ANONYMOUS, fd=-1, pgoff=0). Error check uses
-         * the KERNEL convention, not the sign bit: i386 syscalls return -errno in the
-         * unsigned range 0xfffff001..0xffffffff, while a legit mmap address can sit
-         * anywhere in the 32-bit space (0xe1712000 on the live steam target - a sign-bit
-         * check false-failed it and pushed steam to the gdb fallback). */
+        
         if (round_syscall32(SYS_I386_mmap2, 0, 0x1000, PROT_READ | PROT_WRITE | PROT_EXEC,
                 MAP_PRIVATE | MAP_ANONYMOUS, 0xffffffffu, 0, &eax, "mmap")
             || eax < 0x1000 || eax >= 0xfffff000u) {
@@ -887,7 +791,7 @@ int main(int argc, char** argv)
     }
     g_page = rax;
 
-    /* ---- remote memfd_create in the target ---- */
+    
     static const char memfd_name[] = "libMangoHud.so";
     if (write_remote(g_page + PAGE_NAME_OFF, memfd_name, sizeof(memfd_name))) {
         fprintf(stderr, "[Injector] cannot write the memfd name into the helper page\n");
@@ -897,7 +801,7 @@ int main(int argc, char** argv)
         uint32_t eax = 0;
         if (round_syscall32(SYS_I386_memfd_create, (uint32_t)(g_page + PAGE_NAME_OFF), MFD_CLOEXEC,
                 0, 0, 0, 0, &eax, "memfd_create")
-            || eax > 0xffff) {  // kernel convention: errors arrive as -errno >= 0xfffff001
+            || eax > 0xffff) {  
             fprintf(stderr, "[Injector] remote memfd_create failed (eax=0x%x)\n", eax);
             die_restore();
         }
@@ -909,11 +813,10 @@ int main(int argc, char** argv)
     }
     long target_fd = (long)rax;
 
-    /* ---- write the library into the target's memfd ---- */
+    
     char fdpath[64];
     snprintf(fdpath, sizeof(fdpath), "/proc/%d/fd/%ld", g_pid, target_fd);
-    /* "-" = the library bytes arrive on stdin (loader streams a decrypted-in-memory
-     * payload; no plaintext file ever exists) */
+    
     int libfd = read_stdin ? STDIN_FILENO : open(lib_path, O_RDONLY);
     int memfd = open(fdpath, O_WRONLY);
     if (libfd < 0 || memfd < 0) {
@@ -940,7 +843,7 @@ int main(int argc, char** argv)
     printf("[Injector] wrote %ld bytes into target memfd (fd %ld: %s)\n", (long)total, target_fd, fdpath);
 
 
-    /* ---- dlopen on the target thread ---- */
+    
     char dlopen_path[64];
     snprintf(dlopen_path, sizeof(dlopen_path), "/proc/%d/fd/%ld", g_pid, target_fd);
     if (write_remote(g_page + PAGE_PATH_OFF, dlopen_path, strlen(dlopen_path) + 1)
@@ -964,7 +867,7 @@ int main(int argc, char** argv)
     uint64_t handle = rax;
 
     if (!handle) {
-        /* dlerror on the target for the actual reason */
+        
         uint64_t errptr = 0;
         if (g_arch32) {
             uint32_t errptr32 = 0;
@@ -985,7 +888,7 @@ int main(int argc, char** argv)
 
     printf("[Injector] dlopen returned handle: 0x%llx\n", (unsigned long long)handle);
 
-    /* ---- cleanup: drop the helper page ---- */
+    
     if (g_arch32) {
         uint32_t eax = 0;
         if (round_syscall32(SYS_I386_munmap, (uint32_t)g_page, 0x1000, 0, 0, 0, 0, &eax, "munmap"))
@@ -994,7 +897,7 @@ int main(int argc, char** argv)
         printf("[Injector] note: munmap round failed, helper page stays\n");
     }
 
-    /* ---- restore everything and detach ---- */
+    
     unpatch_landing();
     write_remote(g_stack_window_start, g_stack_backup, STACK_WINDOW + 8);
     if (g_arch32) {

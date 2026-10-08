@@ -8,22 +8,22 @@
 #include <Platform/DynamicLibrary.h>
 #include <SDL/SdlFunctions.h>
 
-// Keybind value encoding, shared by config, capture UI and feature code. A bind is ONE byte:
-//   0        = Off (feature never activates)
-//   1..248   = SDL keyboard scancode (layout-independent physical key)
-//   249..253 = mouse buttons (MOUSE4, MOUSE5, MOUSE3, MOUSE1, MOUSE2)
-// The keybind UI captures whatever key/button the user presses next and stores it directly in
-// this encoding - there is no fixed list to keep in sync (CS2-settings style).
+
+
+
+
+
+
 class Bind {
 public:
     static constexpr int kOff = 0;
     static constexpr int kMinScancode = 1;
-    static constexpr int kMaxScancode = 248;   // SDL scancodes of interest all fit below this
-    static constexpr int kMouse4 = 249;        // X1 (forward thumb)
-    static constexpr int kMouse5 = 250;        // X2 (back thumb)
-    static constexpr int kMouse3 = 251;        // middle
-    static constexpr int kMouse1 = 252;        // left
-    static constexpr int kMouse2 = 253;        // right
+    static constexpr int kMaxScancode = 248;   
+    static constexpr int kMouse4 = 249;        
+    static constexpr int kMouse5 = 250;        
+    static constexpr int kMouse3 = 251;        
+    static constexpr int kMouse1 = 252;        
+    static constexpr int kMouse2 = 253;        
     static constexpr int kLast = kMouse2;
 
     [[nodiscard]] static bool isDown(int value) noexcept
@@ -35,8 +35,8 @@ public:
         return false;
     }
 
-    // Display name for the keybind UI. Keyboard names come from SDL itself ("Q", "Caps Lock",
-    // "Left Shift" - correct on any layout); mouse buttons and Off are static strings.
+    
+    
     [[nodiscard]] static const char* displayName(int value) noexcept
     {
         switch (value) {
@@ -82,6 +82,6 @@ private:
         return "KEY";
     }
 
-    // Constant-initialised and trivially destructible: no __cxa_guard under -nostdlib.
+    
     inline static sdl3::SDL_GetScancodeName* cachedScancodeName{nullptr};
 };

@@ -12,11 +12,11 @@
 
 #include "PlayerAnalyzerTagPanelContext.h"
 
-// In-world "CHEAT O METER" tag: the analyzer's current verdict for THIS pawn, shown as one
-// colored text line under the player info container. Only scanned players get a tag (selected
-// in the menu AND sampled at least once). Runs on the game thread; reads the analyzer's
-// per-slot stats directly (same thread writes them - no locking needed beyond the selection
-// set, which is spinlock-guarded in cheat_ometer).
+
+
+
+
+
 template <typename HookContext, typename Context = PlayerAnalyzerTagPanelContext<HookContext>>
 class PlayerAnalyzerTagPanel {
 public:
@@ -58,7 +58,7 @@ private:
         if (!controllerEntity)
             return cheat_ometer::Tag{};
 
-        // controller slot (picker/event numbering) - never the pawn's entity index
+        
         const auto slot = static_cast<int>(context.hookContext().template make<BaseEntity>(controllerEntity).handle().index().value) - 1;
         return cheat_ometer::tagForSlot(slot);
     }
@@ -75,10 +75,10 @@ private:
     [[nodiscard]] static cs2::Color verdictColor(int score) noexcept
     {
         if (score >= 70)
-            return cs2::Color{255, 71, 71};   // red
+            return cs2::Color{255, 71, 71};   
         if (score >= 40)
-            return cs2::Color{255, 180, 60};  // amber
-        return cs2::Color{120, 243, 79};      // green
+            return cs2::Color{255, 180, 60};  
+        return cs2::Color{120, 243, 79};      
     }
 
     Context context;

@@ -177,7 +177,7 @@ public:
 
     ON_CHANGE(viewmodel_mod_vars::ModifyFov)
     {
-        hookContext.template make<ClientModeHooks>().hookGetViewmodelFov(); // the hook body self-gates on the config
+        hookContext.template make<ClientModeHooks>().hookGetViewmodelFov(); 
     }
 
     ON_CHANGE(no_scope_inaccuracy_vis_vars::Enabled)

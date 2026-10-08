@@ -27,7 +27,7 @@ public:
         if (!game_events::localPlayerIsAttacker(hookContext, event))
             return;
 
-        // Skipping self-damage like the reference implementation: the marker is for landing hits.
+        
         if (game_events::localPlayerIsSlot(hookContext, game_events::entityForKey(event, "userid")))
             return;
 
@@ -35,8 +35,8 @@ public:
             hookContext.featuresStates().visualFeaturesStates.hitmarkerState.lastHurtTime = curtime.value();
     }
 
-    // Runs every frame from ViewRenderHook_onRenderStart: publishes the marker to the overlay
-    // layer while it is inside its timeout window, nothing once it expired (or when disabled).
+    
+    
     void run() const noexcept
     {
         if (!GET_CONFIG_VAR(HitmarkerEnabled)) {
@@ -51,7 +51,7 @@ public:
         }
 
         const auto& state = hookContext.featuresStates().visualFeaturesStates.hitmarkerState;
-        const float timeout = GET_CONFIG_VAR(HitmarkerTimeout); // InRange<float> -> const float&
+        const float timeout = GET_CONFIG_VAR(HitmarkerTimeout); 
         const float elapsed = curtime.value() - state.lastHurtTime;
         if (state.lastHurtTime <= -1.0e8f || elapsed < 0.0f || elapsed >= timeout) {
             overlay_layer::publishHitmarker({});
@@ -59,7 +59,7 @@ public:
         }
 
         const auto color = GET_CONFIG_VAR(HitmarkerColor);
-        // Linear fade across the timeout window, mirroring the reference's alpha ramp.
+        
         const float progress = elapsed / timeout;
         const auto fadedAlpha = static_cast<std::uint8_t>(static_cast<float>(color.a()) * (1.0f - progress) + 0.5f);
         overlay_layer::publishHitmarker(overlay_layer::Hitmarker{

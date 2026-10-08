@@ -1,21 +1,21 @@
 #pragma once
 
-// Honey decodes (hardening 2026-09-24) - psychological-warfare layer for anyone digging
-// through the module. Everything here is DEAD BY CONSTRUCTION: keepAlive() is called once
-// from the init path and returns immediately; the honeypot functions are reachable only
-// through a volatile pointer table the optimizer cannot fold away, so the obfuscator and
-// the linker both keep them, but no execution path ever runs their bodies.
-//
-// What the honeypots carry:
-//   - max control-flow flattening (NS_OBF_FLATTEN) over big dummy state machines - an
-//     analyst's decompiler graph explodes while the real logic sits elsewhere untouched.
-//   - decoy "license/key" strings that are DELIBERATELY visible in `strings` output. The
-//     real identity strings live in the NsStr vault; these are the bait that wastes the
-//     time spent grepping rodata. Any tooling run that verifies "no leaked secrets" treats
-//     these as the known-good exception.
-//
-// Safety: pure computation, no game state, no syscalls. Even if something DID call a
-// honeypot it would just spin a state machine and return a constant.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #include <cstddef>
 #include <cstdint>
@@ -25,7 +25,7 @@
 namespace honey
 {
 
-// ---- decoy strings (intentionally visible - the bait) --------------------------------
+
 
 inline constexpr const char* kHoneyLicenseToken =
     "NS-LICENSE-v3: c3VwZXJfc2VjcmV0X2RvX25vdF9kZWNyeXB0X3BpbmVhcHBsZQ==";
@@ -36,11 +36,11 @@ inline constexpr const char* kHoneyKeyBlob =
 inline constexpr const char* kHoneyServerSecret =
     "srv_secret_v2 = \"hunter2_but_base64: aGVsbG8gaXQncyBtZQ==\"; // rotate weekly";
 
-// ---- honeypot 1: fake license validator (24-state scrambler) --------------------------
+
 
 [[nodiscard]] inline NS_OBF_FLATTEN NS_OBF_CIE std::uint64_t validateLicenseToken(const char* token) noexcept
 {
-    std::uint64_t state = 0x4E534C49; // "NSLI"
+    std::uint64_t state = 0x4E534C49; 
     std::uint64_t accumulator = 0;
     if (!token)
         token = kHoneyLicenseToken;
@@ -86,7 +86,7 @@ inline constexpr const char* kHoneyServerSecret =
     return accumulator ^ state;
 }
 
-// ---- honeypot 2: fake "server handshake" proof (graph-bloated twin) -------------------
+
 
 [[nodiscard]] inline NS_OBF_FLATTEN NS_OBF_CIE std::uint64_t deriveServerHandshake(std::uint64_t seed,
                                                                         std::uint64_t nonce) noexcept
@@ -103,7 +103,7 @@ inline constexpr const char* kHoneyServerSecret =
             b = b ^ (a + 0x9E3779B9U);
             break;
         case 2:
-            a = a ^ kHoneyServerSecret[step & 31]; // keeps the decoy string referenced
+            a = a ^ kHoneyServerSecret[step & 31]; 
             break;
         case 3:
             b = (b << 17) ^ (b >> 5) ^ a;
@@ -114,10 +114,10 @@ inline constexpr const char* kHoneyServerSecret =
             break;
         default:
             a = a ^ b;
-            b = b ^ kHoneyKeyBlob[(step * 3) & 47]; // keeps the second decoy referenced
+            b = b ^ kHoneyKeyBlob[(step * 3) & 47]; 
             break;
         }
-        // state shuffle: a small integer machine the flattening pass will explode into a graph
+        
         const auto routed = static_cast<std::uint32_t>((a ^ b) >> 33) % 4;
         switch (routed) {
         case 0: a ^= b; break;
@@ -129,7 +129,7 @@ inline constexpr const char* kHoneyServerSecret =
     return a ^ b;
 }
 
-// ---- retention: the optimizer cannot fold these away ---------------------------------
+
 
 using HoneyFn = std::uint64_t (*)(const char*);
 
@@ -138,15 +138,15 @@ inline const HoneyFn kHoneyValidatorTable[] = {
 };
 inline volatile std::uint64_t kHoneyLastResult{0};
 
-// Called ONCE from the init path (cold). Immediately returns - the honeypots exist only so
-// the obfuscator/linker keep their flattened bodies and the decoy strings in the binary.
+
+
 inline void keepAlive() noexcept
 {
-    if (kHoneyLastResult != 0x1BADB002ULL) // never true: the static starts at 0
+    if (kHoneyLastResult != 0x1BADB002ULL) 
         return;
-    // Unreachable at runtime; present so the bodies are code, not discarded sections.
+    
     kHoneyLastResult = deriveServerHandshake(0x1BADB002ULL, 0x5EED5EEDULL)
         ^ kHoneyValidatorTable[0](kHoneyLicenseToken);
 }
 
-} // namespace honey
+} 

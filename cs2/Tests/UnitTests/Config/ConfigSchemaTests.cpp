@@ -36,10 +36,10 @@ protected:
         return result;
     }
 
-    // Conversions kept in the schema as parse-and-discard placeholders for backward compatibility
-    // with old config files (see ConfigSchema.h). Their load/save lambdas are intentional no-ops,
-    // so they must not demand a MockConfig call. Matched by full object path because some of these
-    // ids collide with legitimate keys elsewhere (e.g. Aimbot.Fov vs LegitAimbot.Fov).
+    
+    
+    
+    
     static const inline std::set<std::string> discardOnlyPaths{
         "Combat.Aimbot.Fov",
         "Combat.Aimbot.DrawFov",

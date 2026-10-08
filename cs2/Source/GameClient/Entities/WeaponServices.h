@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #include <CS2/Classes/CCSPlayer_WeaponServices.h>
 #include <CS2/Classes/Entities/C_CSWeaponBase.h>
 #include <CS2/Classes/EntitySystem/CEntityHandle.h>
@@ -20,7 +22,13 @@ public:
 
     [[nodiscard]] decltype(auto) weapons() const noexcept
     {
-        return hookContext.template make<PlayerWeapons>(hookContext.patternSearchResults().template get<OffsetToWeapons>().of(weaponServices).get());
+        cs2::CUtlVector<cs2::CEntityHandle>* handles = nullptr;
+        if (weaponServices) {
+            const auto offset = hookContext.schemaSystem().getFieldOffset("CPlayer_WeaponServices", "m_hMyWeapons");
+            if (offset.has_value() && *offset > 0)
+                handles = reinterpret_cast<cs2::CUtlVector<cs2::CEntityHandle>*>(reinterpret_cast<std::byte*>(weaponServices) + *offset);
+        }
+        return hookContext.template make<PlayerWeapons>(handles);
     }
 
     [[nodiscard]] auto getActiveWeapon() const noexcept
@@ -33,15 +41,15 @@ public:
         return hookContext.patternSearchResults().template get<OffsetToActiveWeapon>().of(weaponServices).toOptional();
     }
 
-    // EXPERIMENTAL - raw write to m_hActiveWeapon, the same field activeWeaponHandle() reads.
-    // Used to force a holster-then-redeploy cycle (set to invalid, then back to the real
-    // handle) on a weapon whose subclass/model was just swapped while already equipped -
-    // every prior real success in this project's knife-animation investigation (a rejoin, and
-    // a fresh console `give` after this session's subclass swap was already active) happened
-    // right after a genuine deploy event, never from modifying an already-equipped weapon's
-    // data in place. This is a different field from BaseEntity::cycleOwnerHandle()'s
-    // m_hOwnerEntity (weapon ownership, already tried and disproven alone) - this is the
-    // player's own "which weapon is currently selected" field, never toggled before.
+    
+    
+    
+    
+    
+    
+    
+    
+    
     void setActiveWeaponHandle(cs2::CEntityHandle handle) const noexcept
     {
         hookContext.patternSearchResults().template get<OffsetToActiveWeapon>().of(weaponServices) = handle;

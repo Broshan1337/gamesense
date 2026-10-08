@@ -2,9 +2,9 @@
 
 #include <imgui.h>
 
-// Anti-purple theme, values carried over from the UI donor (somecs2baseforlinux Theme.cpp).
-// Warm sand accent on near-black surfaces; kept as pure data so it stays trivial to re-tune.
-// (The GTK recolor experiment was reverted - design metrics below stayed GTK-shaped instead.)
+
+
+
 namespace gui_theme
 {
 

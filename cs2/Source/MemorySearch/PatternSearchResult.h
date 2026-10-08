@@ -72,8 +72,8 @@ public:
         return result;
     }
 
-    // Reads the single byte at the offset, sign-extended to 32 bits (see Read8 in
-    // CodePatternOperation.h for why this exists).
+    
+    
     [[nodiscard]] std::array<std::byte, 8> read8() const noexcept
     {
         std::array<std::byte, 8> result{};

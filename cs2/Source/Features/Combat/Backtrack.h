@@ -14,15 +14,15 @@
 #include <Utils/Optional.h>
 #include <Utils/Trig.h>
 
-// velocity-cs2's lag-comp backtracking. Each frame it snapshots every enemy's target bones (a ring of
-// past positions). When the rage aimbot fires with backtrack on, it can aim at one of those PAST
-// positions and stamp that record's server tick into the outgoing input_history entry, so the server
-// rewinds the enemy there and the shot connects. (On a local no-latency server this has no visible
-// effect - the lag-comp window it exploits is ~0 tick - but it is built for parity.)
-//
-// Records are keyed by the raw pawn pointer (no STL map): a fixed pool of slots, each a small ring of
-// records. Only stored when m_flSimulationTime advances, so consecutive records are distinct ticks and
-// "N ticks back" == N records back.
+
+
+
+
+
+
+
+
+
 template <typename HookContext>
 class Backtrack {
 public:
@@ -37,7 +37,7 @@ public:
         float simulationTime;
     };
 
-    // Snapshot every alive enemy's target bones this frame. Cheap: a handful of bone reads per enemy.
+    
     void update() const noexcept
     {
         const auto simOffset = hookContext.schemaSystem().getFieldOffset("C_BaseEntity", "m_flSimulationTime");
@@ -58,7 +58,7 @@ public:
 
             auto& slot = slotFor(entity);
             if (slot.count > 0 && slot.records[slot.head].simulationTime == simTime)
-                return; // same tick, nothing new
+                return; 
 
             auto&& node = target.baseEntity().gameSceneNode();
             Record record{};
@@ -77,8 +77,8 @@ public:
         });
     }
 
-    // The best (lowest-FOV from the current view) PAST target point for `entity`, within `maxTicks`
-    // records, honoring the same hitbox priority the aimbot uses. {} if backtracking has no usable record.
+    
+    
     [[nodiscard]] Optional<Result> bestRecord(cs2::C_BaseEntity* entity, const cs2::Vector& eye, float pitch, float yaw, bool head, bool chest, bool stomach, bool arms, bool legs, int maxTicks) const noexcept
     {
         const auto* const slot = findSlot(entity);
@@ -105,7 +105,7 @@ public:
                     bestFov = fov;
                     best = Result{record.bones[b], kHitgroups[b], record.simulationTime};
                 }
-                break; // highest-priority resolvable bone for this record only
+                break; 
             }
         }
         return best;
@@ -115,7 +115,7 @@ private:
     static constexpr int kBones = 5;
     static constexpr int kMaxRecords = 16;
     static constexpr int kMaxSlots = 64;
-    static constexpr int kBoneIndices[kBones] = {6, 4, 2, 9, 25};    // head, chest, stomach, arms, legs
+    static constexpr int kBoneIndices[kBones] = {6, 4, 2, 9, 25};    
     static constexpr int kHitgroups[kBones] = {1, 2, 3, 4, 6};
 
     struct Record {
@@ -126,12 +126,12 @@ private:
 
     struct Slot {
         cs2::C_BaseEntity* owner;
-        int head;   // index of the most recent record
+        int head;   
         int count;
         Record records[kMaxRecords];
     };
 
-    // Finds `entity`'s slot, or claims a free/stale one for it (resetting its ring).
+    
     [[nodiscard]] static Slot& slotFor(cs2::C_BaseEntity* entity) noexcept
     {
         for (auto& slot : slots)
@@ -145,7 +145,7 @@ private:
                 return slot;
             }
         }
-        // Pool full: reuse slot 0 (rare; more than kMaxSlots simultaneous enemies).
+        
         slots[0].owner = entity;
         slots[0].head = 0;
         slots[0].count = 0;

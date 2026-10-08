@@ -46,9 +46,9 @@ public:
         return roundWinStatus().notEqual(cs2::RoundWinStatus::None);
     }
 
-    // m_bIsValveDS read / force - the isvalveds_check port (FORFUTURETESTS/mytest). The offset is
-    // dump-derived (see C_CSGameRules.h) rather than pattern-resolved, so the read is bounds-free
-    // by the same trust the RE-derived constants in this tree carry.
+    
+    
+    
     [[nodiscard]] std::optional<bool> isValveDs() const noexcept
     {
         if (!gameRules)
@@ -58,8 +58,8 @@ public:
         return value != 0;
     }
 
-    // Writes the byte only when it differs; returns whether a write happened (mytest's auto_off
-    // is the same idempotent single-branch shape: cost is one load + compare when already 0).
+    
+    
     [[nodiscard]] bool spoofValveDs(bool spoofedValue) const noexcept
     {
         if (!gameRules)
@@ -74,8 +74,8 @@ public:
         return true;
     }
 
-    // Freeze time / warmup: schema-resolved (both live at the very start of C_CSGameRules, next
-    // to m_iRoundWinStatus). {} = unresolvable; callers fail closed (treat as "in freeze").
+    
+    
     [[nodiscard]] std::optional<bool> isFreezePeriod() const noexcept
     {
         return schemaBool("m_bFreezePeriod");

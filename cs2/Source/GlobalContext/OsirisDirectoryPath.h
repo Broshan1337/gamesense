@@ -57,7 +57,7 @@ public:
         const std::string_view homePath{home};
         constexpr auto kPathSeparatorLength{1};
         constexpr auto kNullTerminatorLength{1};
-        // the config directory name is encrypted; materialize it on the stack
+        
         char dirNameBuf[::build::kOsirisDirNameEnc.decrypted_size()];
         ::build::kOsirisDirNameEnc.decrypt(dirNameBuf);
         const std::string_view dirName{dirNameBuf, std::strlen(dirNameBuf)};

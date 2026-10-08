@@ -1,5 +1,5 @@
-// Monitor if Steam's VAC process reads CS2's memory
-// Run as: sudo ./vac_monitor <cs2_pid> <steam_pid>
+
+
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
     struct dirent* ent;
     
     while (1) {
-        // Check Steam's open file descriptors
+        
         snprintf(path, sizeof(path), "/proc/%d/fd", steam_pid);
         dir = opendir(path);
         
@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
                 if (len > 0) {
                     target[len] = '\0';
                     
-                    // Check if Steam opens CS2's /proc/pid/mem or maps
+                    
                     char cs2_proc[64];
                     snprintf(cs2_proc, sizeof(cs2_proc), "/proc/%d", cs2_pid);
                     
@@ -59,10 +59,10 @@ int main(int argc, char** argv) {
             closedir(dir);
         }
         
-        // Check for process_vm_readv usage (via strace would be better)
-        // Also check /proc/pid/mem permissions
         
-        usleep(100000); // 100ms
+        
+        
+        usleep(100000); 
     }
     
     return 0;

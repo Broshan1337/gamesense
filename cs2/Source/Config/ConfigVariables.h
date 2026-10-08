@@ -47,7 +47,7 @@ private:
 
     using OneByteConfigVariables = ConfigVariableTypes::filter<Projected<UnpackConfigVariable, WithSizeOf<1>::Equal>::Value>;
     using TwoByteConfigVariables = ConfigVariableTypes::filter<Projected<UnpackConfigVariable, WithSizeOf<2>::Equal>::Value>;
-    // 4-byte bucket: floats (e.g. InRange<float>) and packed-Rgba colors.
+    
     using FourByteConfigVariables = ConfigVariableTypes::filter<Projected<UnpackConfigVariable, WithSizeOf<4>::Equal>::Value>;
 
     std::array<std::byte[1], OneByteConfigVariables::size()> oneByteConfigVariables;
