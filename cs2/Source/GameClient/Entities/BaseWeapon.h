@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cmath>
 #include <cstdint>
@@ -436,20 +437,15 @@ public:
         if (!baseEntity().vData().valueOr(nullptr))
             return false;
 
-        // forceHighRes stays FALSE. The reference implementation calls UpdateSkin(true), and this
-        // was briefly changed to true to match it - but that was reverted after a death-triggered
-        // SEGV (null indirect call, PC=0, crash site NOT inside any function this code calls
-        // directly - the signature of a deferred async job running against an already-torn-down
-        // entity, the same crash class this project hit twice before). true makes
-        // RegenerateWeaponSkin queue strictly MORE async composite-material work than false does,
-        // which is the wrong direction to push while an entity-teardown race is unresolved.
-        //
-        // false is also what the game itself uses for its own regenerate_weapon_skins ConCommand
-        // (the thunk does `xor edi, edi` before jumping into the handler), and it is what this
-        // project ran with stably for many sessions. Do not flip this back to true without a
-        // specific reason and a death/respawn stress test.
+        // ABI (see RegenerateSkin in C_CSWeaponBase.h): (weapon, outSkinData*) - the second
+        // argument is a 32-byte OUTPUT buffer the success path writes with aligned movaps
+        // stores (never read). Passing false (the pre-2026-10-07 "forceHighRes" reading) was
+        // a NULL out-pointer: the first real in-game run of this path crashed with
+        // movaps [r12],xmm0, r12 = 0, inside the per-weapon fn (libclient+0x14924d5 on
+        // 11087116). The scratch buffer is 16-byte aligned because of the movaps.
+        alignas(16) std::array<std::byte, 32> regenOut{};
         if (const auto regenerate = hookContext.patternSearchResults().template get<PointerToRegenerateWeaponSkin>(); regenerate && baseWeapon)
-            regenerate(baseWeapon, false);
+            regenerate(baseWeapon, regenOut.data());
 
         return true;
     }
