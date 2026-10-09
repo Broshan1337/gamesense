@@ -16,6 +16,7 @@
 #include <Features/Game/FakeLevelConfigVariables.h>
 #include <Features/Game/FakePremierConfigVariables.h>
 #include <Features/Game/GlitchGeneratorConfigVariables.h>
+#include <Features/Visuals/ScoreboardEquipment/ScoreboardEquipmentConfigVariables.h>
 #include <Features/Game/MovementConfigVariables.h>
 #include <Features/Game/AutoPeekConfigVariables.h>
 #include <Features/Game/RevealRadarConfigVariables.h>
@@ -172,6 +173,10 @@ using ConfigVariableTypes = TypeList<
     triggerbot_vars::AutowallMaxThickness,
     triggerbot_vars::SpreadCompensation,
     triggerbot_vars::SeededFire,
+    triggerbot_vars::ThroughWalls,
+    triggerbot_vars::MinDamage,
+    triggerbot_vars::Backtrack,
+    triggerbot_vars::BacktrackTicks,
     aimbot_vars::Enabled,
     aimbot_vars::TargetSelection,
     aimbot_vars::TargetLock,
@@ -474,5 +479,6 @@ using ConfigVariableTypes = TypeList<
     FakeLevelXp,
     glitch_gen_vars::Style,
     glitch_gen_vars::Intensity,
-    glitch_gen_vars::Preset
+    glitch_gen_vars::Preset,
+    scoreboard_equipment_vars::Enabled
 >;

@@ -3224,6 +3224,10 @@ void pageLegitTriggerbot() noexcept
         toggleVar<triggerbot_vars::Autowall>(bullet_simulation::binding() ? "Shoot Walls (Engine)" : "Shoot Walls (Unavailable)", ++controlId);
         sliderVar<triggerbot_vars::AutowallMaxThickness>("Max Total Wall Thickness", ++controlId, " u");
         toggleVar<triggerbot_vars::SeededFire>("Seeded Fire", ++controlId);
+        toggleVar<triggerbot_vars::ThroughWalls>("Shoot Through Walls", ++controlId);
+        sliderVar<triggerbot_vars::MinDamage>("Minimum Damage", ++controlId, " hp");
+        toggleVar<triggerbot_vars::Backtrack>("Shoot Backtrack", ++controlId);
+        sliderVar<triggerbot_vars::BacktrackTicks>("Backtrack Ticks", ++controlId);
     });
 }
 
@@ -4330,6 +4334,7 @@ void pageMiscGeneral() noexcept
         toggleVar<VoteRevealerEnabled>("Vote Revealer", ++controlId);
         toggleVar<CooldownRevealerEnabled>("Cooldown Revealer", ++controlId);
         toggleVar<reveal_radar_vars::Enabled>("Reveal Radar", ++controlId);
+        toggleVar<scoreboard_equipment_vars::Enabled>("Scoreboard Equipment", ++controlId);
     });
 
     addCard("ACCOUNT", 11, [] {
@@ -7516,6 +7521,8 @@ void registerFeatureBinds() noexcept
     feature_binds::registerNumber<triggerbot_vars::AccuracyRadius>("Max Bullet Deviation");
     feature_binds::registerNumber<triggerbot_vars::Hitchance>("Minimum Hitchance");
     feature_binds::registerNumber<triggerbot_vars::AutowallMaxThickness>("Max Total Wall Thickness");
+    feature_binds::registerNumber<triggerbot_vars::MinDamage>("Minimum Damage");
+    feature_binds::registerNumber<triggerbot_vars::BacktrackTicks>("Backtrack Ticks");
     feature_binds::registerNumber<viewmodel_mod_vars::Fov>("Fov");
     feature_binds::registerNumber<viewmodel_mod_vars::OffsetX>("Offset X");
     feature_binds::registerNumber<viewmodel_mod_vars::OffsetY>("Offset Y");
@@ -7644,6 +7651,8 @@ void registerFeatureBinds() noexcept
     feature_binds::registerToggle<triggerbot_vars::MaxAccuracyOnly>("Shoot At Max Accuracy");
     feature_binds::registerToggle<triggerbot_vars::WallCheck>("Triggerbot Shoot Visible");
     feature_binds::registerToggle<triggerbot_vars::Autowall>("Triggerbot Shoot Walls");
+    feature_binds::registerToggle<triggerbot_vars::ThroughWalls>("Triggerbot Shoot Through Walls");
+    feature_binds::registerToggle<triggerbot_vars::Backtrack>("Triggerbot Shoot Backtrack");
     feature_binds::registerToggle<rcs_vars::Enabled>("Control Recoil");
     feature_binds::registerToggle<no_scope_inaccuracy_vis_vars::Enabled>("No-scope Inaccuracy Vis");
     feature_binds::registerToggle<spread_circle_vars::Enabled>("Draw Weapon Spread");

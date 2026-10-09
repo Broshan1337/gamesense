@@ -34,6 +34,7 @@ public:
         fakePremierObject(configConversion);
         fakeCommendsObject(configConversion);
         glitchGeneratorObject(configConversion);
+        scoreboardEquipmentObject(configConversion);
         return configConversion.endRoot();
     }
 
@@ -65,6 +66,13 @@ private:
         configConversion.uint(u8"Intensity", loadVariable<glitch_gen_vars::Intensity>(), saveVariable<glitch_gen_vars::Intensity>());
         
         configConversion.uint(u8"Preset", loadVariable<glitch_gen_vars::Preset>(), saveVariable<glitch_gen_vars::Preset>());
+        configConversion.endObject();
+    }
+
+    void scoreboardEquipmentObject(auto&& configConversion)
+    {
+        configConversion.beginObject(u8"ScoreboardEquipment");
+        configConversion.boolean(u8"Enabled", loadVariable<scoreboard_equipment_vars::Enabled>(), saveVariable<scoreboard_equipment_vars::Enabled>());
         configConversion.endObject();
     }
 
@@ -185,6 +193,10 @@ private:
         configConversion.boolean(u8"SpreadCompensation", loadVariable<triggerbot_vars::SpreadCompensation>(), saveVariable<triggerbot_vars::SpreadCompensation>());
         configConversion.uint(u8"HoldKey", loadVariable<triggerbot_vars::HoldKey>(), saveVariable<triggerbot_vars::HoldKey>());
         configConversion.boolean(u8"SeededFire", loadVariable<triggerbot_vars::SeededFire>(), saveVariable<triggerbot_vars::SeededFire>());
+        configConversion.boolean(u8"ThroughWalls", loadVariable<triggerbot_vars::ThroughWalls>(), saveVariable<triggerbot_vars::ThroughWalls>());
+        configConversion.uint(u8"MinDamage", loadVariable<triggerbot_vars::MinDamage>(), saveVariable<triggerbot_vars::MinDamage>());
+        configConversion.boolean(u8"Backtrack", loadVariable<triggerbot_vars::Backtrack>(), saveVariable<triggerbot_vars::Backtrack>());
+        configConversion.uint(u8"BacktrackTicks", loadVariable<triggerbot_vars::BacktrackTicks>(), saveVariable<triggerbot_vars::BacktrackTicks>());
         
         
         

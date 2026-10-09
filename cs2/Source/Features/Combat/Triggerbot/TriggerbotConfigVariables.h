@@ -63,5 +63,9 @@ CONFIG_VARIABLE(SpreadCompensation, bool, true);
 
 
 CONFIG_VARIABLE(SeededFire, bool, false);
+CONFIG_VARIABLE(ThroughWalls, bool, false);
+CONFIG_VARIABLE_RANGE(MinDamage, triggerbot_params::kMinDamage);
+CONFIG_VARIABLE(Backtrack, bool, false);
+CONFIG_VARIABLE_RANGE(BacktrackTicks, triggerbot_params::kBacktrackTicks);
 
 }

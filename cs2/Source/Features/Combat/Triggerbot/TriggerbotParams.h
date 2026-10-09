@@ -53,6 +53,10 @@ constexpr auto kHitchance = RangeConstrainedVariableParams<std::uint8_t>{.min = 
 
 constexpr auto kAutowallMaxThickness = RangeConstrainedVariableParams<std::uint8_t>{.min = 1, .max = 40, .def = 8};
 
+constexpr auto kMinDamage = RangeConstrainedVariableParams<std::uint8_t>{.min = 0, .max = 100, .def = 0};
+
+constexpr auto kBacktrackTicks = RangeConstrainedVariableParams<std::uint8_t>{.min = 1, .max = 16, .def = 8};
+
 
 
 

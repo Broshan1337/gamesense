@@ -91,6 +91,7 @@
 #include <Features/Hud/SpectatorList/SpectatorList.h>
 #include <Features/Visuals/Hitmarker/Hitmarker.h>
 #include <Features/Visuals/PlayerList/PlayerList.h>
+#include <Features/Visuals/ScoreboardEquipment/ScoreboardEquipment.h>
 #include <Features/Visuals/Removals/Removals.h>
 #include <Features/Visuals/ThirdPerson/ForceThirdPerson.h>
 #include <Features/Visuals/WorldColors/WorldColors.h>
@@ -554,7 +555,7 @@ void Source2ClientHook_onFrameStageNotify(cs2::CSource2Client* thisptr, int fram
     
     
     
-    if (frameStage == 6 && (GET_CONFIG_VAR(aimbot_vars::Backtrack) || GET_CONFIG_VAR(aimbot_vars::Extrapolate)))
+    if (frameStage == 6 && (GET_CONFIG_VAR(aimbot_vars::Backtrack) || GET_CONFIG_VAR(aimbot_vars::Extrapolate) || GET_CONFIG_VAR(triggerbot_vars::Backtrack)))
         hookContext.template make<Lagcomp>().run();
 
     
@@ -1019,6 +1020,7 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     SoundFeatures{hookContext.soundWatcherState(), hookContext.hooks().viewRenderHook, hookContext}.runOnViewMatrixUpdate();
     hookContext.template make<Hitmarker>().run();
     hookContext.template make<PlayerList>().run();
+    hookContext.template make<ScoreboardEquipment>().run();
     
     
     hookContext.template make<PlayerAnalyzer>().run();

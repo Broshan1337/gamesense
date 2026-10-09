@@ -20,6 +20,7 @@
 #include <GameClient/Entities/BaseEntity.h>
 #include <GameClient/Entities/PlayerPawn.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
+#include <GameClient/Lagcomp.h>
 #include <GameClient/MouseState.h>
 #include <GameClient/SpreadPrediction/SpreadSolver.h>
 #include <GameClient/Tracing/Tracing.h>
@@ -99,13 +100,24 @@ public:
         }
         lastSeenCurtime = now.value();
 
-        auto&& target = crosshairTarget();
-        if (!target) {
-            disarm();
-            return;
+        // Target selection, the reference legitbot's three routes in order: the direct
+        // crosshair pawn, then (only when the crosshair found nothing) the through-wall
+        // scan and the backtrack ghost scan. All three feed the same arm/delay/fire
+        // machinery below; scan targets carry their own resolved point + hitgroup and
+        // skip the direct-only gates.
+        ScanTarget selection{};
+        if (const auto direct = crosshairTarget()) {
+            selection.pawn = direct.rawPawn();
+        } else {
+            const auto scanned = scanTarget(cmd);
+            if (!scanned.hasValue()) {
+                disarm();
+                return;
+            }
+            selection = scanned.value();
         }
 
-        
+        auto&& target = hookContext.template make<PlayerPawn>(selection.pawn);
         auto* const rawTarget = static_cast<cs2::C_BaseEntity*>(target.baseEntity());
         if (!armed || armedTarget != rawTarget) {
             armed = true;
@@ -126,12 +138,29 @@ public:
             return;
         if (!passesMaxAccuracyGate())
             return;
-        if (!passesVisibility(target, cmd))
-            return;
-        if (!passesAimGates(target, cmd))
-            return;
-        if (!passesSeededFire(target, cmd))
-            return;
+        if (selection.fromBacktrack) {
+            // A backtrack ghost: the direct trace already failed by construction, so the
+            // visibility/hitchance/seeded gates on the LIVE pose are the wrong question -
+            // the record's own hitgroup carries the head-only decision and the arm/delay
+            // logic above already re-armed per target.
+            if (GET_CONFIG_VAR(triggerbot_vars::HeadOnly) && selection.hitgroup != 1)
+                return;
+        } else if (selection.throughWall) {
+            // A through-wall target: the scan already damage-checked the bone point; this
+            // re-checks the actual fire direction (the crosshair) penetrates for enough
+            // damage - the shot the spread-compensated writer will actually send.
+            if (!passesVisibility(target, cmd))
+                return;
+            if (GET_CONFIG_VAR(triggerbot_vars::HeadOnly) && selection.hitgroup != 1)
+                return;
+        } else {
+            if (!passesVisibility(target, cmd))
+                return;
+            if (!passesAimGates(target, cmd))
+                return;
+            if (!passesSeededFire(target, cmd))
+                return;
+        }
 
         
         
@@ -180,8 +209,165 @@ public:
     }
 
 private:
-    
-    
+    // A target resolved by one of the fallback scans (through-wall or backtrack) instead of
+    // the direct crosshair trace. `point`/`hitgroup` are the scan's own resolution - the
+    // reference legitbot's ScanTargetThroughWall / ScanBacktrackTarget results.
+    struct ScanTarget {
+        cs2::C_CSPlayerPawn* pawn{};
+        cs2::Vector point{};
+        int hitgroup{0};
+        bool throughWall{false};
+        bool fromBacktrack{false};
+    };
+
+    // The reference legitbot's fallback selection, tried in its order: the through-wall scan
+    // (crosshair on world geometry - fire at the closest-to-crosshair enemy hitbox that
+    // still takes >= MinDamage through the wall), then the backtrack ghost (the crosshair
+    // crossing an enemy's past position - the server's lag compensation lands the shot).
+    [[nodiscard]] Optional<ScanTarget> scanTarget(cs2::CUserCmd* cmd) const noexcept
+    {
+        if (GET_CONFIG_VAR(triggerbot_vars::ThroughWalls))
+            if (const auto throughWall = throughWallTarget(cmd); throughWall.hasValue())
+                return throughWall;
+        if (GET_CONFIG_VAR(triggerbot_vars::Backtrack))
+            if (const auto backtrack = backtrackTarget(cmd); backtrack.hasValue())
+                return backtrack;
+        return {};
+    }
+
+    [[nodiscard]] Optional<ScanTarget> throughWallTarget(cs2::CUserCmd* cmd) const noexcept
+    {
+        auto&& localPawn = hookContext.activeLocalPlayerPawn();
+        if (!localPawn || localPawn.isAlive() != true)
+            return {};
+
+        const auto bullets = localPawn.getActiveWeapon().numBullets();
+        if (bullets.hasValue() && bullets.value() <= 0)
+            return {};
+
+        const auto eye = localPawn.eyePosition();
+        const UserCmd command{cmd};
+        const auto pitch = command.viewPitch();
+        const auto yaw = command.viewYaw();
+        if (!eye.hasValue() || !pitch.hasValue() || !yaw.hasValue())
+            return {};
+
+        auto&& weapon = localPawn.getActiveWeapon();
+        const auto damage = weapon.baseDamage();
+        const auto rangeModifier = weapon.rangeModifier();
+        const auto maxRange = weapon.maxRange();
+        if (!damage.hasValue() || !rangeModifier.hasValue() || !maxRange.hasValue() || !std::isfinite(maxRange.value()) || maxRange.value() <= 0)
+            return {};
+        const auto armorRatio = weapon.armorRatio();
+        const auto headMultiplier = weapon.headshotMultiplier();
+        if (!armorRatio.hasValue() || !headMultiplier.hasValue())
+            return {};
+
+        const int thickness = GET_CONFIG_VAR(triggerbot_vars::Autowall) ? static_cast<int>(GET_CONFIG_VAR(triggerbot_vars::AutowallMaxThickness)) : 8;
+        const float minDamage = static_cast<float>(GET_CONFIG_VAR(triggerbot_vars::MinDamage));
+        const bool headOnly = GET_CONFIG_VAR(triggerbot_vars::HeadOnly);
+        const cs2::Vector direction = shot_geometry::angleVectors(pitch.value(), yaw.value()).forward;
+
+        void* const skip = static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity());
+        Optional<ScanTarget> best;
+        float bestFov = kScanFov;
+
+        hookContext.template make<EntitySystem>().forEachNetworkableEntityIdentity([&](const auto& identity) {
+            auto&& baseEntity = hookContext.template make<BaseEntity>(static_cast<cs2::C_BaseEntity*>(identity.entity));
+            if (!baseEntity.classify().template is<cs2::C_CSPlayerPawn>())
+                return;
+            auto&& enemy = baseEntity.template as<PlayerPawn>();
+            if (!enemy || enemy.isControlledByLocalPlayer() || enemy.isEnemy() != true || enemy.isAlive() != true)
+                return;
+            const auto health = enemy.health();
+            if (!health.hasValue() || health.value() <= 0)
+                return;
+            if (const auto immune = enemy.hasImmunity(); immune.hasValue() && immune.value())
+                return;
+
+            static constexpr int kBones[]{kHeadBone, kChestBone, kStomachBone};
+            static constexpr int kHitgroups[]{1, 2, 3};
+            auto&& node = enemy.baseEntity().gameSceneNode();
+            for (int b = 0; b < 3; ++b) {
+                const auto bone = node.bonePosition(kBones[b]);
+                if (!bone.hasValue())
+                    continue;
+                if (headOnly && kHitgroups[b] != 1)
+                    continue;
+                const auto angles = shot_geometry::anglesTo(eye.value(), bone.value());
+                const float dPitch = angles.pitch - pitch.value();
+                const float dYaw = trig::normalizeDegrees(angles.yaw - yaw.value());
+                const float fov = trig::squareRoot(dPitch * dPitch + dYaw * dYaw);
+                if (fov > bestFov)
+                    continue;
+
+                penetration::TraceBudget budget;
+                const penetration::Limits limits{90.0f, float(thickness), 4};
+                void* const targetEntity = static_cast<cs2::C_BaseEntity*>(enemy.baseEntity());
+                const auto impact = Autowall::evaluate(eye.value(), bone.value(), skip, targetEntity,
+                    {damage.value(), weapon.penetrationPower().valueOr(0.0f), rangeModifier.value(), maxRange.value()},
+                    limits, budget, hookContext);
+                if (!impact.hasValue())
+                    continue;
+                const auto healthDamage = Autowall::healthDamage(hookContext, targetEntity, impact.value().damage, impact.value().hitgroup,
+                    armorRatio.value(), headMultiplier.value());
+                if (!healthDamage.hasValue() || healthDamage.value() < (minDamage > 1.0f ? minDamage : 1.0f))
+                    continue;
+
+                bestFov = fov;
+                best = ScanTarget{enemy.rawPawn(), bone.value(), kHitgroups[b], true, false};
+            }
+        });
+        return best;
+    }
+
+    [[nodiscard]] Optional<ScanTarget> backtrackTarget(cs2::CUserCmd* cmd) const noexcept
+    {
+        auto&& localPawn = hookContext.activeLocalPlayerPawn();
+        if (!localPawn || localPawn.isAlive() != true)
+            return {};
+
+        const auto eye = localPawn.eyePosition();
+        const UserCmd command{cmd};
+        const auto pitch = command.viewPitch();
+        const auto yaw = command.viewYaw();
+        if (!eye.hasValue() || !pitch.hasValue() || !yaw.hasValue())
+            return {};
+
+        const bool headOnly = GET_CONFIG_VAR(triggerbot_vars::HeadOnly);
+        const int maxTicks = static_cast<int>(GET_CONFIG_VAR(triggerbot_vars::BacktrackTicks));
+        const cs2::Vector direction = shot_geometry::angleVectors(pitch.value(), yaw.value()).forward;
+
+        auto&& lagcomp = hookContext.template make<Lagcomp>();
+        Optional<ScanTarget> best;
+
+        hookContext.template make<EntitySystem>().forEachNetworkableEntityIdentity([&](const auto& identity) {
+            if (best.hasValue())
+                return;
+            auto&& baseEntity = hookContext.template make<BaseEntity>(static_cast<cs2::C_BaseEntity*>(identity.entity));
+            if (!baseEntity.classify().template is<cs2::C_CSPlayerPawn>())
+                return;
+            auto&& enemy = baseEntity.template as<PlayerPawn>();
+            if (!enemy || enemy.isControlledByLocalPlayer() || enemy.isEnemy() != true || enemy.isAlive() != true)
+                return;
+
+            // The closest past head/chest/stomach position this enemy occupied; only a hit
+            // the crosshair ray actually crosses counts (the reference's ray-vs-capsule,
+            // approximated at bone-sphere granularity with the record's own hitgroup).
+            const auto record = lagcomp.bestRecord(static_cast<cs2::C_BaseEntity*>(enemy.baseEntity()), eye.value(), pitch.value(), yaw.value(),
+                                                   !headOnly, !headOnly, !headOnly, false, false, maxTicks);
+            if (!record.hasValue())
+                return;
+            if (headOnly && record.value().hitgroup != 1)
+                return;
+            const auto radius = record.value().hitgroup == 1 ? kHeadRadius : kBodyRadius;
+            if (!shot_geometry::rayReachesSphere(eye.value(), direction, record.value().aimPoint, radius))
+                return;
+            best = ScanTarget{enemy.rawPawn(), record.value().aimPoint, record.value().hitgroup, false, true};
+        });
+        return best;
+    }
+
     [[nodiscard]] PlayerPawn<HookContext> crosshairTarget() const noexcept
     {
         const auto none = hookContext.template make<PlayerPawn>(static_cast<cs2::C_CSPlayerPawn*>(nullptr));
@@ -443,8 +629,11 @@ private:
         const auto armorRatio = weapon.armorRatio();
         const auto headMultiplier = weapon.headshotMultiplier();
         if (!armorRatio.hasValue() || !headMultiplier.hasValue()) return false;
+        // The min-damage gate (the reference's triggerbot_md): the shot along the crosshair
+        // must leave the target at <= (health - MinDamage), not merely deal any damage.
+        const float minDamage = static_cast<float>(GET_CONFIG_VAR(triggerbot_vars::MinDamage));
         return Autowall::healthDamage(hookContext, targetEntity, impact.value().damage, impact.value().hitgroup,
-            armorRatio.value(), headMultiplier.value()).valueOr(0.0f) >= 1.0f;
+            armorRatio.value(), headMultiplier.value()).valueOr(0.0f) >= (minDamage > 1.0f ? minDamage : 1.0f);
     }
 
 
@@ -560,9 +749,11 @@ private:
     
     static constexpr int kHeadBone = 6;
     static constexpr int kChestBone = 4;
+    static constexpr int kStomachBone = 2;
     static constexpr float kHeadRadius = 6.0f;
     static constexpr float kBodyRadius = 16.0f;
     static constexpr int kHitchanceSamples = 256;
+    static constexpr float kScanFov = 3.0f;
 
     
     
