@@ -118,7 +118,7 @@ struct C_CSWeaponBase : C_EconEntity {
     
     
     
-    static constexpr int kCompositeMaterialOwnerOffset = 1928;
+    static constexpr int kCompositeMaterialOwnerOffset = 1936;
 };
 
 }
