@@ -10,6 +10,7 @@
 #include <GameClient/Entities/BaseWeapon.h>
 #include <GameClient/Entities/EntityClassifier.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
+#include <GameClient/PawnSettle.h>
 #include <Utils/CrashLogger.h>
 #include <Utils/MurmurHash2.h>
 
@@ -70,7 +71,7 @@ public:
         
         
         
-        if (auto&& localPawn = hookContext.activeLocalPlayerPawn(); localPawn && localPawn.isAlive().value_or(false)) {
+        if (auto&& localPawn = hookContext.activeLocalPlayerPawn(); localPawn && localPawn.isAlive().value_or(false) && pawn_settle::ready(localPawn.rawPawn())) {
             
             
             

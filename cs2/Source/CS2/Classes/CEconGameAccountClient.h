@@ -19,7 +19,7 @@ struct CEconGameAccountClient {
     
     
     
-    static constexpr int kEconClientOffset = 0x12C848;
+    static constexpr int kEconClientOffset = 0x12C818;
 
     
     

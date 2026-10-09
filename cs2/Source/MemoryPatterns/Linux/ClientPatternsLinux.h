@@ -110,8 +110,8 @@ struct ClientPatterns {
             
             
             
-            .template addPattern<EconSystemAccessor, CodePattern{"E8 ? ? ? ? 48 8B 80 48 C8 12 00 48 85 C0 74 ? 48 8B 78 68 E8 ? ? ? ? 48 89 C3 48 85 C0 74 ? E8"}.add(1).abs()>()
-            .template addPattern<GameAccountClientAccessor, CodePattern{"E8 ? ? ? ? 48 8B 80 48 C8 12 00 48 85 C0 74 ? 48 8B 78 68 E8 ? ? ? ? 48 89 C3 48 85 C0 74 ? E8"}.add(22).abs()>()
+            .template addPattern<EconSystemAccessor, CodePattern{"E8 ? ? ? ? 48 8B 80 ? ? ? ? 48 85 C0 74 ? 48 8B 78 68 E8 ? ? ? ? 48 89 C3 48 85 C0 74 ? E8"}.add(1).abs()>()
+            .template addPattern<GameAccountClientAccessor, CodePattern{"E8 ? ? ? ? 48 8B 80 ? ? ? ? 48 85 C0 74 ? 48 8B 78 68 E8 ? ? ? ? 48 89 C3 48 85 C0 74 ? E8"}.add(22).abs()>()
             
             
             
