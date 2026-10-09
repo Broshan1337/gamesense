@@ -103,6 +103,7 @@ struct ClientPatterns {
             
             
             .template addPattern<PlayerRankingDataPointer, CodePattern{"48 8D 1D ? ? ? ? F6 43 10 04 0F 84"}.add(3).abs()>()
+            .template addPattern<TeamSelectEventGuardSite, CodePattern{"48 8B 40 08 80 78 58 00 75 ? 48 8B 7B 08 45 0F B6 FC 44 89 FE 48 8B 07 FF 90 A8 0A 00 00 48 8B 7B 08 44 89 FE 48 8B 07 FF 90 10 01 00 00"}.add(10)>()
             
             
             

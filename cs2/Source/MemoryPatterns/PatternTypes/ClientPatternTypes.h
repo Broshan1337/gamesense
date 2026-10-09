@@ -55,6 +55,8 @@ STRONG_TYPE_ALIAS(CSGOInputPointer, cs2::CCSGOInput*);
 
 STRONG_TYPE_ALIAS(PlayerRankingDataPointer, void*);
 
+STRONG_TYPE_ALIAS(TeamSelectEventGuardSite, void*);
+
 STRONG_TYPE_ALIAS(EconSystemAccessor, void*(*)());
 STRONG_TYPE_ALIAS(GameAccountClientAccessor, void*(*)(void* sharedObjectCache));
 

@@ -97,6 +97,7 @@
 #include <Features/Lua/LuaManager.h>
 #include <Features/Lua/LuaConfigBridge.h>
 #include <Hooks/SceneRenderHooks.h>
+#include <Hooks/TeamSelectEventGuard.h>
 #include <Hooks/ChamsHook.h>
 #include <Features/Visuals/Chams/Chams.h>
 
@@ -382,8 +383,13 @@
     hookContext.template make<ClientModeHooks>().hookClientMode();
     
     
-    (void)scene_render_hooks::install(); 
-    
+    (void)scene_render_hooks::install();
+
+    if (team_select_guard::install(reinterpret_cast<std::uintptr_t>(hookContext.patternSearchResults().template get<TeamSelectEventGuardSite>())))
+        StatusReport::record("TeamSelect event null-guard installed (game spawn-event crash workaround)", true);
+    else
+        StatusReport::record("TeamSelect event null-guard NOT installed (crash workaround inactive)", false);
+
     (void)chams_hook::install();
     static_cast<void>(viewmodel_rotation_hook::install());
     
@@ -464,6 +470,7 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     hookContext.template make<Removals>().onUnload();
     hookContext.template make<ViewmodelMod>().onUnload();
     scene_render_hooks::uninstall();
+    team_select_guard::uninstall();
     chams_hook::uninstall();
     viewmodel_rotation_hook::uninstall();
     netlag_hook::unload();
