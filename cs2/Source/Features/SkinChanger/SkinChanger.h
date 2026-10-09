@@ -192,6 +192,9 @@ private:
         
         
         
+        // The game's REAL subclass hash for the knife's legacy model (falls back to the old
+        // synthetic token only for table misses) - the real hash is what makes updateSubclass()
+        // dispatch the knife's actual VData (grip/pose). See kKnifeModels' comment.
         const auto desiredSubclassToken = makeSubclassToken(static_cast<std::uint16_t>(*configuredKnife));
 
         const bool alreadyInDesiredState =
@@ -237,6 +240,9 @@ private:
             return;
         lastReapplyAttemptTime = curtime.value();
 
+        // The item definition's model path - the same field the current working reference
+        // (2026-10-09) reads through the schema (m_pszModelName). Our resolveKnifeModelPath
+        // reads the same itemdef field directly.
         const char* modelPath = resolveKnifeModelPath(static_cast<std::uint16_t>(*configuredKnife));
 
         
@@ -328,6 +334,9 @@ private:
         
         
         
+        // Same 1/2 legacy/default mesh split as guns - the current working reference uses
+        // exactly this for knives (the ~0-all-groups variant was a different, older reference;
+        // the depot no longer even ships _ag2 knife models).
         const std::uint64_t meshMask = knife.isEquippedPaintKitLegacy() ? 2 : 1;
         knife.setMeshGroupMask(meshMask);
 
@@ -356,10 +365,18 @@ private:
         
         
         
-        knife.updateCompositeMaterial();
-
-        if (!knife.regenerateSkin())
+        // The current working reference's rebuild trio, in its exact order (flush with
+        // dispatch -> set-merge -> UpdateSkin(1) -> PostDataUpdate). UpdateSkin resets the
+        // weapon's CACHED paint attribution (the cache the mesh path reads - the HUD-only
+        // bug). The vData guard from the old regenerateSkin() still applies: a freshly
+        // spawned weapon without resolved VData must not be rebuilt yet (the caller retries
+        // next frame via markApplied not running).
+        if (!knife.baseEntity().vData().valueOr(nullptr))
             return;
+        knife.updateCompositeMaterial(true);
+        knife.updateCompositeMaterialSet();
+        knife.updateSkin(1);
+        knife.bumpEconReloadEventId();
         hookContext.skinChangerState().markApplied(handle, desiredPaintKit, configuredSeed, configuredWearPermille, statTrak);
 
         
@@ -447,10 +464,7 @@ private:
             return;
 
         
-        
-        
-        
-        if (!weapon.applySkinAttributes(desiredPaintKit, desiredSeed, static_cast<float>(desiredWearPermille) / 1000.0f))
+                if (!weapon.applySkinAttributes(desiredPaintKit, desiredSeed, static_cast<float>(desiredWearPermille) / 1000.0f))
             return;
 
         
@@ -485,10 +499,12 @@ private:
         
         
         
-        weapon.updateCompositeMaterial();
-
-        if (!weapon.regenerateSkin())
+        if (!weapon.baseEntity().vData().valueOr(nullptr))
             return;
+        weapon.updateCompositeMaterial(true);
+        weapon.updateCompositeMaterialSet();
+        weapon.updateSkin(1);
+        weapon.bumpEconReloadEventId();
         hookContext.skinChangerState().markApplied(handle, desiredPaintKit, desiredSeed, desiredWearPermille, statTrak);
 
         

@@ -50,6 +50,8 @@ struct C_CSWeaponBase : C_EconEntity {
     
     
     using ResolveSubclassData = std::int64_t(C_CSWeaponBase* thisptr);
+    using UpdateSkin = void(C_CSWeaponBase* thisptr, int changeFlag);
+    using UpdateCompositeMaterialSet = void(void* destOwner, void* srcOwner, bool dispatch);
     
     
     

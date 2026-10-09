@@ -351,24 +351,18 @@ public:
         if (!setAttribute || !item)
             return false;
 
-        // Item metadata fields the reference always sets alongside the skin attributes -
-        // added after two cheaper animation-fix hypotheses (SetModel presence, an
-        // ownership-toggle nudge) were both tested live and disproven; the reference is
-        // confirmed to render both the skin AND the holding animation correctly, so porting
-        // its full field set faithfully - not just the 3 skin attributes - is the next real
-        // step. The reference's item id is a FAUX id (high 0xf0000000 / low 0x10), not
-        // 0xFFFFFFFF: the HUD (weapon-select row icon/name) resolves item details through the
-        // item id, and an invalid/zero id leaves the row on the generic fallback ("Knife") -
-        // m_bInitialized=true is required for the same reason (the reference sets it on every
-        // apply; leaving the view "uninitialized" makes the HUD treat it as having no item).
-        offsets.itemIDHigh.of(item) = 0xF0000000u;
-        offsets.itemIDLow.of(item) = 0x10u;
-        offsets.initialized.of(item) = true;
+        // Item metadata stamps - the CURRENT working reference (2026-10-09, current client
+        // build) sets exactly: ItemIDHigh = 0xFFFFFFFF (the "no real SOC item" marker that
+        // makes the game's own resolver promote the weapon-fallback paint/seed/wear into
+        // real view attributes), AccountID, DisallowSOC, RestoreCustomMaterialAfterPrecache.
+        // It does NOT touch ItemIDLow, m_bInitialized or EntityQuality here, and it does NOT
+        // use a faux 0xF0000000:0x10 id - the earlier faux-id stamp is retired (it produced
+        // an id the resolver chased instead of the fallbacks, and the extra fields polluted
+        // the HUD row state).
+        offsets.itemIDHigh.of(item) = 0xFFFFFFFFu;
         offsets.accountID.of(item) = offsets.originalOwnerXuidLow.of(baseWeapon).valueOr(0u);
         offsets.disallowSOC.of(item) = true;
         offsets.restoreCustomMaterialAfterPrecache.of(item) = true;
-
-        offsets.entityQuality.of(item) = 0;
 
         setAttribute(item, "set item texture prefab", static_cast<float>(paintKit));
         setAttribute(item, "set item texture wear", wear);
@@ -390,25 +384,73 @@ public:
         return true;
     }
 
-    // The real UpdateCompositeMaterial (sub_40F1590) - see UpdateCompositeMaterial's declaration
-    // comment (C_CSWeaponBase.h) for what it does and the full RE trail. Flushes the weapon's
-    // embedded CCompositeMaterialOwner's pending composite-material job queue before
-    // regenerateSkin() rebuilds it. Must be called immediately BEFORE regenerateSkin(): that's
-    // both the reference implementation's own order and, more importantly, exactly what the
-    // game's own regenerate_weapon_skins ConCommand handler does per weapon.
+    // The real UpdateCompositeMaterial (0x420F200 on 11106093) - drains the weapon's embedded
+    // CCompositeMaterialOwner: processes the pending job array (owner+0x2b8 count / +0x2c0
+    // array), releases the refcounted handle array (owner+0x2a0/+0x2a8), zeroes both counts.
+    // The bool ONLY gates a trailing deferred owner->vt[4] dispatch (when entries existed and
+    // the owner overrides that slot) - verified by disassembly, it is the only thing the
+    // argument affects.
     //
-    // This project has only ever reached this function indirectly, through regenerateSkin()'s own
-    // internal conditional fallback branch, which our call path never actually satisfies - so the
-    // flush has never once happened on the path this feature uses. The bool is passed true,
-    // matching both the ConCommand handler and the reference; the step it gates is guarded
-    // against the base class's default no-op inside the function itself, so true is safe here.
-    void updateCompositeMaterial() const noexcept
+    // CALL ORDER (live-verified 2026-10-09): drain BEFORE stamping the item view, with the
+    // deferred dispatch OFF. The 5GB-era material path re-syncs state through those pending
+    // jobs/deferred dispatch - executing them AFTER our attribute stamp wipes it (the HUD skin
+    // name disappeared the moment the flush started landing after the stamp, i.e. exactly when
+    // the kCompositeMaterialOwnerOffset 1928->1936 fix made this call real). Draining first
+    // clears the stale jobs harmlessly and still zeroes the pending counters regenerateSkin()
+    // historically gated on.
+    void updateCompositeMaterial(bool dispatchOwnerRebuild = false) const noexcept
     {
         const auto update = hookContext.patternSearchResults().template get<PointerToUpdateCompositeMaterial>();
         if (!update || !baseWeapon)
             return;
 
-        update(reinterpret_cast<unsigned char*>(baseWeapon) + cs2::C_CSWeaponBase::kCompositeMaterialOwnerOffset, true);
+        update(reinterpret_cast<unsigned char*>(baseWeapon) + cs2::C_CSWeaponBase::kCompositeMaterialOwnerOffset, dispatchOwnerRebuild);
+    }
+
+    // The real UpdateSkin (0x14D1890 on 11106093) - resets the weapon's CACHED skin
+    // attribution block (weapon+0x2910..0x2928, cached paint kit -> -1). The mesh/material
+    // path reads that cache, NOT the item view or the fallback fields - so without this
+    // reset every material lookup keeps returning the stock attribution no matter what was
+    // stamped on the view. That cache is why weapon skins rendered HUD-only: the HUD reads
+    // the view directly, the model reads the cache. Gated internally on a global flag
+    // (same gate the game's own regenerate_weapon_skins handler checks before rebuilding).
+    // This is the reference skin changer's weapon->UpdateSkin(true) step.
+    void updateSkin(int changeFlag) const noexcept
+    {
+        if (const auto update = hookContext.patternSearchResults().template get<PointerToUpdateSkin>(); update && baseWeapon)
+            update(baseWeapon, changeFlag);
+    }
+
+    // The real UpdateCompositeMaterialSet (0x420FBE0 on 11106093) - merges a source
+    // composite-material set into this weapon's owner (dest must already hold entries).
+    // The game's own callers pass (destOwner, srcOwner, dispatch) with twin entities
+    // (weapon / its viewmodel twin). The reference skin changer calls it with the weapon
+    // itself (self-merge, dispatch off) right after UpdateCompositeMaterial - that is the
+    // port here: re-select/refcount the weapon's own freshly-flushed set.
+    void updateCompositeMaterialSet() const noexcept
+    {
+        const auto updateSet = hookContext.patternSearchResults().template get<PointerToUpdateCompositeMaterialSet>();
+        if (!updateSet || !baseWeapon)
+            return;
+        auto* const weapon = reinterpret_cast<unsigned char*>(baseWeapon);
+        const auto owner = weapon + cs2::C_CSWeaponBase::kCompositeMaterialOwnerOffset;
+        updateSet(owner, owner, false);
+    }
+
+    // The reference inventory changer's final post-bake step (read int + write int+1).
+    // On Linux the field is the schema member C_CSWeaponBase.m_nCustomEconReloadEventId -
+    // bumping it makes the render/anim side treat the composite-material rebuild as a real
+    // econ reload event and rebind the weapon's visuals; without it the rebuild can complete
+    // while the scene object keeps rendering the previously-bound (stock) materials.
+    void bumpEconReloadEventId() const noexcept
+    {
+        if (!baseWeapon)
+            return;
+        const auto offset = hookContext.schemaSystem().getFieldOffset("C_CSWeaponBase", "m_nCustomEconReloadEventId");
+        if (!offset.has_value() || *offset <= 0)
+            return;
+        auto* const eventId = reinterpret_cast<int32_t*>(reinterpret_cast<unsigned char*>(baseWeapon) + *offset);
+        *eventId = *eventId + 1;
     }
 
     // Triggers the actual composite material rebuild (RegenerateWeaponSkin). Call this AFTER

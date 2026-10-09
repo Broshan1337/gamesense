@@ -21,6 +21,8 @@ STRONG_TYPE_ALIAS(PointerToUpdateWeaponData, cs2::C_CSWeaponBase::UpdateWeaponDa
 STRONG_TYPE_ALIAS(PointerToUpdateSubclass, cs2::C_CSWeaponBase::UpdateSubclass*);
 STRONG_TYPE_ALIAS(PointerToSetModel, cs2::C_CSWeaponBase::SetModel*);
 STRONG_TYPE_ALIAS(PointerToUpdateCompositeMaterial, cs2::C_CSWeaponBase::UpdateCompositeMaterial*);
+STRONG_TYPE_ALIAS(PointerToUpdateSkin, cs2::C_CSWeaponBase::UpdateSkin*);
+STRONG_TYPE_ALIAS(PointerToUpdateCompositeMaterialSet, cs2::C_CSWeaponBase::UpdateCompositeMaterialSet*);
 
 
 

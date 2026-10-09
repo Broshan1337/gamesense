@@ -108,7 +108,9 @@ struct WeaponPatterns {
             
             
             
-            .template addPattern<PointerToResolveSubclassData, CodePattern{"55 48 89 E5 41 57 41 56 41 89 D6 41 55 41 54 41 89 F4 53 48 89 FB 48 83 EC 68 E8"}>()
+            .template addPattern<PointerToResolveSubclassData, CodePattern{"55 48 89 E5 41 57 49 89 FF 41 56 41 55 41 54 53 48 81 EC 48 01 00 00 48 8B 07 FF 90 ? ? ? ? 89 C3 41 8B 87 F0 04 00 00 85 C0"}>()
+            .template addPattern<PointerToUpdateSkin, CodePattern{"48 8B 05 ? ? ? ? 80 78 58 00 75 ? C3 66 90 55 48 89 E5 41 56 41 55 41 54 41 89 F4 53 48 89 FB 48 81 EC A0 00 00 00"}>()
+            .template addPattern<PointerToUpdateCompositeMaterialSet, CodePattern{"55 48 89 E5 53 48 89 FB 48 83 EC 18 8B 87 A0 02 00 00 85 C0 7E ? 48 89 F7 84 D2 75 ? 48 8D B3 A0 02 00 00 48 8B 5D F8 31 D2 C9"}>()
             
             
             
