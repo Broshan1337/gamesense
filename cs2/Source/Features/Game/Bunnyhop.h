@@ -154,12 +154,29 @@ public:
             userCmd.replaceButtons(cs2::CCSGOInput::Buttons::kJump,
                 wantsJump ? cs2::CCSGOInput::Buttons::kJump : 0);
             if (wantsJump) jumpTiming.pressed(pendingJumpTime);
-            const float when = hasPendingLanding ? pendingLandingWhen : 0.0f;
             if (hasPendingLanding || hasPendingTap) {
-                if (auto* press = hookContext.template make<SubtickMoves>().add(userCmd.baseMessage(), when)) {
+                // The replayed button stream carries state across ticks, so an
+                // injected press must be paired with a release inside the same
+                // command or kJump stays held with no sample ever clearing it.
+                // Landing taps land a release just before the press (velocity
+                // shape); ground taps reuse the in-game-verified AttackCommand
+                // press@0/release@1 pulse. sortByTime restores stream order.
+                const bool roomForPair = Moves::count(userCmd.baseMessage()) + 2
+                    <= cs2::CUserCmd::BaseMessage::SubtickMoves::kMaxSteps;
+                const float pressWhen = hasPendingLanding ? pendingLandingWhen : 0.0f;
+                const float releaseWhen = hasPendingLanding
+                    ? std::clamp(pressWhen - 1.0f / 64.0f, 1.0f / 64.0f, 63.0f / 64.0f) : 1.0f;
+                auto* const press = roomForPair
+                    ? hookContext.template make<SubtickMoves>().add(userCmd.baseMessage(), pressWhen) : nullptr;
+                if (press) {
                     Moves::setButton(press, cs2::CCSGOInput::Buttons::kJump, true);
-                    Moves::sortByTime(userCmd.baseMessage());
-                    jumpTiming.pressed(pendingJumpTime);
+                    if (auto* release = hookContext.template make<SubtickMoves>().add(userCmd.baseMessage(), releaseWhen)) {
+                        Moves::setButton(release, cs2::CCSGOInput::Buttons::kJump, false);
+                        Moves::sortByTime(userCmd.baseMessage());
+                        jumpTiming.pressed(pendingJumpTime);
+                    } else {
+                        Moves::stripButtons(userCmd.baseMessage(), cs2::CCSGOInput::Buttons::kJump);
+                    }
                 }
             }
         }

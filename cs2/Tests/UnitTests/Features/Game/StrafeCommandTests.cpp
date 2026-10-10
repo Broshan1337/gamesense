@@ -88,25 +88,21 @@ TEST(StrafeCommandTest, ReplacesAnalogAndAllMovementBanksButPreservesOtherButton
         cs2::CUserCmd::BaseMessage::kForwardMoveHasBit | cs2::CUserCmd::BaseMessage::kLeftMoveHasBit);
 }
 
-TEST(StrafeCommandTest, RemovesCompetingSubtickMovementAndPreservesJumpAttackTimeAndView)
+TEST(StrafeCommandTest, CommitLeavesRealSubtickSamplesIntactSoReplayedKeysNeverStick)
 {
     Command cmd;
     cmd.subticks();
+    const auto snapshot = cmd.steps;
     StrafeCommand pending;
     ASSERT_TRUE(pending.stage(cmd.handle(), {0.0f, -1.0f}));
     ASSERT_TRUE(pending.commit<Context>(cmd.handle()));
+    // The replay consumer applies subtick samples with carried state: erasing a
+    // real press+release pair (the old stripMovement) stranded the key as held
+    // until the player pressed it again.
     EXPECT_EQ(read<int>(cmd.base, Field::kFieldOffset + Field::kCurrentSizeOffset), 3);
-    for (int i = 0; i < 3; ++i) {
-        EXPECT_EQ(read<std::uint32_t>(cmd.steps[i], Step::kHasBitsOffset)
-            & (Step::kAnalogForwardDeltaHasBit | Step::kAnalogLeftDeltaHasBit), 0u);
-        EXPECT_FLOAT_EQ(read<float>(cmd.steps[i], Step::kWhenOffset), 0.25f * (i + 1));
-        EXPECT_FLOAT_EQ(read<float>(cmd.steps[i], Step::kYawDeltaOffset), 5.0f);
-    }
-    EXPECT_EQ(read<std::uint32_t>(cmd.steps[0], Step::kHasBitsOffset) & (Step::kButtonHasBit | Step::kPressedHasBit), 0u);
-    EXPECT_EQ(read<std::uint64_t>(cmd.steps[1], Step::kButtonOffset), Buttons::kJump);
-    EXPECT_EQ(read<std::uint64_t>(cmd.steps[2], Step::kButtonOffset), Buttons::kAttack);
-    EXPECT_EQ(read<std::uint8_t>(cmd.steps[1], Step::kPressedOffset), 1u);
-    EXPECT_EQ(read<std::uint8_t>(cmd.steps[2], Step::kPressedOffset), 1u);
+    EXPECT_EQ(cmd.steps, snapshot);
+    EXPECT_FLOAT_EQ(UserCmd{cmd.handle()}.forwardMove().value(), 0.0f);
+    EXPECT_FLOAT_EQ(UserCmd{cmd.handle()}.leftMove().value(), -1.0f);
 }
 
 TEST(StrafeCommandTest, CorrectsMovementWhenAnotherFeatureChangesViewYaw)

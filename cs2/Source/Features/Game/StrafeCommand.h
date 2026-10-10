@@ -69,7 +69,9 @@ public:
         if (corrected.left > 0.0f) buttons |= Buttons::kMoveLeft;
         if (corrected.left < 0.0f) buttons |= Buttons::kMoveRight;
         userCmd.replaceButtons(mask, buttons);
-        SubtickMoves<HookContext>::stripMovement(userCmd.baseMessage(), mask);
+        // Never strip the game's real W/A/S/D subtick samples: the replayed
+        // button stream carries state across ticks, so deleting a mid-air
+        // press+release pair strands the key as held until pressed again.
         return true;
     }
 
