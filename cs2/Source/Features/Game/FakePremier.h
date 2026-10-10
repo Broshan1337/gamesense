@@ -10,7 +10,6 @@
 #include <GameClient/Entities/PlayerController.h>
 #include <HookContext/HookContextMacros.h>
 #include <MemoryPatterns/PatternTypes/ClientPatternTypes.h>
-#include <UI/ImGui/GuiLog.h>
 
 
 
@@ -39,13 +38,14 @@ public:
     {
         const bool premier = GET_CONFIG_VAR(FakePremierEnabled);
         const bool wingman = GET_CONFIG_VAR(FakeWingmanEnabled);
-        // The controller carries ONE ranking slot - wingman takes the slot when both are
-        // enabled (the two features are mutually exclusive by construction).
-        const bool wingmanMode = wingman;
+        // The controller/block carry ONE current-mode slot (rankType + ranking + wins) -
+        // premier wins it when both are on (the prominent scoreboard badge). The TREE
+        // below carries every mode's node independently, so both features spoof their
+        // own badges at once.
+        const bool controllerWingman = wingman && !premier;
 
-        applyRankingBlock(premier, wingmanMode);
-        applyRankTree(premier, wingmanMode);
-        logStateChange(premier, wingmanMode);
+        applyRankingBlock(premier, controllerWingman);
+        applyRankTree(premier, wingman);
 
         auto* const controllerEntity = static_cast<cs2::C_BaseEntity*>(hookContext.localPlayerController().baseEntity());
         if (!controllerEntity)
@@ -62,9 +62,9 @@ public:
         cachedRankTypeOffset = *rankTypeOffset;
         cachedWinsOffset = *winsOffset;
 
-        if (premier || wingmanMode) {
+        if (premier || controllerWingman) {
             captureOriginal(controllerEntity, *rankingOffset, *rankTypeOffset, *winsOffset);
-            apply(controllerEntity, *rankingOffset, *rankTypeOffset, *winsOffset, premier, wingmanMode);
+            apply(controllerEntity, *rankingOffset, *rankTypeOffset, *winsOffset, premier, controllerWingman);
         } else if (hasOriginal) {
             restore(controllerEntity, *rankingOffset, *rankTypeOffset, *winsOffset);
         }
@@ -75,66 +75,6 @@ public:
         if (hasOriginal && cachedController && cachedRankingOffset > 0 && cachedRankTypeOffset > 0 && cachedWinsOffset > 0)
             restore(cachedController, cachedRankingOffset, cachedRankTypeOffset, cachedWinsOffset);
         restoreRankingBlock();
-    }
-
-    // One-shot diagnostics (one line per toggle/slider CHANGE, not per frame): everything
-    // the display depends on in one place - toggles, targets, and the tree/block
-    // READBACK after the write. If the badge ever disagrees with this line, the badge
-    // reads a source we do not write.
-    void logStateChange(bool premier, bool wingmanMode) const noexcept
-    {
-        using Tree = cs2::GcRankCacheTree;
-        const int score = static_cast<int>(GET_CONFIG_VAR(FakePremierScore));
-        const int wingmanRank = static_cast<int>(GET_CONFIG_VAR(WingmanRank));
-        const int wins = GET_CONFIG_VAR(FakePremierWins) ? static_cast<int>(GET_CONFIG_VAR(PremierWins)) : -1;
-        if (diagInitialized && premier == diagPremier && wingmanMode == diagWingman
-            && score == diagScore && wingmanRank == diagWingmanRank && wins == diagWins)
-            return;
-        diagPremier = premier;
-        diagWingman = wingmanMode;
-        diagScore = score;
-        diagWingmanRank = wingmanRank;
-        diagWins = wins;
-        diagInitialized = true;
-
-        auto&& ps = hookContext.patternSearchResults();
-        auto* const baseSlot = static_cast<std::byte*>(ps.template get<RankCacheBasePointer>());
-        auto* const rootSlot = static_cast<std::byte*>(ps.template get<RankCacheRootPointer>());
-        auto* const blockSlot = static_cast<std::byte*>(ps.template get<PlayerRankingDataPointer>());
-        int treePremier = -1, treeWingman = -1, treeCompWins = -1;
-        if (baseSlot && rootSlot) {
-            void* nodes{};
-            std::memcpy(&nodes, baseSlot, sizeof(nodes));
-            std::int32_t rootIdx{};
-            std::memcpy(&rootIdx, rootSlot, sizeof(rootIdx));
-            if (nodes && rootIdx != Tree::kInvalidIndex) {
-                auto* const raw = static_cast<std::byte*>(nodes);
-                for (int k = 0; k < 2; ++k) {
-                    const std::int32_t key = k == 0 ? Tree::kRankTypePremier : Tree::kRankTypeWingman;
-                    int* const out = k == 0 ? &treePremier : &treeWingman;
-                    if (const auto* node = findTreeNode(const_cast<std::byte*>(raw), rootIdx, key))
-                        std::memcpy(out, node + Tree::kNodeRatingOffset, sizeof(*out));
-                }
-                if (const auto* compNode = findTreeNode(const_cast<std::byte*>(raw), rootIdx, Tree::kRankTypeCompetitive))
-                    std::memcpy(&treeCompWins, compNode + Tree::kNodeWinsOffset, sizeof(treeCompWins));
-            }
-        }
-        int blockRanking = -1, blockWins = -1;
-        if (blockSlot) {
-            void* block{};
-            std::memcpy(&block, blockSlot, sizeof(block));
-            if (block) {
-                void* sub{};
-                std::memcpy(&sub, static_cast<std::byte*>(block) + cs2::PlayerRankingData::kRankingSubstructOffset, sizeof(sub));
-                if (sub) {
-                    std::memcpy(&blockRanking, static_cast<std::byte*>(sub) + cs2::PlayerRankingData::kRankingSubstructRankingOffset, sizeof(blockRanking));
-                    std::memcpy(&blockWins, static_cast<std::byte*>(sub) + cs2::PlayerRankingData::kRankingSubstructWinsOffset, sizeof(blockWins));
-                }
-            }
-        }
-        gui_log::write("[premier] premier=%d score=%d winsSpoof=%d wingman=%d wingmanRank=%d | tree: premier=%d wingman=%d compWins=%d | block: ranking=%d wins=%d",
-            premier ? 1 : 0, score, wins, wingmanMode ? 1 : 0, wingmanRank,
-            treePremier, treeWingman, treeCompWins, blockRanking, blockWins);
     }
 
 private:
@@ -239,32 +179,49 @@ private:
 
         const bool spoofWins = GET_CONFIG_VAR(FakePremierWins);
         const std::int32_t winsValue = static_cast<std::int32_t>(GET_CONFIG_VAR(PremierWins));
-        const std::int32_t ratingValue = wingmanMode
-            ? static_cast<std::int32_t>(GET_CONFIG_VAR(WingmanRank))
-            : static_cast<std::int32_t>(GET_CONFIG_VAR(FakePremierScore));
 
-        // Main node: wingman (key 7) in wingman mode, premier (key 11) in premier mode.
-        const std::int32_t mainKey = wingmanMode ? Tree::kRankTypeWingman : Tree::kRankTypePremier;
-        auto* node = findTreeNode(nodes, rootIdx, mainKey);
-        if (!node)
-            node = insertTreeNode(nodes, rootIdx, mainKey);
-        if (node) {
-            std::memcpy(node + Tree::kNodeRatingOffset, &ratingValue, sizeof(ratingValue));
-            if (spoofWins)
-                std::memcpy(node + Tree::kNodeWinsOffset, &winsValue, sizeof(winsValue));
+        // The tree carries EVERY mode's node side by side (that is its whole point -
+        // the profile card reads each badge by its own key). The two toggles are
+        // INDEPENDENT: premier on -> key 11 <- Premier Score, wingman on -> key 7 <-
+        // Wingman Rank. The old either/or made wingman suppress the premier node
+        // entirely ("premier stays 20k" - frozen at the slider's old default).
+        if (premier) {
+            auto* node = findOrInsertTreeNode(nodes, rootIdx, Tree::kRankTypePremier);
+            if (node) {
+                const std::int32_t score = static_cast<std::int32_t>(GET_CONFIG_VAR(FakePremierScore));
+                std::memcpy(node + Tree::kNodeRatingOffset, &score, sizeof(score));
+                if (spoofWins)
+                    std::memcpy(node + Tree::kNodeWinsOffset, &winsValue, sizeof(winsValue));
+            }
+        }
+        if (wingmanMode) {
+            auto* node = findOrInsertTreeNode(nodes, rootIdx, Tree::kRankTypeWingman);
+            if (node) {
+                const std::int32_t rank = static_cast<std::int32_t>(GET_CONFIG_VAR(WingmanRank));
+                std::memcpy(node + Tree::kNodeRatingOffset, &rank, sizeof(rank));
+                if (spoofWins)
+                    std::memcpy(node + Tree::kNodeWinsOffset, &winsValue, sizeof(winsValue));
+            }
         }
 
         // Premier display gate: the >= 10 competitive-wins check reads the competitive
         // node's (key 12) wins field - satisfy it WITHOUT touching the classic comp
         // rating (we have no comp-rank slider; writing the premier score there would
         // show a nonsense classic badge).
-        if (premier) {
-            auto* compNode = findTreeNode(nodes, rootIdx, Tree::kRankTypeCompetitive);
-            if (!compNode)
-                compNode = insertTreeNode(nodes, rootIdx, Tree::kRankTypeCompetitive);
-            if (compNode && spoofWins)
+        if (spoofWins) {
+            if (auto* compNode = findOrInsertTreeNode(nodes, rootIdx, Tree::kRankTypeCompetitive))
                 std::memcpy(compNode + Tree::kNodeWinsOffset, &winsValue, sizeof(winsValue));
         }
+    }
+
+    // Walk from the root for the wanted key; if the GC has not sent that node yet,
+    // re-link a detached stale slot as a fresh leaf (complete the leaf before linking,
+    // so readers only ever see a valid leaf or the old tree).
+    [[nodiscard]] std::byte* findOrInsertTreeNode(std::byte* nodes, std::int32_t rootIdx, std::int32_t wanted) const noexcept
+    {
+        if (auto* node = findTreeNode(nodes, rootIdx, wanted))
+            return node;
+        return insertTreeNode(nodes, rootIdx, wanted);
     }
 
     // Returns the NODE BASE (add GcRankCacheTree offsets at the use site - the first
@@ -451,12 +408,6 @@ private:
     inline static bool blockOriginalHadFlag{false};
     inline static bool hasBlockOriginal{false};
 
-    inline static bool diagInitialized{false};
-    inline static bool diagPremier{false};
-    inline static bool diagWingman{false};
-    inline static int diagScore{-1};
-    inline static int diagWingmanRank{-1};
-    inline static int diagWins{-1};
 
     HookContext& hookContext;
 };
