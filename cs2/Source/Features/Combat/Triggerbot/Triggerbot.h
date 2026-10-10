@@ -266,7 +266,6 @@ private:
         const int thickness = GET_CONFIG_VAR(triggerbot_vars::Autowall) ? static_cast<int>(GET_CONFIG_VAR(triggerbot_vars::AutowallMaxThickness)) : 8;
         const float minDamage = static_cast<float>(GET_CONFIG_VAR(triggerbot_vars::MinDamage));
         const bool headOnly = GET_CONFIG_VAR(triggerbot_vars::HeadOnly);
-        const cs2::Vector direction = shot_geometry::angleVectors(pitch.value(), yaw.value()).forward;
 
         void* const skip = static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity());
         Optional<ScanTarget> best;

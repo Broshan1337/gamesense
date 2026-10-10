@@ -344,7 +344,6 @@ private:
         if (!endDistanceOffset.has_value() || !enabledOffset.has_value() || !cubeEndOffset.has_value() || !cubeActiveOffset.has_value())
             return;
 
-        const auto fogColor = static_cast<std::uint32_t>(GET_CONFIG_VAR(WorldColorsFogColor));
         const auto density = static_cast<float>(GET_CONFIG_VAR(WorldColorsFogDensity)) / 100.0f;
         const float fogDistance = static_cast<float>(GET_CONFIG_VAR(WorldColorsFogDistance));
 

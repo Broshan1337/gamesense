@@ -401,14 +401,14 @@ inline void drainProbe(HookContext& hookContext) noexcept
     {
         const std::lock_guard guard{ringLock};
         
-        for (int i = 0; i < kRingSlots; ++i) {
+        for (int i = 0; i < static_cast<int>(kRingSlots); ++i) {
             const int idx = (ring.writeIndex + i) % kRingSlots;
             const auto& slot = ring.slots[idx];
             if (slot.vtable == 0)
                 continue;
             local[count++] = slot;
         }
-        for (int i = 0; i < kRingSlots; ++i)
+        for (int i = 0; i < static_cast<int>(kRingSlots); ++i)
             ring.slots[i].vtable = 0;
     }
 

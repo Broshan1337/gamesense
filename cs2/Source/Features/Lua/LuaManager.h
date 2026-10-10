@@ -72,7 +72,7 @@ struct HttpSlot {
     pid_t pid = 0;
     int scriptIndex = -1;
     int callbackRef = -1; 
-    char outPath[192] = {};
+    char outPath[352] = {};
 };
 
 

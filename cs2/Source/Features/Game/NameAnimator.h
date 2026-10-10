@@ -37,6 +37,25 @@
 
 template <typename HookContext>
 class NameAnimator {
+
+    // Clamped append: the old strncat bounds took sizeof(kBufferTextSize) (the
+    // size of the constant, 8) instead of the buffer, truncating frames to a
+    // handful of bytes and provoking -Wstringop-truncation.
+    static void appendClamped(char (&frame)[chat_tools::kBufferTextSize], const char* source, std::size_t max) noexcept
+    {
+        const std::size_t used = std::strlen(frame);
+        if (used + 1 >= chat_tools::kBufferTextSize)
+            return;
+        std::size_t room = chat_tools::kBufferTextSize - used - 1;
+        if (room > max)
+            room = max;
+        const std::size_t sourceLength = std::strlen(source);
+        if (room > sourceLength)
+            room = sourceLength;
+        std::memcpy(frame + used, source, room);
+        frame[used + room] = '\0';
+    }
+
 public:
     explicit NameAnimator(HookContext& hookContext) noexcept
         : hookContext{hookContext}
@@ -564,7 +583,6 @@ private:
     void waveFrame(char (&frame)[chat_tools::kBufferTextSize]) noexcept
     {
         constexpr int kWavelength = 6;
-        constexpr int kStep = 2;
         const int tick = animationTick() * 2;
         char out[chat_tools::kBufferTextSize];
         std::size_t write = 0;
@@ -651,9 +669,9 @@ private:
     {
         frame[0] = '\0';
         const int jitter = static_cast<int>(Random::floating(0.0f, 7.0f)); 
-        for (int k = 0; k < jitter / 2 && std::strlen(frame) + 1 < sizeof(chat_tools::kBufferTextSize); ++k)
+        for (int k = 0; k < jitter / 2 && std::strlen(frame) + 1 < chat_tools::kBufferTextSize; ++k)
             std::strcat(frame, " ");
-        std::strncat(frame, text, sizeof(chat_tools::kBufferTextSize) - std::strlen(frame) - 1);
+        appendClamped(frame, text, chat_tools::kBufferTextSize);
     }
 
     
@@ -675,7 +693,7 @@ private:
         frame[0] = '\0';
         std::strcat(frame, kEmoji[position % kEmojiCount]);
         std::strcat(frame, " ");
-        std::strncat(frame, text, sizeof(chat_tools::kBufferTextSize) - std::strlen(frame) - 1);
+        appendClamped(frame, text, chat_tools::kBufferTextSize);
         position = (position + 1) % kEmojiCount;
     }
 
@@ -689,7 +707,7 @@ private:
             return;
         }
         frame[0] = '\0';
-        for (int i = 0; i < seqCount && std::strlen(frame) + 3 < sizeof(chat_tools::kBufferTextSize); ++i)
+        for (int i = 0; i < seqCount && std::strlen(frame) + 15 < chat_tools::kBufferTextSize; ++i)
             std::strcat(frame, kWall);
     }
 
@@ -741,9 +759,9 @@ private:
         
         const int left = static_cast<int>(Random::floating(0.0f, static_cast<float>(kFaceCount)));
         const int right = static_cast<int>(Random::floating(0.0f, static_cast<float>(kFaceCount)));
-        std::strncat(frame, kFaces[left], sizeof(chat_tools::kBufferTextSize) / 3);
-        std::strncat(frame, text, sizeof(chat_tools::kBufferTextSize) - std::strlen(frame) - 1);
-        std::strncat(frame, kFaces[right], (sizeof(chat_tools::kBufferTextSize) - std::strlen(frame)) / 2 - 1);
+        appendClamped(frame, kFaces[left], chat_tools::kBufferTextSize / 3);
+        appendClamped(frame, text, chat_tools::kBufferTextSize);
+        appendClamped(frame, kFaces[right], (chat_tools::kBufferTextSize - std::strlen(frame)) / 2 - 1);
     }
 
     
@@ -752,8 +770,6 @@ private:
     
     void superWaveFrame(char (&frame)[chat_tools::kBufferTextSize]) noexcept
     {
-        constexpr char kFrom[] = "abdeghijklmopqrstuvwy";
-        
         static constexpr const char* kTo[] = {
             "\xE1\xB5\x83", "\xE1\xB5\x87", "\xE1\xB5\x96", "\xE1\xB5\x89",
             "\xCA\xB8", "\xCA\xB0", "\xE1\xB5\x8F", "\xCA\xB2", "\xCB\xA1",
@@ -799,8 +815,8 @@ private:
             return;
         }
         frame[0] = '\0';
-        std::strcat(frame, "\xE2\x80\xAE"); 
-        std::strncat(frame, text, sizeof(chat_tools::kBufferTextSize) - std::strlen(frame) - 1);
+        std::strcat(frame, "\xE2\x80\xAE");
+        appendClamped(frame, text, chat_tools::kBufferTextSize);
     }
 
     

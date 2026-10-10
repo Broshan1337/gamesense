@@ -1026,6 +1026,7 @@ inline HttpSlot* acquireHttpSlot(lua_State* L)
     if (!slot)
         return nullptr;
     std::snprintf(slot->outPath, sizeof(slot->outPath), "%s/ns_lua_http_%d.txt", ns_paths::root(), slotIndex);
+    static_assert(sizeof(HttpSlot::outPath) >= ns_paths::kMaxPath + 24, "outPath must fit root + suffix");
     ::unlink(slot->outPath);
     slot->active = true;
     slot->processDone = false;
@@ -1096,7 +1097,7 @@ inline int l_httpGet(lua_State* L)
         return luaL_error(L, "http.get: too many concurrent requests");
     }
 
-    char configPath[ns_paths::kMaxPath];
+    char configPath[ns_paths::kMaxPath + 32];
     std::snprintf(configPath, sizeof(configPath), "%s/ns_lua_http_%d.cfg", ns_paths::root(), static_cast<int>(slot - httpSlots));
     ::unlink(configPath);
     if (!writeCurlConfig(configPath, "GET", url, nullptr, 0, nullptr)) {
@@ -1182,8 +1183,8 @@ inline int l_httpRequest(lua_State* L)
     }
     const int slotIndex = static_cast<int>(slot - httpSlots);
 
-    char configPath[ns_paths::kMaxPath];
-    char bodyPath[ns_paths::kMaxPath] = "";
+    char configPath[ns_paths::kMaxPath + 32];
+    char bodyPath[ns_paths::kMaxPath + 32] = "";
     std::snprintf(configPath, sizeof(configPath), "%s/ns_lua_http_%d.cfg", ns_paths::root(), slotIndex);
     ::unlink(configPath);
     if (body) {
@@ -1516,7 +1517,11 @@ inline int l_guiTextInput(lua_State* L)
     std::memcpy(item.textValue, defaultValue, defaultLength);
     item.textValue[defaultLength] = '\0';
     if (const auto* saved = findPendingGuiDefault(script.name, label, 't')) {
-        std::snprintf(item.textValue, sizeof(item.textValue), "%s", saved->text);
+        // Saved text may be longer than the widget's buffer; clamp on purpose.
+        const std::size_t savedLength = std::strlen(saved->text) < sizeof(item.textValue) - 1
+            ? std::strlen(saved->text) : sizeof(item.textValue) - 1;
+        std::memcpy(item.textValue, saved->text, savedLength);
+        item.textValue[savedLength] = '\0';
     }
     lua_pushinteger(L, script.guiItemCount);
     return 1;

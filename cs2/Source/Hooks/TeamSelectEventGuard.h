@@ -33,8 +33,8 @@ inline void uninstall() noexcept
 {
     if (!active)
         return;
-    writeBytes(patchSite, originalBytes, sizeof(originalBytes));
-    writeBytes(patchSite + 0x18, originalEsiLoad, sizeof(originalEsiLoad));
+    (void)writeBytes(patchSite, originalBytes, sizeof(originalBytes));
+    (void)writeBytes(patchSite + 0x18, originalEsiLoad, sizeof(originalEsiLoad));
     active = false;
     patchSite = 0;
 }
@@ -73,7 +73,7 @@ inline void uninstall() noexcept
     }
     const std::uint8_t esiPatch[3]{0x44, 0x89, 0xE6};
     if (!writeBytes(site + 0x18, esiPatch, sizeof(esiPatch))) {
-        writeBytes(site, originalBytes, sizeof(originalBytes));
+        (void)writeBytes(site, originalBytes, sizeof(originalBytes));
         return false;
     }
     patchSite = site;

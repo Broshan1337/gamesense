@@ -412,7 +412,7 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
         
         
         
-        session_bind::verifyOnce([] { GUI::requestUnload(); });
+        (void)session_bind::verifyOnce([] { GUI::requestUnload(); });
         HookContext<GlobalContext>::initCompleteGlobalContextFromGameThread();
     }
 

@@ -1601,7 +1601,9 @@ static int nsvg__parseMatrix( float* xform, const char* str )
 	float t[ 6 ];
 	int na = 0;
 	int len = nsvg__parseTransformArgs( str, t, 6, &na );
-	if ( na != 6 ) return len;
+	/* Partial matrix leaves t unwritten in the caller's buffer; report
+	   failure so the caller skips the premultiply instead of using it. */
+	if ( na != 6 ) return 0;
 	memcpy( xform, t, sizeof( float ) * 6 );
 	return len;
 }

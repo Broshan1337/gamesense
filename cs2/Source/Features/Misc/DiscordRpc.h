@@ -315,7 +315,7 @@ private:
         if (!hasMatch && !hasRadio) {
             std::snprintf(rendered, sizeof(rendered), "{\"clear\":true}");
         } else {
-            char matchPart[512] = "null";
+            char matchPart[896] = "null";
             char radioPart[640] = "null";
 
             if (hasMatch) {

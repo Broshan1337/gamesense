@@ -167,7 +167,7 @@ inline void debugAppend(const char* name, const void* data, std::size_t length) 
 
     std::uint16_t channels = 1;
     std::uint32_t sampleRate = 48000;
-    bool haveData = false, haveFmt = false;
+    bool haveFmt = false;
 
     std::uint8_t chunk[8];
     while (::read(fd, chunk, sizeof(chunk)) == sizeof(chunk)) {
@@ -271,7 +271,7 @@ inline void scanClips(HookContext& hookContext) noexcept
     char fresh[kMaxClips][kMaxClipName]{};
     int freshCount = 0;
     while (const dirent* entry = ::readdir(d)) {
-        if (freshCount >= kMaxClips)
+        if (freshCount >= static_cast<int>(kMaxClips))
             break;
         const std::size_t len = std::strlen(entry->d_name);
         if (len < 5 || len >= kMaxClipName)

@@ -454,8 +454,8 @@ static void discardHttpSlot(lua_State* L, HttpSlot* slot) noexcept
         ::kill(slot->pid, SIGKILL);
         ::waitpid(slot->pid, nullptr, 0);
     }
-    char configPath[ns_paths::kMaxPath];
-    char bodyPath[ns_paths::kMaxPath];
+    char configPath[ns_paths::kMaxPath + 32];
+    char bodyPath[ns_paths::kMaxPath + 32];
     std::snprintf(configPath, sizeof(configPath), "%s/ns_lua_http_%d.cfg", ns_paths::root(), static_cast<int>(slot - httpSlots));
     std::snprintf(bodyPath, sizeof(bodyPath), "%s/ns_lua_http_%d.body", ns_paths::root(), static_cast<int>(slot - httpSlots));
     ::unlink(configPath);
@@ -1012,8 +1012,13 @@ static bool preloadLibs(lua_State* L) noexcept
             const char* error = lua_tostring(L, -1);
             lua_pop(L, 1);
             char message[896];
-            std::snprintf(message, sizeof(message), "lib preload failed (%s): %s", paths[i], error ? error : "unknown lib error");
-            lua_pushlstring(L, message, std::strlen(message));
+            // A Lua traceback can exceed the buffer; clamping the log is fine.
+            int messageLength = std::snprintf(message, sizeof(message), "lib preload failed (%s): %s", paths[i], error ? error : "unknown lib error");
+            if (messageLength < 0)
+                messageLength = 0;
+            else if (static_cast<std::size_t>(messageLength) >= sizeof(message))
+                messageLength = static_cast<int>(sizeof(message)) - 1;
+            lua_pushlstring(L, message, static_cast<std::size_t>(messageLength));
             return false;
         }
         

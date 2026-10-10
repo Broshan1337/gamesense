@@ -45,7 +45,7 @@ public:
     
     
     
-    [[nodiscard]] __attribute__((annotate("+fla"))) PatternPoolView getView() noexcept
+    [[nodiscard]] NS_OBF_FLATTEN PatternPoolView getView() noexcept
     {
         
         

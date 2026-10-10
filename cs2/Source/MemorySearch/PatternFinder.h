@@ -74,7 +74,7 @@ public:
         });
     }
 
-    [[nodiscard]] [[NOINLINE]] __attribute__((annotate("+fla"))) PatternSearchResult operator()(BytePattern pattern) const noexcept
+    [[nodiscard]] [[NOINLINE]] NS_OBF_FLATTEN PatternSearchResult operator()(BytePattern pattern) const noexcept
     {
         auto patternFinder = HybridPatternFinder{bytes, pattern};
         const auto found = patternFinder.findNextOccurrence();

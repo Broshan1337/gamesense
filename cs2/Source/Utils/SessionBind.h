@@ -258,7 +258,7 @@ inline NS_OBF_FLATTEN void presentTick(void (*onLoaderGone)()) noexcept
     if (state != 1) {
         
         
-        verifyOnce(onLoaderGone);
+        (void)verifyOnce(onLoaderGone);
         return;
     }
     

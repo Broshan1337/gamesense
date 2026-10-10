@@ -143,7 +143,7 @@ struct VptrScanResult {
 {
     VptrScanResult result;
     std::uintptr_t firstHit = 0;
-    forEachAnonymousRwRegion([&](std::uintptr_t low, std::uintptr_t high) {
+    (void)forEachAnonymousRwRegion([&](std::uintptr_t low, std::uintptr_t high) {
         for (std::uintptr_t addr = (low + 7) & ~std::uintptr_t{7}; addr + 8 <= high; addr += 8) {
             std::uintptr_t value{};
             std::memcpy(&value, reinterpret_cast<const void*>(addr), sizeof(value));

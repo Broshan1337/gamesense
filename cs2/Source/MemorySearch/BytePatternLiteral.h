@@ -11,9 +11,9 @@
 
 
 template <BytePatternStorage Storage>
-__attribute__((annotate("+fla"))) auto operator ""_pat()
+NS_OBF_FLATTEN auto operator ""_pat()
 {
-    static constexpr auto kEncrypted = [] consteval {
+    static constexpr auto kEncrypted = []() consteval {
         std::array<char, Storage.size> encrypted{};
         for (std::size_t i = 0; i < Storage.size; ++i)
             encrypted[i] = static_cast<char>(Storage.pattern[i] ^ patternVaultKey(i));

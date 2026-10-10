@@ -504,7 +504,6 @@ constexpr const char* const kMiscSubTabs[] = {"General", "Chat", "Other"};
 
 
 float scrollOffset = 0.0f;
-float dropdownScroll = 0.0f; 
 float scrollTarget = 0.0f;
 float maxScroll = 0.0f;
 
@@ -3659,7 +3658,7 @@ void pageSound() noexcept
         static const char* const kNoClipPlaceholder[1] = {"no clips - drop wavs in configs/sounds"};
         static const char* clipOptions[soundboard::kMaxClips]{};
         int clipCountNow = 0;
-        for (int i = 0; i < soundboard::clipCount && clipCountNow < soundboard::kMaxClips; ++i)
+        for (int i = 0; i < soundboard::clipCount && clipCountNow < static_cast<int>(soundboard::kMaxClips); ++i)
             clipOptions[clipCountNow++] = soundboard::clipNamePtrs[i];
         const bool haveClips = clipCountNow > 0;
         int clipSelected = haveClips ? static_cast<int>(ui_config::get<soundboard_vars::ClipIndex>()) : 0;
