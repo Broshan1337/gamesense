@@ -185,8 +185,17 @@ private:
         // INDEPENDENT: premier on -> key 11 <- Premier Score, wingman on -> key 7 <-
         // Wingman Rank. The old either/or made wingman suppress the premier node
         // entirely ("premier stays 20k" - frozen at the slider's old default).
+        //
+        // NO INSERT: a missing key is SKIPPED (findTreeNode only walks slots
+        // reachable from the root index - live-verified 2026-10-10 the hard way: the
+        // tree allocation holds only ~4 slots; what reads as "detached slots 4..7"
+        // beyond it is an ADJACENT GC-heap object (a 40-byte-stride tree the game
+        // walks in main-menu rich presence). Writing a "detached slot 7" (my probe
+        // did, and insertTreeNode would) lands in that object and corrupts its
+        // child indexes -> SIGSEGV in libclient+0x1ec4eca. Only root-reachable
+        // slots are ever written.
         if (premier) {
-            auto* node = findOrInsertTreeNode(nodes, rootIdx, Tree::kRankTypePremier);
+            auto* node = findTreeNode(nodes, rootIdx, Tree::kRankTypePremier);
             if (node) {
                 const std::int32_t score = static_cast<std::int32_t>(GET_CONFIG_VAR(FakePremierScore));
                 std::memcpy(node + Tree::kNodeRatingOffset, &score, sizeof(score));
@@ -195,7 +204,7 @@ private:
             }
         }
         if (wingmanMode) {
-            auto* node = findOrInsertTreeNode(nodes, rootIdx, Tree::kRankTypeWingman);
+            auto* node = findTreeNode(nodes, rootIdx, Tree::kRankTypeWingman);
             if (node) {
                 const std::int32_t rank = static_cast<std::int32_t>(GET_CONFIG_VAR(WingmanRank));
                 std::memcpy(node + Tree::kNodeRatingOffset, &rank, sizeof(rank));
@@ -209,19 +218,9 @@ private:
         // rating (we have no comp-rank slider; writing the premier score there would
         // show a nonsense classic badge).
         if (spoofWins) {
-            if (auto* compNode = findOrInsertTreeNode(nodes, rootIdx, Tree::kRankTypeCompetitive))
+            if (auto* compNode = findTreeNode(nodes, rootIdx, Tree::kRankTypeCompetitive))
                 std::memcpy(compNode + Tree::kNodeWinsOffset, &winsValue, sizeof(winsValue));
         }
-    }
-
-    // Walk from the root for the wanted key; if the GC has not sent that node yet,
-    // re-link a detached stale slot as a fresh leaf (complete the leaf before linking,
-    // so readers only ever see a valid leaf or the old tree).
-    [[nodiscard]] std::byte* findOrInsertTreeNode(std::byte* nodes, std::int32_t rootIdx, std::int32_t wanted) const noexcept
-    {
-        if (auto* node = findTreeNode(nodes, rootIdx, wanted))
-            return node;
-        return insertTreeNode(nodes, rootIdx, wanted);
     }
 
     // Returns the NODE BASE (add GcRankCacheTree offsets at the use site - the first
@@ -245,72 +244,6 @@ private:
         return nullptr;
     }
 
-    // Re-links a detached stale slot for a missing key (the GC prunes empty entries
-    // between snapshots). Mirrors the reference Lua's insert: complete the leaf before
-    // linking, so readers only ever see a valid leaf or the old tree. Returns the NODE
-    // BASE like findTreeNode - the caller stamps rating/wins.
-    [[nodiscard]] static std::byte* insertTreeNode(std::byte* nodes, std::int32_t rootIdx, std::int32_t wanted) noexcept
-    {
-        using Tree = cs2::GcRankCacheTree;
-        std::byte* link = nullptr;
-        std::int32_t idx = rootIdx;
-        for (int step = 0; step < Tree::kMaxWalkSteps; ++step) {
-            auto* const node = nodes + Tree::kNodeStride * idx;
-            std::int32_t key{};
-            std::memcpy(&key, node + Tree::kNodeKeyOffset, sizeof(key));
-            if (key == wanted)
-                return node;
-            link = node + (wanted > key ? Tree::kNodeRightOffset : Tree::kNodeLeftOffset);
-            std::int32_t child{};
-            std::memcpy(&child, link, sizeof(child));
-            if (child == Tree::kInvalidIndex)
-                break;
-            idx = child;
-        }
-        if (!link)
-            return nullptr;
-
-        bool seen[Tree::kMaxSlots]{};
-        std::int32_t stack[Tree::kMaxWalkSteps * 2]{};
-        int stackSize = 0;
-        stack[stackSize++] = rootIdx;
-        int steps = 0;
-        while (stackSize > 0 && steps < Tree::kMaxWalkSteps * 4) {
-            ++steps;
-            const std::int32_t j = stack[--stackSize];
-            if (j == Tree::kInvalidIndex || j < 0 || j >= Tree::kMaxSlots || seen[j])
-                continue;
-            seen[j] = true;
-            auto* const node = nodes + Tree::kNodeStride * j;
-            std::int32_t left{}, right{};
-            std::memcpy(&left, node + Tree::kNodeLeftOffset, sizeof(left));
-            std::memcpy(&right, node + Tree::kNodeRightOffset, sizeof(right));
-            if (stackSize + 2 <= static_cast<int>(sizeof(stack) / sizeof(stack[0]))) {
-                stack[stackSize++] = left;
-                stack[stackSize++] = right;
-            }
-        }
-        for (int i = 0; i < Tree::kDetachedSlotScan; ++i) {
-            if (seen[i])
-                continue;
-            auto* const slot = nodes + Tree::kNodeStride * i;
-            std::int32_t key{};
-            std::memcpy(&key, slot + Tree::kNodeKeyOffset, sizeof(key));
-            if (key != wanted)
-                continue;
-            const std::int32_t leaf = Tree::kInvalidIndex;
-            std::memcpy(slot + Tree::kNodeLeftOffset, &leaf, sizeof(leaf));
-            std::memcpy(slot + Tree::kNodeRightOffset, &leaf, sizeof(leaf));
-            std::int32_t neutral{};
-            std::memcpy(slot + Tree::kNodeRatingOffset, &neutral, sizeof(neutral));
-            std::memcpy(slot + Tree::kNodeWinsOffset, &neutral, sizeof(neutral));
-            const std::int32_t slotIdx = i;
-            std::memcpy(link, &slotIdx, sizeof(slotIdx));
-            return slot;
-        }
-        return nullptr;
-    }
-
     void restoreRankingBlock() const noexcept
     {
         auto* const block = static_cast<std::byte*>(hookContext.patternSearchResults().template get<PlayerRankingDataPointer>());
@@ -329,6 +262,7 @@ private:
         }
         hasBlockOriginal = false;
     }
+
     void apply(cs2::C_BaseEntity* controllerEntity, int rankingOffset, int rankTypeOffset, int winsOffset, bool premier, bool wingmanMode) const noexcept
     {
         const auto bytes = reinterpret_cast<std::byte*>(controllerEntity);

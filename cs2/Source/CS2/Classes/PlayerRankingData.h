@@ -72,7 +72,6 @@ struct GcRankCacheTree {
     static constexpr int kInvalidIndex = -1;
     static constexpr int kMaxWalkSteps = 64;
     static constexpr int kMaxSlots = 64;
-    static constexpr int kDetachedSlotScan = 8;
 
     static constexpr int kRankTypeWingman = 7;
     static constexpr int kRankTypePremier = 11;
