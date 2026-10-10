@@ -8,7 +8,7 @@ namespace combat_stats_vars
 
 
 
-inline constexpr auto kOffsetRange = RangeConstrainedVariableParams<std::uint8_t>{.min = 0, .max = 120, .def = 0};
+inline constexpr auto kOffsetRange = RangeConstrainedVariableParams<float>{.min = -4096.0f, .max = 4096.0f, .def = 0.0f};
 inline constexpr auto kFeedLifetimeRange = RangeConstrainedVariableParams<std::uint8_t>{.min = 1, .max = 30, .def = 6};
 
 

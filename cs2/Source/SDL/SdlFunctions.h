@@ -38,6 +38,7 @@ constexpr std::uint32_t kX2 = 1u << 4;
 namespace scancode
 {
 constexpr int kE = 8;
+constexpr int kTab = 43;
 constexpr int kSpace = 44;
 }
 

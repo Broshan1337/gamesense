@@ -45,6 +45,10 @@ private:
         configConversion.beginObject(u8"FakePremier");
         configConversion.boolean(u8"Enabled", loadVariable<FakePremierEnabled>(), saveVariable<FakePremierEnabled>());
         configConversion.uint(u8"Score", loadVariable<FakePremierScore>(), saveVariable<FakePremierScore>());
+        configConversion.boolean(u8"FakePremierWins", loadVariable<FakePremierWins>(), saveVariable<FakePremierWins>());
+        configConversion.uint(u8"PremierWins", loadVariable<PremierWins>(), saveVariable<PremierWins>());
+        configConversion.boolean(u8"FakeWingmanEnabled", loadVariable<FakeWingmanEnabled>(), saveVariable<FakeWingmanEnabled>());
+        configConversion.uint(u8"WingmanRank", loadVariable<WingmanRank>(), saveVariable<WingmanRank>());
         configConversion.endObject();
     }
 
@@ -138,8 +142,8 @@ private:
     {
         configConversion.beginObject(u8"CombatStats");
         configConversion.uint(u8"FeedLifetime", loadVariable<combat_stats_vars::FeedLifetime>(), saveVariable<combat_stats_vars::FeedLifetime>());
-        configConversion.uint(u8"FeedOffsetX", loadVariable<combat_stats_vars::FeedOffsetX>(), saveVariable<combat_stats_vars::FeedOffsetX>());
-        configConversion.uint(u8"FeedOffsetY", loadVariable<combat_stats_vars::FeedOffsetY>(), saveVariable<combat_stats_vars::FeedOffsetY>());
+        configConversion.floating(u8"FeedOffsetX", loadVariable<combat_stats_vars::FeedOffsetX>(), saveVariable<combat_stats_vars::FeedOffsetX>());
+        configConversion.floating(u8"FeedOffsetY", loadVariable<combat_stats_vars::FeedOffsetY>(), saveVariable<combat_stats_vars::FeedOffsetY>());
         configConversion.floating(u8"CountersOffsetX", loadVariable<combat_stats_vars::CountersOffsetX>(), saveVariable<combat_stats_vars::CountersOffsetX>());
         configConversion.floating(u8"CountersOffsetY", loadVariable<combat_stats_vars::CountersOffsetY>(), saveVariable<combat_stats_vars::CountersOffsetY>());
         configConversion.endObject();

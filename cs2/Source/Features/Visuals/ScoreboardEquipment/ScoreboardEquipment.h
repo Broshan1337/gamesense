@@ -17,8 +17,10 @@
 #include <GameClient/Entities/PlayerPawn.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
 #include <GameClient/Hud/Hud.h>
+#include <GameClient/KeyboardState.h>
 #include <GameClient/Panorama/PanoramaUiEngine.h>
 #include <HookContext/HookContextMacros.h>
+#include <SDL/SdlFunctions.h>
 #include <Utils/Optional.h>
 
 // Scoreboard equipment reveal (ported from the reference Windows implementation): draws every
@@ -55,6 +57,12 @@ public:
         if (++throttleCounter % kThrottle != 0)
             return;
 
+        // Only walk + push while the scoreboard is up (TAB held): the icons live on the
+        // scoreboard rows, and the entity walk (every pawn, every weapon, VData name read)
+        // at 10Hz is what made deathmatch feel like it "slowly loads every player".
+        if (!KeyboardState::isKeyDown(sdl3::scancode::kTab))
+            return;
+
         if (!inited) {
             if (!runScript(kInitScript))
                 return;
@@ -66,6 +74,9 @@ public:
         if (!offsetsReady())
             return;
 
+        // All changed players batch into ONE RunScript per cycle (each receive() updates
+        // one row) - one JS parse instead of one per player.
+        batchLength = 0;
         hookContext.template make<EntitySystem>().forEachNetworkableEntityIdentity([&](const auto& entityIdentity) {
             const auto entityTypeInfo = hookContext.entityClassifier().classifyEntity(entityIdentity.entityClass);
             if (!entityTypeInfo.template is<cs2::CCSPlayerController>())
@@ -74,6 +85,11 @@ public:
             auto&& controller = hookContext.template make<PlayerController>(static_cast<cs2::CCSPlayerController*>(entityIdentity.entity));
             updatePlayer(controller, static_cast<cs2::C_BaseEntity*>(entityIdentity.entity));
         });
+
+        if (batchLength > 0) {
+            batch[batchLength] = '\0';
+            runScript(batch);
+        }
     }
 
 private:
@@ -82,6 +98,8 @@ private:
     static constexpr int kMaxWeapons = 16;
     static constexpr int kMaxPathChars = 48;
     static constexpr int kMaxScriptChars = 2048;
+    // One cycle's concatenated receive() calls: up to kMaxSlots players per batch.
+    static constexpr std::size_t kMaxBatchChars = 32 * 768;
 
     struct ResolvedOffsets {
         std::optional<std::int32_t> steamID;
@@ -200,8 +218,15 @@ private:
             return;
         slot->xuid = xuid;
         std::strncpy(slot->script, script, sizeof(slot->script) - 1);
+        slot->script[sizeof(slot->script) - 1] = '\0';
 
-        runScript(script);
+        // Append to the cycle batch instead of a RunScript per player.
+        const std::size_t length = std::strlen(script);
+        if (batchLength + length + 1 < sizeof(batch)) {
+            std::memcpy(batch + batchLength, script, length);
+            batchLength += length;
+            batch[batchLength] = '\0';
+        }
     }
 
     void collectWeapons(auto&& pawn, WeaponEntry* weapons, int& weaponCount, char* activePath) const noexcept
@@ -480,6 +505,8 @@ private:
     inline static int throttleCounter{0};
     inline static ResolvedOffsets offsetCache{};
     inline static PlayerCache cache[kMaxSlots]{};
+    inline static char batch[kMaxBatchChars]{};
+    inline static std::size_t batchLength{0};
 
     HookContext& hookContext;
 };

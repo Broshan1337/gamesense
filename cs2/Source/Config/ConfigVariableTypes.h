@@ -480,5 +480,9 @@ using ConfigVariableTypes = TypeList<
     glitch_gen_vars::Style,
     glitch_gen_vars::Intensity,
     glitch_gen_vars::Preset,
-    scoreboard_equipment_vars::Enabled
+    scoreboard_equipment_vars::Enabled,
+    FakePremierWins,
+    PremierWins,
+    FakeWingmanEnabled,
+    WingmanRank
 >;

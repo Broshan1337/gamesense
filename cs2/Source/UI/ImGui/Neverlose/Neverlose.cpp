@@ -620,6 +620,13 @@ float motion(ImGuiID id, float target, float speed = 16.0f, float initial = -1.0
 
 
 
+// Motion-storage key. WARNING (live-verified 2026-10-09): ImHashData is CRC32-based and
+// LINEAR in the seed, so hand-picked (salt, id) pairs collide far more often than random
+// - the profile popover shipped three simultaneous collisions (outer-glow toggle vs the
+// glow-color row, fading-rgb-style toggle vs the rgb-speed slider, debug toggle vs the
+// sliders-color row), which made the knobs float mid-track and drift with the mouse.
+// When adding a motion row: pick a fresh salt and VERIFY no collision against every other
+// animKey pair in this file (incl. variable-id users: toggle/select/multiSelect/scale pill).
 ImGuiID animKey(ImU32 salt, int id) noexcept
 {
     return ImHashData(&id, sizeof(id), salt);
@@ -1626,6 +1633,30 @@ void openFeatureBind(feature_binds::Entry* entry) noexcept
     styleSelect.open = false;
 }
 
+// A styled hover hint (replaces ImGui::SetTooltip): popover chrome - inset background,
+// hairline border, accent dot, small caption text - drawn on the FOREGROUND draw list so
+// it layers above popovers like the game's own tooltips, offset above-right of the cursor
+// and clamped to the viewport.
+void styledHint(const char* text) noexcept
+{
+    ImDrawList* d = ImGui::GetForegroundDrawList();
+    const ImVec2 vp = ImGui::GetMainViewport()->Pos;
+    const ImVec2 vpSize = ImGui::GetMainViewport()->Size;
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    const float textWidth = ImGui::GetFont()->CalcTextSizeA(kTextSmall, FLT_MAX, 0.0f, text).x;
+    const ImVec2 size{textWidth + s(24.0f), s(22.0f)};
+    ImVec2 p{mouse.x + s(14.0f), mouse.y - size.y - s(10.0f)};
+    if (p.x + size.x > vp.x + vpSize.x - s(4.0f))
+        p.x = mouse.x - size.x - s(14.0f);
+    if (p.y < vp.y + s(4.0f))
+        p.y = mouse.y + s(14.0f);
+    softShadow(d, p, p + size, s(10.0f));
+    d->AddRectFilled(p, p + size, C(23, 23, 25, 248), s(8.0f));
+    d->AddRect(p, p + size, C(46, 46, 50), s(8.0f));
+    pulsingDot(d, p + ImVec2(s(11.0f), size.y * 0.5f), s(2.0f), g_accent);
+    textY(d, p.x + s(20.0f), p.y, size.y, C(170, 173, 184), text, kTextSmall, nullptr);
+}
+
 void numericBindGesture(feature_binds::Entry* entry) noexcept
 {
     if (state.featureBindOpen || state.popup.open || state.multiSelectOpen
@@ -1636,7 +1667,7 @@ void numericBindGesture(feature_binds::Entry* entry) noexcept
     if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
         openFeatureBind(entry);
     else if (hovered && !ImGui::IsAnyItemActive())
-        ImGui::SetTooltip("Right-click to bind a value (Hold or Toggle)");
+        styledHint("Right-click to bind a value (Hold or Toggle)");
     if (entry && entry->key != Bind::kOff) {
         const float x = card.origin.x + s(13) + card.lastLabelWidth + s(7);
         const float available = card.width - s(158) - (x - card.origin.x);
@@ -3552,8 +3583,8 @@ void pageHud() noexcept
     });
     addCard("HIT FEED", 3, [] {
         sliderVar<combat_stats_vars::FeedLifetime>("Hide After", ++controlId, "s");
-        sliderVar<combat_stats_vars::FeedOffsetX>("X Offset", ++controlId);
-        sliderVar<combat_stats_vars::FeedOffsetY>("Y Offset", ++controlId);
+        floatSliderVar<combat_stats_vars::FeedOffsetX>("X Offset", ++controlId);
+        floatSliderVar<combat_stats_vars::FeedOffsetY>("Y Offset", ++controlId);
     });
     addCard("STATUS CHIPS", 2, [] {
         floatSliderVar<status_panel_vars::OffsetX>("X Offset", ++controlId);
@@ -4344,6 +4375,10 @@ void pageMiscGeneral() noexcept
         sliderVar<FakeLevelXp>("Level Xp", ++controlId);
         toggleVar<FakePremierEnabled>("Fake Premier Score", ++controlId);
         sliderVar<FakePremierScore>("Premier Score", ++controlId);
+        toggleVar<FakePremierWins>("Premier Wins Spoof", ++controlId);
+        sliderVar<PremierWins>("Premier Wins", ++controlId);
+        toggleVar<FakeWingmanEnabled>("Fake Wingman Rank", ++controlId);
+        sliderVar<WingmanRank>("Wingman Rank", ++controlId);
         toggleVar<FakeCommendsEnabled>("Fake Commends", ++controlId);
         sliderVar<FakeCommendsFriendly>("Friendly Commends", ++controlId);
         sliderVar<FakeCommendsTeaching>("Teaching Commends", ++controlId);
@@ -6719,7 +6754,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
             const ImVec2 tp(p.x + width - s(43.0f), y + rowCentered(s(18.0f)));
             ImGui::PushID(8713);
             const bool clicked = hitPopupRow("##glow_toggle", tp - ImVec2(s(9), 0.0f), ImVec2(s(38.0f), s(18.0f)), PopupProfile);
-            const float r = motion(animKey(0x6d13u, 8713), glowOn ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+            const float r = motion(animKey(0x924770u, 8713), glowOn ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
             ImGui::PopID();
             drawCheckboxChip(d, tp + ImVec2(s(5.5f), 0.0f), s(18), r);
             if (clicked)
@@ -6736,7 +6771,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
             const ImVec2 tp(p.x + width - s(43.0f), y + rowCentered(s(18.0f)));
             ImGui::PushID(8715);
             const bool clicked = hitPopupRow("##glow_rainbow", tp - ImVec2(s(9), 0.0f), ImVec2(s(38.0f), s(18.0f)), PopupProfile);
-            const float r = motion(animKey(0x6d14u, 8715), rainbow ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+            const float r = motion(animKey(0x8577eu, 8715), rainbow ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
             ImGui::PopID();
             drawCheckboxChip(d, tp + ImVec2(s(5.5f), 0.0f), s(18), r);
             if (clicked)
@@ -6752,7 +6787,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
             const ImVec2 tp(p.x + width - s(43.0f), y + rowCentered(s(18.0f)));
             ImGui::PushID(8718);
             const bool clicked = hitPopupRow("##style_rainbow", tp - ImVec2(s(9), 0.0f), ImVec2(s(38.0f), s(18.0f)), PopupProfile);
-            const float r = motion(animKey(0x6d17u, 8718), styleRainbow ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+            const float r = motion(animKey(0x6dcbacu, 8718), styleRainbow ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
             ImGui::PopID();
             drawCheckboxChip(d, tp + ImVec2(s(5.5f), 0.0f), s(18), r);
             if (clicked)
@@ -6776,7 +6811,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
                 value = min + ImClamp((ImGui::GetIO().MousePos.x - start.x) / trackWidth, 0.0f, 1.0f) * (max - min);
                 ui_config::set<MenuGlowSpeed>(MenuGlowSpeed::ValueType{value});
             }
-            const float shown = motion(animKey(0x6d15u, 8716), (value - min) / (max - min), 16.0f, (value - min) / (max - min));
+            const float shown = motion(animKey(0x7b8929u, 8716), (value - min) / (max - min), 16.0f, (value - min) / (max - min));
             ImGui::PopID();
             d->AddRectFilled(start, start + ImVec2(trackWidth, s(6)), C(44, 44, 47), s(3));
             d->AddRect(start, start + ImVec2(trackWidth, s(6)), C(66, 66, 72), s(3));
@@ -6799,7 +6834,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
                 value = min + ImClamp((ImGui::GetIO().MousePos.x - start.x) / trackWidth, 0.0f, 1.0f) * (max - min);
                 ui_config::set<MenuGlowSize>(MenuGlowSize::ValueType{value});
             }
-            const float shown = motion(animKey(0x6d16u, 8717), (value - min) / (max - min), 16.0f, (value - min) / (max - min));
+            const float shown = motion(animKey(0x93fdcau, 8717), (value - min) / (max - min), 16.0f, (value - min) / (max - min));
             ImGui::PopID();
             d->AddRectFilled(start, start + ImVec2(trackWidth, s(6)), C(44, 44, 47), s(3));
             d->AddRect(start, start + ImVec2(trackWidth, s(6)), C(66, 66, 72), s(3));
@@ -6815,7 +6850,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
             const ImVec2 tp(p.x + width - s(43.0f), y + rowCentered(s(18.0f)));
             ImGui::PushID(8719);
             const bool clicked = hitPopupRow("##glow_debug", tp - ImVec2(s(9), 0.0f), ImVec2(s(38.0f), s(18.0f)), PopupProfile);
-            const float r = motion(animKey(0x6d17u, 8719), debug ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+            const float r = motion(animKey(0x3cc0fu, 8719), debug ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
             ImGui::PopID();
             drawCheckboxChip(d, tp + ImVec2(s(5.5f), 0.0f), s(18), r);
             if (clicked)
@@ -6877,12 +6912,15 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
             visible[visibleCount++] = i;
     }
 
-    const float searchHeight = s(30.0f);
+    const float searchHeight = s(34.0f);
     const float fullListHeight = visibleCount * s(28.0f);
     const float listHeight = ImMin(fullListHeight, ImMax(s(28), ImGui::GetMainViewport()->Size.y - s(210))) + s(6);
     static float configScroll = 0;
     if (ImGui::GetFrameCount() == configPopoverOpenedFrame) configScroll = 0;
-    const float actionHeight = s(164.0f);
+    // Sized to the actual content: 3 action buttons (30 each) + new-name input row
+    // (input 24 + buttons 28) + breathing room. The old flat 164 left a dead band at
+    // the bottom of the popover.
+    const float actionHeight = 3 * s(30.0f) + s(8.0f) + s(24.0f) + s(28.0f) + s(10.0f);
     ImVec2 p = base + ImVec2(kSidebarWidth + s(11), kToolbarHeight + s(4));
     const ImVec2 size(width, searchHeight + listHeight + actionHeight);
     p = popupPosition(p, size);
@@ -6895,8 +6933,10 @@ void configPopover(ImDrawList* d, ImVec2 base) noexcept
     d->AddLine(p + ImVec2(s(12), searchHeight), p + ImVec2(size.x - s(12), searchHeight), C(38, 38, 42));
 
     
-    ImGui::SetCursorScreenPos(p + ImVec2(s(8), s(4)));
-    ImGui::PushItemWidth(width - s(16.0f));
+    // Search field inset matches the popover chrome (10px sides, 8px top) instead of
+    // hugging the border; height budget grew with searchHeight.
+    ImGui::SetCursorScreenPos(p + ImVec2(s(10), s(8)));
+    ImGui::PushItemWidth(width - s(20.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s(6), s(4)));
     ImGui::InputTextWithHint("##cfg_search", "search", configSearch, sizeof(configSearch));
     ImGui::PopStyleVar();
@@ -7448,7 +7488,12 @@ void neverlose::drawMenuGlow(float menuAlpha) noexcept
     const int bC = static_cast<int>(bch * 255.0f);
     const int aC = static_cast<int>(glowColor.a() * ImSaturate(menuAlpha));
 
-    ImDrawList* fg = ImGui::GetForegroundDrawList();
+    // BACKGROUND draw list, not foreground: the glow must layer UNDER the popover/script
+    // windows (ImGui windows render above the background list) - on the foreground list it
+    // painted the shell glow OVER every popover that bleeds past the shell (paintkit
+    // dropdowns, the config popover). The 20% translucent shell bg lets the inner rings
+    // bleed through slightly, which reads as the intended halo.
+    ImDrawList* fg = ImGui::GetBackgroundDrawList();
     const ImVec2 display = ImGui::GetIO().DisplaySize;
     const ImVec2 shellPos((display.x - kShellWidth) * 0.5f + menuOffset.x, (display.y - shellHeightBase) * 0.5f + menuOffset.y);
     const ImVec2 shellEnd = shellPos + ImVec2(kShellWidth, kShellHeight);
@@ -7565,6 +7610,8 @@ void registerFeatureBinds() noexcept
     feature_binds::registerNumber<FakeLevelValue>("Level");
     feature_binds::registerNumber<FakeLevelXp>("Level Xp");
     feature_binds::registerNumber<FakePremierScore>("Premier Score");
+    feature_binds::registerNumber<PremierWins>("Premier Wins");
+    feature_binds::registerNumber<WingmanRank>("Wingman Rank");
     feature_binds::registerNumber<FakeCommendsFriendly>("Friendly Commends");
     feature_binds::registerNumber<FakeCommendsTeaching>("Teaching Commends");
     feature_binds::registerNumber<FakeCommendsLeader>("Leader Commends");
