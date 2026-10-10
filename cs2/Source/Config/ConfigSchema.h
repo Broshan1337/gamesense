@@ -218,33 +218,36 @@ private:
         configConversion.uint(u8"Fov", [](std::uint64_t) {}, [] { return 0; });
         configConversion.boolean(u8"DrawFov", [](bool) {}, [] { return false; });
         configConversion.uint(u8"FovCircleHue", [](std::uint64_t) {}, [] { return 0; });
-        configConversion.boolean(u8"HitHead", loadVariable<aimbot_vars::HitHead>(), saveVariable<aimbot_vars::HitHead>());
-        configConversion.boolean(u8"HitChest", loadVariable<aimbot_vars::HitChest>(), saveVariable<aimbot_vars::HitChest>());
-        configConversion.boolean(u8"HitStomach", loadVariable<aimbot_vars::HitStomach>(), saveVariable<aimbot_vars::HitStomach>());
-        configConversion.boolean(u8"HitArms", loadVariable<aimbot_vars::HitArms>(), saveVariable<aimbot_vars::HitArms>());
-        configConversion.boolean(u8"HitLegs", loadVariable<aimbot_vars::HitLegs>(), saveVariable<aimbot_vars::HitLegs>());
+        // Hitboxes/multipoint/pointscale/body aim/force shot/hitchance/min damage are
+        // per-weapon-group now (RageGroups object below); the old keys stay as
+        // parse-and-discard placeholders at their exact positions.
+        configConversion.boolean(u8"HitHead", [](bool) {}, [] { return true; });
+        configConversion.boolean(u8"HitChest", [](bool) {}, [] { return false; });
+        configConversion.boolean(u8"HitStomach", [](bool) {}, [] { return false; });
+        configConversion.boolean(u8"HitArms", [](bool) {}, [] { return false; });
+        configConversion.boolean(u8"HitLegs", [](bool) {}, [] { return false; });
         configConversion.boolean(u8"SpreadCompensation", loadVariable<aimbot_vars::SpreadCompensation>(), saveVariable<aimbot_vars::SpreadCompensation>());
         configConversion.boolean(u8"RecoilCompensation", loadVariable<aimbot_vars::RecoilCompensation>(), saveVariable<aimbot_vars::RecoilCompensation>());
-        configConversion.boolean(u8"ForceShot", loadVariable<aimbot_vars::ForceShot>(), saveVariable<aimbot_vars::ForceShot>());
-        configConversion.boolean(u8"ForceShotAir", loadVariable<aimbot_vars::ForceShotAir>(), saveVariable<aimbot_vars::ForceShotAir>());
+        configConversion.boolean(u8"ForceShot", [](bool) {}, [] { return false; });
+        configConversion.boolean(u8"ForceShotAir", [](bool) {}, [] { return false; });
         configConversion.boolean(u8"Extrapolate", loadVariable<aimbot_vars::Extrapolate>(), saveVariable<aimbot_vars::Extrapolate>());
         configConversion.uint(u8"ExtrapolateTicks", loadVariable<aimbot_vars::ExtrapolateTicks>(), saveVariable<aimbot_vars::ExtrapolateTicks>());
-        configConversion.boolean(u8"BodyAim", loadVariable<aimbot_vars::BodyAim>(), saveVariable<aimbot_vars::BodyAim>());
-        configConversion.uint(u8"Hitchance", loadVariable<aimbot_vars::Hitchance>(), saveVariable<aimbot_vars::Hitchance>());
-        configConversion.uint(u8"MinDamage", loadVariable<aimbot_vars::MinDamage>(), saveVariable<aimbot_vars::MinDamage>());
-        configConversion.boolean(u8"Multipoint", loadVariable<aimbot_vars::Multipoint>(), saveVariable<aimbot_vars::Multipoint>());
+        configConversion.boolean(u8"BodyAim", [](bool) {}, [] { return false; });
+        configConversion.uint(u8"Hitchance", [](std::uint64_t) {}, [] { return 0; });
+        configConversion.uint(u8"MinDamage", [](std::uint64_t) {}, [] { return 0; });
+        configConversion.boolean(u8"Multipoint", [](bool) {}, [] { return false; });
         configConversion.boolean(u8"Backtrack", loadVariable<aimbot_vars::Backtrack>(), saveVariable<aimbot_vars::Backtrack>());
         configConversion.uint(u8"BacktrackTicks", loadVariable<aimbot_vars::BacktrackTicks>(), saveVariable<aimbot_vars::BacktrackTicks>());
-        
-        
+
+
         configConversion.boolean(u8"SpreadCircleFov", loadVariable<aimbot_vars::SpreadCircleFov>(), saveVariable<aimbot_vars::SpreadCircleFov>());
-        
-        
-        
+
+
+
         configConversion.boolean(u8"SeedCorrectionMode", [](bool) {}, [] { return false; });
-        
-        configConversion.uint(u8"PointScale", loadVariable<aimbot_vars::PointScale>(), saveVariable<aimbot_vars::PointScale>());
-        configConversion.boolean(u8"DynamicPointscale", loadVariable<aimbot_vars::DynamicPointscale>(), saveVariable<aimbot_vars::DynamicPointscale>());
+
+        configConversion.uint(u8"PointScale", [](std::uint64_t) {}, [] { return 85; });
+        configConversion.boolean(u8"DynamicPointscale", [](bool) {}, [] { return true; });
         configConversion.boolean(u8"WallCheck", loadVariable<aimbot_vars::WallCheck>(), saveVariable<aimbot_vars::WallCheck>());
         configConversion.boolean(u8"Autowall", loadVariable<aimbot_vars::Autowall>(), saveVariable<aimbot_vars::Autowall>());
         configConversion.boolean(u8"AutoStop", loadVariable<aimbot_vars::AutoStop>(), saveVariable<aimbot_vars::AutoStop>());
@@ -252,6 +255,8 @@ private:
         configConversion.boolean(u8"SeedFallback", loadVariable<aimbot_vars::SeedFallback>(), saveVariable<aimbot_vars::SeedFallback>());
         configConversion.boolean(u8"ForceShotWait", loadVariable<aimbot_vars::ForceShotWait>(), saveVariable<aimbot_vars::ForceShotWait>());
         configConversion.uint(u8"ForceShotWaitTicks", loadVariable<aimbot_vars::ForceShotWaitTicks>(), saveVariable<aimbot_vars::ForceShotWaitTicks>());
+        configConversion.boolean(u8"DuckPeek", loadVariable<aimbot_vars::DuckPeek>(), saveVariable<aimbot_vars::DuckPeek>());
+        configConversion.boolean(u8"DebugMultipoints", loadVariable<aimbot_vars::DebugMultipoints>(), saveVariable<aimbot_vars::DebugMultipoints>());
         configConversion.endObject();
 
         configConversion.beginObject(u8"LegitAimbot");
@@ -306,6 +311,71 @@ private:
         configConversion.uint(u8"Color", loadVariable<spread_circle_vars::SpreadCircleColor>(), saveVariable<spread_circle_vars::SpreadCircleColor>());
         configConversion.endObject();
 
+        // Per-weapon-group rage config. Appended LAST inside Combat; group objects in
+        // fixed order Pistol/Smg/Rifle/Shotgun/Sniper/Lmg, keys in fixed order per
+        // group - the config loader is order-sensitive, never shuffle.
+        configConversion.beginObject(u8"RageGroups");
+        rageWeaponGroupObject<rage_groups::Enabled, rage_groups::Pistol>(configConversion, u8"Pistol");
+        rageWeaponGroupObject<rage_groups::Enabled, rage_groups::Smg>(configConversion, u8"Smg");
+        rageWeaponGroupObject<rage_groups::Enabled, rage_groups::Rifle>(configConversion, u8"Rifle");
+        rageWeaponGroupObject<rage_groups::Enabled, rage_groups::Shotgun>(configConversion, u8"Shotgun");
+        rageWeaponGroupObject<rage_groups::Enabled, rage_groups::Sniper>(configConversion, u8"Sniper");
+        rageWeaponGroupObject<rage_groups::Enabled, rage_groups::Lmg>(configConversion, u8"Lmg");
+        // Specific weapons (AWP != SSG 08...): same 17-key objects, "Enabled" =
+        // override this weapon's group config. Order fixed by the generated list.
+#define RAGE_WEAPON_SCHEMA_X(W, def, pretty) \
+        rageWeaponGroupObject<rage_groups::OverrideEnabled, rage_groups::W>(configConversion, u8"" pretty);
+        RAGE_WEAPON_CONFIG_LIST_NS(RAGE_WEAPON_SCHEMA_X)
+#undef RAGE_WEAPON_SCHEMA_X
+        configConversion.endObject();
+
+        // Anti-aim (velocity misc.cpp antiaim structure). Appended LAST inside
+        // Combat; keys in fixed order - the loader is order-sensitive.
+        configConversion.beginObject(u8"AntiAim");
+        configConversion.boolean(u8"Enabled", loadVariable<antiaim_vars::Enabled>(), saveVariable<antiaim_vars::Enabled>());
+        configConversion.uint(u8"PitchMode", loadVariable<antiaim_vars::PitchMode>(), saveVariable<antiaim_vars::PitchMode>());
+        configConversion.uint(u8"AtTargetsKey", loadVariable<antiaim_vars::AtTargetsKey>(), saveVariable<antiaim_vars::AtTargetsKey>());
+        configConversion.boolean(u8"AutoYawAdjust", loadVariable<antiaim_vars::AutoYawAdjust>(), saveVariable<antiaim_vars::AutoYawAdjust>());
+        configConversion.uint(u8"ManualLeftKey", loadVariable<antiaim_vars::ManualLeftKey>(), saveVariable<antiaim_vars::ManualLeftKey>());
+        configConversion.uint(u8"ManualRightKey", loadVariable<antiaim_vars::ManualRightKey>(), saveVariable<antiaim_vars::ManualRightKey>());
+        configConversion.uint(u8"AutoYaw", loadVariable<antiaim_vars::AutoYaw>(), saveVariable<antiaim_vars::AutoYaw>());
+        configConversion.boolean(u8"AvoidBackstab", loadVariable<antiaim_vars::AvoidBackstab>(), saveVariable<antiaim_vars::AvoidBackstab>());
+        configConversion.boolean(u8"DirectionIndicator", loadVariable<antiaim_vars::DirectionIndicator>(), saveVariable<antiaim_vars::DirectionIndicator>());
+        configConversion.uint(u8"DirectionIndicatorColor", loadVariable<antiaim_vars::DirectionIndicatorColor>(), saveVariable<antiaim_vars::DirectionIndicatorColor>());
+        configConversion.boolean(u8"HideShots", loadVariable<antiaim_vars::HideShots>(), saveVariable<antiaim_vars::HideShots>());
+        configConversion.endObject();
+
+        // Miss-detection bruteforce resolver. Appended LAST inside Combat.
+        configConversion.beginObject(u8"Resolver");
+        configConversion.boolean(u8"Enabled", loadVariable<resolver_vars::Enabled>(), saveVariable<resolver_vars::Enabled>());
+        configConversion.uint(u8"MissTicks", loadVariable<resolver_vars::MissTicks>(), saveVariable<resolver_vars::MissTicks>());
+        configConversion.boolean(u8"ResetOnRound", loadVariable<resolver_vars::ResetOnRound>(), saveVariable<resolver_vars::ResetOnRound>());
+        configConversion.endObject();
+
+        configConversion.endObject();
+    }
+
+    template <template <typename> class EnabledType, typename Group>
+    void rageWeaponGroupObject(auto&& configConversion, const char8_t* groupName)
+    {
+        configConversion.beginObject(groupName);
+        configConversion.boolean(u8"Enabled", loadVariable<EnabledType<Group>>(), saveVariable<EnabledType<Group>>());
+        configConversion.boolean(u8"Multipoint", loadVariable<rage_groups::Multipoint<Group>>(), saveVariable<rage_groups::Multipoint<Group>>());
+        configConversion.uint(u8"PointScale", loadVariable<rage_groups::PointScale<Group>>(), saveVariable<rage_groups::PointScale<Group>>());
+        configConversion.boolean(u8"DynamicPointscale", loadVariable<rage_groups::DynamicPointscale<Group>>(), saveVariable<rage_groups::DynamicPointscale<Group>>());
+        configConversion.boolean(u8"BodyAim", loadVariable<rage_groups::BodyAim<Group>>(), saveVariable<rage_groups::BodyAim<Group>>());
+        configConversion.boolean(u8"ForceShot", loadVariable<rage_groups::ForceShot<Group>>(), saveVariable<rage_groups::ForceShot<Group>>());
+        configConversion.boolean(u8"ForceShotAir", loadVariable<rage_groups::ForceShotAir<Group>>(), saveVariable<rage_groups::ForceShotAir<Group>>());
+        configConversion.uint(u8"Hitchance", loadVariable<rage_groups::Hitchance<Group>>(), saveVariable<rage_groups::Hitchance<Group>>());
+        configConversion.uint(u8"MinDamage", loadVariable<rage_groups::MinDamage<Group>>(), saveVariable<rage_groups::MinDamage<Group>>());
+        configConversion.uint(u8"MinDamageOverrideKey", loadVariable<rage_groups::MinDamageOverrideKey<Group>>(), saveVariable<rage_groups::MinDamageOverrideKey<Group>>());
+        configConversion.uint(u8"MinDamageOverrideValue", loadVariable<rage_groups::MinDamageOverrideValue<Group>>(), saveVariable<rage_groups::MinDamageOverrideValue<Group>>());
+        configConversion.boolean(u8"HitHead", loadVariable<rage_groups::HitHead<Group>>(), saveVariable<rage_groups::HitHead<Group>>());
+        configConversion.boolean(u8"HitChest", loadVariable<rage_groups::HitChest<Group>>(), saveVariable<rage_groups::HitChest<Group>>());
+        configConversion.boolean(u8"HitStomach", loadVariable<rage_groups::HitStomach<Group>>(), saveVariable<rage_groups::HitStomach<Group>>());
+        configConversion.boolean(u8"HitArms", loadVariable<rage_groups::HitArms<Group>>(), saveVariable<rage_groups::HitArms<Group>>());
+        configConversion.boolean(u8"HitLegs", loadVariable<rage_groups::HitLegs<Group>>(), saveVariable<rage_groups::HitLegs<Group>>());
+        configConversion.boolean(u8"Doubletap", loadVariable<rage_groups::Doubletap<Group>>(), saveVariable<rage_groups::Doubletap<Group>>());
         configConversion.endObject();
     }
 

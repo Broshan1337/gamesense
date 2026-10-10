@@ -29,6 +29,10 @@
 #include <CS2/Classes/Entities/C_BaseEntity.h>
 #include <CS2/Classes/EntitySystem/CEntityIndex.h>
 #include <Features/Combat/Aimbot/Aimbot.h>
+#include <Features/Combat/DuckPeek.h>
+#include <Features/Combat/AntiAim/AntiAim.h>
+#include <Features/Combat/DoubleTap/DoubleTap.h>
+#include <Features/Combat/Resolver/Resolver.h>
 #include <Features/Combat/Aimbot/AimbotFovCircle.h>
 #include <Features/Combat/AttackCommand.h>
 #include <Features/Combat/SpreadCircleVis/SpreadCircleVis.h>
@@ -486,6 +490,9 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     hookContext.template make<ClientModeHooks>().restoreClientModeHooks();
     hookContext.template make<NoScopeInaccuracyVis>().onUnload();
     hookContext.template make<Aimbot>().onUnload();
+    hookContext.template make<DuckPeek<HookContext<GlobalContext>>>().onUnload();
+    hookContext.template make<AntiAim<HookContext<GlobalContext>>>().onUnload();
+    hookContext.template make<DoubleTapGate<HookContext<GlobalContext>>>().onUnload();
     hookContext.template make<AimbotFovCircle>().onUnload();
     hookContext.template make<SpreadCircleVis>().onUnload();
     hookContext.template make<BombPlantAlert>().onUnload();
@@ -713,6 +720,7 @@ bool GameEventManagerHook_onFireEventClientSide(cs2::IGameEventManager2* thisptr
     hookContext.template make<SpawnProtectionSound>().onFireEventClientSide(event);
     hookContext.template make<CombatStats>().onFireEventClientSide(event);
     hookContext.template make<Killsay>().onFireEventClientSide(event);
+    resolver::onFireEventClientSide(hookContext, event);
     
     
     
@@ -824,8 +832,9 @@ void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCm
     
     
     hookContext.template make<Aimbot>().onCreateMove(cmd);
-    
-    
+    const bool rageShotStaged = hookContext.template make<Aimbot>().shotStaged();
+    hookContext.template make<DuckPeek<HookContext<GlobalContext>>>().onCreateMove(rageShotStaged);
+    hookContext.template make<AntiAim<HookContext<GlobalContext>>>().onCreateMove(cmd, rageShotStaged);
     hookContext.template make<LegitAimbot>().onCreateMove(cmd);
     
     hookContext.template make<Rcs>().onCreateMove(cmd);
@@ -934,19 +943,24 @@ std::uint64_t CSGOInputHook_onWriteMoveCrc(cs2::CCSGOInput* thisptr, cs2::CUserC
     
     
     hookContext.template make<TestStrafer>().onWriteMoveCrc(cmd);
-        
-        
-        
+
+
+
         hookContext.template make<FvaEmulator>().onWriteMoveCrcEarly(cmd);
         
         
         
         
+        hookContext.template make<DuckPeek<HookContext<GlobalContext>>>().onWriteMoveCrc(cmd);
         hookContext.template make<Triggerbot>().onWriteMoveCrc(cmd);
         
         
         
         hookContext.template make<Aimbot>().onWriteMoveCrc(cmd);
+        // Doubletap gate: after the aimbot/triggerbot writers (sees every fire
+        // intent). The anti-aim no longer writes at slot 7 - it arms the FVA
+        // target at CreateMove (camera-safe synthetic history entries).
+        hookContext.template make<DoubleTapGate<HookContext<GlobalContext>>>().onWriteMoveCrc(cmd);
         hookContext.template make<LegitAimbot>().onWriteMoveCrc(cmd);
         
         
@@ -1025,6 +1039,7 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     SoundFeatures{hookContext.soundWatcherState(), hookContext.hooks().viewRenderHook, hookContext}.runOnViewMatrixUpdate();
     hookContext.template make<Hitmarker>().run();
     hookContext.template make<OffScreenArrows>().run();
+    hookContext.template make<AntiAim<HookContext<GlobalContext>>>().onRenderUpdate();
     hookContext.template make<KillEffects>().run();
     hookContext.template make<PlayerList>().run();
     hookContext.template make<ScoreboardEquipment>().run();

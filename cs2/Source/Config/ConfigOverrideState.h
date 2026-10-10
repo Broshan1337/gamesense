@@ -6,7 +6,9 @@
 namespace config_overrides {
 // Bind storage is a fixed array whose elements remain alive until module unload.
 // Keep saving the base value while the live config carries a temporary override.
-inline constexpr std::size_t kCapacity = 1024;
+// Indexed by ConfigVariableTypes::indexOf - must exceed the TypeList size
+// (per-weapon rage configs pushed it past 1024 on 2026-10-10).
+inline constexpr std::size_t kCapacity = 2048;
 struct SavedValue {
     const bool* active{};
     const double* original{};

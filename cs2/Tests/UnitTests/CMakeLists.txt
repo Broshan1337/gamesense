@@ -1,4 +1,11 @@
 add_executable(UnitTests)
+# Match Source/CMakeLists.txt depth limits: the ConfigVariableTypes tuple instantiates
+# recursively and GCC's default template depth (900) is too shallow for it (2026-10-10).
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_compile_options(UnitTests PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fconstexpr-depth=4096 -ftemplate-depth=4096>)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  target_compile_options(UnitTests PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fconstexpr-depth=4096 -fbracket-depth=1024 -ftemplate-depth=2048>)
+endif()
 
 if(MSVC)
   target_compile_options(UnitTests PRIVATE "/MP")

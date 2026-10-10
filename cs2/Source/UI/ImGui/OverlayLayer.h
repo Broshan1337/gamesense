@@ -124,6 +124,59 @@ inline void publishHitmarker(const Hitmarker& newHitmarker) noexcept
 }
 
 
+// Rage multipoint scan cloud (velocity's debug multipoints): the game thread
+// (CreateMove) publishes the generated scan points projected to screen percents;
+// renderGameOverlay draws filled circles colored per hitbox group, center
+// points larger. Producer: Features/Combat/Aimbot (Aimbot::refineMultipointCapsule).
+struct MultiPoint {
+    float xPercent;
+    float yPercent;
+    std::uint32_t rgba;   // color::Rgba packing (r<<24|g<<16|b<<8|a)
+    bool center;
+};
+
+constexpr int kMaxMultiPoints = 128;
+
+inline SpinLock multiPointLock;
+inline MultiPoint multiPoints[kMaxMultiPoints];
+inline int multiPointCount = 0;
+
+inline void publishMultiPoints(const MultiPoint* newPoints, int count) noexcept
+{
+    if (count > kMaxMultiPoints)
+        count = kMaxMultiPoints;
+    const std::lock_guard multiPointGuard{multiPointLock};
+    for (int i = 0; i < count; ++i)
+        multiPoints[i] = newPoints[i];
+    multiPointCount = count;
+}
+
+// Anti-aim direction indicator (velocity misc.cpp on_render): the game thread
+// publishes the arc points (feet-centered 60 degree sweep at the AA yaw,
+// projected to screen percents, fade baked into rgba); renderGameOverlay draws
+// the tapering polyline. Producer: Features/Combat/AntiAim.
+struct AaArcPoint {
+    float xPercent;
+    float yPercent;
+    std::uint32_t rgba;
+};
+
+constexpr int kMaxAaArcPoints = 56;
+
+inline SpinLock aaArcLock;
+inline AaArcPoint aaArcPoints[kMaxAaArcPoints];
+inline int aaArcPointCount = 0;
+
+inline void publishAaArc(const AaArcPoint* newPoints, int count) noexcept
+{
+    if (count > kMaxAaArcPoints)
+        count = kMaxAaArcPoints;
+    const std::lock_guard aaArcGuard{aaArcLock};
+    for (int i = 0; i < count; ++i)
+        aaArcPoints[i] = newPoints[i];
+    aaArcPointCount = count;
+}
+
 struct Snapshot {
     Arrow arrows[kMaxArrows];
     int count = 0;
@@ -133,6 +186,10 @@ struct Snapshot {
     int timerCount = 0;
     Bolt bolts[kMaxBolts];
     int boltCount = 0;
+    MultiPoint multiPoints[kMaxMultiPoints];
+    int multiPointCount = 0;
+    AaArcPoint aaArcPoints[kMaxAaArcPoints];
+    int aaArcPointCount = 0;
 };
 
 [[nodiscard]] inline Snapshot snapshot() noexcept
@@ -158,6 +215,18 @@ struct Snapshot {
         s.boltCount = boltCount;
         for (int i = 0; i < boltCount; ++i)
             s.bolts[i] = bolts[i];
+    }
+    {
+        const std::lock_guard multiPointGuard{multiPointLock};
+        s.multiPointCount = multiPointCount;
+        for (int i = 0; i < multiPointCount; ++i)
+            s.multiPoints[i] = multiPoints[i];
+    }
+    {
+        const std::lock_guard aaArcGuard{aaArcLock};
+        s.aaArcPointCount = aaArcPointCount;
+        for (int i = 0; i < aaArcPointCount; ++i)
+            s.aaArcPoints[i] = aaArcPoints[i];
     }
     return s;
 }

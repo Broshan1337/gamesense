@@ -496,7 +496,28 @@ int searchGlowSubTab = 0;
 
 
 int rageSubTab = 0;
-constexpr const char* const kRageSubTabs[] = {"Aimbot", "Accuracy"};
+constexpr const char* const kRageSubTabs[] = {"Aimbot", "Accuracy", "Anti Aim"};
+// Per-weapon-group rage editing: which group's vars the RAGE rows edit. Gameplay
+// resolves the active weapon's group (RageGroups.h) independently of this.
+// Weapon-config selector: entries 0..5 = the weapon groups, 6.. = specific guns
+// (RageWeaponDefs.h list, same order as gameplay resolution prefers them).
+int rageMenuGroup = 0;
+#define RAGE_MENU_NAME_X(W, def, pretty) pretty
+constexpr const char* const kRageMenuEntries[]{"Pistol", "SMG", "Rifle", "Shotgun", "Sniper", "LMG",
+    RAGE_WEAPON_CONFIG_LIST(RAGE_MENU_NAME_X)};
+#undef RAGE_MENU_NAME_X
+constexpr int kRageMenuEntryCount = static_cast<int>(sizeof(kRageMenuEntries) / sizeof(kRageMenuEntries[0]));
+void rageMenuGroupApply(int index) noexcept
+{
+    if (index >= 0 && index < kRageMenuEntryCount)
+        rageMenuGroup = index;
+}
+[[nodiscard]] int rageMenuWeaponDef() noexcept
+{
+    if (rageMenuGroup < 6 || rageMenuGroup >= kRageMenuEntryCount)
+        return 0;
+    return rage_weapons::kDefs[rageMenuGroup - 6].defIndex;
+}
 int legitSubTab = 0;
 constexpr const char* const kLegitSubTabs[] = {"Aimbot", "Triggerbot"};
 int miscSubTab = 0;
@@ -3128,17 +3149,92 @@ void pageSubTabPills(ImDrawList* d, int& current, const char* const* labels, int
     columnYs[0] = columnYs[1] = s(4.0f) + pillHeight + s(30.0f);
 }
 
+// ---- RAGE per-weapon-group rows ----
+// One row shape per group knob; rageGroupRow instantiates it for the group the
+// Weapon Group select points at. Gameplay always reads the ACTIVE weapon's group.
+
+template <typename G> struct RageGroupBodyAimRow { void operator()(int id) const noexcept { toggleVar<rage_groups::BodyAim<G>>("Force Body Aim", id); } };
+template <typename G> struct RageGroupMultipointRow { void operator()(int id) const noexcept { toggleVar<rage_groups::Multipoint<G>>("Multipoint", id); } };
+template <typename G> struct RageGroupPointScaleRow { void operator()(int id) const noexcept { sliderVar<rage_groups::PointScale<G>>("Point Scale", id, "%"); } };
+template <typename G> struct RageGroupDynamicPointscaleRow { void operator()(int id) const noexcept { toggleVar<rage_groups::DynamicPointscale<G>>("Dynamic Point Scale", id); } };
+template <typename G> struct RageGroupHitboxesRow {
+    void operator()(int id) const noexcept
+    {
+        static constexpr const char* const kHitboxNames[]{ "Head", "Chest", "Stomach", "Arms", "Legs" };
+        multiSelectVar<rage_groups::HitHead<G>, rage_groups::HitChest<G>, rage_groups::HitStomach<G>, rage_groups::HitArms<G>, rage_groups::HitLegs<G>>("Hitboxes", id, kHitboxNames);
+    }
+};
+template <typename G> struct RageGroupForceShotRow { void operator()(int id) const noexcept { toggleVar<rage_groups::ForceShot<G>>("Auto Shoot Ground", id); } };
+template <typename G> struct RageGroupForceShotAirRow { void operator()(int id) const noexcept { toggleVar<rage_groups::ForceShotAir<G>>("Auto Shoot Air", id); } };
+template <typename G> struct RageGroupHitchanceRow { void operator()(int id) const noexcept { sliderVar<rage_groups::Hitchance<G>>("Min Estimated Hitchance", id, "%"); } };
+template <typename G> struct RageGroupMinDamageRow { void operator()(int id) const noexcept { sliderVar<rage_groups::MinDamage<G>>("Min Damage", id, " hp"); } };
+template <typename G> struct RageGroupMinDamageOverrideKeyRow { void operator()(int id) const noexcept { keybindVar<rage_groups::MinDamageOverrideKey<G>>("Min Dmg Override Key", id); } };
+template <typename G> struct RageGroupMinDamageOverrideValueRow { void operator()(int id) const noexcept { sliderVar<rage_groups::MinDamageOverrideValue<G>>("Min Dmg Override Value", id, " hp"); } };
+template <typename G> struct RageGroupDoubletapRow { void operator()(int id) const noexcept { toggleVar<rage_groups::Doubletap<G>>("Doubletap", id); } };
+
+template <template <typename> class Row, typename... Args>
+void rageGroupRow(Args&&... args) noexcept
+{
+    if (const int def = rageMenuWeaponDef(); def != 0) {
+        switch (def) {
+#define RAGE_MENU_ROW_X(W, defIndex, pretty) \
+        case defIndex: Row<rage_groups::W>{}(std::forward<Args>(args)...); break;
+            RAGE_WEAPON_CONFIG_LIST_NS(RAGE_MENU_ROW_X)
+#undef RAGE_MENU_ROW_X
+        default: break;
+        }
+        return;
+    }
+    switch (rageMenuGroup) {
+    case 0: Row<rage_groups::Pistol>{}(std::forward<Args>(args)...); break;
+    case 1: Row<rage_groups::Smg>{}(std::forward<Args>(args)...); break;
+    case 2: Row<rage_groups::Rifle>{}(std::forward<Args>(args)...); break;
+    case 3: Row<rage_groups::Shotgun>{}(std::forward<Args>(args)...); break;
+    case 4: Row<rage_groups::Sniper>{}(std::forward<Args>(args)...); break;
+    default: Row<rage_groups::Lmg>{}(std::forward<Args>(args)...); break;
+    }
+}
+
+// The enabled row is label/type-split: groups gate the ragebot for that group
+// ("Group Enabled"), specific weapons switch their own config over the group's
+// ("Use Weapon Config", OverrideEnabled).
+void rageEnabledRow(int id) noexcept
+{
+    if (const int def = rageMenuWeaponDef(); def != 0) {
+        switch (def) {
+#define RAGE_MENU_OVERRIDE_X(W, defIndex, pretty) \
+        case defIndex: toggleVar<rage_groups::OverrideEnabled<rage_groups::W>>("Use Weapon Config", id); break;
+            RAGE_WEAPON_CONFIG_LIST_NS(RAGE_MENU_OVERRIDE_X)
+#undef RAGE_MENU_OVERRIDE_X
+        default: break;
+        }
+        return;
+    }
+    switch (rageMenuGroup) {
+    case 0: toggleVar<rage_groups::Enabled<rage_groups::Pistol>>("Group Enabled", id); break;
+    case 1: toggleVar<rage_groups::Enabled<rage_groups::Smg>>("Group Enabled", id); break;
+    case 2: toggleVar<rage_groups::Enabled<rage_groups::Rifle>>("Group Enabled", id); break;
+    case 3: toggleVar<rage_groups::Enabled<rage_groups::Shotgun>>("Group Enabled", id); break;
+    case 4: toggleVar<rage_groups::Enabled<rage_groups::Sniper>>("Group Enabled", id); break;
+    default: toggleVar<rage_groups::Enabled<rage_groups::Lmg>>("Group Enabled", id); break;
+    }
+}
+
 void pageRageAimbot() noexcept
 {
     using namespace aimbot_vars;
-    addCard("AIMBOT", 7, [] {
+    addCard("AIMBOT", 9, [] {
+        select("Weapon Config", &rageMenuGroup, kRageMenuEntries, kRageMenuEntryCount, ++controlId, &rageMenuGroupApply);
         toggleVar<Enabled>("Silent Aim", ++controlId);
-        toggleVar<BodyAim>("Force Body Aim", ++controlId);
-        toggleVar<Multipoint>("Multipoint", ++controlId);
-        sliderVar<PointScale>("Point Scale ", ++controlId, "%");
-        toggleVar<DynamicPointscale>("Dynamic Point Scale", ++controlId);
+        rageEnabledRow(++controlId);
+        rageGroupRow<RageGroupBodyAimRow>(++controlId);
+        rageGroupRow<RageGroupMultipointRow>(++controlId);
+        rageGroupRow<RageGroupPointScaleRow>(++controlId);
+        rageGroupRow<RageGroupDynamicPointscaleRow>(++controlId);
+        rageGroupRow<RageGroupDoubletapRow>(++controlId);
         toggleVar<Backtrack>("Backtrack", ++controlId);
         toggleVar<AutoStop>("Auto Stop", ++controlId);
+        toggleVar<DebugMultipoints>("Debug Multipoints", ++controlId);
     });
     addCard("TIMING", 3, [] {
         sliderVar<BacktrackTicks>("Backtrack Ticks", ++controlId);
@@ -3150,12 +3246,12 @@ void pageRageAimbot() noexcept
         selectVar<TargetSelection>("Target Selection", modes, 3, ++controlId);
         toggleVar<TargetLock>("Lock Target", ++controlId);
         toggleVar<SpreadCircleFov>("Spread FOV", ++controlId);
-        
-        
-        
-        
-        static constexpr const char* const kHitboxNames[]{ "Head", "Chest", "Stomach", "Arms", "Legs" };
-        multiSelectVar<HitHead, HitChest, HitStomach, HitArms, HitLegs>("Hitboxes", ++controlId, kHitboxNames);
+        rageGroupRow<RageGroupHitboxesRow>(++controlId);
+    });
+    addCard("RESOLVER", 3, [] {
+        toggleVar<resolver_vars::Enabled>("Bruteforce Resolver", ++controlId);
+        sliderVar<resolver_vars::MissTicks>("Miss Window Ticks", ++controlId);
+        toggleVar<resolver_vars::ResetOnRound>("Reset Each Round", ++controlId);
     });
 }
 
@@ -3168,13 +3264,17 @@ void pageRageAccuracy() noexcept
         toggleVar<SeedFallback>("Lucky Seeds (Unavailable)", ++controlId);
         toggleVar<RecoilCompensation>("Compensate Recoil", ++controlId);
     });
-    addCard("AUTO SHOOT", 7, [] {
-        toggleVar<ForceShot>("Auto Shoot Ground", ++controlId);
-        toggleVar<ForceShotAir>("Auto Shoot Air", ++controlId);
+    addCard("AUTO SHOOT", 11, [] {
+        select("Weapon Config", &rageMenuGroup, kRageMenuEntries, kRageMenuEntryCount, ++controlId, &rageMenuGroupApply);
+        rageGroupRow<RageGroupForceShotRow>(++controlId);
+        rageGroupRow<RageGroupForceShotAirRow>(++controlId);
         toggleVar<ForceShotWait>("Wait For Accuracy", ++controlId);
-        sliderVar<Hitchance>("Min Estimated Hitchance", ++controlId, "%");
-        sliderVar<MinDamage>("Min Damage", ++controlId);
+        rageGroupRow<RageGroupHitchanceRow>(++controlId);
+        rageGroupRow<RageGroupMinDamageRow>(++controlId);
+        rageGroupRow<RageGroupMinDamageOverrideKeyRow>(++controlId);
+        rageGroupRow<RageGroupMinDamageOverrideValueRow>(++controlId);
         toggleVar<WallCheck>("Shoot Visible", ++controlId);
+        toggleVar<DuckPeek>("Duck Peek", ++controlId);
         toggleVar<Autowall>(bullet_simulation::binding() ? "Shoot Walls (Engine)" : "Shoot Walls (Unavailable)", ++controlId);
     });
     addCard("EXTRAS", 2, [] {
@@ -3183,29 +3283,55 @@ void pageRageAccuracy() noexcept
     });
 }
 
+void pageRageAntiAim() noexcept
+{
+    using namespace antiaim_vars;
+    addCard("ANTI AIM", 9, [] {
+        toggleVar<Enabled>("Anti Aim", ++controlId);
+        static constexpr const char* const kPitchModes[]{"Off", "Down", "Up"};
+        selectVar<PitchMode>("Pitch", kPitchModes, 3, ++controlId);
+        static constexpr const char* const kAutoYawModes[]{"Off", "Crosshair", "Distance", "Health"};
+        selectVar<AutoYaw>("Auto Yaw", kAutoYawModes, 4, ++controlId);
+        keybindVar<AtTargetsKey>("At Targets Key", ++controlId);
+        toggleVar<AutoYawAdjust>("Auto Yaw Adjust", ++controlId);
+        keybindVar<ManualLeftKey>("Manual Left", ++controlId);
+        keybindVar<ManualRightKey>("Manual Right", ++controlId);
+        toggleVar<AvoidBackstab>("Avoid Backstab", ++controlId);
+    });
+    addCard("INDICATOR", 3, [] {
+        toggleVar<DirectionIndicator>("Direction Indicator", ++controlId);
+        colorVar<DirectionIndicatorColor>("Indicator Color", ++controlId);
+        toggleVar<HideShots>("Hide Shots", ++controlId);
+    });
+}
+
 void pageRage() noexcept
 {
     if (!searchIndexing) {
-        pageSubTabPills(ImGui::GetWindowDrawList(), rageSubTab, kRageSubTabs, 2, 9720);
+        pageSubTabPills(ImGui::GetWindowDrawList(), rageSubTab, kRageSubTabs, 3, 9720);
         searchGlowSubTab = rageSubTab;
         controlId += rageSubTab * 500; 
         if (rageSubTab == 0)
             pageRageAimbot();
-        else
+        else if (rageSubTab == 1)
             pageRageAccuracy();
+        else
+            pageRageAntiAim();
         return;
     }
 
     
     
-    for (int t = 0; t < 2; ++t) {
-        pageSubTabPills(ImGui::GetWindowDrawList(), rageSubTab, kRageSubTabs, 2, 9720);
+    for (int t = 0; t < 3; ++t) {
+        pageSubTabPills(ImGui::GetWindowDrawList(), rageSubTab, kRageSubTabs, 3, 9720);
         searchGlowSubTab = t;
         controlId += t * 500;
         if (t == 0)
             pageRageAimbot();
-        else
+        else if (t == 1)
             pageRageAccuracy();
+        else
+            pageRageAntiAim();
         columnYs[0] = columnYs[1] = 0;
     }
 }
@@ -3246,12 +3372,9 @@ void pageLegitAim() noexcept
         selectVar<TargetSelection>("Target Selection", modes, 3, ++controlId);
         toggleVar<TargetLock>("Lock Target", ++controlId);
     });
-    addCard("HITBOXES", 5, [] {
-        toggleVar<HitHead>("Target Head", ++controlId);
-        toggleVar<HitChest>("Target Chest", ++controlId);
-        toggleVar<HitStomach>("Target Stomach", ++controlId);
-        toggleVar<HitArms>("Target Arms", ++controlId);
-        toggleVar<HitLegs>("Target Legs", ++controlId);
+    addCard("HITBOXES", 1, [] {
+        static constexpr const char* const kHitboxNames[]{ "Head", "Chest", "Stomach", "Arms", "Legs" };
+        multiSelectVar<HitHead, HitChest, HitStomach, HitArms, HitLegs>("Hitboxes", ++controlId, kHitboxNames);
     });
     addCard("RECOIL & SCOPES", 5, [] {
         toggleVar<rcs_vars::Enabled>("Control Recoil", ++controlId);
@@ -7599,12 +7722,9 @@ void registerFeatureBinds() noexcept
         return;
     done = true;
 
-    feature_binds::registerNumber<aimbot_vars::PointScale>("Point Scale ");
     feature_binds::registerNumber<aimbot_vars::BacktrackTicks>("Backtrack Ticks");
     feature_binds::registerNumber<aimbot_vars::ExtrapolateTicks>("Lead Ticks");
     feature_binds::registerNumber<aimbot_vars::ForceShotWaitTicks>("Accuracy Wait Ticks");
-    feature_binds::registerNumber<aimbot_vars::Hitchance>("Min Estimated Hitchance");
-    feature_binds::registerNumber<aimbot_vars::MinDamage>("Min Damage");
     feature_binds::registerNumber<legit_aimbot_vars::Fov>("Field Of View");
     feature_binds::registerNumber<legit_aimbot_vars::Smooth>("Smoothing");
     feature_binds::registerNumber<legit_aimbot_vars::Strength>("Assist Strength");
@@ -7709,19 +7829,20 @@ void registerFeatureBinds() noexcept
     
     feature_binds::registerToggle<aimbot_vars::Enabled>("Silent Aim");
     feature_binds::registerToggle<aimbot_vars::TargetLock>("Rage Target Lock");
-    feature_binds::registerToggle<aimbot_vars::BodyAim>("Force Body Aim");
-    feature_binds::registerToggle<aimbot_vars::Multipoint>("Multipoint");
-    feature_binds::registerToggle<aimbot_vars::DynamicPointscale>("Dynamic Point Scale");
     feature_binds::registerToggle<aimbot_vars::Backtrack>("Backtrack");
     feature_binds::registerToggle<aimbot_vars::AutoStop>("Auto Stop");
     feature_binds::registerToggle<aimbot_vars::SpreadCompensation>("Exact Spread (Unavailable)");
     feature_binds::registerToggle<aimbot_vars::SpreadGate>("Hold Fire Until Exact");
     feature_binds::registerToggle<aimbot_vars::RecoilCompensation>("Compensate Recoil");
-    feature_binds::registerToggle<aimbot_vars::ForceShot>("Auto Shoot Ground");
-    feature_binds::registerToggle<aimbot_vars::ForceShotAir>("Auto Shoot Air");
     feature_binds::registerToggle<aimbot_vars::WallCheck>("Rage Shoot Visible");
     feature_binds::registerToggle<aimbot_vars::Autowall>("Rage Shoot Walls");
     feature_binds::registerToggle<aimbot_vars::SpreadCircleFov>("Rage Spread FOV");
+    feature_binds::registerToggle<rage_groups::ForceShotAir<rage_groups::Pistol>>("Auto Shoot Air (Pistol)");
+    feature_binds::registerToggle<rage_groups::ForceShotAir<rage_groups::Smg>>("Auto Shoot Air (SMG)");
+    feature_binds::registerToggle<rage_groups::ForceShotAir<rage_groups::Rifle>>("Auto Shoot Air (Rifle)");
+    feature_binds::registerToggle<rage_groups::ForceShotAir<rage_groups::Shotgun>>("Auto Shoot Air (Shotgun)");
+    feature_binds::registerToggle<rage_groups::ForceShotAir<rage_groups::Sniper>>("Auto Shoot Air (Sniper)");
+    feature_binds::registerToggle<rage_groups::ForceShotAir<rage_groups::Lmg>>("Auto Shoot Air (LMG)");
     feature_binds::registerToggle<aimbot_vars::Extrapolate>("Lead Targets");
 
     
@@ -7746,11 +7867,6 @@ void registerFeatureBinds() noexcept
     feature_binds::registerToggle<legit_aimbot_vars::WallCheck>("Legit Aim Visible");
     feature_binds::registerToggle<legit_aimbot_vars::DrawFov>("Draw FOV Circle");
     feature_binds::registerToggle<legit_aimbot_vars::SpreadCircleFov>("Legit Spread Circle FOV");
-    feature_binds::registerToggle<aimbot_vars::HitHead>("Target Head");
-    feature_binds::registerToggle<aimbot_vars::HitChest>("Target Chest");
-    feature_binds::registerToggle<aimbot_vars::HitStomach>("Target Stomach");
-    feature_binds::registerToggle<aimbot_vars::HitArms>("Target Arms");
-    feature_binds::registerToggle<aimbot_vars::HitLegs>("Target Legs");
     feature_binds::registerToggle<triggerbot_vars::Enabled>("Triggerbot");
     feature_binds::registerToggle<triggerbot_vars::AccuracyCheck>("Shoot When Accurate");
     feature_binds::registerToggle<triggerbot_vars::HeadOnly>("Shoot At The Head");
@@ -7861,6 +7977,40 @@ void neverlose::renderGameOverlay() noexcept
                 fg->AddText(font, fontSize, pos + ImVec2(1.0f, 1.0f), C(0, 0, 0, 160), text);
                 fg->AddText(font, fontSize, pos, color, text);
             }
+        }
+    }
+
+    // Rage debug multipoints: filled circles over the scanned point cloud
+    // (velocity's per-hitbox colors; centers draw larger).
+    if (snapshot.multiPointCount > 0) {
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        for (int i = 0; i < snapshot.multiPointCount; ++i) {
+            const auto& point = snapshot.multiPoints[i];
+            const float px = point.xPercent * 0.01f * display.x;
+            const float py = point.yPercent * 0.01f * display.y;
+            const ImU32 color = C(point.rgba >> 24 & 0xFF, point.rgba >> 16 & 0xFF, point.rgba >> 8 & 0xFF, point.rgba & 0xFF);
+            fg->AddCircleFilled(ImVec2(px, py), point.center ? 3.5f : 2.0f, color, 12);
+        }
+    }
+
+    // Anti-aim direction indicator: tapering arc at the local feet (alpha fade
+    // baked into each point's rgba by the producer; thickness tapers at the ends).
+    if (snapshot.aaArcPointCount > 1) {
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        constexpr float kMaxThickness = 3.0f;
+        const float total = static_cast<float>(snapshot.aaArcPointCount - 1);
+        for (int i = 0; i + 1 < snapshot.aaArcPointCount; ++i) {
+            const auto& p0 = snapshot.aaArcPoints[i];
+            const auto& p1 = snapshot.aaArcPoints[i + 1];
+            const ImVec2 a{p0.xPercent * 0.01f * display.x, p0.yPercent * 0.01f * display.y};
+            const ImVec2 b{p1.xPercent * 0.01f * display.x, p1.yPercent * 0.01f * display.y};
+            const float edge0 = 1.0f - ImFabs(static_cast<float>(i) / total - 0.5f) * 2.0f;
+            const float edge1 = 1.0f - ImFabs(static_cast<float>(i + 1) / total - 0.5f) * 2.0f;
+            const float thickness = kMaxThickness * (((edge0 + edge1) * 0.5f) * 0.85f + 0.15f);
+            const ImU32 colorA = C(p0.rgba >> 24 & 0xFF, p0.rgba >> 16 & 0xFF, p0.rgba >> 8 & 0xFF, p0.rgba & 0xFF);
+            const ImU32 colorB = C(p1.rgba >> 24 & 0xFF, p1.rgba >> 16 & 0xFF, p1.rgba >> 8 & 0xFF, p1.rgba & 0xFF);
+            fg->AddLine(a, b, colorA, thickness);
+            fg->AddLine(a, b, colorB, ImMax(thickness - 1.0f, 0.5f));
         }
     }
 

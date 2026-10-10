@@ -262,6 +262,13 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU
     if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
       target_compile_options(Neversnooze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fconstexpr-depth=4096 -fbracket-depth=1024 -ftemplate-depth=2048>)
     endif()
+    # GCC default -ftemplate-depth=900 (GCC >= 14) no longer covers the TypeList tuple:
+    # std::tuple instantiates recursively, one level per entry - the per-weapon rage
+    # configs pushed ConfigVariableTypes past 1000 entries (2026-10-10) and the tuple
+    # instantiation itself blew the limit inside <type_traits>.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+      target_compile_options(Neversnooze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fconstexpr-depth=4096 -ftemplate-depth=4096>)
+    endif()
     target_link_options(Neversnooze PRIVATE LINKER:--no-undefined -z noexecstack)
   endif()
 

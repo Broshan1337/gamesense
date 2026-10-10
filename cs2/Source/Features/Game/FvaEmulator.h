@@ -111,6 +111,7 @@
 namespace fva_target
 {
 inline std::atomic<bool> armed{false};
+inline std::atomic<bool> alwaysPublish{false};
 inline std::atomic<std::uint32_t> pitchBits{};
 inline std::atomic<std::uint32_t> yawBits{};
 
@@ -134,10 +135,14 @@ namespace fva
 
 
 
-inline void setTargetAngle(float pitch, float yaw) noexcept
+// alwaysPublish: the target must chain on EVERY tick, not only fire ticks -
+// the anti-aim rides this channel (its angles must reach the server's eye
+// reconstruction each command; FvaChainOnFireOnly must not gate it out).
+inline void setTargetAngle(float pitch, float yaw, bool alwaysPublish = false) noexcept
 {
     fva_target::pitchBits.store(fva_target::bitCasted(pitch), std::memory_order_relaxed);
     fva_target::yawBits.store(fva_target::bitCasted(yaw), std::memory_order_relaxed);
+    fva_target::alwaysPublish.store(alwaysPublish, std::memory_order_relaxed);
     fva_target::armed.store(true, std::memory_order_release);
 }
 
@@ -198,7 +203,10 @@ public:
 
         
         
-        if (GET_CONFIG_VAR(FvaChainOnFireOnly) && !userCmd.isButtonDown(cs2::CCSGOInput::Buttons::kAttack))
+        if (GET_CONFIG_VAR(FvaChainOnFireOnly)
+            && !userCmd.isButtonDown(cs2::CCSGOInput::Buttons::kAttack)
+            && !(fva_target::armed.load(std::memory_order_acquire)
+                 && fva_target::alwaysPublish.load(std::memory_order_relaxed)))
             return;
 
         InputHistory history{cmd};

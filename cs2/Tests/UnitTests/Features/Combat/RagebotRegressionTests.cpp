@@ -6,6 +6,8 @@
 #include <optional>
 #include <string_view>
 #include <cstring>
+#include <type_traits>
+#include <Config/ConfigVariableTypes.h>
 
 #include <Features/Combat/AutoStop.h>
 #include <Features/Combat/Autowall/Penetration.h>
@@ -305,4 +307,152 @@ TEST(RageWeaponReadiness, RespectsCooldownFractionReloadAndMissingSchema) {
     EXPECT_EQ(weapon.isReadyToFire(101),false);
     context.schema.available=false;
     EXPECT_FALSE(weapon.isReadyToFire(101).hasValue());
+}
+
+#include <Features/Combat/Aimbot/RageGroups.h>
+
+// Per-weapon-group mapping (velocity cstypes weapon_type): pistol=1 smg=2 rifle=3
+// shotgun=4 sniper=5 lmg=6; non-gun weapons stand down (-1).
+TEST(RageGroups, MapWeaponTypeToGroupIndex)
+{
+    EXPECT_EQ(rage_groups::groupIndexForWeaponType(0), -1);   // knife
+    EXPECT_EQ(rage_groups::groupIndexForWeaponType(1), 0);    // pistol
+    EXPECT_EQ(rage_groups::groupIndexForWeaponType(2), 1);    // smg
+    EXPECT_EQ(rage_groups::groupIndexForWeaponType(3), 2);    // rifle
+    EXPECT_EQ(rage_groups::groupIndexForWeaponType(4), 3);    // shotgun
+    EXPECT_EQ(rage_groups::groupIndexForWeaponType(5), 4);    // sniper
+    EXPECT_EQ(rage_groups::groupIndexForWeaponType(6), 5);    // lmg
+    EXPECT_EQ(rage_groups::groupIndexForWeaponType(7), -1);   // c4
+    EXPECT_EQ(rage_groups::groupIndexForWeaponType(8), -1);   // taser
+    EXPECT_EQ(rage_groups::groupIndexForWeaponType(9), -1);   // grenade
+}
+
+// Every (group, field) alias must be a DISTINCT type: template aliases collapse
+// (Enabled<G> vs HitHead<G> share GroupBoolVariable<G, true>) and a collapsed
+// pair silently merges two config keys into one storage slot.
+TEST(RageGroups, FieldAliasesAreDistinctTypes)
+{
+    using namespace rage_groups;
+    static_assert(!std::is_same_v<Enabled<Pistol>, HitHead<Pistol>>);
+    static_assert(!std::is_same_v<Enabled<Pistol>, Enabled<Smg>>);
+    static_assert(!std::is_same_v<Hitchance<Sniper>, MinDamage<Sniper>>);
+    static_assert(!std::is_same_v<MinDamageOverrideKey<Rifle>, MinDamageOverrideValue<Rifle>>);
+    static_assert(ConfigVariableTypes::contains<Enabled<Lmg>>());
+    static_assert(ConfigVariableTypes::contains<HitLegs<Shotgun>>());
+    SUCCEED();
+}
+
+#include <Features/Combat/Resolver/Resolver.h>
+
+// Miss-detection bruteforce: staged shot + no damage within the window advances
+// the victim's yaw state in the classic cycle; a landed hit resets it; a fresh
+// pending shot replaces a stale one.
+TEST(RageResolver, MissAdvancesAndHitResetsBruteState)
+{
+    resolver::resetAll();
+    constexpr std::uint32_t kVictim = 0x1234'0001u;
+    resolver::onShotStaged(kVictim, 100);
+    EXPECT_FLOAT_EQ(resolver::bruteOffsetFor(kVictim), 0.0f);
+
+    // Inside the window: no advance.
+    resolver::onTick(101, 3);
+    EXPECT_FLOAT_EQ(resolver::bruteOffsetFor(kVictim), 0.0f);
+
+    // Window expires: first miss -> state 1 (-35).
+    resolver::onTick(104, 3);
+    EXPECT_FLOAT_EQ(resolver::bruteOffsetFor(kVictim), -35.0f);
+
+    // Second miss -> state 2 (+35).
+    resolver::onShotStaged(kVictim, 110);
+    resolver::onTick(114, 3);
+    EXPECT_FLOAT_EQ(resolver::bruteOffsetFor(kVictim), 35.0f);
+
+    // Unknown victim stays at zero.
+    EXPECT_FLOAT_EQ(resolver::bruteOffsetFor(0xDEADu), 0.0f);
+
+    resolver::resetAll();
+    EXPECT_FLOAT_EQ(resolver::bruteOffsetFor(kVictim), 0.0f);
+}
+
+#include <Features/Combat/DoubleTap/DoubleTap.h>
+
+// Doubletap gate semantics (velocity can_attack): past the weapon's next-attack
+// tick AND two ticks past our own DT fire, not reloading, ammo left.
+TEST(RageDoubleTap, GateRequiresCooldownGapReloadAndAmmo)
+{
+    double_tap::lastFireTick = 100;
+    double_tap::WeaponGate gate{102, false, true};
+    EXPECT_FALSE(double_tap::canAttack(gate, 101));  // before next-attack tick
+    EXPECT_TRUE(double_tap::canAttack(gate, 103));   // ready and 3 past last fire
+    gate.inReload = true;
+    EXPECT_FALSE(double_tap::canAttack(gate, 103));
+    gate.inReload = false;
+    gate.clipPositive = false;
+    EXPECT_FALSE(double_tap::canAttack(gate, 103));
+    double_tap::lastFireTick = 102;
+    EXPECT_FALSE(double_tap::canAttack(gate, 103));  // only 1 past own fire
+    double_tap::reset();
+    EXPECT_EQ(double_tap::lastFireTick, 0);
+}
+
+// The retarded-tick stamp: every input-history entry's player tick becomes the
+// weapon's next-attack tick (has-bits 0x800 set, value at +104).
+TEST(RageDoubleTap, StampsAllHistoryEntriesAtNextAttackTick)
+{
+    alignas(8) std::byte entries[2][128]{};
+    // Protobuf repeated-field shape: rep header, elements array at rep+8.
+    struct RepField { std::byte header[8]; std::byte* elements[2]; } rep{};
+    rep.elements[0] = entries[0];
+    rep.elements[1] = entries[1];
+    Command command;
+    command.write(command.cmd, cs2::CUserCmd::kInputHistorySizeOffset, 2);
+    command.write(command.cmd, 56, &rep);
+
+    double_tap::stampEntriesAtNextAttack(reinterpret_cast<cs2::CUserCmd*>(command.cmd), 321);
+
+    for (int i = 0; i < 2; ++i) {
+        std::uint32_t hasBits{};
+        std::memcpy(&hasBits, entries[i] + 16, sizeof(hasBits));
+        EXPECT_EQ(hasBits & 0x800, 0x800u);
+        int tick{};
+        std::memcpy(&tick, entries[i] + 104, sizeof(tick));
+        EXPECT_EQ(tick, 321);
+    }
+}
+
+#include <Features/Combat/Aimbot/RageWeaponDefs.h>
+
+// The per-weapon list is generated from the game's own items_game.txt - spot-check
+// the def-index anchors the generator itself asserts (they are the stable, known
+// CS:GO-era indices; a drift here means a regen is needed, not a code fix).
+TEST(RageWeaponDefs, TableCarriesTheStableDefIndexAnchors)
+{
+    EXPECT_EQ(rage_weapons::kCount, 32);
+    const auto find = [](int defIndex) {
+        for (const auto& def : rage_weapons::kDefs)
+            if (def.defIndex == defIndex) return def.name;
+        return "";
+    };
+    EXPECT_STREQ(find(9), "AWP");
+    EXPECT_STREQ(find(40), "SSG 08");
+    EXPECT_STREQ(find(7), "AK-47");
+    EXPECT_STREQ(find(60), "M4A1-S");
+    EXPECT_STREQ(find(1), "Desert Eagle");
+}
+
+// Every (weapon, field) must be a distinct config variable with a distinct type:
+// a weapon's OverrideEnabled must never collapse with its group's Enabled or with
+// another weapon's field (same field-tag aliases collapse across groups - the
+// Field tag types are what keep them apart).
+TEST(RageWeaponDefs, PerWeaponAliasesAreDistinctAndRegistered)
+{
+    using namespace rage_groups;
+    static_assert(!std::is_same_v<OverrideEnabled<Awp>, Enabled<Sniper>>);
+    static_assert(!std::is_same_v<OverrideEnabled<Awp>, OverrideEnabled<Ssg08>>);
+    static_assert(!std::is_same_v<HitHead<Awp>, HitHead<Pistol>>);
+    static_assert(ConfigVariableTypes::contains<OverrideEnabled<Awp>>());
+    static_assert(ConfigVariableTypes::contains<Doubletap<Negev>>());
+    static_assert(ConfigVariableTypes::contains<MinDamage<Deagle>>());
+    static_assert(ConfigVariableTypes::contains<HitLegs<Scar20>>());
+    SUCCEED();
 }

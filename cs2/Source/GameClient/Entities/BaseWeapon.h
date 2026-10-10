@@ -652,6 +652,23 @@ public:
         return vDataFloat("m_flInaccuracyJumpApex");
     }
 
+    // The weapon's type enum (CCSWeaponBaseVData/m_WeaponType, an int, schema-by-name; the
+    // dumper cross-check value is 0x520 on the 14189/11087116-era builds - runtime resolves
+    // it by name so updates are handled). Knife=0 pistol=1 smg=2 rifle=3 shotgun=4 sniper=5
+    // lmg=6 c4=7 taser=8 grenade=9 equipment=10 healthshot=11.
+    [[nodiscard]] Optional<int> weaponType() const noexcept
+    {
+        const auto vData = baseEntity().vData().valueOr(nullptr);
+        if (!vData)
+            return {};
+        const auto offset = hookContext.schemaSystem().getFieldOffset("CCSWeaponBaseVData", "m_WeaponType");
+        if (!offset.has_value() || *offset <= 0)
+            return {};
+        int value{};
+        std::memcpy(&value, reinterpret_cast<const std::byte*>(vData) + *offset, sizeof(value));
+        return value;
+    }
+
     // Bullet damage inputs from VData, for the min-damage estimate (velocity's penetration::prepare):
     // base damage (m_nDamage, an int), the per-500u range falloff multiplier (m_flRangeModifier), the
     // weapon's armor penetration ratio (m_flArmorRatio) and the headshot multiplier (m_flHeadshotMultiplier).

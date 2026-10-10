@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -21,8 +22,11 @@
 #include <GameClient/Lagcomp.h>
 #include <GameClient/MultiPoint.h>
 #include <Features/Combat/Aimbot/AimbotConfigVariables.h>
+#include <Features/Combat/Aimbot/RageGroups.h>
+#include <Features/Combat/Resolver/Resolver.h>
 #include <GameClient/Entities/BaseEntity.h>
 #include <GameClient/Entities/PlayerPawn.h>
+#include <GameClient/ConVars/CvarSystem.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
 #include <GameClient/SubtickMoves.h>
 #include <GameClient/SpreadPrediction/SpreadSolver.h>
@@ -32,6 +36,9 @@
 #include <Utils/Optional.h>
 #include <Utils/Trig.h>
 #include <Utils/VerifyConsole.h>
+#include <Utils/ColorUtils.h>
+#include <GameClient/WorldToScreen/WorldToClipSpaceConverter.h>
+#include <UI/ImGui/OverlayLayer.h>
 
 template <typename HookContext>
 class Aimbot {
@@ -46,6 +53,11 @@ public:
 
         wallTraceBudget = {};
         damageCache.reset();
+        healthCache.reset();
+        if (multipointDebugActive && !GET_CONFIG_VAR(aimbot_vars::DebugMultipoints)) {
+            overlay_layer::publishMultiPoints(nullptr, 0);
+            multipointDebugActive = false;
+        }
         forceShotThisTick = false;
         shotStagedThisTick = false;
         stagedCorrectionValid = false;
@@ -61,8 +73,30 @@ public:
         const bool backtrackEnabled = GET_CONFIG_VAR(aimbot_vars::Backtrack);
         const bool extrapolateEnabled = GET_CONFIG_VAR(aimbot_vars::Extrapolate);
 
-        const bool forceShotEnabled = GET_CONFIG_VAR(aimbot_vars::ForceShot) || GET_CONFIG_VAR(aimbot_vars::ForceShotAir);
+        if (GET_CONFIG_VAR(resolver_vars::Enabled)) {
+            if (const auto tick = hookContext.localPlayerController().tickBase(); tick.hasValue())
+                resolver::onTick(tick.value(), static_cast<int>(GET_CONFIG_VAR(resolver_vars::MissTicks)));
+        }
+
         const UserCmd userCmd{cmd};
+
+        auto&& localPawn = hookContext.activeLocalPlayerPawn();
+        if (!localPawn || localPawn.isAlive() != true) {
+            lastTargetHandleValue = 0;
+            shotWait.reset();
+            return;
+        }
+
+        // Per-weapon-group config from the active weapon (RageGroups.h). Non-gun
+        // weapons (knife/grenade/C4) resolve invalid and the ragebot stands down.
+        activeGroup = rage_groups::active(hookContext, localPawn.getActiveWeapon());
+        if (!activeGroup.valid || !activeGroup.enabled) {
+            lastTargetHandleValue = 0;
+            shotWait.reset();
+            return;
+        }
+
+        const bool forceShotEnabled = activeGroup.forceShot || activeGroup.forceShotAir;
         const bool userFiring = userCmd.isButtonDown(cs2::CCSGOInput::Buttons::kAttack);
         if (!userFiring && !forceShotEnabled) {
             lastTargetHandleValue = 0;
@@ -71,13 +105,6 @@ public:
         }
 
         if (!userCmd) {
-            lastTargetHandleValue = 0;
-            shotWait.reset();
-            return;
-        }
-
-        auto&& localPawn = hookContext.activeLocalPlayerPawn();
-        if (!localPawn || localPawn.isAlive() != true) {
             lastTargetHandleValue = 0;
             shotWait.reset();
             return;
@@ -110,7 +137,7 @@ public:
         const auto aim = aimTarget.acquire(eye.value(), currentPitch.value(), currentYaw.value(), maxFov,
             hitboxFlags(), [&](const auto& candidate) {
                 if (passesVisibility(localPawn, eye.value(), candidate)) return true;
-                if (!GET_CONFIG_VAR(aimbot_vars::Multipoint) || !candidate.shape.valid) return false;
+                if (!activeGroup.multipoint || !candidate.shape.valid) return false;
                 const auto point = refineMultipoint(localPawn, eye.value(), candidate);
                 if (!passesVisibility(localPawn, eye.value(), point)) return false;
                 refinedCandidate = point;
@@ -129,7 +156,7 @@ public:
         if (refinedCandidate.hasValue() && refinedCandidate.value().entity == chosen.entity
             && refinedCandidate.value().hitgroup == chosen.hitgroup)
             chosen = refinedCandidate.value();
-        else if (GET_CONFIG_VAR(aimbot_vars::Multipoint))
+        else if (activeGroup.multipoint)
             chosen = refineMultipoint(localPawn, eye.value(), chosen);
 
         if (!passesVisibility(localPawn, eye.value(), chosen)) {
@@ -231,6 +258,10 @@ public:
         stagedAimPoint = chosen.aimPoint;
         stagedShape = chosen.shape;
         shotStagedThisTick = true;
+        if (GET_CONFIG_VAR(resolver_vars::Enabled)) {
+            const auto tick = hookContext.localPlayerController().tickBase();
+            resolver::onShotStaged(lastTargetHandleValue, tick.valueOr(-1));
+        }
         stagedCommand = cmd;
         std::memcpy(&stagedSequence, reinterpret_cast<const std::byte*>(cmd) + cs2::CUserCmd::kCommandNumberOffset, sizeof(stagedSequence));
         lastTargetHandleValue = hookContext.template make<BaseEntity>(chosen.entity).handle().value;
@@ -342,6 +373,24 @@ public:
         shotWait.reset();
         stickyMultipointEntity = nullptr;
         stickyMultipointSlot = 0;
+        activeGroup = {};
+        multipointDebugActive = false;
+    }
+
+public:
+    // Staged-shot query for the split-phase duck peek (its press/release decision
+    // rides on whether this tick carries a shot).
+    [[nodiscard]] bool shotStaged() const noexcept
+    {
+        return shotStagedThisTick;
+    }
+
+    // Duck peek (standing-inaccuracy exploit) armed: evaluate the cone the shot
+    // actually sees - the duck is released for the fire tick (velocity's
+    // get_standing_inaccuracy), not the live ducked cone.
+    [[nodiscard]] bool duckPeekEval(auto&& localPawn) const noexcept
+    {
+        return GET_CONFIG_VAR(aimbot_vars::DuckPeek) && localPawn.isOnGround() == true;
     }
 
 private:
@@ -352,12 +401,12 @@ private:
         const auto tick = hookContext.localPlayerController().tickBase();
         const auto ammo = localPawn.getActiveWeapon().clipAmmo();
         const bool enabled = onGround.hasValue() && (onGround.value()
-            ? GET_CONFIG_VAR(aimbot_vars::ForceShot) : GET_CONFIG_VAR(aimbot_vars::ForceShotAir));
-        const int minDamage = GET_CONFIG_VAR(aimbot_vars::MinDamage);
+            ? activeGroup.forceShot : activeGroup.forceShotAir);
+        const int minDamage = activeGroup.minDamage;
         const bool eligible = enabled && ammo.hasValue() && ammo.value() > 0
 
             && (minDamage <= 0 || estimatedDamage(localPawn, eye, target) >= static_cast<float>(minDamage));
-        const int chance = GET_CONFIG_VAR(aimbot_vars::Hitchance);
+        const int chance = activeGroup.hitchance;
         const bool chancePassed = chance <= 0 || passesHitchance(localPawn, eye, target, chance);
         const bool maxAccuracy = localPawn.isAtMaxAccuracy() && chancePassed;
         const bool wait = GET_CONFIG_VAR(aimbot_vars::ForceShotWait);
@@ -399,7 +448,9 @@ private:
         if (spreadSamplesReady) return spreadSamplesValid;
         spreadSamplesReady = true;
         auto solver = hookContext.template make<SpreadSolver>();
-        const auto params = solver.weaponParams(localPawn.getActiveWeapon());
+        const auto params = duckPeekEval(localPawn)
+            ? solver.weaponParamsAtVelocity(localPawn.getActiveWeapon(), localPawn.baseEntity(), cs2::Vector{0.0f, 0.0f, 0.0f})
+            : solver.weaponParams(localPawn.getActiveWeapon());
         if (!params.hasValue()) return false;
         for (int i = 0; i < kHitchanceSamples; ++i) {
             const auto offset = solver.estimatedSpreadOffset(static_cast<std::uint32_t>(i), params.value());
@@ -441,6 +492,51 @@ private:
         return target;
     }
 
+    // Debug multipoints (velocity debug_multipoints): publish the generated scan
+    // cloud for the render overlay, colored per hitbox (velocity's map).
+    void publishMultipointDebug(const MultiPoint::Point* points, int pointCount, int hitboxIndex) const noexcept
+    {
+        if (!GET_CONFIG_VAR(aimbot_vars::DebugMultipoints)) {
+            if (multipointDebugActive) {
+                overlay_layer::publishMultiPoints(nullptr, 0);
+                multipointDebugActive = false;
+            }
+            return;
+        }
+        multipointDebugActive = true;
+        auto&& converter = hookContext.template make<WorldToClipSpaceConverter>();
+        overlay_layer::MultiPoint published[overlay_layer::kMaxMultiPoints];
+        int count = 0;
+        for (int i = 0; i < pointCount && count < overlay_layer::kMaxMultiPoints; ++i) {
+            const auto& position = points[i].position;
+            if (!hitbox_geometry::finite(position))
+                continue;
+            const auto clip = converter.toClipSpace(position);
+            if (!(clip.w > 0.001f))
+                continue;
+            const auto inverseW = 1.0f / clip.w;
+            published[count++] = overlay_layer::MultiPoint{
+                (clip.x * inverseW + 1.0f) * 50.0f,
+                (1.0f - clip.y * inverseW) * 50.0f,
+                multipointDebugColor(hitboxIndex),
+                points[i].isCenter,
+            };
+        }
+        overlay_layer::publishMultiPoints(published, count);
+    }
+
+    [[nodiscard]] static std::uint32_t multipointDebugColor(int hitboxIndex) noexcept
+    {
+        switch (hitboxIndex) {
+        case 0: return static_cast<std::uint32_t>(color::Rgba{255, 80, 80});
+        case 2: case 3: return static_cast<std::uint32_t>(color::Rgba{220, 220, 60});
+        case 4: case 5: case 6: return static_cast<std::uint32_t>(color::Rgba{255, 160, 60});
+        case 7: case 8: case 9: case 10: case 11: case 12: return static_cast<std::uint32_t>(color::Rgba{80, 160, 255});
+        case 13: case 14: case 15: case 16: case 17: case 18: return static_cast<std::uint32_t>(color::Rgba{180, 80, 255});
+        default: return static_cast<std::uint32_t>(color::Rgba{200, 200, 200});
+        }
+    }
+
     [[nodiscard]] Optional<typename AimTarget<HookContext>::Target> refineMultipointCapsule(auto&& localPawn, const cs2::Vector& eye, const typename AimTarget<HookContext>::Target& target) const noexcept
     {
         auto&& node = hookContext.template make<BaseEntity>(target.entity).gameSceneNode();
@@ -480,11 +576,16 @@ private:
 
         MultiPoint::Point points[MultiPoint::kMaxPoints];
         const int pointCount = MultiPoint::generate(*aimed, bone.value().position, bone.value().rotation,
-                                                    static_cast<float>(GET_CONFIG_VAR(aimbot_vars::PointScale)), eye,
+                                                    static_cast<float>(activeGroup.pointScale), eye,
                                                     hookContext.localPlayerBulletInaccuracy().valueOr(0.0f),
-                                                    GET_CONFIG_VAR(aimbot_vars::DynamicPointscale), points, bone.value().scale);
+                                                    activeGroup.dynamicPointscale, points, bone.value().scale);
+        publishMultipointDebug(points, pointCount, aimed->index);
         if (pointCount <= 0)
             return {};
+
+        const float bruteYaw = GET_CONFIG_VAR(resolver_vars::Enabled)
+            ? resolver::bruteOffsetFor(hookContext.template make<BaseEntity>(target.entity).handle().value) : 0.0f;
+        const cs2::Vector bruteCenter = target.aimPoint;
 
         const bool incumbent = stickyMultipointEntity == target.entity && stickyMultipointHitgroup == target.hitgroup;
 
@@ -496,7 +597,7 @@ private:
             bestFraction += kMultipointStickyBonus;
 
         for (int i = 0; i < pointCount; ++i) {
-            const auto& point = points[i].position;
+            const auto point = rotateAround(points[i].position, bruteCenter, bruteYaw);
             const auto angles = shot_geometry::anglesTo(eye, point);
             const typename AimTarget<HookContext>::Target candidate{{angles.pitch, angles.yaw}, point, target.entity, target.hitgroup, target.shape};
             if (!passesVisibility(localPawn, eye, candidate))
@@ -545,6 +646,20 @@ private:
         }
     }
 
+    // Resolver bruteforce rotation: yaw a victim's scan points around the
+    // record origin by their current bruteforce state.
+    [[nodiscard]] static cs2::Vector rotateAround(const cs2::Vector& point, const cs2::Vector& center, float yawDeg) noexcept
+    {
+        if (yawDeg == 0.0f)
+            return point;
+        const float radians = yawDeg * trig::kDegreesToRadians;
+        const float c = trig::cosine(radians);
+        const float s = trig::sine(radians);
+        const float dx = point.x - center.x;
+        const float dy = point.y - center.y;
+        return cs2::Vector{center.x + dx * c - dy * s, center.y + dx * s + dy * c, point.z};
+    }
+
     [[nodiscard]] Optional<ScoredAim> bestPointOnSkeleton(auto&& localPawn, const cs2::Vector& eye, float pitch, float yaw,
                                                           cs2::C_BaseEntity* entity,
                                                           const typename AimTarget<HookContext>::HitboxFlags& flags,
@@ -556,7 +671,8 @@ private:
         if (hitboxSet.count == 0 || evaluationsLeft <= 0)
             return best;
 
-        const int minDamage = GET_CONFIG_VAR(aimbot_vars::MinDamage);
+        const int minDamage = activeGroup.minDamage;
+        const std::uint32_t victimHandleValue = hookContext.template make<BaseEntity>(entity).handle().value;
 
         for (int h = 0; h < hitboxSet.count && evaluationsLeft > 0; ++h) {
             const auto& entry = hitboxSet.entries[h];
@@ -571,12 +687,15 @@ private:
 
             MultiPoint::Point points[MultiPoint::kMaxPoints];
             const int generatedCount = MultiPoint::generate(entry, bone.position, bone.rotation,
-                                                        static_cast<float>(GET_CONFIG_VAR(aimbot_vars::PointScale)), eye, 0.0f, false, points, bone.scale);
-            const int pointCount = multipoint && GET_CONFIG_VAR(aimbot_vars::Multipoint) ? generatedCount : std::min(1, generatedCount);
+                                                        static_cast<float>(activeGroup.pointScale), eye, 0.0f, false, points, bone.scale);
+            const int pointCount = multipoint && activeGroup.multipoint ? generatedCount : std::min(1, generatedCount);
+            const float bruteYaw = GET_CONFIG_VAR(resolver_vars::Enabled)
+                ? resolver::bruteOffsetFor(victimHandleValue) : 0.0f;
+            const cs2::Vector bruteCenter = record.boneCount > 0 ? record.bones[0].position : cs2::Vector{};
 
             for (int p = 0; p < pointCount && evaluationsLeft > 0; ++p) {
                 --evaluationsLeft;
-                const auto& point = points[p].position;
+                const auto point = rotateAround(points[p].position, bruteCenter, bruteYaw);
 
                 const auto angles = shot_geometry::anglesTo(eye, point);
                 const float dPitch = angles.pitch - pitch;
@@ -588,7 +707,8 @@ private:
                 if (!passesVisibility(localPawn, eye, candidate))
                     continue;
                 const float damage = estimatedDamage(localPawn, eye, candidate);
-                if (damage < 0.0f || (minDamage > 0 && damage < static_cast<float>(minDamage)))
+                // Lethal damage waives the group's min-damage gate (velocity).
+                if (damage < 0.0f || (minDamage > 0 && damage < static_cast<float>(minDamage) && damage < targetHealth))
                     continue;
 
                 float score = damage;
@@ -628,7 +748,7 @@ private:
 
         Optional<ScoredAim> best;
         int evaluationsLeft = kMaxScanPoints;
-        const int passes = GET_CONFIG_VAR(aimbot_vars::Multipoint) ? 2 : 1;
+        const int passes = activeGroup.multipoint ? 2 : 1;
         for (int pass = 0; pass < passes && evaluationsLeft > 0; ++pass) {
             for (int r = 0; r < recordCount && evaluationsLeft > 0; ++r) {
                 const auto& record = *records[r];
@@ -708,20 +828,61 @@ private:
                                        const typename AimTarget<HookContext>::Target& target) const noexcept
     {
         const float damage = estimatedDamage(localPawn,eye,target);
-        const int minimum = GET_CONFIG_VAR(aimbot_vars::MinDamage);
-        return damage >= static_cast<float>(minimum>0 ? minimum : 1);
+        const int minimum = activeGroup.minDamage;
+        const float needed = static_cast<float>(minimum>0 ? minimum : 1);
+        if (damage >= needed)
+            return true;
+        // Lethal damage waives the gate (velocity: damage >= target health).
+        const auto health = targetHealth(target.entity);
+        return health.hasValue() && damage >= health.value();
+    }
+
+    // Per-tick entity->health memo (lethal waiver reads it per visibility probe).
+    inline static struct HealthCache {
+        static constexpr std::size_t kCapacity = 32;
+        struct Entry { const void* entity; float health; };
+        std::array<Entry, kCapacity> entries{};
+        std::size_t size = 0;
+        void reset() noexcept { size = 0; }
+        [[nodiscard]] bool find(const void* entity, float& out) const noexcept
+        {
+            for (std::size_t i = 0; i < size; ++i)
+                if (entries[i].entity == entity) { out = entries[i].health; return true; }
+            return false;
+        }
+        void store(const void* entity, float health) noexcept
+        {
+            if (size < kCapacity)
+                entries[size++] = {entity, health};
+        }
+    } healthCache{};
+
+    [[nodiscard]] Optional<float> targetHealth(cs2::C_BaseEntity* entity) const noexcept
+    {
+        if (!entity)
+            return {};
+        float cached;
+        if (healthCache.find(entity, cached))
+            return cached;
+        float health = 100.0f;
+        auto&& targetPawn = hookContext.template make<BaseEntity>(entity).template as<PlayerPawn>();
+        if (targetPawn)
+            if (const auto hp = targetPawn.health(); hp.hasValue())
+                health = static_cast<float>(hp.value());
+        healthCache.store(entity, health);
+        return health;
     }
 
     [[nodiscard]] typename AimTarget<HookContext>::HitboxFlags hitboxFlags() const noexcept
     {
-        if (GET_CONFIG_VAR(aimbot_vars::BodyAim))
+        if (activeGroup.bodyAim)
             return {.head = false, .chest = true, .stomach = true, .arms = false, .legs = false};
         return {
-            .head = GET_CONFIG_VAR(aimbot_vars::HitHead),
-            .chest = GET_CONFIG_VAR(aimbot_vars::HitChest),
-            .stomach = GET_CONFIG_VAR(aimbot_vars::HitStomach),
-            .arms = GET_CONFIG_VAR(aimbot_vars::HitArms),
-            .legs = GET_CONFIG_VAR(aimbot_vars::HitLegs),
+            .head = activeGroup.hitHead,
+            .chest = activeGroup.hitChest,
+            .stomach = activeGroup.hitStomach,
+            .arms = activeGroup.hitArms,
+            .legs = activeGroup.hitLegs,
         };
     }
 
@@ -729,13 +890,24 @@ private:
     {
         if (pawn.isOnGround() != true)
             return;
-        const auto velocityOffset = hookContext.schemaSystem().getFieldOffset("C_BaseEntity", "m_vecVelocity");
+        auto&& schema = hookContext.schemaSystem();
+        const auto velocityOffset = schema.getFieldOffset("C_BaseEntity", "m_vecVelocity");
         if (!velocityOffset.has_value() || *velocityOffset <= 0)
             return;
-        const auto* bytes = reinterpret_cast<const std::byte*>(static_cast<cs2::C_BaseEntity*>(pawn.baseEntity()));
+        const auto* const bytes = reinterpret_cast<const std::byte*>(static_cast<cs2::C_BaseEntity*>(pawn.baseEntity()));
         cs2::Vector velocity{};
         std::memcpy(&velocity, bytes + *velocityOffset, sizeof(velocity));
-        auto_stop::apply(userCmd, velocity, viewYaw);
+
+        auto_stop::StopInputs inputs;
+        auto&& cvars = hookContext.template make<CvarSystem>();
+        inputs.svFriction = cvars.readFloatConVar("sv_friction");
+        inputs.svStopspeed = cvars.readFloatConVar("sv_stopspeed");
+        const auto surfaceOffset = schema.getFieldOffset("C_BaseEntity", "m_flSurfaceFriction");
+        if (surfaceOffset.has_value() && *surfaceOffset > 0)
+            std::memcpy(&inputs.surfaceFriction.emplace(), bytes + *surfaceOffset, sizeof(float));
+        if (const auto weaponMax = pawn.getActiveWeapon().maxSpeed(); weaponMax.hasValue())
+            inputs.weaponMaxSpeed = weaponMax.value();
+        auto_stop::apply(userCmd, velocity, viewYaw, inputs);
         SubtickMoves<HookContext>::stripAnalog(userCmd.baseMessage());
         SubtickMoves<HookContext>::releaseButton(userCmd.baseMessage(), auto_stop::forward);
         SubtickMoves<HookContext>::releaseButton(userCmd.baseMessage(), auto_stop::back);
@@ -755,6 +927,7 @@ private:
 
     inline static cs2::CUserCmd* stagedCommand{};
     inline static int stagedSequence{};
+    inline static rage_groups::Active activeGroup{};
     inline static hitbox_geometry::Shape stagedShape{};
     inline static bool spreadSamplesReady{false}, spreadSamplesValid{false};
     inline static cs2::Vector spreadSamples[kHitchanceSamples]{};
@@ -777,6 +950,7 @@ private:
     inline static shot_wait::State shotWait;
     inline static penetration::TraceBudget wallTraceBudget;
     inline static penetration::DamageCache damageCache;
+    inline static bool multipointDebugActive{false};
 
     inline static cs2::Vector stagedEye{};
     inline static cs2::Vector stagedAimPoint{};
