@@ -40,6 +40,8 @@
 
 #include <Hooks/Graphics/VulkanHook.h>
 #include <Platform/Linux/LinuxPlatformApi.h>
+#include <Utils/VpkIconLoader.h>
+#include <Utils/VpkIcons.h>
 
 #include <UI/ImGui/GUI.h>
 #include <UI/ImGui/GuiLog.h>
@@ -924,11 +926,15 @@ ImFont* iconFont() noexcept
 
 
 struct CardContext {
-    ImVec2 origin; 
+    ImVec2 origin;
     float width = 0.0f;
-    float row = 0.0f; 
-    float labelReserve = 0.0f; 
-    float lastLabelWidth = 0.0f; 
+    float row = 0.0f;
+    float labelReserve = 0.0f;
+    float lastLabelWidth = 0.0f;
+    // Optional equipment icon drawn after the row label (inventory tab): a rasterized
+    // game VPK icon (Utils/VpkIconLoader.h) keyed by defIndex, nullptr = none.
+    void* labelIcon = nullptr;
+    float labelIconAspect = 1.0f;
 };
 
 CardContext card;
@@ -977,6 +983,19 @@ void beginRow(ImDrawList* d, const char* label) noexcept
     const float reserve = card.labelReserve > 0.0f ? card.labelReserve : s(158.0f);
     card.labelReserve = 0.0f;
     card.lastLabelWidth = drawLabelFit(d, card.origin.x + s(13), y, kRowHeight, kTextBodyCol, label, kTextBody, nullptr, card.width - s(13) - reserve);
+    if (card.labelIcon) {
+        // Equipment icon after the label (inventory tab): rasterized from the game's own
+        // VPK (Utils/VpkIconLoader.h). Height matches the row text; width keeps aspect.
+        const float iconH = s(13.0f);
+        const float iconW = iconH * card.labelIconAspect;
+        const float iconX = card.origin.x + s(13) + card.lastLabelWidth + s(7);
+        if (iconX + iconW < card.origin.x + card.width - reserve) {
+            const float iconY = y + (kRowHeight - iconH) * 0.5f;
+            d->AddImage(reinterpret_cast<ImTextureID>(card.labelIcon), ImVec2(iconX, iconY), ImVec2(iconX + iconW, iconY + iconH));
+        }
+    }
+    card.labelIcon = nullptr;
+    card.labelIconAspect = 1.0f;
     card.row += 1.0f;
 }
 
@@ -4588,10 +4607,26 @@ void inventoryPills(ImDrawList* d) noexcept
 
 
 
+// Stage the equipment icon for the next beginRow() label (inventory tab): looks the icon
+// up by defIndex, requests the rasterization if needed, and arms the card context so
+// beginRow draws it right of the label text.
+void stageRowIcon(std::uint16_t defIndex) noexcept
+{
+    const char* iconName = vpk_icons::iconNameForDefIndex(defIndex);
+    if (!iconName)
+        return;
+    if (void* descriptor = vpk_icons::icon(iconName))
+        if (const auto aspect = vpk_icons::iconAspect(iconName); aspect > 0.1f && aspect < 10.0f) {
+            card.labelIcon = descriptor;
+            card.labelIconAspect = aspect;
+        }
+}
+
 template <typename SkinVar, typename WearVar, typename SeedVar>
 void weaponSkinRows(std::uint16_t defIndex) noexcept
 {
     const auto* list = cs2::paintKitListFor(defIndex);
+    stageRowIcon(defIndex);
     paintKitRow<SkinVar>(list ? list->weaponName : "?", defIndex, ++controlId);
     wearRow<WearVar>("Wear", ++controlId);
     seedRow<SeedVar>("Seed", ++controlId);
@@ -4613,7 +4648,9 @@ void pageInventoryCategory(int category) noexcept
             ? static_cast<std::uint16_t>(*SkinChangerData::resolveKnifeModel(knifeModel))
             : std::uint16_t{0};
         addCard("KNIVES", 6, [] {
+            stageRowIcon(knifeFinishDefIndex);
             selectVar<KnifeModel>("Knife Model", kKnifeModels, 21, ++controlId);
+            stageRowIcon(knifeFinishDefIndex);
             paintKitRow<KnifeSkin>("Knife Finish", knifeFinishDefIndex, ++controlId);
             wearRow<KnifeSkinWear>("Wear", ++controlId);
             seedRow<KnifeSkinSeed>("Seed", ++controlId);

@@ -124,7 +124,11 @@ constexpr int kMargin = 24;
 namespace lua_texture
 {
 
-inline constexpr int kMaxTextures = 8;
+// 0..79: Lua API textures. 80..127: reserved for the equipment-icon slots
+// (Utils/VpkIcons.h) - same storage, so all upload/retire machinery is shared.
+inline constexpr int kMaxTextures = 128;
+inline constexpr int kIconSlotBase = 80;
+inline constexpr int kMaxIconSlots = 48;
 
 
 

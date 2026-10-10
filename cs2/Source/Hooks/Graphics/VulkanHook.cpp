@@ -190,7 +190,7 @@ std::atomic<bool> logoRequestPending{false};
 
 
 
-constexpr int kMaxLuaTextures = 8; 
+constexpr int kMaxLuaTextures = 128; // 0..79 Lua API, 80..127 reserved for equipment icons (Utils/VpkIcons.h)
 AvatarUploadState luaTextures[kMaxLuaTextures];
 std::atomic<bool> luaTexturePending[kMaxLuaTextures]{};
 struct RetiredTexture {
