@@ -80,7 +80,7 @@ public:
                         const float scaled = std::min(moveLength, targetRatio);
                         pendingForward = (forward.value() / moveLength) * scaled;
                         pendingLeft = (left.value() / moveLength) * scaled;
-                        pendingForceMove = true;
+                        pendingSlowWalk = true;
                     }
                 }
             }
@@ -286,7 +286,7 @@ public:
             }
         }
 
-        hasPendingInput = pendingForceMove || pendingEdgeJump || pendingJumpBug
+        hasPendingInput = pendingSlowWalk || pendingForceMove || pendingEdgeJump || pendingJumpBug
             || pendingClearMoveButtons || pendingViewAngles;
     }
 
@@ -307,8 +307,14 @@ public:
 
         const UserCmd userCmd{cmd};
 
-        
-        
+        // Slow Walk rides the command scalars only. forceMove stomps CSGOInput's
+        // persistent movement state and the game's real queued W/A/S/D samples,
+        // stranding keys as held after a jump (issue #4).
+        if (pendingSlowWalk) {
+            userCmd.setForwardMove(pendingForward);
+            userCmd.setLeftMove(pendingLeft);
+        }
+
         if (pendingEdgeJump)
             userCmd.setButtonState(cs2::CCSGOInput::Buttons::kJump, true);
 
@@ -373,6 +379,7 @@ private:
     void reset() const noexcept
     {
         hasPendingInput = false;
+        pendingSlowWalk = false;
         pendingForceMove = false;
         pendingForward = 0.0f;
         pendingLeft = 0.0f;
@@ -600,6 +607,7 @@ private:
     static constexpr std::uint64_t kDuckButton = 0x4;
 
     inline static bool hasPendingInput{false};
+    inline static bool pendingSlowWalk{false};
     inline static bool pendingForceMove{false};
     inline static float pendingForward{0.0f};
     inline static float pendingLeft{0.0f};
