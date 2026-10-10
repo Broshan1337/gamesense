@@ -2561,15 +2561,53 @@ inline int l_steamRequestFriendPresence(lua_State* L)
 
 
 
+inline double steamNowSeconds() noexcept
+{
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) / 1.0e9;
+}
+
+inline int invitesDetailed = 0;
+inline double lastNoLobbyLog = -100.0;
+inline double lastFailLog = -100.0;
+
 inline int l_steamInvite(lua_State* L)
 {
     std::uint64_t sid = 0;
     if (!resolveSteamApi() || !checkSteamIdArg(L, 1, &sid))
         return 0;
     const std::uint64_t lobby = currentLobbyId();
-    if (lobby == 0)
-        return 0; 
-    lua_pushboolean(L, steamApi.inviteToLobby(steamApi.matchmaking, lobby, sid) ? 1 : 0);
+    if (lobby == 0) {
+        // One-shot (throttled to 1/10s): the most likely "shows people but nobody gets
+        // invited" cause - the lobby resolve failed while the friend enumeration works.
+        if (steamNowSeconds() - lastNoLobbyLog > 10.0) {
+            lastNoLobbyLog = steamNowSeconds();
+            luaSteamLog("[invite] FAILED: no lobby resolved (open your party first)");
+        }
+        return 0;
+    }
+    const bool ok = steamApi.inviteToLobby(steamApi.matchmaking, lobby, sid) ? true : false;
+    // One-shot diagnostics: the first 3 invites per session log the full chain state,
+    // every failed invite logs throttled to 1/10s. If the invitee never sees a popup
+    // while these lines say ret=1 with a sane lobby/owner, the invite leaves Steam and
+    // the invitee-side delivery is the question (in-game? notifications?).
+    const bool detail = invitesDetailed < 3;
+    if (detail || (!ok && steamNowSeconds() - lastFailLog > 10.0)) {
+        if (detail)
+            ++invitesDetailed;
+        if (!ok)
+            lastFailLog = steamNowSeconds();
+        const auto owner = steamApi.getLobbyOwner(steamApi.matchmaking, lobby);
+        const auto members = steamApi.getLobbyMemberCount(steamApi.matchmaking, lobby);
+        const char* name = steamApi.getFriendName(steamApi.friends, sid);
+        const std::uint64_t ownId = steamApi.getSteamId(steamApi.user);
+        luaSteamLog("[invite] lobby=%llu owner=%llu me=%llu ownerIsMe=%d members=%d ret=%d target=%llu name=%s",
+            static_cast<unsigned long long>(lobby), static_cast<unsigned long long>(owner),
+            static_cast<unsigned long long>(ownId), owner == ownId ? 1 : 0, members, ok ? 1 : 0,
+            static_cast<unsigned long long>(sid), name ? name : "?");
+    }
+    lua_pushboolean(L, ok ? 1 : 0);
     return 1;
 }
 
