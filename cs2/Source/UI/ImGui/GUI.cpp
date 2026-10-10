@@ -1,6 +1,7 @@
 #include "GUI.h"
 #include <CS2/Constants/DllNames.h>
 #include "MenuInput.h"
+#include <imgui_internal.h>
 
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -298,6 +299,13 @@ bool GUI::init() noexcept
     gui_log::write("init: MemAlloc bridge installed (alloc slot %#zx, free slot %#zx)", ImGuiMemAllocBridge::allocSlotOffset, ImGuiMemAllocBridge::freeSlotOffset);
 
     ImGui::CreateContext();
+
+    // Force every rounded-rect corner onto the tessellated arc path: below
+    // ArcFastRadiusCutoff (default ~12px) corners render from the coarse 12-entry
+    // fast-arc table - visibly polygonal on the small pills/toggles/chips, which
+    // is exactly the "cheap corners" look. Zero cutoff => PathArcTo everywhere,
+    // segment count derived per radius from CircleSegmentMaxError.
+    ImGui::GetDrawListSharedData()->ArcFastRadiusCutoff = 0.0f;
 
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;

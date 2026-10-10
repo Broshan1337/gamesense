@@ -103,6 +103,9 @@ struct ClientPatterns {
             
             
             .template addPattern<PlayerRankingDataPointer, CodePattern{"48 8D 1D ? ? ? ? F6 43 10 04 0F 84"}.add(3).abs()>()
+            .template addPattern<RankCacheBasePointer, CodePattern{"48 63 05 ? ? ? ? 83 F8 FF 74 ? 8B 3D ? ? ? ? B9 00 00 00 00 4C 8B 05 ? ? ? ? 81 E7 FF FF FF 7F 49 0F 45 C8 48 69 C0 88 00 00 00"}.add(26).abs()>()
+            .template addPattern<RankCacheRootPointer, CodePattern{"48 63 05 ? ? ? ? 83 F8 FF 74 ? 8B 3D ? ? ? ? B9 00 00 00 00 4C 8B 05 ? ? ? ? 81 E7 FF FF FF 7F 49 0F 45 C8 48 69 C0 88 00 00 00"}.add(3).abs()>()
+            .template addPattern<RankCacheFlagPointer, CodePattern{"48 63 05 ? ? ? ? 83 F8 FF 74 ? 8B 3D ? ? ? ? B9 00 00 00 00 4C 8B 05 ? ? ? ? 81 E7 FF FF FF 7F 49 0F 45 C8 48 69 C0 88 00 00 00"}.add(14).abs()>()
             .template addPattern<TeamSelectEventGuardSite, CodePattern{"48 8B 40 08 80 78 58 00 75 ? 48 8B 7B 08 45 0F B6 FC 44 89 FE 48 8B 07 FF 90 A8 0A 00 00 48 8B 7B 08 44 89 FE 48 8B 07 FF 90 10 01 00 00"}.add(10)>()
             
             

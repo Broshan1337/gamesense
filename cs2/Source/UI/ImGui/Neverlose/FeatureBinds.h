@@ -15,6 +15,7 @@
 #include <GameClient/Bind.h>
 #include <Config/ConfigOverrideState.h>
 #include <UI/ImGui/UiConfig.h>
+#include <Utils/InRange.h>
 
 namespace feature_binds
 {
@@ -108,36 +109,54 @@ template <typename ConfigVar>
 bool numericSetter(double value) noexcept
 {
     using Range = typename ConfigVar::ValueType;
-    using Number = typename Range::ValueType;
-    if (!std::isfinite(value))
-        return false;
-    value = std::clamp(value, static_cast<double>(Range::kMin), static_cast<double>(Range::kMax));
-    if constexpr (std::is_integral_v<Number>)
-        value = std::round(value);
-    return ui_config::set<ConfigVar>(Range{static_cast<Number>(value)});
+    if constexpr (IsRangeConstrained<Range>::value) {
+        using Number = typename Range::ValueType;
+        if (!std::isfinite(value))
+            return false;
+        value = std::clamp(value, static_cast<double>(Range::kMin), static_cast<double>(Range::kMax));
+        if constexpr (std::is_integral_v<Number>)
+            value = std::round(value);
+        return ui_config::set<ConfigVar>(Range{static_cast<Number>(value)});
+    } else {
+        // Plain-type var (no InRange bounds): coerce straight to the value type.
+        using Number = Range;
+        if (!std::isfinite(value))
+            return false;
+        if constexpr (std::is_integral_v<Number>)
+            value = std::round(value);
+        return ui_config::set<ConfigVar>(static_cast<Number>(value));
+    }
 }
 
-template <typename ConfigVar>
-void registerNumber(const char* label) noexcept
+template < typename ConfigVar >
+void registerNumber( const char* label ) noexcept
 {
-    if (auto* existing = entryFor<ConfigVar>()) {
+    if ( auto* existing = entryFor< ConfigVar >( ) ) {
         existing->label = label;
         return;
     }
-    if (entryCount >= kMaxEntries)
+    if ( entryCount >= kMaxEntries )
         return;
     using Range = typename ConfigVar::ValueType;
-    auto& entry = entries[entryCount++];
-    entry.id = idFor<ConfigVar>();
+    auto& entry = entries[ entryCount++ ];
+    entry.id = idFor< ConfigVar >( );
     entry.label = label;
-    entry.get = &typeGetter<ConfigVar>;
-    entry.set = &numericSetter<ConfigVar>;
+    entry.get = &typeGetter< ConfigVar >;
+    entry.set = &numericSetter< ConfigVar >;
     entry.numeric = true;
-    entry.integral = std::is_integral_v<typename Range::ValueType>;
-    entry.minimum = static_cast<double>(Range::kMin);
-    entry.maximum = static_cast<double>(Range::kMax);
-    entry.boundValue = entry.get();
-    registerSavedBase<ConfigVar>(entry);
+    // Range-constrained vars carry their own bounds; plain-type vars (e.g. the
+    // skin changer's uint16 StatTrak/Wear/Seed) get the slider's own bounds.
+    if constexpr ( IsRangeConstrained< Range >::value ) {
+        entry.integral = std::is_integral_v< typename Range::ValueType >;
+        entry.minimum = static_cast< double >( Range::kMin );
+        entry.maximum = static_cast< double >( Range::kMax );
+    } else {
+        entry.integral = std::is_integral_v< Range >;
+        entry.minimum = 0.0;
+        entry.maximum = 0.0;
+    }
+    entry.boundValue = entry.get( );
+    registerSavedBase< ConfigVar >( entry );
 }
 
 [[nodiscard]] inline Entry* entryById(std::uint64_t id) noexcept

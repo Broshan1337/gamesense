@@ -1,7 +1,7 @@
 import struct, sys, os
 
-VPK = "/mnt/disk2/SteamLibrary/steamapps/common/Counter-Strike Global Offensive/game/csgo/pak01_dir.vpk"
-GAME = "/mnt/disk2/SteamLibrary/steamapps/common/Counter-Strike Global Offensive/game/csgo"
+VPK = "/mnt/HDD2/SteamLibrary/steamapps/common/Counter-Strike Global Offensive/game/csgo/pak01_dir.vpk"
+GAME = "/mnt/HDD2/SteamLibrary/steamapps/common/Counter-Strike Global Offensive/game/csgo"
 
 def tree(f):
     f.seek(0)

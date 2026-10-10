@@ -55,6 +55,15 @@ STRONG_TYPE_ALIAS(CSGOInputPointer, cs2::CCSGOInput*);
 
 STRONG_TYPE_ALIAS(PlayerRankingDataPointer, void*);
 
+// The GC rank cache tree the scoreboard/profile rank display actually reads (found via
+// the rank getter's prologue - see RankCache patterns in ClientPatternsLinux.h): nodes of
+// kNodeStride bytes keyed by ranktype (7=wingman, 10=DZ, 11=premier, 12=competitive),
+// rating@+0x54 / wins@+0x58 per node. Resolved values are the addresses of the .bss
+// SLOTS (base pointer / root index / validity flag word), not the values themselves.
+STRONG_TYPE_ALIAS(RankCacheBasePointer, void*);
+STRONG_TYPE_ALIAS(RankCacheRootPointer, void*);
+STRONG_TYPE_ALIAS(RankCacheFlagPointer, void*);
+
 STRONG_TYPE_ALIAS(TeamSelectEventGuardSite, void*);
 
 STRONG_TYPE_ALIAS(EconSystemAccessor, void*(*)());

@@ -1686,7 +1686,7 @@ void numericBindGesture(feature_binds::Entry* entry) noexcept
     if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
         openFeatureBind(entry);
     else if (hovered && !ImGui::IsAnyItemActive())
-        styledHint("Right-click to bind a value (Hold or Toggle)");
+        styledHint("Middle-click to bind a value (Hold or Toggle)");
     if (entry && entry->key != Bind::kOff) {
         const float x = card.origin.x + s(13) + card.lastLabelWidth + s(7);
         const float available = card.width - s(158) - (x - card.origin.x);
@@ -2593,20 +2593,24 @@ void itemDefRow(const char* label, const cs2::ItemDefEntry* list, int count, int
 template <typename ConfigVar>
 void wearRow(const char* label, int id) noexcept
 {
+    feature_binds::registerNumber<ConfigVar>(label);
     const auto current = ui_config::get<ConfigVar>();
     int permille = static_cast<int>(current);
     if (sliderRow(label, &permille, 0, 1000, id, nullptr))
         ui_config::set<ConfigVar>(static_cast<typename ConfigVar::ValueType>(permille));
+    numericBindGesture(feature_binds::entryFor<ConfigVar>());
 }
 
 
 template <typename ConfigVar>
 void seedRow(const char* label, int id) noexcept
 {
+    feature_binds::registerNumber<ConfigVar>(label);
     const auto current = ui_config::get<ConfigVar>();
     int seed = static_cast<int>(current);
     if (sliderRow(label, &seed, 0, 1000, id, nullptr))
         ui_config::set<ConfigVar>(static_cast<typename ConfigVar::ValueType>(seed));
+    numericBindGesture(feature_binds::entryFor<ConfigVar>());
 }
 
 
@@ -2653,6 +2657,7 @@ void sliderVar(const char* label, int id, const char* suffix = nullptr) noexcept
 template <typename ConfigVar>
 void hueVar(const char* label, int id) noexcept
 {
+    feature_binds::registerNumber<ConfigVar>(label);
     const auto current = ui_config::get<ConfigVar>();
     float hue = static_cast<float>(static_cast<typename ConfigVar::ValueType::ValueType>(current));
     if (hueRow(label, &hue, id)) {
@@ -2663,6 +2668,7 @@ void hueVar(const char* label, int id) noexcept
             clamped = ConfigVar::ValueType::kMax;
         ui_config::set<ConfigVar>(typename ConfigVar::ValueType{clamped});
     }
+    numericBindGesture(feature_binds::entryFor<ConfigVar>());
 }
 
 template <typename ConfigVar>
@@ -2782,7 +2788,6 @@ void paintKitPopupLayer(ImDrawList* d) noexcept
     recordPopupRect(PopupDropdown, p, p + size);
     const int first = d->VtxBuffer.Size;
     softShadow(d, p, p + size, s(16.0f));
-    d->AddRectFilled(p - ImVec2(s(5), s(2)), p + size + ImVec2(s(5), s(8)), C(0, 0, 0, 55), s(18));
     d->AddRectFilled(p, p + size, kPopupBg, s(18));
     d->AddRect(p, p + size, kPopupBorder, s(18));
     d->AddLine(p + ImVec2(s(16), s(1)), p + ImVec2(size.x - s(16), s(1)), C(255, 255, 255, 22));
@@ -4656,10 +4661,12 @@ void pageInventoryCategory(int category) noexcept
             seedRow<KnifeSkinSeed>("Seed", ++controlId);
             toggleVar<StatTrakEnabled>("StatTrak", ++controlId);
             {
+                feature_binds::registerNumber<StatTrakValue>("StatTrak Value");
                 const auto value = ui_config::get<StatTrakValue>();
                 int statTrak = static_cast<int>(value);
                 if (sliderRow("StatTrak Value", &statTrak, 0, 9999, ++controlId, nullptr))
                     ui_config::set<StatTrakValue>(static_cast<std::uint16_t>(statTrak));
+                numericBindGesture(feature_binds::entryFor<StatTrakValue>());
             }
         });
         break;
@@ -6629,7 +6636,6 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
     recordPopupRect(PopupProfile, p, p + size);
     const int first = d->VtxBuffer.Size;
     softShadow(d, p, p + size, s(16.0f));
-    d->AddRectFilled(p - ImVec2(s(4), s(2)), p + size + ImVec2(s(4), s(7)), C(0, 0, 0, 65), s(18));
     d->AddRectFilled(p, p + size, kInsetBg, s(16));
     d->AddRect(p, p + size, C(46, 46, 50), s(16));
 
