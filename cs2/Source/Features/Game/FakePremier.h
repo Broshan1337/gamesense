@@ -10,6 +10,7 @@
 #include <GameClient/Entities/PlayerController.h>
 #include <HookContext/HookContextMacros.h>
 #include <MemoryPatterns/PatternTypes/ClientPatternTypes.h>
+#include <UI/ImGui/GuiLog.h>
 
 
 
@@ -44,6 +45,7 @@ public:
 
         applyRankingBlock(premier, wingmanMode);
         applyRankTree(premier, wingmanMode);
+        logStateChange(premier, wingmanMode);
 
         auto* const controllerEntity = static_cast<cs2::C_BaseEntity*>(hookContext.localPlayerController().baseEntity());
         if (!controllerEntity)
@@ -73,6 +75,66 @@ public:
         if (hasOriginal && cachedController && cachedRankingOffset > 0 && cachedRankTypeOffset > 0 && cachedWinsOffset > 0)
             restore(cachedController, cachedRankingOffset, cachedRankTypeOffset, cachedWinsOffset);
         restoreRankingBlock();
+    }
+
+    // One-shot diagnostics (one line per toggle/slider CHANGE, not per frame): everything
+    // the display depends on in one place - toggles, targets, and the tree/block
+    // READBACK after the write. If the badge ever disagrees with this line, the badge
+    // reads a source we do not write.
+    void logStateChange(bool premier, bool wingmanMode) const noexcept
+    {
+        using Tree = cs2::GcRankCacheTree;
+        const int score = static_cast<int>(GET_CONFIG_VAR(FakePremierScore));
+        const int wingmanRank = static_cast<int>(GET_CONFIG_VAR(WingmanRank));
+        const int wins = GET_CONFIG_VAR(FakePremierWins) ? static_cast<int>(GET_CONFIG_VAR(PremierWins)) : -1;
+        if (diagInitialized && premier == diagPremier && wingmanMode == diagWingman
+            && score == diagScore && wingmanRank == diagWingmanRank && wins == diagWins)
+            return;
+        diagPremier = premier;
+        diagWingman = wingmanMode;
+        diagScore = score;
+        diagWingmanRank = wingmanRank;
+        diagWins = wins;
+        diagInitialized = true;
+
+        auto&& ps = hookContext.patternSearchResults();
+        auto* const baseSlot = static_cast<std::byte*>(ps.template get<RankCacheBasePointer>());
+        auto* const rootSlot = static_cast<std::byte*>(ps.template get<RankCacheRootPointer>());
+        auto* const blockSlot = static_cast<std::byte*>(ps.template get<PlayerRankingDataPointer>());
+        int treePremier = -1, treeWingman = -1, treeCompWins = -1;
+        if (baseSlot && rootSlot) {
+            void* nodes{};
+            std::memcpy(&nodes, baseSlot, sizeof(nodes));
+            std::int32_t rootIdx{};
+            std::memcpy(&rootIdx, rootSlot, sizeof(rootIdx));
+            if (nodes && rootIdx != Tree::kInvalidIndex) {
+                auto* const raw = static_cast<std::byte*>(nodes);
+                for (int k = 0; k < 2; ++k) {
+                    const std::int32_t key = k == 0 ? Tree::kRankTypePremier : Tree::kRankTypeWingman;
+                    int* const out = k == 0 ? &treePremier : &treeWingman;
+                    if (const auto* node = findTreeNode(const_cast<std::byte*>(raw), rootIdx, key))
+                        std::memcpy(out, node + Tree::kNodeRatingOffset, sizeof(*out));
+                }
+                if (const auto* compNode = findTreeNode(const_cast<std::byte*>(raw), rootIdx, Tree::kRankTypeCompetitive))
+                    std::memcpy(&treeCompWins, compNode + Tree::kNodeWinsOffset, sizeof(treeCompWins));
+            }
+        }
+        int blockRanking = -1, blockWins = -1;
+        if (blockSlot) {
+            void* block{};
+            std::memcpy(&block, blockSlot, sizeof(block));
+            if (block) {
+                void* sub{};
+                std::memcpy(&sub, static_cast<std::byte*>(block) + cs2::PlayerRankingData::kRankingSubstructOffset, sizeof(sub));
+                if (sub) {
+                    std::memcpy(&blockRanking, static_cast<std::byte*>(sub) + cs2::PlayerRankingData::kRankingSubstructRankingOffset, sizeof(blockRanking));
+                    std::memcpy(&blockWins, static_cast<std::byte*>(sub) + cs2::PlayerRankingData::kRankingSubstructWinsOffset, sizeof(blockWins));
+                }
+            }
+        }
+        gui_log::write("[premier] premier=%d score=%d winsSpoof=%d wingman=%d wingmanRank=%d | tree: premier=%d wingman=%d compWins=%d | block: ranking=%d wins=%d",
+            premier ? 1 : 0, score, wins, wingmanMode ? 1 : 0, wingmanRank,
+            treePremier, treeWingman, treeCompWins, blockRanking, blockWins);
     }
 
 private:
@@ -388,6 +450,13 @@ private:
     inline static std::int32_t blockOriginalWins{};
     inline static bool blockOriginalHadFlag{false};
     inline static bool hasBlockOriginal{false};
+
+    inline static bool diagInitialized{false};
+    inline static bool diagPremier{false};
+    inline static bool diagWingman{false};
+    inline static int diagScore{-1};
+    inline static int diagWingmanRank{-1};
+    inline static int diagWins{-1};
 
     HookContext& hookContext;
 };
