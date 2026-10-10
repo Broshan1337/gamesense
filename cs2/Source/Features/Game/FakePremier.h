@@ -181,29 +181,33 @@ private:
             ? static_cast<std::int32_t>(GET_CONFIG_VAR(WingmanRank))
             : static_cast<std::int32_t>(GET_CONFIG_VAR(FakePremierScore));
 
-        // Node targets per mode: premier mode -> premier + competitive-wins gate node
-        // (the display hides premier behind >= 10 competitive wins); wingman -> wingman.
-        const std::int32_t keys[2] = {wingmanMode ? Tree::kRankTypeWingman : Tree::kRankTypePremier,
-            wingmanMode ? Tree::kRankTypeWingman : Tree::kRankTypeCompetitive};
-
-        for (int k = 0; k < 2; ++k) {
-            const std::int32_t wanted = keys[k];
-            // The wingman pass writes the same node twice (only one target); skip dup.
-            if (wingmanMode && k == 1)
-                break;
-
-            auto* node = findTreeNode(nodes, rootIdx, wanted);
-            if (!node)
-                node = insertTreeNode(nodes, rootIdx, wanted, ratingValue, spoofWins ? winsValue : 0);
-            if (!node)
-                continue;
-
+        // Main node: wingman (key 7) in wingman mode, premier (key 11) in premier mode.
+        const std::int32_t mainKey = wingmanMode ? Tree::kRankTypeWingman : Tree::kRankTypePremier;
+        auto* node = findTreeNode(nodes, rootIdx, mainKey);
+        if (!node)
+            node = insertTreeNode(nodes, rootIdx, mainKey);
+        if (node) {
             std::memcpy(node + Tree::kNodeRatingOffset, &ratingValue, sizeof(ratingValue));
             if (spoofWins)
                 std::memcpy(node + Tree::kNodeWinsOffset, &winsValue, sizeof(winsValue));
         }
+
+        // Premier display gate: the >= 10 competitive-wins check reads the competitive
+        // node's (key 12) wins field - satisfy it WITHOUT touching the classic comp
+        // rating (we have no comp-rank slider; writing the premier score there would
+        // show a nonsense classic badge).
+        if (premier) {
+            auto* compNode = findTreeNode(nodes, rootIdx, Tree::kRankTypeCompetitive);
+            if (!compNode)
+                compNode = insertTreeNode(nodes, rootIdx, Tree::kRankTypeCompetitive);
+            if (compNode && spoofWins)
+                std::memcpy(compNode + Tree::kNodeWinsOffset, &winsValue, sizeof(winsValue));
+        }
     }
 
+    // Returns the NODE BASE (add GcRankCacheTree offsets at the use site - the first
+    // version returned node+84 and the caller added +84 AGAIN, landing writes past the
+    // 136-byte node into the next slot's fields; live-verified 2026-10-10).
     [[nodiscard]] static std::byte* findTreeNode(std::byte* nodes, std::int32_t idx, std::int32_t wanted) noexcept
     {
         using Tree = cs2::GcRankCacheTree;
@@ -212,7 +216,7 @@ private:
             std::int32_t key{};
             std::memcpy(&key, node + Tree::kNodeKeyOffset, sizeof(key));
             if (key == wanted)
-                return node + Tree::kNodeRatingOffset;
+                return node;
             std::int32_t next{};
             std::memcpy(&next, node + (wanted > key ? Tree::kNodeRightOffset : Tree::kNodeLeftOffset), sizeof(next));
             if (next == Tree::kInvalidIndex)
@@ -224,8 +228,9 @@ private:
 
     // Re-links a detached stale slot for a missing key (the GC prunes empty entries
     // between snapshots). Mirrors the reference Lua's insert: complete the leaf before
-    // linking, so readers only ever see a valid leaf or the old tree.
-    [[nodiscard]] static std::byte* insertTreeNode(std::byte* nodes, std::int32_t rootIdx, std::int32_t wanted, std::int32_t rating, std::int32_t wins) noexcept
+    // linking, so readers only ever see a valid leaf or the old tree. Returns the NODE
+    // BASE like findTreeNode - the caller stamps rating/wins.
+    [[nodiscard]] static std::byte* insertTreeNode(std::byte* nodes, std::int32_t rootIdx, std::int32_t wanted) noexcept
     {
         using Tree = cs2::GcRankCacheTree;
         std::byte* link = nullptr;
@@ -235,7 +240,7 @@ private:
             std::int32_t key{};
             std::memcpy(&key, node + Tree::kNodeKeyOffset, sizeof(key));
             if (key == wanted)
-                return node + Tree::kNodeRatingOffset;
+                return node;
             link = node + (wanted > key ? Tree::kNodeRightOffset : Tree::kNodeLeftOffset);
             std::int32_t child{};
             std::memcpy(&child, link, sizeof(child));
@@ -277,11 +282,12 @@ private:
             const std::int32_t leaf = Tree::kInvalidIndex;
             std::memcpy(slot + Tree::kNodeLeftOffset, &leaf, sizeof(leaf));
             std::memcpy(slot + Tree::kNodeRightOffset, &leaf, sizeof(leaf));
-            std::memcpy(slot + Tree::kNodeRatingOffset, &rating, sizeof(rating));
-            std::memcpy(slot + Tree::kNodeWinsOffset, &wins, sizeof(wins));
+            std::int32_t neutral{};
+            std::memcpy(slot + Tree::kNodeRatingOffset, &neutral, sizeof(neutral));
+            std::memcpy(slot + Tree::kNodeWinsOffset, &neutral, sizeof(neutral));
             const std::int32_t slotIdx = i;
             std::memcpy(link, &slotIdx, sizeof(slotIdx));
-            return slot + Tree::kNodeRatingOffset;
+            return slot;
         }
         return nullptr;
     }
