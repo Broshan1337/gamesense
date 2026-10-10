@@ -6311,7 +6311,7 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
     nav("\xEF\x9C\x8C", "Movement", Page::Movement); 
     y_nav += 2.0f;
 
-    eyebrow("FEATURES");
+    eyebrow("VISUAL");
     
     {
         const ImVec2 p = base + ImVec2(s(7), y_nav);
@@ -6351,11 +6351,11 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
         }
         y_nav = startY + 7 * s(32.0f) * expand;
     }
+    nav("\xEF\x9B\x8B", "Inventory", Page::Inventory);
     y_nav += s(2.0f);
 
-    eyebrow("OTHER");
-    nav("\xEF\x9B\x8B", "Inventory", Page::Inventory); 
-    nav("\xEF\x94\x99", "Radio", Page::Radio);         
+    eyebrow("MISC");
+    nav("\xEF\x94\x99", "Radio", Page::Radio);
 
     
     
