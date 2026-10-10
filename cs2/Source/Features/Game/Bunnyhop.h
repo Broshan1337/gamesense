@@ -150,33 +150,32 @@ public:
         
         if (hasPendingJump && GET_CONFIG_VAR(BunnyhopEnabled)) {
             using Moves = SubtickMoves<HookContext>;
-            Moves::stripButtons(userCmd.baseMessage(), cs2::CCSGOInput::Buttons::kJump);
+            // The reference bhop write path (somecs2baseforlinux, in-game verified):
+            // airborne ticks carry the intent in the BUTTON BANKS ONLY - never a
+            // subtick stream sample. A stream press without its release in the
+            // same command is carried across the tick boundary by the replay
+            // (issue #4: keys stuck until pressed again). Ground ticks tap the
+            // stream with press+release at the SAME when (appended in order, so
+            // no re-sort needed) and hold the bank bit. The game's own real
+            // jump samples are NEVER stripped - they are the ground truth.
             userCmd.replaceButtons(cs2::CCSGOInput::Buttons::kJump,
                 wantsJump ? cs2::CCSGOInput::Buttons::kJump : 0);
-            if (wantsJump) jumpTiming.pressed(pendingJumpTime);
-            if (hasPendingLanding || hasPendingTap) {
-                // The replayed button stream carries state across ticks, so an
-                // injected press must be paired with a release inside the same
-                // command or kJump stays held with no sample ever clearing it.
-                // Landing taps land a release just before the press (velocity
-                // shape); ground taps reuse the in-game-verified AttackCommand
-                // press@0/release@1 pulse. sortByTime restores stream order.
-                const bool roomForPair = Moves::count(userCmd.baseMessage()) + 2
-                    <= cs2::CUserCmd::BaseMessage::SubtickMoves::kMaxSteps;
-                const float pressWhen = hasPendingLanding ? pendingLandingWhen : 0.0f;
-                const float releaseWhen = hasPendingLanding
-                    ? std::clamp(pressWhen - 1.0f / 64.0f, 1.0f / 64.0f, 63.0f / 64.0f) : 1.0f;
-                auto* const press = roomForPair
-                    ? hookContext.template make<SubtickMoves>().add(userCmd.baseMessage(), pressWhen) : nullptr;
-                if (press) {
-                    Moves::setButton(press, cs2::CCSGOInput::Buttons::kJump, true);
-                    if (auto* release = hookContext.template make<SubtickMoves>().add(userCmd.baseMessage(), releaseWhen)) {
-                        Moves::setButton(release, cs2::CCSGOInput::Buttons::kJump, false);
-                        Moves::sortByTime(userCmd.baseMessage());
-                        jumpTiming.pressed(pendingJumpTime);
-                    } else {
-                        Moves::stripButtons(userCmd.baseMessage(), cs2::CCSGOInput::Buttons::kJump);
-                    }
+            if (!wantsJump) {
+                clearPending();
+                return;
+            }
+            jumpTiming.pressed(pendingJumpTime);
+            if (Moves::count(userCmd.baseMessage()) + 2
+                > cs2::CUserCmd::BaseMessage::SubtickMoves::kMaxSteps)
+                return clearPending();
+            auto&& moves = hookContext.template make<SubtickMoves>();
+            auto* const press = moves.add(userCmd.baseMessage(), 1.0f);
+            if (press) {
+                Moves::setButton(press, cs2::CCSGOInput::Buttons::kJump, true);
+                if (auto* release = moves.add(userCmd.baseMessage(), 1.0f)) {
+                    Moves::setButton(release, cs2::CCSGOInput::Buttons::kJump, false);
+                } else {
+                    Moves::stripButtons(userCmd.baseMessage(), cs2::CCSGOInput::Buttons::kJump);
                 }
             }
         }
