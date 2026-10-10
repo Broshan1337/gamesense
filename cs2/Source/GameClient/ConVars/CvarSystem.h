@@ -83,6 +83,26 @@ public:
         return readValueAs<int>(conVar);
     }
 
+    // Color cvars: three floats at the value slot (raw type tag 12).
+    [[nodiscard]] std::optional<float> readColorConVarChannel(const char* name, int channel) const noexcept
+    {
+        constexpr std::uintptr_t kTypeOffset = 0x28;
+        constexpr std::uint16_t kColorTypeRaw = 12;
+        if (channel < 0 || channel > 2)
+            return {};
+        const auto conVar = findConVar(name);
+        if (!conVar)
+            return {};
+        if (*reinterpret_cast<const std::uint16_t*>(reinterpret_cast<std::uintptr_t>(conVar) + kTypeOffset) != kColorTypeRaw)
+            return {};
+        const auto pointerToValue = hookContext.patternSearchResults().template get<OffsetToConVarValue>().of(conVar).get();
+        if (!pointerToValue)
+            return {};
+        float value = 0.0f;
+        std::memcpy(&value, static_cast<const std::byte*>(pointerToValue) + channel * sizeof(float), sizeof(value));
+        return value;
+    }
+
     
     
     
@@ -124,6 +144,45 @@ public:
 
         const float written = value;
         std::memcpy(pointerToValue, &written, sizeof(written));
+        return true;
+    }
+
+    [[nodiscard]] bool forceIntConVar(const char* name, int value) const noexcept
+    {
+        const auto conVar = findConVar(name);
+        if (!conVar)
+            return false;
+        if (!conVarTypeIs(conVar, cs2::ConVarValueType::int32))
+            return false;
+
+        const auto pointerToValue = hookContext.patternSearchResults().template get<OffsetToConVarValue>().of(conVar).get();
+        if (!pointerToValue)
+            return false;
+
+        const int written = value;
+        std::memcpy(pointerToValue, &written, sizeof(written));
+        return true;
+    }
+
+    // Color cvars (e.g. fog_color) hold three floats at the value slot; the
+    // type tag sits past our modeled enum (raw 12 on this build), so the
+    // check is on the raw tag - anything unexpected fails closed.
+    [[nodiscard]] bool forceColorConVar(const char* name, float r, float g, float b) const noexcept
+    {
+        constexpr std::uintptr_t kTypeOffset = 0x28;
+        constexpr std::uint16_t kColorTypeRaw = 12;
+        const auto conVar = findConVar(name);
+        if (!conVar)
+            return false;
+        if (*reinterpret_cast<const std::uint16_t*>(reinterpret_cast<std::uintptr_t>(conVar) + kTypeOffset) != kColorTypeRaw)
+            return false;
+
+        const auto pointerToValue = hookContext.patternSearchResults().template get<OffsetToConVarValue>().of(conVar).get();
+        if (!pointerToValue)
+            return false;
+
+        const float written[3] = {r, g, b};
+        std::memcpy(pointerToValue, written, sizeof(written));
         return true;
     }
 

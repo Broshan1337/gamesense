@@ -130,6 +130,8 @@ struct ClientPatterns {
             
             
             .template addPattern<GetUserCmd, CodePattern{"55 48 89 E5 41 54 4C 8B 25 ? ? ? ? 53 89 F3"}>()
+
+            .template addPattern<PointerToSpawnParticleEffect, CodePattern{"55 48 89 E5 41 57 41 89 D7 41 56 41 89 CE 41 55 45 89 CD 41 54 49 89 F4 53 44 89 CB 48 81 EC B8 00 00 00"}>()
             
             
             

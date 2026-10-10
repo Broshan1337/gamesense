@@ -5,11 +5,29 @@
 #include "ConfigStringConversionState.h"
 #include <Platform/Macros/FunctionAttributes.h>
 
+// SkipUnknownKeys: the load-time mode. The strict sequential walk (default)
+// requires file keys in exact schema order; the tolerant mode additionally
+// skips key/value pairs the schema does not know, so a config file saved by
+// an older schema revision (extra/renamed keys) still loads. The real load
+// path (Config.h) runs valid() first and always passes the flag; the raw
+// parser default keeps the documented strict state machine.
+struct SkipUnknownKeysTag {
+    explicit SkipUnknownKeysTag() = default;
+};
+inline constexpr SkipUnknownKeysTag skipUnknownKeys{};
+
 class ConfigFromString {
 public:
     ConfigFromString(std::span<const char8_t> buffer, ConfigStringConversionState& conversionState) noexcept
         : buffer{buffer}
         , conversionState{conversionState}
+    {
+    }
+
+    ConfigFromString(std::span<const char8_t> buffer, ConfigStringConversionState& conversionState, SkipUnknownKeysTag) noexcept
+        : buffer{buffer}
+        , conversionState{conversionState}
+        , skipUnknownKeys{true}
     {
     }
 
@@ -43,7 +61,12 @@ public:
 
     void endObject() noexcept
     {
-        if (shouldReadMe() && skipWhitespaces() && readChar(u8'}'))
+        // Tolerant mode only: skip pairs the schema does not consume
+        // (older-revision leftovers) up to this object's closing brace, so
+        // the walk stays in sync with the file even when the schema dropped
+        // or renamed keys. Strict mode keeps the documented whitespace +
+        // closing-brace read.
+        if (shouldReadMe() && (skipUnknownKeys ? skipUntilObjectEnd() : skipWhitespaces()) && readChar(u8'}'))
             decreaseConversionNestingLevel();
         decreaseNestingLevel();
     }
@@ -143,7 +166,105 @@ private:
 
     [[nodiscard]] bool readKey(const char8_t* key) noexcept
     {
-        return skipWhitespaces() && readChar(u8'"') && readString(key) && readChar(u8'"') && skipWhitespaces() && readChar(u8':');
+        if (!(skipWhitespaces() && readChar(u8'"')))
+            return false;
+        if (!skipUnknownKeys)
+            return readString(key) && readChar(u8'"') && skipWhitespaces() && readChar(u8':');
+        const auto entryReadIndex = readIndex;
+        while (true) {
+            if (readString(key) && readChar(u8'"') && skipWhitespaces() && readChar(u8':'))
+                return true;
+            // The key at the cursor is not the expected one (or a longer one):
+            // it was left by an older schema revision. Skip it (string, ':',
+            // value, ',') and try the next key instead of failing the load.
+            if (!(skipKeyRest() && readChar(u8'"') && skipWhitespaces() && readChar(u8':') && skipValue()))
+                break;
+            if (!(skipWhitespaces() && readChar(u8',') && skipWhitespaces() && readChar(u8'"')))
+                break;
+        }
+        // Expected key not in this object: restore the cursor so the caller's
+        // save/restore contract (and the object-end skip) sees the old state.
+        readIndex = entryReadIndex;
+        return false;
+    }
+
+    // Consume the remaining characters of a partially-read key up to (not
+    // including) its closing quote.
+    [[nodiscard]] bool skipKeyRest() noexcept
+    {
+        while (readIndex < buffer.size()) {
+            if (buffer[readIndex] == u8'"')
+                return true;
+            ++readIndex;
+        }
+        return false;
+    }
+
+    // Skip one value: nested object (brace-depth skip), string, bool or number.
+    [[nodiscard]] bool skipValue() noexcept
+    {
+        if (!skipWhitespaces() || readIndex >= buffer.size())
+            return false;
+        const auto c = buffer[readIndex];
+        if (c == u8'{') {
+            unsigned depth = 0;
+            while (readIndex < buffer.size()) {
+                const auto ch = buffer[readIndex];
+                ++readIndex;
+                if (ch == u8'{') {
+                    ++depth;
+                } else if (ch == u8'}') {
+                    if (--depth == 0)
+                        return true;
+                }
+            }
+            return false;
+        }
+        if (c == u8'"') {
+            ++readIndex;
+            return skipKeyRest() && readChar(u8'"');
+        }
+        {
+            const auto savedReadIndex = readIndex;
+            if (readString(u8"true"))
+                return true;
+            readIndex = savedReadIndex;
+            if (readString(u8"false"))
+                return true;
+            readIndex = savedReadIndex;
+        }
+        const auto start = readIndex;
+        while (readIndex < buffer.size()) {
+            const auto ch = buffer[readIndex];
+            if ((ch >= u8'0' && ch <= u8'9') || ch == u8'-' || ch == u8'+' || ch == u8'.' || ch == u8'e' || ch == u8'E')
+                ++readIndex;
+            else
+                break;
+        }
+        return readIndex > start;
+    }
+
+    // Skip key/value pairs (older-revision leftovers) until this object's
+    // closing brace (not consumed).
+    [[nodiscard]] bool skipUntilObjectEnd() noexcept
+    {
+        while (true) {
+            skipWhitespaces();
+            if (readIndex >= buffer.size())
+                return false;
+            const auto c = buffer[readIndex];
+            if (c == u8'}')
+                return true;
+            if (c == u8',') {
+                ++readIndex;
+                continue;
+            }
+            if (c != u8'"')
+                return false;
+            ++readIndex;
+            if (!(skipKeyRest() && readChar(u8'"') && skipWhitespaces() && readChar(u8':') && skipValue()))
+                return false;
+        }
     }
 
     void increaseNestingLevel() noexcept
@@ -302,6 +423,7 @@ private:
     std::span<const char8_t> buffer;
     std::size_t readIndex{0};
     ConfigStringConversionState& conversionState;
+    bool skipUnknownKeys = false;
     std::array<config_params::ObjectIndexType, config_params::kMaxNestingLevel + 1> indexInNestingLevel{};
     config_params::NestingLevelIndexType nestingLevel{0};
 };

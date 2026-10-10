@@ -521,7 +521,7 @@ private:
         std::size_t parsedBytes{0};
         do {
             assert(conversionState.offset <= readBytes);
-            ConfigFromString configFromString{std::span{state().fileOperationBuffer + conversionState.offset, readBytes - conversionState.offset}, conversionState};
+            ConfigFromString configFromString{std::span{state().fileOperationBuffer + conversionState.offset, readBytes - conversionState.offset}, conversionState, skipUnknownKeys};
             parsedBytes = ConfigSchema{hookContext}.performConversion(configFromString);
         } while (parsedBytes != 0 && (conversionState.nestingLevel != 0 || conversionState.indexInNestingLevel[0] != 1));
         

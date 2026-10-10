@@ -42,4 +42,14 @@ struct WorldColorsState {
     bool bloomQueuedValid = false;
     float lastQueued = 0.0f;
     double lastQueueTime = 0.0;
+
+    // Engine fog_* cvar originals (cached on first fog enable, restored on disable).
+    bool fogCvarsCached = false;
+    int fogOverrideOriginal = 0;
+    bool fogOverrideEnableOriginal = false;
+    float fogColorOriginal[3]{};
+    float fogStartOriginal = 0.0f;
+    float fogEndOriginal = 0.0f;
+    float fogMaxDensityOriginal = 0.0f;
+    double fogLastQueueTime = 0.0;
 };

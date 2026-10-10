@@ -89,8 +89,13 @@ private:
             return;
 
         auto&& victimPawn = lookup.pawnBySlot(victimSlot);
-        if (!victimPawn || victimPawn.teamNumber() == localTeamNumber())
-            return;   
+        // Teammate damage is not a hit. A FAILED pawn lookup must NOT drop the
+        // hit: on killing blows the victim pawn is mid-destroy when player_hurt
+        // fires, and dropping those landed the whole "killed but showed
+        // missed" bug (2026-10-10). Only a pawn that positively reads
+        // same-team is skipped.
+        if (victimPawn && victimPawn.teamNumber() == localTeamNumber())
+            return;
 
         ++hitsLanded;
 

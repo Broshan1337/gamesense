@@ -9,6 +9,7 @@
 #include <CS2/Classes/Entities/CCSPlayerController.h>
 #include <CS2/Classes/Glow.h>
 #include <CS2/Classes/IGameEventManager2.h>
+#include <CS2/Classes/CParticleSystemMgr.h>
 #include <CS2/Classes/VMatrix.h>
 #include <CS2/Panorama/CPanel2D.h>
 #include <Platform/Macros/IsPlatform.h>
@@ -82,6 +83,8 @@ STRONG_TYPE_ALIAS(RepeatedPtrFieldAddAllocated, void*(*)(void* field, void* elem
 
 
 STRONG_TYPE_ALIAS(GetUserCmd, void*(*)(void* controller, int commandNumber));
+
+STRONG_TYPE_ALIAS(PointerToSpawnParticleEffect, cs2::CParticleSystemMgr::SpawnEffect*);
 
 
 

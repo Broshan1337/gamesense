@@ -43,7 +43,7 @@ public:
     {
         if (!GET_CONFIG_VAR(scoreboard_equipment_vars::Enabled)) {
             if (wasEnabled) {
-                runScript(kClearScript);
+                static_cast<void>(runScript(kClearScript));
                 resetState();
             }
             return;
@@ -88,7 +88,7 @@ public:
 
         if (batchLength > 0) {
             batch[batchLength] = '\0';
-            runScript(batch);
+            static_cast<void>(runScript(batch));
         }
     }
 
@@ -96,6 +96,9 @@ private:
     static constexpr int kThrottle = 6;
     static constexpr int kMaxSlots = 32;
     static constexpr int kMaxWeapons = 16;
+    // Layout caps: past this the icon row spills over the money column.
+    static constexpr int kMaxIconsPerRow = 10;
+    static constexpr int kMaxGrenadeIcons = 4;
     static constexpr int kMaxPathChars = 48;
     static constexpr int kMaxScriptChars = 2048;
     // One cycle's concatenated receive() calls: up to kMaxSlots players per batch.
@@ -206,6 +209,7 @@ private:
             collectWeapons(pawn, weapons, weaponCount, activePath);
             collectArmorAndDefuser(pawn, pawnPointer, weapons, weaponCount);
             sortWeapons(weapons, weaponCount);
+            weaponCount = capIcons(weapons, weaponCount);
         }
 
         char script[kMaxScriptChars];
@@ -217,11 +221,10 @@ private:
         if (slot->xuid == xuid && std::strcmp(slot->script, script) == 0)
             return;
         slot->xuid = xuid;
-        std::strncpy(slot->script, script, sizeof(slot->script) - 1);
-        slot->script[sizeof(slot->script) - 1] = '\0';
+        const std::size_t length = std::strlen(script);
+        std::memcpy(slot->script, script, length + 1);
 
         // Append to the cycle batch instead of a RunScript per player.
-        const std::size_t length = std::strlen(script);
         if (batchLength + length + 1 < sizeof(batch)) {
             std::memcpy(batch + batchLength, script, length);
             batchLength += length;
@@ -233,7 +236,7 @@ private:
     {
         auto&& activeWeapon = pawn.getActiveWeapon();
         if (const auto name = activeWeapon.getName()) {
-            buildIconPath(activePath, kMaxPathChars, name);
+            static_cast<void>(buildIconPath(activePath, kMaxPathChars, name));
         }
 
         pawn.weapons().forEach([&](auto&& weaponEntity) {
@@ -251,7 +254,7 @@ private:
             int type{};
             std::memcpy(&type, reinterpret_cast<const std::byte*>(vdata) + *offsets().weaponType, sizeof(type));
             const bool grenade = isGrenadeName(vdataName);
-            if (type < 0 || type > 8 && !grenade)
+            if (type < 0 || (type > 8 && !grenade))
                 return;
 
             WeaponEntry entry{};
@@ -315,10 +318,30 @@ private:
         }
     }
 
+    // Sorted order (primary..defuser): keep at most kMaxIconsPerRow, and never more
+    // than kMaxGrenadeIcons grenades even when the loadout is short.
+    [[nodiscard]] static int capIcons(const WeaponEntry* weapons, int weaponCount) noexcept
+    {
+        int kept = 0;
+        int grenades = 0;
+        for (int i = 0; i < weaponCount; ++i) {
+            if (kept >= kMaxIconsPerRow)
+                break;
+            if (weapons[i].grenade) {
+                if (grenades >= kMaxGrenadeIcons)
+                    continue;
+                ++grenades;
+            }
+            ++kept;
+        }
+        return kept;
+    }
+
     static void buildUpdateScript(char* out, std::size_t capacity, std::uint64_t xuid, const WeaponEntry* weapons, int weaponCount, const char* activePath) noexcept
     {
         int offset = std::snprintf(out, capacity,
-            "if(typeof SClient!=='undefined')SClient.receive({type:\"updateWeapons\",content:{xuid:\"%llu\",weapons:[", xuid);
+            "if(typeof SClient!=='undefined')SClient.receive({type:\"updateWeapons\",content:{xuid:\"%llu\",weapons:[",
+            static_cast<unsigned long long>(xuid));
         if (offset <= 0)
             return;
         for (int i = 0; i < weaponCount && static_cast<std::size_t>(offset) < capacity; ++i) {
@@ -402,6 +425,22 @@ private:
         "        if (!sb) return null;"
         "        return sb.FindChildTraverse(\"player-\" + xuid) || sb.FindChildTraverse(\"id-\" + xuid);"
         "    }"
+        "    function findLabel(panel, depth) {"
+        "        if (!panel || depth <= 0) return null;"
+        "        var kids;"
+        "        try { kids = panel.Children(); } catch (e) { return null; }"
+        "        if (!kids || !kids.length) return null;"
+        "        for (var i = 0; i < kids.length; ++i) {"
+        "            var k = kids[i];"
+        "            if (!k) continue;"
+        "            var t = \"\";"
+        "            try { t = k.paneltype; } catch (e) { t = \"\"; }"
+        "            if (t === \"Label\") return k;"
+        "            var r = findLabel(k, depth - 1);"
+        "            if (r) return r;"
+        "        }"
+        "        return null;"
+        "    }"
         "    return {"
         "        update: function (xuid, weapons, active_path) {"
         "            var sb = $.GetContextPanel();"
@@ -411,16 +450,31 @@ private:
         "                    var cont = sb.FindChildTraverse(\"ScoreboardContainer\") || sb.FindChildTraverse(\"id-eom-scoreboard-container\");"
         "                    if (cont) sbMain = cont.FindChildTraverse(\"Scoreboard\") || cont;"
         "                }"
-        "                if (sbMain) { sbMain.style.maxWidth = \"1800px\"; sbMain.style.width = \"1600px\"; }"
+        "                if (sbMain) {"
+        "                    var screenW = 1920;"
+        "                    try { if (sb.actuallayoutwidth > 0) screenW = sb.actuallayoutwidth; } catch (e) {}"
+        "                    sbMain.style.maxWidth = Math.min(1800, screenW - 40) + \"px\";"
+        "                    sbMain.style.width = Math.min(1560, screenW - 80) + \"px\";"
+        "                }"
         "            }"
         "            var row = getRow(xuid);"
         "            if (!row) return;"
         "            var nameSection = row.FindChildTraverse(\"id-sb-name\");"
         "            if (nameSection) {"
-        "                nameSection.style.maxWidth = \"600px\";"
-        "                nameSection.style.minWidth = \"350px\";"
-        "                nameSection.style.width = \"450px\";"
-        "                nameSection.style.overflow = \"noclip\";"
+        "                nameSection.style.maxWidth = \"420px\";"
+        "                nameSection.style.width = \"420px\";"
+        "                nameSection.style.overflow = \"clip\";"
+        "                var labelHosts = [nameSection];"
+        "                var nameIcons0 = nameSection.FindChildTraverse(\"id-sb-name__nameicons\");"
+        "                if (nameIcons0) labelHosts.push(nameIcons0);"
+        "                for (var h = 0; h < labelHosts.length; ++h) {"
+        "                    var label = findLabel(labelHosts[h], 4);"
+        "                    if (label) {"
+        "                        label.style.maxWidth = \"140px\";"
+        "                        label.style.textOverflow = \"ellipsis\";"
+        "                        break;"
+        "                    }"
+        "                }"
         "            }"
         "            var nameIcons = row.FindChildTraverse(\"id-sb-name__nameicons\");"
         "            if (!nameIcons) return;"

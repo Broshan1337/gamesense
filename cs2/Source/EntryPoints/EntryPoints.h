@@ -92,6 +92,9 @@
 #include <Features/Visuals/Hitmarker/Hitmarker.h>
 #include <Features/Visuals/PlayerList/PlayerList.h>
 #include <Features/Visuals/ScoreboardEquipment/ScoreboardEquipment.h>
+#include <Features/Visuals/OffScreenArrows/OffScreenArrows.h>
+#include <Features/Visuals/BulletTracers/BulletTracers.h>
+#include <Features/Visuals/KillEffects/KillEffects.h>
 #include <Features/Visuals/Removals/Removals.h>
 #include <Features/Visuals/ThirdPerson/ForceThirdPerson.h>
 #include <Features/Visuals/WorldColors/WorldColors.h>
@@ -700,6 +703,8 @@ bool GameEventManagerHook_onFireEventClientSide(cs2::IGameEventManager2* thisptr
     
     hookContext.template make<HitSound>().onFireEventClientSide(event);
     hookContext.template make<Hitmarker>().onFireEventClientSide(event);
+    hookContext.template make<BulletTracers>().onFireEventClientSide(event);
+    hookContext.template make<KillEffects>().onFireEventClientSide(event);
     hookContext.template make<WorldColors>().onFireEventClientSide(event);
     hookContext.template make<HitLog>().onFireEventClientSide(event);
     hookContext.template make<TeamDamageTracker>().onFireEventClientSide(event);
@@ -1019,6 +1024,8 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     soundWatcher.update();
     SoundFeatures{hookContext.soundWatcherState(), hookContext.hooks().viewRenderHook, hookContext}.runOnViewMatrixUpdate();
     hookContext.template make<Hitmarker>().run();
+    hookContext.template make<OffScreenArrows>().run();
+    hookContext.template make<KillEffects>().run();
     hookContext.template make<PlayerList>().run();
     hookContext.template make<ScoreboardEquipment>().run();
     

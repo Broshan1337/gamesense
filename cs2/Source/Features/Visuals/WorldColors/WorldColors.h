@@ -128,6 +128,7 @@ public:
             restoreFogs();
         else
             updateFog();
+        updateFogCvars();
         updateBloom();
     }
 
@@ -185,43 +186,135 @@ public:
         state.bloomWasEnabled = true;
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    void recolorWorld(void* primitives, int primitiveCount) const noexcept
+    // Engine fog override (2026-10-10 RE): the client carries the classic fog_*
+    // cvar family, and fog_override claims "Overrides the map's fog settings
+    // (-1 populates fog_ vars with map's values)". Live-read layout on
+    // 11106093: fog_override int32 (default 0), fog_enable bool (1),
+    // fog_color THREE FLOATS r/g/b (default -1 = use map), fog_start/fog_end/
+    // fog_maxdensity floats (default -1). The C_EnvCubemapFog entities carry
+    // distance/opacity but their COLOR comes from the cubemap texture - the
+    // fog_color cvar is the only color lever we have. Console-queue once per
+    // change + 2s drift (engine parses its own encoding) with direct memory
+    // writes as backstop; originals cached on first enable, restored on the
+    // disable edge (fog_override -1 lets the engine repopulate from the map).
+    void updateFogCvars() const noexcept
     {
-        if (!GET_CONFIG_VAR(WorldColorsWorldEnabled) || !primitives || primitiveCount <= 0)
+        auto& state = hookContext.featuresStates().visualFeaturesStates.worldColorsState;
+        auto&& cv = cvarSystem();
+        const bool enabled = GET_CONFIG_VAR(WorldColorsFogEnabled);
+
+        if (!enabled) {
+            if (state.fogCvarsCached) {
+                auto&& executor = hookContext.template make<EngineCommandExecutor>();
+                char command[64];
+                std::snprintf(command, sizeof(command), "fog_override %d", state.fogOverrideOriginal);
+                executor.execute(command);
+                std::snprintf(command, sizeof(command), "fog_override_enable %d", static_cast<int>(state.fogOverrideEnableOriginal));
+                executor.execute(command);
+                static_cast<void>(cv.forceIntConVar("fog_override", state.fogOverrideOriginal));
+                static_cast<void>(cv.forceBoolConVar("fog_override_enable", state.fogOverrideEnableOriginal));
+                state.fogCvarsCached = false;
+            }
+            return;
+        }
+
+        if (!state.fogCvarsCached) {
+            if (const auto original = cv.readIntConVar("fog_override")) {
+                state.fogOverrideOriginal = original.value();
+                state.fogOverrideEnableOriginal = cv.readBoolConVar("fog_override_enable").value_or(false);
+                state.fogColorOriginal[0] = cv.readColorConVarChannel("fog_color", 0).value_or(-1.0f);
+                state.fogColorOriginal[1] = cv.readColorConVarChannel("fog_color", 1).value_or(-1.0f);
+                state.fogColorOriginal[2] = cv.readColorConVarChannel("fog_color", 2).value_or(-1.0f);
+                state.fogStartOriginal = cv.readFloatConVar("fog_start").value_or(-1.0f);
+                state.fogEndOriginal = cv.readFloatConVar("fog_end").value_or(-1.0f);
+                state.fogMaxDensityOriginal = cv.readFloatConVar("fog_maxdensity").value_or(-1.0f);
+                state.fogCvarsCached = true;
+            }
+        }
+        if (!state.fogCvarsCached)
             return;
 
-        const auto value = static_cast<std::uint32_t>(GET_CONFIG_VAR(WorldColorsWorldColor));
-        auto* prim = static_cast<std::byte*>(primitives);
-        for (int i = 0; i < primitiveCount; ++i, prim += kSkyPrimitiveStride) {
-            std::memcpy(prim + kParticleColorOffset, &value, sizeof(value));
+        const auto color = GET_CONFIG_VAR(WorldColorsFogColor);
+        const auto density = static_cast<float>(GET_CONFIG_VAR(WorldColorsFogDensity)) / 100.0f;
+        const float fogDistance = static_cast<float>(GET_CONFIG_VAR(WorldColorsFogDistance));
+        const float channels[3] = {
+            static_cast<float>(color.r()), static_cast<float>(color.g()), static_cast<float>(color.b()),
+        };
 
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-        }
+        const double now = monotonicSeconds();
+        const bool timeToSend = now - state.fogLastQueueTime > 2.0;
+        if (!timeToSend)
+            return;
+        state.fogLastQueueTime = now;
+
+        // One command per execute() call (ExecuteClientCommand is a
+        // single-command API - no newline splitting assumed).
+        // Both override families are driven: fog_* (classic, "fog_override 1")
+        // and fog_override_enable/start/end/max_density (the second override
+        // system next to it) - whichever the renderer consumes.
+        auto&& executor = hookContext.template make<EngineCommandExecutor>();
+        char command[96];
+        std::snprintf(command, sizeof(command), "fog_override 1");
+        executor.execute(command);
+        std::snprintf(command, sizeof(command), "fog_override_enable 1");
+        executor.execute(command);
+        std::snprintf(command, sizeof(command), "fog_start 0");
+        executor.execute(command);
+        std::snprintf(command, sizeof(command), "fog_override_start 0");
+        executor.execute(command);
+        std::snprintf(command, sizeof(command), "fog_end %.0f", static_cast<double>(fogDistance));
+        executor.execute(command);
+        std::snprintf(command, sizeof(command), "fog_override_end %.0f", static_cast<double>(fogDistance));
+        executor.execute(command);
+        std::snprintf(command, sizeof(command), "fog_maxdensity %.3f", static_cast<double>(density));
+        executor.execute(command);
+        std::snprintf(command, sizeof(command), "fog_override_max_density %.3f", static_cast<double>(density));
+        executor.execute(command);
+        std::snprintf(command, sizeof(command), "fog_color %d %d %d", color.r(), color.g(), color.b());
+        executor.execute(command);
+
+        // Memory backstop (same values the engine just parsed).
+        static_cast<void>(cv.forceIntConVar("fog_override", 1));
+        static_cast<void>(cv.forceBoolConVar("fog_override_enable", true));
+        static_cast<void>(cv.forceFloatConVar("fog_start", 0.0f));
+        static_cast<void>(cv.forceFloatConVar("fog_end", fogDistance));
+        static_cast<void>(cv.forceFloatConVar("fog_maxdensity", density));
+        static_cast<void>(cv.forceColorConVar("fog_color", channels[0], channels[1], channels[2]));
+    }
+
+    
+    
+    
+    
+    
+    
+    
+    
+    // World recolor. `writeObjectLightTint` is true ONLY on the base-desc
+    // (CBaseSceneObjectDesc) path: its draw impl (0x41C380 on 11106093, formerly
+    // 0x40E240) copies sceneObject+0x50/+0x54 (object = qword at prim+0x18) into
+    // the per-frame light entries each draw, so writing the tint there colors
+    // walls through the light queue - the documented "working path".
+    // The aggregate path (TinyBVH walk) is NOT verified for object layout and
+    // previously CRASHED with a prim+0x00 object read (2026-09-06) - it stays
+    // prim-albedo-only: a stale offset costs a missing recolor, never a crash.
+    // ponytail: no save/restore of the object tint - disable clears at map
+    // change; add a cached-restore only if that ever bothers anyone.
+    // WORLD MODULATION (2026-10-10 verdict): FAIL-CLOSED NO-OP.
+    // Live user verdict: prim albedo (+0x50) recolors weapons and random
+    // props with wrong colors (world shaders don't consume it as a tint);
+    // scene-object +0x50/+0x54 are the LIGHT-QUEUE FLOAT sources copied into
+    // per-frame light entries (+4/+8) - writing RGBA u32s there corrupts
+    // lighting (wrong colors, transparency when alpha drops, hue shifts).
+    // The correct write (velocity's world color) is the light-queue ENTRY
+    // color u32 at entry+0 (queue global -> [queue+0x18] base, entry stride
+    // 0x20, per-object count/index) - needs the queue-global RE session
+    // with the game IN A MATCH. Until then: no write, "a missing recolor
+    // must cost a missing recolor, never a corruption".
+    void recolorWorld(void* primitives, int primitiveCount) const noexcept
+    {
+        static_cast<void>(primitives);
+        static_cast<void>(primitiveCount);
     }
 
     
@@ -510,7 +603,6 @@ private:
     static constexpr auto kSkyPrimitiveStride = 0x70;             
                                                                   
                                                                   
-    static constexpr auto kSceneObjectLightColorOffset = 0x50;    
 
     [[nodiscard]] static void* readPointer(const std::byte* address) noexcept
     {

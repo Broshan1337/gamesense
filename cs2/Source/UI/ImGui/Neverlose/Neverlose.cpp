@@ -97,6 +97,9 @@
 #include <Features/Hud/Watermark/WatermarkPanelParams.h>
 #include <UI/ImGui/Neverlose/MenuThemeConfigVariables.h>
 #include <Features/Visuals/GrenadeTimers/GrenadeTimersConfigVariables.h>
+#include <Features/Visuals/OffScreenArrows/OffScreenArrowsConfigVariables.h>
+#include <Features/Visuals/BulletTracers/BulletTracersConfigVariables.h>
+#include <Features/Visuals/KillEffects/KillEffectsConfigVariables.h>
 #include <Features/Visuals/Hitmarker/HitmarkerConfigVariables.h>
 #include <Features/Visuals/ModelGlow/ModelGlowConfigVariables.h>
 #include <Features/Visuals/OutlineGlow/OutlineGlowConfigVariables.h>
@@ -3560,6 +3563,20 @@ void pageEffects() noexcept
         toggleVar<grenade_timers_vars::Enabled>("Master Switch", ++controlId);
         toggleVar<grenade_timers_vars::SmokeTimers>("Smoke Timers", ++controlId);
         toggleVar<grenade_timers_vars::MolotovTimers>("Molotov Timers", ++controlId);
+    });
+    addCard("OFF-SCREEN ARROWS", 4, [] {
+        toggleVar<OffScreenArrowsEnabled>("Enemy Arrows", ++controlId);
+        colorVar<OffScreenArrowsColor>("Arrow Color", ++controlId);
+        floatSliderVar<OffScreenArrowsRadius>("Radius", ++controlId, " px");
+        floatSliderVar<OffScreenArrowsSize>("Size", ++controlId, " px");
+    });
+    addCard("BULLET TRACERS", 1, [] {
+        toggleVar<BulletTracersEnabled>("Bullet Tracers", ++controlId);
+    });
+    addCard("KILL EFFECTS", 3, [] {
+        toggleVar<KillEffectsEnabled>("Lightning Strike", ++controlId);
+        colorVar<KillEffectsColor>("Bolt Color", ++controlId);
+        toggleVar<KillEffectsScreenFlash>("Kill Screen Flash", ++controlId);
     });
 }
 
@@ -7843,6 +7860,173 @@ void neverlose::renderGameOverlay() noexcept
                 const ImU32 color = C(timer.rgba >> 24 & 0xFF, timer.rgba >> 16 & 0xFF, timer.rgba >> 8 & 0xFF, timer.rgba & 0xFF);
                 fg->AddText(font, fontSize, pos + ImVec2(1.0f, 1.0f), C(0, 0, 0, 160), text);
                 fg->AddText(font, fontSize, pos, color, text);
+            }
+        }
+    }
+
+    // Off-screen enemy arrows: filled triangles on a circle around screen center.
+    if (snapshot.count > 0) {
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        const ImVec2 center = display * 0.5f;
+        const float radius = static_cast<float>(ui_config::get<OffScreenArrowsRadius>());
+        const auto arrowColor = ui_config::get<OffScreenArrowsColor>();
+        const ImU32 color = C(arrowColor.r(), arrowColor.g(), arrowColor.b(), arrowColor.a());
+        const ImU32 outline = C(0, 0, 0, static_cast<int>(arrowColor.a()) * 2 / 5);
+        const float arrowWidth = static_cast<float>(ui_config::get<OffScreenArrowsSize>());
+        const float arrowHeight = arrowWidth * 0.75f;
+        for (int i = 0; i < snapshot.count; ++i) {
+            const auto& arrow = snapshot.arrows[i];
+            float dx = (arrow.xPercent * 0.01f - 0.5f) * display.x;
+            float dy = (arrow.yPercent * 0.01f - 0.5f) * display.y;
+            if (arrow.behind) {
+                dx = -dx;
+                dy = -dy;
+            }
+            if (dx == 0.0f && dy == 0.0f)
+                continue;
+            const float angle = ImAtan2(dy, dx);
+            const float fx = ImCos(angle);
+            const float fy = ImSin(angle);
+            const ImVec2 tip = ImVec2(center.x + fx * radius, center.y + fy * radius);
+            const ImVec2 base = ImVec2(tip.x - fx * arrowHeight, tip.y - fy * arrowHeight);
+            const ImVec2 perp = ImVec2(-fy * arrowWidth * 0.5f, fx * arrowWidth * 0.5f);
+            fg->AddTriangleFilled(tip, ImVec2(base.x - perp.x, base.y - perp.y), ImVec2(base.x + perp.x, base.y + perp.y), color);
+            fg->AddTriangle(tip, ImVec2(base.x - perp.x, base.y - perp.y), ImVec2(base.x + perp.x, base.y + perp.y), outline, 1.0f);
+        }
+    }
+
+    // Bullet tracers are IN-GAME (the weapon's own tracer particle system) -
+    // no overlay drawing.
+
+    // Kill-effect lightning: a strike FROM THE SKY down onto the victim's
+    // death spot. The producer projects BOTH the death spot and the world
+    // point straight above it (2500u up) and publishes them as screen
+    // percents; the draw side converts to pixels. The sky end is CAPPED at
+    // 1.5x screen height along its projected direction (so looking up sends
+    // the bolt through the top edge - it really comes from the sky), while
+    // degenerate flat/below-horizon cases fall back to a short vertical
+    // bolt (never sideways, never below the base = the floor-lines bug class
+    // is impossible by construction).
+    if (snapshot.boltCount > 0) {
+        constexpr int kBoltSegments = 12;
+        constexpr float kScreenFlashTime = 0.45f;  // kill screen flash duration
+        constexpr float kJitterAmplitude = 26.0f;
+        constexpr float kCoreThickness = 4.0f;
+        constexpr float kGlowThickness = 14.0f;
+        constexpr float kMinBoltLength = 160.0f;   // px fallback length
+        constexpr float kMaxBoltLength = 1.5f;      // x screen height cap
+        constexpr float kForkLength = 64.0f;
+        constexpr float kForkDownDrift = 0.3f;      // slight toward-base tilt
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        const float screenH = display.y;
+
+        // Freshest strike drives the kill screen flash (healthshot-style).
+        float freshest = 1.0f;
+        for (int i = 0; i < snapshot.boltCount; ++i)
+            freshest = ImMin(freshest, snapshot.bolts[i].ageScale);
+
+        for (int i = 0; i < snapshot.boltCount; ++i) {
+            const auto& bolt = snapshot.bolts[i];
+            const ImVec2 base{bolt.xPercent * 0.01f * display.x, bolt.yPercent * 0.01f * display.y};
+
+            // Screen-space direction toward the sky point (pixel DELTAS).
+            const ImVec2 upDelta{
+                (bolt.upXPercent - bolt.xPercent) * 0.01f * display.x,
+                (bolt.upYPercent - bolt.yPercent) * 0.01f * display.y};
+            const float upLen = ImSqrt(upDelta.x * upDelta.x + upDelta.y * upDelta.y);
+
+            // Bolt vector: base -> top. Default: short vertical bolt.
+            ImVec2 top{base.x, base.y - kMinBoltLength};
+            if (upLen > 1.0f) {
+                const ImVec2 unit{upDelta.x / upLen, upDelta.y / upLen};
+                // The sky point is toward the sky only if it sits ABOVE the
+                // base (screen up = smaller y). Horizontal/below cases would
+                // draw sideways/past-the-floor lines - clamp those out.
+                if (unit.y < -0.25f) {
+                    const float len = ImMin(upLen, kMaxBoltLength * screenH);
+                    top = ImVec2{base.x + unit.x * len, base.y + unit.y * len};
+                }
+            }
+            const ImVec2 dir = base - top;
+            const float length = ImSqrt(dir.x * dir.x + dir.y * dir.y);
+            if (length < 1.0f)
+                continue;
+            const ImVec2 dirUnit{dir.x / length, dir.y / length};
+            const ImVec2 perp{-dirUnit.y, dirUnit.x};
+            const ImU32 coreColor = C(bolt.rgba >> 24 & 0xFF, bolt.rgba >> 16 & 0xFF, bolt.rgba >> 8 & 0xFF, bolt.rgba & 0xFF);
+            const int alpha = static_cast<int>(bolt.rgba & 0xFF);
+            const ImU32 glowColor = C(bolt.rgba >> 24 & 0xFF, bolt.rgba >> 16 & 0xFF, bolt.rgba >> 8 & 0xFF, alpha * 3 / 10);
+            const float stroke = kCoreThickness * (1.0f - bolt.ageScale * 0.5f);
+
+            std::uint32_t rng = bolt.seed | 1u;
+            const auto nextJitter = [&rng]() {
+                rng = rng * 1664525u + 1013904223u;
+                return static_cast<float>(rng >> 16 & 0xFFFF) * (1.0f / 65536.0f) - 0.5f;
+            };
+
+            ImVec2 point = top;
+            for (int seg = 1; seg <= kBoltSegments; ++seg) {
+                const float t = static_cast<float>(seg) / kBoltSegments;
+                // Jitter tapers toward the strike point (sky end wanders wide).
+                const float wander = kJitterAmplitude * 2.0f * (0.45f + 0.55f * t);
+                const ImVec2 next = ImVec2(
+                    top.x + dir.x * t + perp.x * nextJitter() * wander,
+                    top.y + dir.y * t + perp.y * nextJitter() * wander);
+                fg->AddLine(point, next, glowColor, kGlowThickness);
+                fg->AddLine(point, next, coreColor, stroke);
+
+                // Two seeded forks partway down the bolt: capped side
+                // branches off the UNIT bolt direction - never past the base.
+                if (seg == kBoltSegments / 3 || seg == kBoltSegments * 2 / 3) {
+                    const float side = nextJitter() < 0.0f ? -1.0f : 1.0f;
+                    const ImVec2 forkStep{
+                        perp.x * side * kForkLength + dirUnit.x * kForkLength * kForkDownDrift,
+                        perp.y * side * kForkLength + dirUnit.y * kForkLength * kForkDownDrift};
+                    ImVec2 fork = point;
+                    constexpr int kForkSegments = 3;
+                    for (int b = 1; b <= kForkSegments; ++b) {
+                        const float bt = static_cast<float>(b) / kForkSegments;
+                        const ImVec2 forkNext = ImVec2(
+                            point.x + forkStep.x * bt + perp.x * nextJitter() * 10.0f,
+                            point.y + forkStep.y * bt + perp.y * nextJitter() * 10.0f);
+                        fg->AddLine(fork, forkNext, glowColor, kGlowThickness * 0.4f);
+                        fg->AddLine(fork, forkNext, coreColor, stroke * 0.6f);
+                        fork = forkNext;
+                    }
+                }
+                point = next;
+            }
+
+            // Small impact flash at the strike point.
+            fg->AddCircleFilled(base, 8.0f, coreColor, 10);
+            fg->AddCircle(base, 14.0f, glowColor, 1.5f, 12);
+        }
+
+        // Kill screen flash (healthshot-style): on every strike a quick tinted
+        // flash + edge vignette blooms and fades over kScreenFlashTime.
+        if (ui_config::get<KillEffectsScreenFlash>() && freshest < kScreenFlashTime) {
+            const auto& bolt = snapshot.bolts[0];
+            const int r = static_cast<int>(bolt.rgba >> 24 & 0xFF);
+            const int g = static_cast<int>(bolt.rgba >> 16 & 0xFF);
+            const int b = static_cast<int>(bolt.rgba >> 8 & 0xFF);
+            const float f = 1.0f - freshest / kScreenFlashTime;  // 1 fresh -> 0 gone
+            const int tint = static_cast<int>(f * 36.0f);
+            const int edge = static_cast<int>(f * 90.0f);
+            if (tint > 0) {
+                fg->AddRectFilled(ImVec2{0.0f, 0.0f}, display, C(r, g, b, tint));
+                // Vignette: four gradient bands fading from the screen edges.
+                const float bandX = display.x * 0.25f;
+                const float bandY = display.y * 0.25f;
+                const ImU32 transparent = C(r, g, b, 0);
+                const ImU32 edgeCol = C(r, g, b, edge);
+                fg->AddRectFilledMultiColor(ImVec2{0.0f, 0.0f}, ImVec2{display.x, bandY},
+                    edgeCol, edgeCol, transparent, transparent);
+                fg->AddRectFilledMultiColor(ImVec2{0.0f, display.y - bandY}, ImVec2{display.x, display.y},
+                    transparent, transparent, edgeCol, edgeCol);
+                fg->AddRectFilledMultiColor(ImVec2{0.0f, 0.0f}, ImVec2{bandX, display.y},
+                    edgeCol, transparent, transparent, edgeCol);
+                fg->AddRectFilledMultiColor(ImVec2{display.x - bandX, 0.0f}, ImVec2{display.x, display.y},
+                    transparent, edgeCol, edgeCol, transparent);
             }
         }
     }

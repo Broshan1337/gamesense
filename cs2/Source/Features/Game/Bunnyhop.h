@@ -117,7 +117,12 @@ public:
         const float penalty = hookContext.template make<CvarSystem>().readFloatConVar("sv_jump_spam_penalty_time").value_or(1.0f / 64);
         const bool allowed = jumpTiming.mayPress(pendingJumpTime, penalty);
         hasPendingLanding = hasPendingLanding && allowed;
-        wantsJump = wantsJump && allowed;
+        // A predicted landing THIS tick is a jump too: pressing at the landing
+        // subtick (not the next ground tick at when=1.0) is what keeps the hop
+        // frictionless - the 2026-10-10 verdict had every landing eat 1+ ground
+        // ticks of friction (deltas of -20..-95 units per hop) because the
+        // staged landing press was dropped and the jump only fired a tick late.
+        wantsJump = (wantsJump || hasPendingLanding) && allowed;
         hasPendingTap = wantsJump;
         hasPendingJump = true;
         hasPendingInput = true;
@@ -168,11 +173,16 @@ public:
             if (Moves::count(userCmd.baseMessage()) + 2
                 > cs2::CUserCmd::BaseMessage::SubtickMoves::kMaxSteps)
                 return clearPending();
+            // Airborne landing press: when = the predicted landing subtick
+            // (fraction of this tick), so the jump lands in the SAME tick the
+            // pawn touches ground and friction never gets a ground tick to
+            // eat. Ground ticks keep the legacy press+release at when=1.0.
+            const float pressWhen = hasPendingLanding ? pendingLandingWhen : 1.0f;
             auto&& moves = hookContext.template make<SubtickMoves>();
-            auto* const press = moves.add(userCmd.baseMessage(), 1.0f);
+            auto* const press = moves.add(userCmd.baseMessage(), pressWhen);
             if (press) {
                 Moves::setButton(press, cs2::CCSGOInput::Buttons::kJump, true);
-                if (auto* release = moves.add(userCmd.baseMessage(), 1.0f)) {
+                if (auto* release = moves.add(userCmd.baseMessage(), pressWhen)) {
                     Moves::setButton(release, cs2::CCSGOInput::Buttons::kJump, false);
                 } else {
                     Moves::stripButtons(userCmd.baseMessage(), cs2::CCSGOInput::Buttons::kJump);

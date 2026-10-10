@@ -597,6 +597,23 @@ private:
         configConversion.boolean(u8"MolotovTimers", loadVariable<grenade_timers_vars::MolotovTimers>(), saveVariable<grenade_timers_vars::MolotovTimers>());
         configConversion.endObject();
 
+        configConversion.beginObject(u8"OffScreenArrows");
+        configConversion.boolean(u8"Enabled", loadVariable<OffScreenArrowsEnabled>(), saveVariable<OffScreenArrowsEnabled>());
+        configConversion.uint(u8"Color", loadVariable<OffScreenArrowsColor>(), saveVariable<OffScreenArrowsColor>());
+        configConversion.floating(u8"Radius", loadVariable<OffScreenArrowsRadius>(), saveVariable<OffScreenArrowsRadius>());
+        configConversion.floating(u8"Size", loadVariable<OffScreenArrowsSize>(), saveVariable<OffScreenArrowsSize>());
+        configConversion.endObject();
+
+        configConversion.beginObject(u8"BulletTracers");
+        configConversion.boolean(u8"Enabled", loadVariable<BulletTracersEnabled>(), saveVariable<BulletTracersEnabled>());
+        configConversion.endObject();
+
+        configConversion.beginObject(u8"KillEffects");
+        configConversion.boolean(u8"Enabled", loadVariable<KillEffectsEnabled>(), saveVariable<KillEffectsEnabled>());
+        configConversion.uint(u8"Color", loadVariable<KillEffectsColor>(), saveVariable<KillEffectsColor>());
+        configConversion.boolean(u8"ScreenFlash", loadVariable<KillEffectsScreenFlash>(), saveVariable<KillEffectsScreenFlash>());
+        configConversion.endObject();
+
         configConversion.endObject();
     }
 

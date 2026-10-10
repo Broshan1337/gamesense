@@ -17,6 +17,9 @@
 #include <Features/Game/FakePremierConfigVariables.h>
 #include <Features/Game/GlitchGeneratorConfigVariables.h>
 #include <Features/Visuals/ScoreboardEquipment/ScoreboardEquipmentConfigVariables.h>
+#include <Features/Visuals/OffScreenArrows/OffScreenArrowsConfigVariables.h>
+#include <Features/Visuals/BulletTracers/BulletTracersConfigVariables.h>
+#include <Features/Visuals/KillEffects/KillEffectsConfigVariables.h>
 #include <Features/Game/MovementConfigVariables.h>
 #include <Features/Game/AutoPeekConfigVariables.h>
 #include <Features/Game/RevealRadarConfigVariables.h>
@@ -484,5 +487,13 @@ using ConfigVariableTypes = TypeList<
     FakePremierWins,
     PremierWins,
     FakeWingmanEnabled,
-    WingmanRank
+    WingmanRank,
+    OffScreenArrowsEnabled,
+    OffScreenArrowsColor,
+    OffScreenArrowsRadius,
+    BulletTracersEnabled,
+    KillEffectsEnabled,
+    KillEffectsColor,
+    OffScreenArrowsSize,
+    KillEffectsScreenFlash
 >;
