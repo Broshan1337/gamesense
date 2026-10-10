@@ -161,11 +161,6 @@ float kTextIcon = 13.0f;
 
 float kShellWidth = 748.0f;
 float kShellHeight = 576.0f;
-// Shell corner radius - proportionally matches the profile popover (210 wide / s(16)):
-// 748 * 16 / 210 ~= 57 was the literal proportional number, but the content layout
-// (cards end 9px short of the right edge with their own 16px rounding) nests cleanly
-// up to ~40; bigger and the card corners would poke past the shell silhouette.
-float kShellRounding = 40.0f;
 float kSidebarWidth = 158.0f;
 float kToolbarHeight = 56.0f;
 float kRowHeight = 37.0f;
@@ -299,7 +294,6 @@ void applyMetrics() noexcept
     neverlose::g_menuUiScale.store(menuScale, std::memory_order_relaxed);
     kShellWidth = 748.0f * menuScale;
     kShellHeight = 576.0f * menuScale;
-    kShellRounding = 40.0f * menuScale;
     shellHeightBase = 576.0f * menuScale;
     kSidebarWidth = 158.0f * menuScale;
     kToolbarHeight = 56.0f * menuScale;
@@ -6222,7 +6216,7 @@ bool changePage(Page next) noexcept
 
 void sidebar(ImDrawList* d, ImVec2 base) noexcept
 {
-    d->AddRectFilled(base, base + ImVec2(kSidebarWidth, kShellHeight), kSidebarBg, kShellRounding, ImDrawFlags_RoundCornersLeft);
+    d->AddRectFilled(base, base + ImVec2(kSidebarWidth, kShellHeight), kSidebarBg, s(17.0f), ImDrawFlags_RoundCornersLeft);
     d->AddRectFilled(base + ImVec2(s(145), 0), base + ImVec2(kSidebarWidth, kShellHeight), kSidebarBg);
     d->AddLine(base + ImVec2(kSidebarWidth, 0), base + ImVec2(kSidebarWidth, kShellHeight), C(30, 33, 43));
 
@@ -6461,7 +6455,7 @@ void toolbar(ImDrawList* d, ImVec2 base) noexcept
     
     
     
-    d->AddRectFilled(base + ImVec2(kSidebarWidth, 0), base + ImVec2(kShellWidth, kToolbarHeight), kToolbarBg, kShellRounding, ImDrawFlags_RoundCornersTopRight);
+    d->AddRectFilled(base + ImVec2(kSidebarWidth, 0), base + ImVec2(kShellWidth, kToolbarHeight), kToolbarBg, s(17.0f), ImDrawFlags_RoundCornersTopRight);
     d->AddLine(base + ImVec2(kSidebarWidth, kToolbarHeight), base + ImVec2(kShellWidth, kToolbarHeight), C(26, 26, 29));
 
     
@@ -6554,10 +6548,7 @@ void toolbar(ImDrawList* d, ImVec2 base) noexcept
 
 void accountBar(ImDrawList* d, ImVec2 base) noexcept
 {
-    // 8px above the old spot: the shell's bigger bottom-left arc (kShellRounding)
-    // would otherwise cut through the bar's corner - at this height the bar's own
-    // s(6) rounding clears the arc on every row (verified geometrically).
-    const ImVec2 account = base + ImVec2(s(7), kShellHeight - s(53.0f));
+    const ImVec2 account = base + ImVec2(s(7), kShellHeight - s(45.0f));
     const float barWidth = kSidebarWidth - s(18.0f);
     accountBarMin = account;
     accountBarMax = account + ImVec2(barWidth, s(38));
@@ -6638,7 +6629,7 @@ void profilePopover(ImDrawList* d, ImVec2 base) noexcept
     
     
     const float height = rowHeight * 12.0f + s(26.0f) + s(16.0f);
-    ImVec2 p = base + ImVec2(s(7.0f), kShellHeight - s(53.0f) - height * open - s(6.0f));
+    ImVec2 p = base + ImVec2(s(7.0f), kShellHeight - s(45.0f) - height * open - s(6.0f));
     const ImVec2 size(width, height);
     p = popupPosition(p, size);
     PopupSurface surface{PopupProfile, p, size, d};
@@ -7204,12 +7195,12 @@ void neverlose::render() noexcept
         
         
 
-        softShadow(d, b, b + ImVec2(kShellWidth, kShellHeight), kShellRounding, s(16.0f));
+        softShadow(d, b, b + ImVec2(kShellWidth, kShellHeight), s(17.0f), s(16.0f));
 
-        d->AddRectFilled(b, b + ImVec2(kShellWidth, kShellHeight), kShellBg, kShellRounding);
-        d->AddRect(b, b + ImVec2(kShellWidth, kShellHeight), kHairlineSoft, kShellRounding);
+        d->AddRectFilled(b, b + ImVec2(kShellWidth, kShellHeight), kShellBg, s(17.0f));
+        d->AddRect(b, b + ImVec2(kShellWidth, kShellHeight), kHairlineSoft, s(17.0f));
 
-        d->AddRect(b - ImVec2(1.0f, 1.0f), b + ImVec2(kShellWidth, kShellHeight) + ImVec2(1.0f, 1.0f), C(255, 255, 255, 14), kShellRounding + s(1.0f));
+        d->AddRect(b - ImVec2(1.0f, 1.0f), b + ImVec2(kShellWidth, kShellHeight) + ImVec2(1.0f, 1.0f), C(255, 255, 255, 14), s(18.0f));
 
         sidebar(d, b);
         toolbar(d, b);
@@ -7569,7 +7560,7 @@ void neverlose::drawMenuGlow(float menuAlpha) noexcept
             continue;
         fg->AddRect(ImVec2(shellPos.x - offset, shellPos.y - offset),
                     ImVec2(shellEnd.x + offset, shellEnd.y + offset),
-                    C(rC, gC, bC, static_cast<int>(ringAlpha)), kShellRounding + offset, 0, thickness + 1.0f);
+                    C(rC, gC, bC, static_cast<int>(ringAlpha)), s(17.0f) + offset, 0, thickness + 1.0f);
     }
 
     
