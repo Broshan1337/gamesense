@@ -12,6 +12,7 @@
 #include "Platform/SelfUnload.h"
 #include "Utils/ReturnAddress.h"
 #include <Utils/CrashLogger.h>
+#include <Utils/ConsoleBanner.h>
 #include <UI/ImGui/GuiLog.h>
 #include <Utils/RetAddrSpoofer.h>
 #include <Utils/SessionBind.h>
@@ -1104,6 +1105,10 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     
     
     
+    // gamesneeze-style console banner: the NS logo once, ahead of the status
+    // lines (console output only - the gui.log contract stays anomaly-only).
+    console_banner::printOnce();
+
     StatusReport::dumpOnce([](const char* message, bool ok) {
         
         

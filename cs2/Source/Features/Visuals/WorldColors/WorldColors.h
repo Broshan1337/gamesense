@@ -203,16 +203,18 @@ public:
         auto&& cv = cvarSystem();
         const bool enabled = GET_CONFIG_VAR(WorldColorsFogEnabled);
 
+        // Restore edge: same direct-force path (the console commands are
+        // FCVAR_CHEAT-rejected - see below - so restore NEVER used the queue
+        // to begin with). All cached fog_* values are restored, -1 lets the
+        // engine repopulate fog_color from the map.
         if (!enabled) {
             if (state.fogCvarsCached) {
-                auto&& executor = hookContext.template make<EngineCommandExecutor>();
-                char command[64];
-                std::snprintf(command, sizeof(command), "fog_override %d", state.fogOverrideOriginal);
-                executor.execute(command);
-                std::snprintf(command, sizeof(command), "fog_override_enable %d", static_cast<int>(state.fogOverrideEnableOriginal));
-                executor.execute(command);
                 static_cast<void>(cv.forceIntConVar("fog_override", state.fogOverrideOriginal));
                 static_cast<void>(cv.forceBoolConVar("fog_override_enable", state.fogOverrideEnableOriginal));
+                static_cast<void>(cv.forceColorConVar("fog_color", state.fogColorOriginal[0], state.fogColorOriginal[1], state.fogColorOriginal[2]));
+                static_cast<void>(cv.forceFloatConVar("fog_start", state.fogStartOriginal));
+                static_cast<void>(cv.forceFloatConVar("fog_end", state.fogEndOriginal));
+                static_cast<void>(cv.forceFloatConVar("fog_maxdensity", state.fogMaxDensityOriginal));
                 state.fogCvarsCached = false;
             }
             return;
@@ -241,39 +243,14 @@ public:
             static_cast<float>(color.r()), static_cast<float>(color.g()), static_cast<float>(color.b()),
         };
 
-        const double now = monotonicSeconds();
-        const bool timeToSend = now - state.fogLastQueueTime > 2.0;
-        if (!timeToSend)
-            return;
-        state.fogLastQueueTime = now;
-
-        // One command per execute() call (ExecuteClientCommand is a
-        // single-command API - no newline splitting assumed).
-        // Both override families are driven: fog_* (classic, "fog_override 1")
-        // and fog_override_enable/start/end/max_density (the second override
-        // system next to it) - whichever the renderer consumes.
-        auto&& executor = hookContext.template make<EngineCommandExecutor>();
-        char command[96];
-        std::snprintf(command, sizeof(command), "fog_override 1");
-        executor.execute(command);
-        std::snprintf(command, sizeof(command), "fog_override_enable 1");
-        executor.execute(command);
-        std::snprintf(command, sizeof(command), "fog_start 0");
-        executor.execute(command);
-        std::snprintf(command, sizeof(command), "fog_override_start 0");
-        executor.execute(command);
-        std::snprintf(command, sizeof(command), "fog_end %.0f", static_cast<double>(fogDistance));
-        executor.execute(command);
-        std::snprintf(command, sizeof(command), "fog_override_end %.0f", static_cast<double>(fogDistance));
-        executor.execute(command);
-        std::snprintf(command, sizeof(command), "fog_maxdensity %.3f", static_cast<double>(density));
-        executor.execute(command);
-        std::snprintf(command, sizeof(command), "fog_override_max_density %.3f", static_cast<double>(density));
-        executor.execute(command);
-        std::snprintf(command, sizeof(command), "fog_color %d %d %d", color.r(), color.g(), color.b());
-        executor.execute(command);
-
-        // Memory backstop (same values the engine just parsed).
+        // 2026-10-13 (in-game report): the fog_* cvars are FCVAR_CHEAT-flagged,
+        // so the console queue ("fog_override 1" etc. every 2s) NEVER lands -
+        // the engine prints "[Console] SV: Convar ... is cheat protected,
+        // change ignored" for every command, twice per cycle, forever. The
+        // console queue is pure spam; the DIRECT force writes below are the
+        // real lever (they set the value the renderer reads at ConVar+value,
+        // past the flag). Queue deleted; values written every enable frame.
+        // Both override families are set (fog_* classic + fog_override_*).
         static_cast<void>(cv.forceIntConVar("fog_override", 1));
         static_cast<void>(cv.forceBoolConVar("fog_override_enable", true));
         static_cast<void>(cv.forceFloatConVar("fog_start", 0.0f));
