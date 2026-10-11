@@ -194,22 +194,37 @@ private:
         // did, and insertTreeNode would) lands in that object and corrupts its
         // child indexes -> SIGSEGV in libclient+0x1ec4eca. Only root-reachable
         // slots are ever written.
+        // 2026-10-13 (crash triage): DIRTY-CHECKED writes only. The tree is GC-shared
+        // heap the GC thread rewrites per snapshot, and nodes MOVE between snapshots
+        // (live-verified 2026-10-10). Unconditional 64 Hz writes raced a snapshot and
+        // landed in a freed/reused GC allocation -> a CProtoBufMsg/GC job object got
+        // its internals stomped -> the game called a garbage vtable slot -> SEGV_ACCERR
+        // executing a non-exec data page (in-game crash in the MatchmakingClientAbandon
+        // GC job machinery, twice, identical RVA). Writing ONLY on value drift shrinks
+        // the race window by orders of magnitude; the spoof still re-applies whenever
+        // the GC reverts it (that stays load-bearing).
+        const auto writeIfChanged = [](std::byte* node, int offset, std::int32_t value) noexcept {
+            std::int32_t current{};
+            std::memcpy(&current, node + offset, sizeof(current));
+            if (current != value)
+                std::memcpy(node + offset, &value, sizeof(value));
+        };
         if (premier) {
             auto* node = findTreeNode(nodes, rootIdx, Tree::kRankTypePremier);
             if (node) {
                 const std::int32_t score = static_cast<std::int32_t>(GET_CONFIG_VAR(FakePremierScore));
-                std::memcpy(node + Tree::kNodeRatingOffset, &score, sizeof(score));
+                writeIfChanged(node, Tree::kNodeRatingOffset, score);
                 if (spoofWins)
-                    std::memcpy(node + Tree::kNodeWinsOffset, &winsValue, sizeof(winsValue));
+                    writeIfChanged(node, Tree::kNodeWinsOffset, winsValue);
             }
         }
         if (wingmanMode) {
             auto* node = findTreeNode(nodes, rootIdx, Tree::kRankTypeWingman);
             if (node) {
                 const std::int32_t rank = static_cast<std::int32_t>(GET_CONFIG_VAR(WingmanRank));
-                std::memcpy(node + Tree::kNodeRatingOffset, &rank, sizeof(rank));
+                writeIfChanged(node, Tree::kNodeRatingOffset, rank);
                 if (spoofWins)
-                    std::memcpy(node + Tree::kNodeWinsOffset, &winsValue, sizeof(winsValue));
+                    writeIfChanged(node, Tree::kNodeWinsOffset, winsValue);
             }
         }
 
@@ -219,7 +234,7 @@ private:
         // show a nonsense classic badge).
         if (spoofWins) {
             if (auto* compNode = findTreeNode(nodes, rootIdx, Tree::kRankTypeCompetitive))
-                std::memcpy(compNode + Tree::kNodeWinsOffset, &winsValue, sizeof(winsValue));
+                writeIfChanged(compNode, Tree::kNodeWinsOffset, winsValue);
         }
     }
 

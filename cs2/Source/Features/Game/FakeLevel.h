@@ -54,22 +54,32 @@ private:
         return static_cast<std::byte*>(hookContext.patternSearchResults().template get<PlayerRankingDataPointer>());
     }
 
+    // 2026-10-13 (crash triage): DIRTY-CHECKED writes only. The ranking block is
+    // GC-shared memory the GC thread rewrites per snapshot; the old apply() wrote
+    // level + xp + flags unconditionally EVERY TICK (3 writes x 64 Hz straight into
+    // moving GC allocations - the race class that stomped a GC job object and crashed
+    // the game with a corrupted vtable call). Write only when a value drifts; the
+    // flags write only when the present bits actually need setting.
     void apply(std::byte* rankingData) const noexcept
     {
         const std::uint32_t level = GET_CONFIG_VAR(FakeLevelValue);
-        write(rankingData, cs2::PlayerRankingData::kLevelOffset, level);
+        std::uint32_t currentLevel{};
+        std::memcpy(&currentLevel, rankingData + cs2::PlayerRankingData::kLevelOffset, sizeof(currentLevel));
+        if (currentLevel != level)
+            write(rankingData, cs2::PlayerRankingData::kLevelOffset, level);
 
-        
-        
         const std::uint32_t xp = GET_CONFIG_VAR(FakeLevelXp);
-        write(rankingData, cs2::PlayerRankingData::kExperienceOffset, xp);
+        std::uint32_t currentXp{};
+        std::memcpy(&currentXp, rankingData + cs2::PlayerRankingData::kExperienceOffset, sizeof(currentXp));
+        if (currentXp != xp)
+            write(rankingData, cs2::PlayerRankingData::kExperienceOffset, xp);
 
-        
-        
         std::uint32_t flags{};
         std::memcpy(&flags, rankingData + cs2::PlayerRankingData::kFlagsOffset, sizeof(flags));
-        flags |= cs2::PlayerRankingData::kLevelPresentFlag | cs2::PlayerRankingData::kExperiencePresentFlag;
-        std::memcpy(rankingData + cs2::PlayerRankingData::kFlagsOffset, &flags, sizeof(flags));
+        const std::uint32_t wanted = flags | cs2::PlayerRankingData::kLevelPresentFlag
+            | cs2::PlayerRankingData::kExperiencePresentFlag;
+        if (wanted != flags)
+            std::memcpy(rankingData + cs2::PlayerRankingData::kFlagsOffset, &wanted, sizeof(wanted));
     }
 
     
