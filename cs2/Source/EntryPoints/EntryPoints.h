@@ -30,6 +30,7 @@
 #include <CS2/Classes/EntitySystem/CEntityIndex.h>
 #include <Features/Combat/Aimbot/Aimbot.h>
 #include <Features/Combat/DuckPeek.h>
+#include <Features/Visuals/Esp/Esp.h>
 #include <Features/Combat/AntiAim/AntiAim.h>
 #include <Features/Combat/DoubleTap/DoubleTap.h>
 #include <Features/Combat/Resolver/Resolver.h>
@@ -491,6 +492,7 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     hookContext.template make<NoScopeInaccuracyVis>().onUnload();
     hookContext.template make<Aimbot>().onUnload();
     hookContext.template make<DuckPeek<HookContext<GlobalContext>>>().onUnload();
+    hookContext.template make<Esp<HookContext<GlobalContext>>>().onUnload();
     hookContext.template make<AntiAim<HookContext<GlobalContext>>>().onUnload();
     hookContext.template make<DoubleTapGate<HookContext<GlobalContext>>>().onUnload();
     hookContext.template make<AimbotFovCircle>().onUnload();
@@ -1039,6 +1041,7 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     SoundFeatures{hookContext.soundWatcherState(), hookContext.hooks().viewRenderHook, hookContext}.runOnViewMatrixUpdate();
     hookContext.template make<Hitmarker>().run();
     hookContext.template make<OffScreenArrows>().run();
+    hookContext.template make<Esp<HookContext<GlobalContext>>>().run();
     hookContext.template make<AntiAim<HookContext<GlobalContext>>>().onRenderUpdate();
     hookContext.template make<KillEffects>().run();
     hookContext.template make<PlayerList>().run();

@@ -177,6 +177,84 @@ inline void publishAaArc(const AaArcPoint* newPoints, int count) noexcept
     aaArcPointCount = count;
 }
 
+// ---- ESP scene primitives (core ESP suite, Features/Visuals/Esp) ----
+// All coordinates are PERCENTS OF DISPLAY (xPercent/yPercent like Arrow);
+// the draw side converts with the current display size. rgba values carry
+// color::Rgba packing. Fixed-capacity: producers must respect the caps.
+
+struct EspRect {
+    float xPercent;         // box left
+    float yPercent;         // box top
+    float wPercent;         // box width
+    float hPercent;         // box height
+    std::uint32_t rgba;
+    bool cornered;          // corner-brackets instead of full rect
+    bool fill;              // also fill the box
+    float cornerPercent;    // corner bracket arm length
+    float thickness;        // px, draw-side
+};
+
+struct EspLine {
+    float axPercent, ayPercent, bxPercent, byPercent;
+    std::uint32_t rgba;
+    float thickness;        // px, draw-side
+};
+
+struct EspCircle {
+    float xPercent, yPercent, radiusPx;
+    std::uint32_t rgba;
+    float thickness;
+};
+
+struct EspText {
+    float xPercent, yPercent;
+    bool center;             // horizontally centered at x
+    std::uint32_t rgba;
+    float size;               // font pt
+    char text[32];
+};
+
+// Vertical bar (health/armor): fill rises from the bottom of the bar.
+// backupFill/backupRgba = the white damage-echo overlay (hzqst backup-health
+// animation; producer fades its alpha).
+struct EspBar {
+    float xPercent, yPercent;
+    float wPx;              // width in PIXELS (constant bar width, not display percent)
+    float hPercent;
+    float fill;             // 0..1
+    float backupFill;        // 0..1, 0 = none
+    std::uint32_t rgba;
+    std::uint32_t backupRgba;
+};
+
+constexpr int kMaxEspRects = 32;
+constexpr int kMaxEspLines = 512;
+constexpr int kMaxEspCircles = 32;
+constexpr int kMaxEspTexts = 192;
+constexpr int kMaxEspBars = 64;
+
+struct EspScene {
+    EspRect rects[kMaxEspRects];
+    int rectCount = 0;
+    EspLine lines[kMaxEspLines];
+    int lineCount = 0;
+    EspCircle circles[kMaxEspCircles];
+    int circleCount = 0;
+    EspText texts[kMaxEspTexts];
+    int textCount = 0;
+    EspBar bars[kMaxEspBars];
+    int barCount = 0;
+};
+
+inline SpinLock espLock;
+inline EspScene espScene;
+
+inline void publishEsp(const EspScene& newScene) noexcept
+{
+    const std::lock_guard espGuard{espLock};
+    espScene = newScene;
+}
+
 struct Snapshot {
     Arrow arrows[kMaxArrows];
     int count = 0;
@@ -190,6 +268,7 @@ struct Snapshot {
     int multiPointCount = 0;
     AaArcPoint aaArcPoints[kMaxAaArcPoints];
     int aaArcPointCount = 0;
+    EspScene espScene;
 };
 
 [[nodiscard]] inline Snapshot snapshot() noexcept
@@ -227,6 +306,10 @@ struct Snapshot {
         s.aaArcPointCount = aaArcPointCount;
         for (int i = 0; i < aaArcPointCount; ++i)
             s.aaArcPoints[i] = aaArcPoints[i];
+    }
+    {
+        const std::lock_guard espGuard{espLock};
+        s.espScene = espScene;
     }
     return s;
 }

@@ -309,6 +309,7 @@ enum class Page
     Rage,
     Legit,
     Movement,
+    Esp,
     PlayerInfo,
     Glow,
     Viewmodel,
@@ -560,7 +561,7 @@ char searchQuery[64] = "";
 int searchSelected = 0; 
 
 constexpr const char* kPageNames[] = {
-    "Rage", "Legit", "Movement", "Player Info", "Glow",
+    "Rage", "Legit", "Movement", "Esp", "Player Info", "Glow",
     "Viewmodel", "Effects", "Hud", "Sound", "Inventory", "Radio", "Scripts", "Misc"
 };
 
@@ -2954,7 +2955,13 @@ int controlId = 0;
 
 
 constexpr int kCardSlotsPerPage = 48;
-constexpr int kMaxCardPages = 13;
+// kMaxCardPages follows the Page enum (Page::Misc is the last page). The
+// 2026-10-11 Esp page insertion moved Misc to index 13 past this fixed 13
+// and the Misc cards indexed OOB -> garbage column plans (cards rendered
+// overlapping) + OOB height writes. The static_assert below pins the enum
+// to the array so any future page insertion breaks the BUILD instead.
+constexpr int kMaxCardPages = static_cast<int>(Page::Misc) + 1;
+static_assert(static_cast<int>(Page::Misc) + 1 == 14, "kMaxCardPages/Page enum drifted - update the card plan arrays");
 float cardHeights[kMaxCardPages * kCardSlotsPerPage] = {};
 int cardCountLast[kMaxCardPages] = {};
 int cardColumnPlan[kMaxCardPages * kCardSlotsPerPage] = {};
@@ -3436,6 +3443,61 @@ void pageLegit() noexcept
     }
 }
 
+void pageEsp() noexcept
+{
+    using namespace esp_vars;
+    addCard("ESP", 3, [] {
+        toggleVar<Enabled>("ESP", ++controlId);
+        toggleVar<TeammatesEnabled>("Show Teammates", ++controlId);
+        sliderVar<MaxDistance>("Max Distance", ++controlId, " u");
+    });
+    addCard("BOX", 6, [] {
+        toggleVar<BoxEnabled>("Box", ++controlId);
+        static constexpr const char* const kBoxStyles[]{"Full", "Cornered"};
+        selectVar<BoxStyle>("Box Style", kBoxStyles, 2, ++controlId);
+        toggleVar<BoxFill>("Box Fill", ++controlId);
+        colorVar<BoxColor>("Box Color", ++controlId);
+        sliderVar<BoxThickness>("Box Thickness", ++controlId, " px");
+        sliderVar<CornerLength>("Corner Length", ++controlId, "%");
+    });
+    addCard("SKELETON", 2, [] {
+        toggleVar<SkeletonEnabled>("Skeleton", ++controlId);
+        colorVar<SkeletonColor>("Skeleton Color", ++controlId);
+    });
+    addCard("MARKERS", 7, [] {
+        toggleVar<HeadCircleEnabled>("Head Circle", ++controlId);
+        sliderVar<HeadCircleRadius>("Head Circle Size", ++controlId, " px");
+        colorVar<HeadCircleColor>("Head Circle Color", ++controlId);
+        toggleVar<ViewLineEnabled>("View Line", ++controlId);
+        sliderVar<ViewLineLength>("View Line Length", ++controlId, " u");
+        toggleVar<SnaplineEnabled>("Snapline", ++controlId);
+        colorVar<SnaplineColor>("Snapline Color", ++controlId);
+    });
+    addCard("BARS", 7, [] {
+        toggleVar<HealthBarEnabled>("Health Bar", ++controlId);
+        colorVar<HealthColor>("Health Color", ++controlId);
+        toggleVar<ArmorBarEnabled>("Armor Bar", ++controlId);
+        colorVar<ArmorColor>("Armor Color", ++controlId);
+        sliderVar<HealthBarWidth>("Bar Width", ++controlId, " px");
+        toggleVar<BackupHealthAnim>("Damage Echo", ++controlId);
+        sliderVar<EchoSize>("Echo Size", ++controlId, " pt");
+    });
+    addCard("TEXT", 3, [] {
+        toggleVar<NameEnabled>("Name", ++controlId);
+        sliderVar<NameSize>("Name Size", ++controlId, " pt");
+        toggleVar<DistanceEnabled>("Distance", ++controlId);
+    });
+    addCard("FLAGS", 7, [] {
+        toggleVar<FlagsEnabled>("Info Flags", ++controlId);
+        toggleVar<FlagFlashed>("Flashed", ++controlId);
+        toggleVar<FlagScoped>("Scoped", ++controlId);
+        toggleVar<FlagReloading>("Reloading", ++controlId);
+        toggleVar<FlagDefusing>("Defusing", ++controlId);
+        toggleVar<FlagBomb>("Bomb", ++controlId);
+        toggleVar<FlagKit>("Kit", ++controlId);
+    });
+}
+
 void pagePlayerInfo() noexcept
 {
     using namespace player_info_vars;
@@ -3693,8 +3755,9 @@ void pageEffects() noexcept
         floatSliderVar<OffScreenArrowsRadius>("Radius", ++controlId, " px");
         floatSliderVar<OffScreenArrowsSize>("Size", ++controlId, " px");
     });
-    addCard("BULLET TRACERS", 1, [] {
+    addCard("BULLET TRACERS", 2, [] {
         toggleVar<BulletTracersEnabled>("Bullet Tracers", ++controlId);
+        colorVar<BulletTracersColor>("Tracer Color", ++controlId);
     });
     addCard("KILL EFFECTS", 3, [] {
         toggleVar<KillEffectsEnabled>("Lightning Strike", ++controlId);
@@ -6135,6 +6198,7 @@ void indexNextSearchPage() noexcept
         case Page::Rage: pageRage(); break;
         case Page::Legit: pageLegit(); break;
         case Page::Movement: pageMovement(); break;
+        case Page::Esp: pageEsp(); break;
         case Page::PlayerInfo: pagePlayerInfo(); break;
         case Page::Glow: pageGlow(); break;
         case Page::Viewmodel: pageViewmodel(); break;
@@ -6477,6 +6541,7 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
     if (expand > 0.02f) {
         const int first = d->VtxBuffer.Size;
         const float startY = y_nav;
+        nav("\xEF\x80\x9B", "Esp", Page::Esp, 14);
         nav("\xEF\x80\x87", "Player Info", Page::PlayerInfo, 14);   
         nav("\xEF\x81\xAE", "Glow", Page::Glow, 14);                
         nav("\xEF\x80\xBD", "Viewmodel", Page::Viewmodel, 14);      
@@ -6488,7 +6553,7 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
             const ImU32 a = (v.col >> IM_COL32_A_SHIFT) & 255u;
             v.col = (v.col & 0xffffffu) | ((ImU32)(a * expand) << IM_COL32_A_SHIFT);
         }
-        y_nav = startY + 7 * s(32.0f) * expand;
+        y_nav = startY + 8 * s(32.0f) * expand;
     }
     nav("\xEF\x9B\x8B", "Inventory", Page::Inventory);
     y_nav += s(2.0f);
@@ -7359,6 +7424,7 @@ void neverlose::render() noexcept
         case Page::Rage: pageRage(); break;
         case Page::Legit: pageLegit(); break;
         case Page::Movement: pageMovement(); break;
+        case Page::Esp: pageEsp(); break;
         case Page::PlayerInfo: pagePlayerInfo(); break;
         case Page::Glow: pageGlow(); break;
         case Page::Viewmodel: pageViewmodel(); break;
@@ -7990,6 +8056,89 @@ void neverlose::renderGameOverlay() noexcept
             const float py = point.yPercent * 0.01f * display.y;
             const ImU32 color = C(point.rgba >> 24 & 0xFF, point.rgba >> 16 & 0xFF, point.rgba >> 8 & 0xFF, point.rgba & 0xFF);
             fg->AddCircleFilled(ImVec2(px, py), point.center ? 3.5f : 2.0f, color, 12);
+        }
+    }
+
+        // Core ESP suite (Features/Visuals/Esp): the producer publishes percent-of-display
+    // primitives; convert with the current display size. Health fill rises from the
+    // bar bottom, the white damage echo rides on top (alpha pre-faded by the producer).
+    if (snapshot.espScene.rectCount > 0 || snapshot.espScene.lineCount > 0
+        || snapshot.espScene.circleCount > 0 || snapshot.espScene.textCount > 0
+        || snapshot.espScene.barCount > 0) {
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        const auto toPx = [&](float xPercent, float yPercent) noexcept {
+            return ImVec2{xPercent * 0.01f * display.x, yPercent * 0.01f * display.y};
+        };
+        const auto unpack = [](std::uint32_t rgba) noexcept {
+            return C(rgba >> 24 & 0xFF, rgba >> 16 & 0xFF, rgba >> 8 & 0xFF, rgba & 0xFF);
+        };
+
+        const auto& scene = snapshot.espScene;
+        for (int i = 0; i < scene.barCount; ++i) {
+            const auto& bar = scene.bars[i];
+            const ImVec2 p = toPx(bar.xPercent, bar.yPercent);
+            const ImVec2 size{bar.wPx, bar.hPercent * 0.01f * display.y};
+            const float fillH = size.y * (bar.fill < 0.0f ? 0.0f : (bar.fill > 1.0f ? 1.0f : bar.fill));
+            fg->AddRectFilled(p, p + size, C(12, 12, 14, 130), 2.0f);
+            if (fillH > 0.0f)
+                fg->AddRectFilled(ImVec2(p.x, p.y + size.y - fillH), p + size, unpack(bar.rgba), 2.0f);
+            const float backupH = size.y * (bar.backupFill < 0.0f ? 0.0f : (bar.backupFill > 1.0f ? 1.0f : bar.backupFill));
+            if (bar.backupRgba != 0 && backupH > fillH)
+                fg->AddRectFilled(ImVec2(p.x, p.y + size.y - backupH), ImVec2(p.x + size.x, p.y + size.y - fillH), unpack(bar.backupRgba), 2.0f);
+            fg->AddRect(p, p + size, C(0, 0, 0, 120), 2.0f, 0, 1.0f);
+        }
+        for (int i = 0; i < scene.rectCount; ++i) {
+            const auto& rect = scene.rects[i];
+            const ImVec2 p = toPx(rect.xPercent, rect.yPercent);
+            const ImVec2 size{rect.wPercent * 0.01f * display.x, rect.hPercent * 0.01f * display.y};
+            if (rect.fill)
+                fg->AddRectFilled(p, p + size, C(255, 255, 255, 28), 2.0f);
+            const ImU32 color = unpack(rect.rgba);
+            if (rect.cornered) {
+                const float arm = ImMin(size.x, size.y) * rect.cornerPercent;
+                const ImVec2 corners[4]{p, ImVec2(p.x + size.x, p.y), ImVec2(p.x + size.x, p.y + size.y), ImVec2(p.x, p.y + size.y)};
+                constexpr float directionsX[4][2]{{1, 0}, {-1, 0}, {-1, 0}, {1, 0}};
+                constexpr float directionsY[4][2]{{0, 1}, {0, 1}, {0, -1}, {0, -1}};
+                for (int c = 0; c < 4; ++c) {
+                    fg->AddLine(corners[c], ImVec2(corners[c].x + directionsX[c][0] * arm, corners[c].y + directionsY[c][0] * arm), color, rect.thickness);
+                    fg->AddLine(corners[c], ImVec2(corners[c].x + directionsX[c][1] * arm, corners[c].y + directionsY[c][1] * arm), color, rect.thickness);
+                }
+            } else {
+                fg->AddRect(p, p + size, C(0, 0, 0, 150), 2.0f, 0, rect.thickness + 1.0f);
+                fg->AddRect(p, p + size, color, 2.0f, 0, rect.thickness);
+            }
+        }
+        for (int i = 0; i < scene.lineCount; ++i) {
+            const auto& line = scene.lines[i];
+            const ImVec2 a = toPx(line.axPercent, line.ayPercent);
+            const ImVec2 b = toPx(line.bxPercent, line.byPercent);
+            if (line.thickness >= 0.9f)
+                fg->AddLine(a, b, C(0, 0, 0, 160), line.thickness + 1.0f);
+            fg->AddLine(a, b, unpack(line.rgba), line.thickness);
+        }
+        for (int i = 0; i < scene.circleCount; ++i) {
+            const auto& circle = scene.circles[i];
+            const ImVec2 p = toPx(circle.xPercent, circle.yPercent);
+            fg->AddCircle(p, circle.radiusPx, C(0, 0, 0, 160), 24, circle.thickness + 1.0f);
+            fg->AddCircle(p, circle.radiusPx, unpack(circle.rgba), 24, circle.thickness);
+        }
+        if (scene.textCount > 0) {
+            if (ImFont* font = ImGui::GetIO().Fonts->Fonts[0]) {
+                constexpr float kEspTextSize = 13.0f;
+                for (int i = 0; i < scene.textCount; ++i) {
+                    const auto& text = scene.texts[i];
+                    if (!text.text[0])
+                        continue;
+                    ImVec2 pos = toPx(text.xPercent, text.yPercent);
+                    const float textSizePt = text.size > 4.0f ? text.size : kEspTextSize;
+                    const ImVec2 textSize = font->CalcTextSizeA(textSizePt, FLT_MAX, 0.0f, text.text);
+                    if (text.center)
+                        pos.x -= textSize.x * 0.5f;
+                    pos.y -= textSize.y * 0.5f;
+                    fg->AddText(font, textSizePt, pos + ImVec2(1.0f, 1.0f), C(0, 0, 0, 180), text.text);
+                    fg->AddText(font, textSizePt, pos, unpack(text.rgba), text.text);
+                }
+            }
         }
     }
 

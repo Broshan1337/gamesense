@@ -18,7 +18,7 @@ inline constexpr struct {
 } kDefIndexIcons[]{
     {1, "deagle"}, {2, "elite"}, {3, "fiveseven"}, {4, "glock"},
     {7, "ak47"}, {8, "aug"}, {9, "awp"}, {10, "famas"},
-    {11, "g3sg1"}, {13, "galilar"}, {14, "m249"}, {16, "m4a4"},
+    {11, "g3sg1"}, {13, "galilar"}, {14, "m249"}, {16, "m4a1"},
     {17, "mac10"}, {19, "p90"}, {23, "mp5sd"}, {24, "ump45"},
     {25, "xm1014"}, {26, "bizon"}, {27, "mag7"}, {28, "negev"},
     {29, "sawedoff"}, {30, "tec9"}, {32, "p2000"}, {33, "mp7"},

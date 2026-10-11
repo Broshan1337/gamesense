@@ -35,6 +35,7 @@ public:
         fakeCommendsObject(configConversion);
         glitchGeneratorObject(configConversion);
         scoreboardEquipmentObject(configConversion);
+        espObject(configConversion);
         return configConversion.endRoot();
     }
 
@@ -352,6 +353,50 @@ private:
         configConversion.boolean(u8"ResetOnRound", loadVariable<resolver_vars::ResetOnRound>(), saveVariable<resolver_vars::ResetOnRound>());
         configConversion.endObject();
 
+        configConversion.endObject();
+    }
+
+    // Core ESP suite (Features/Visuals/Esp). Top-level "Esp" object, appended
+    // LAST in performConversion; keys in fixed order (order-sensitive loader).
+    void espObject(auto&& configConversion)
+    {
+        configConversion.beginObject(u8"Esp");
+        configConversion.boolean(u8"Enabled", loadVariable<esp_vars::Enabled>(), saveVariable<esp_vars::Enabled>());
+        configConversion.boolean(u8"BoxEnabled", loadVariable<esp_vars::BoxEnabled>(), saveVariable<esp_vars::BoxEnabled>());
+        configConversion.uint(u8"BoxStyle", loadVariable<esp_vars::BoxStyle>(), saveVariable<esp_vars::BoxStyle>());
+        configConversion.boolean(u8"BoxFill", loadVariable<esp_vars::BoxFill>(), saveVariable<esp_vars::BoxFill>());
+        configConversion.uint(u8"BoxColor", loadVariable<esp_vars::BoxColor>(), saveVariable<esp_vars::BoxColor>());
+        configConversion.boolean(u8"SkeletonEnabled", loadVariable<esp_vars::SkeletonEnabled>(), saveVariable<esp_vars::SkeletonEnabled>());
+        configConversion.uint(u8"SkeletonColor", loadVariable<esp_vars::SkeletonColor>(), saveVariable<esp_vars::SkeletonColor>());
+        configConversion.boolean(u8"HeadCircleEnabled", loadVariable<esp_vars::HeadCircleEnabled>(), saveVariable<esp_vars::HeadCircleEnabled>());
+        configConversion.uint(u8"HeadCircleColor", loadVariable<esp_vars::HeadCircleColor>(), saveVariable<esp_vars::HeadCircleColor>());
+        configConversion.boolean(u8"ViewLineEnabled", loadVariable<esp_vars::ViewLineEnabled>(), saveVariable<esp_vars::ViewLineEnabled>());
+        configConversion.uint(u8"ViewLineLength", loadVariable<esp_vars::ViewLineLength>(), saveVariable<esp_vars::ViewLineLength>());
+        configConversion.boolean(u8"SnaplineEnabled", loadVariable<esp_vars::SnaplineEnabled>(), saveVariable<esp_vars::SnaplineEnabled>());
+        configConversion.uint(u8"SnaplineColor", loadVariable<esp_vars::SnaplineColor>(), saveVariable<esp_vars::SnaplineColor>());
+        configConversion.boolean(u8"HealthBarEnabled", loadVariable<esp_vars::HealthBarEnabled>(), saveVariable<esp_vars::HealthBarEnabled>());
+        configConversion.boolean(u8"ArmorBarEnabled", loadVariable<esp_vars::ArmorBarEnabled>(), saveVariable<esp_vars::ArmorBarEnabled>());
+        configConversion.boolean(u8"BackupHealthAnim", loadVariable<esp_vars::BackupHealthAnim>(), saveVariable<esp_vars::BackupHealthAnim>());
+        configConversion.boolean(u8"NameEnabled", loadVariable<esp_vars::NameEnabled>(), saveVariable<esp_vars::NameEnabled>());
+        configConversion.boolean(u8"WeaponNameEnabled", loadVariable<esp_vars::WeaponNameEnabled>(), saveVariable<esp_vars::WeaponNameEnabled>());
+        configConversion.boolean(u8"DistanceEnabled", loadVariable<esp_vars::DistanceEnabled>(), saveVariable<esp_vars::DistanceEnabled>());
+        configConversion.boolean(u8"FlagsEnabled", loadVariable<esp_vars::FlagsEnabled>(), saveVariable<esp_vars::FlagsEnabled>());
+        configConversion.boolean(u8"FlagFlashed", loadVariable<esp_vars::FlagFlashed>(), saveVariable<esp_vars::FlagFlashed>());
+        configConversion.boolean(u8"FlagScoped", loadVariable<esp_vars::FlagScoped>(), saveVariable<esp_vars::FlagScoped>());
+        configConversion.boolean(u8"FlagReloading", loadVariable<esp_vars::FlagReloading>(), saveVariable<esp_vars::FlagReloading>());
+        configConversion.boolean(u8"FlagDefusing", loadVariable<esp_vars::FlagDefusing>(), saveVariable<esp_vars::FlagDefusing>());
+        configConversion.boolean(u8"FlagBomb", loadVariable<esp_vars::FlagBomb>(), saveVariable<esp_vars::FlagBomb>());
+        configConversion.boolean(u8"FlagKit", loadVariable<esp_vars::FlagKit>(), saveVariable<esp_vars::FlagKit>());
+        configConversion.boolean(u8"TeammatesEnabled", loadVariable<esp_vars::TeammatesEnabled>(), saveVariable<esp_vars::TeammatesEnabled>());
+        configConversion.uint(u8"MaxDistance", loadVariable<esp_vars::MaxDistance>(), saveVariable<esp_vars::MaxDistance>());
+        configConversion.uint(u8"HeadCircleRadius", loadVariable<esp_vars::HeadCircleRadius>(), saveVariable<esp_vars::HeadCircleRadius>());
+        configConversion.uint(u8"HealthColor", loadVariable<esp_vars::HealthColor>(), saveVariable<esp_vars::HealthColor>());
+        configConversion.uint(u8"ArmorColor", loadVariable<esp_vars::ArmorColor>(), saveVariable<esp_vars::ArmorColor>());
+        configConversion.uint(u8"BoxThickness", loadVariable<esp_vars::BoxThickness>(), saveVariable<esp_vars::BoxThickness>());
+        configConversion.uint(u8"CornerLength", loadVariable<esp_vars::CornerLength>(), saveVariable<esp_vars::CornerLength>());
+        configConversion.uint(u8"NameSize", loadVariable<esp_vars::NameSize>(), saveVariable<esp_vars::NameSize>());
+        configConversion.uint(u8"HealthBarWidth", loadVariable<esp_vars::HealthBarWidth>(), saveVariable<esp_vars::HealthBarWidth>());
+        configConversion.uint(u8"EchoSize", loadVariable<esp_vars::EchoSize>(), saveVariable<esp_vars::EchoSize>());
         configConversion.endObject();
     }
 
@@ -676,6 +721,7 @@ private:
 
         configConversion.beginObject(u8"BulletTracers");
         configConversion.boolean(u8"Enabled", loadVariable<BulletTracersEnabled>(), saveVariable<BulletTracersEnabled>());
+        configConversion.uint(u8"Color", loadVariable<BulletTracersColor>(), saveVariable<BulletTracersColor>());
         configConversion.endObject();
 
         configConversion.beginObject(u8"KillEffects");

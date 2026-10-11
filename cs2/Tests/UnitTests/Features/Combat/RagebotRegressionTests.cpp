@@ -456,3 +456,4 @@ TEST(RageWeaponDefs, PerWeaponAliasesAreDistinctAndRegistered)
     static_assert(ConfigVariableTypes::contains<HitLegs<Scar20>>());
     SUCCEED();
 }
+

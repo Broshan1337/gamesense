@@ -85,6 +85,7 @@ enum class ScriptPage : int
     Rage = 0,
     Legit,
     Movement,
+    Esp,
     PlayerInfo,
     Glow,
     Viewmodel,
@@ -96,9 +97,9 @@ enum class ScriptPage : int
     Scripts,
     Misc
 };
-inline constexpr int kScriptPageCount = 13; 
+inline constexpr int kScriptPageCount = 14; 
 inline constexpr const char* kScriptPageNames[kScriptPageCount] = {
-    "Rage", "Legit", "Movement", "Player Info", "Glow",
+    "Rage", "Legit", "Movement", "Esp", "Player Info", "Glow",
     "Viewmodel", "Effects", "Hud", "Sound", "Inventory", "Radio", "Scripts", "Misc"
 };
 

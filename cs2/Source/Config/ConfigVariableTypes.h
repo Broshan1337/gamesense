@@ -2,6 +2,7 @@
 
 #include <Features/Combat/Aimbot/AimbotConfigVariables.h>
 #include <Features/Combat/Aimbot/RageGroupsConfigVariables.h>
+#include <Features/Visuals/Esp/EspConfigVariables.h>
 #include <Features/Combat/AntiAim/AntiAimConfigVariables.h>
 #include <Features/Combat/Resolver/ResolverConfigVariables.h>
 #include <Features/Combat/LegitAimbot/LegitAimbotConfigVariables.h>
@@ -625,5 +626,43 @@ using ConfigVariableTypes = TypeList<
     rage_groups::Doubletap<rage_groups::Rifle>,
     rage_groups::Doubletap<rage_groups::Shotgun>,
     rage_groups::Doubletap<rage_groups::Sniper>,
-    rage_groups::Doubletap<rage_groups::Lmg>
+    rage_groups::Doubletap<rage_groups::Lmg>,
+    // Core ESP suite (Features/Visuals/Esp).
+    esp_vars::Enabled,
+    esp_vars::BoxEnabled,
+    esp_vars::BoxStyle,
+    esp_vars::BoxFill,
+    esp_vars::BoxColor,
+    esp_vars::SkeletonEnabled,
+    esp_vars::SkeletonColor,
+    esp_vars::HeadCircleEnabled,
+    esp_vars::HeadCircleColor,
+    esp_vars::ViewLineEnabled,
+    esp_vars::ViewLineLength,
+    esp_vars::SnaplineEnabled,
+    esp_vars::SnaplineColor,
+    esp_vars::HealthBarEnabled,
+    esp_vars::ArmorBarEnabled,
+    esp_vars::BackupHealthAnim,
+    esp_vars::NameEnabled,
+    esp_vars::WeaponNameEnabled,
+    esp_vars::DistanceEnabled,
+    esp_vars::FlagsEnabled,
+    esp_vars::FlagFlashed,
+    esp_vars::FlagScoped,
+    esp_vars::FlagReloading,
+    esp_vars::FlagDefusing,
+    esp_vars::FlagBomb,
+    esp_vars::FlagKit,
+    esp_vars::TeammatesEnabled,
+    esp_vars::MaxDistance,
+    esp_vars::HeadCircleRadius,
+    esp_vars::HealthColor,
+    esp_vars::ArmorColor,
+    esp_vars::BoxThickness,
+    esp_vars::CornerLength,
+    esp_vars::NameSize,
+    esp_vars::HealthBarWidth,
+    esp_vars::EchoSize,
+    BulletTracersColor
 >;
