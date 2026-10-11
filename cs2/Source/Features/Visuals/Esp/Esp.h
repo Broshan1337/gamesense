@@ -9,6 +9,8 @@
 #include <CS2/Classes/Entities/C_CSPlayerPawn.h>
 #include <CS2/Classes/Vector.h>
 #include <Features/Visuals/Esp/EspConfigVariables.h>
+#include <Features/Visuals/SpectatorSync/SpectatorSync.h>
+#include <Features/Visuals/SpectatorSync/SpectatorSyncConfigVariables.h>
 #include <GameClient/Entities/BaseEntity.h>
 #include <GameClient/Entities/PlayerController.h>
 #include <GameClient/Entities/PlayerPawn.h>
@@ -163,6 +165,13 @@ public:
             } else if (!teammates) {
                 return;
             }
+            // Spectator sync (vesta): hide the complete player presentation
+            // while any live pawn observes us - never draw wall knowledge a
+            // live spectator could see.
+            if (GET_CONFIG_VAR(spectator_sync_vars::Enabled)
+                && GET_CONFIG_VAR(spectator_sync_vars::HideWhileSpectated)
+                && hookContext.template make<SpectatorSync<HookContext>>().beingSpectated())
+                return;
 
             const auto origin = pawn.absOrigin();
             if (!origin.hasValue() || !finite(origin.value()))
@@ -329,11 +338,18 @@ private:
         const float right = bx + bw;
         const float bottom = by + bh;
 
+        // Threat highlight (vesta threat_module): enemies within 60u of us
+        // draw their box tinted red - the close-range danger read.
+        const auto threat = hookContext.template make<SpectatorSync<HookContext>>();
+        const auto enemyFlag = pawn.isEnemy();
+        const bool threatOn = threat.threatEnabled() && enemyFlag.has_value() && *enemyFlag && distance < 60.0f * 52.49f;
+
         // ---- Box ----
         if (GET_CONFIG_VAR(esp_vars::BoxEnabled) && scene.rectCount < overlay_layer::kMaxEspRects)
             scene.rects[scene.rectCount++] = overlay_layer::EspRect{
                 bx, by, bw, bh,
-                static_cast<std::uint32_t>(GET_CONFIG_VAR(esp_vars::BoxColor)),
+                threatOn ? static_cast<std::uint32_t>(color::Rgba{255, 80, 80, 230})
+                         : static_cast<std::uint32_t>(GET_CONFIG_VAR(esp_vars::BoxColor)),
                 static_cast<std::uint8_t>(GET_CONFIG_VAR(esp_vars::BoxStyle)) != 0,
                 GET_CONFIG_VAR(esp_vars::BoxFill),
                 static_cast<float>(GET_CONFIG_VAR(esp_vars::CornerLength)) / 100.0f,  // corner arm % of the shorter side

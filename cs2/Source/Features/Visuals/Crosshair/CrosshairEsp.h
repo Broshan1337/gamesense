@@ -114,12 +114,10 @@ private:
     // The pieces are display-independent (gap/length/thickness in px), so the
     // producer computes them once against a virtual 1920-wide display; the
     // draw side scales by display.width / 1920.
-    void publish(const Optional<cs2::Vector>&, const Optional<cs2::Vector>&, std::uint32_t color) const noexcept
+    void publish(const Optional<cs2::Vector>& eye, const Optional<cs2::Vector>& view, std::uint32_t color) const noexcept
     {
         constexpr float kReferenceWidth = 1920.0f;
         const float scale = kReferenceWidth / 1920.0f;
-        const float cx = 50.0f;   // percent-of-display: horizontal center
-        const float cy = 50.0f;  // vertical center
         const float thickness = static_cast<float>(GET_CONFIG_VAR(crosshair_vars::Thickness)) * scale;
         const float gap = static_cast<float>(GET_CONFIG_VAR(crosshair_vars::Gap)) * scale;
         const float length = static_cast<float>(GET_CONFIG_VAR(crosshair_vars::Length)) * scale;

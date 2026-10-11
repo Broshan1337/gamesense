@@ -99,6 +99,7 @@
 #include <Features/Visuals/GrenadeTimers/GrenadeTimersConfigVariables.h>
 #include <Features/Visuals/OffScreenArrows/OffScreenArrowsConfigVariables.h>
 #include <Features/Visuals/BulletTracers/BulletTracersConfigVariables.h>
+#include <Features/Visuals/EventLog/EventLog.h>
 #include <Features/Visuals/KillEffects/KillEffectsConfigVariables.h>
 #include <Features/Visuals/Hitmarker/HitmarkerConfigVariables.h>
 #include <Features/Visuals/ModelGlow/ModelGlowConfigVariables.h>
@@ -3512,6 +3513,38 @@ void pageEsp() noexcept
         sliderVar<crosshair_vars::PenetrationMinDamage>("Min Damage", ++controlId, " hp");
         colorVar<crosshair_vars::PenetrationColorYes>("Can Penetrate", ++controlId);
         colorVar<crosshair_vars::PenetrationColorNo>("Blocked", ++controlId);
+    });
+    addCard("RADAR", 6, [] {
+        toggleVar<radar_vars::Enabled>("Radar", ++controlId);
+        sliderVar<radar_vars::Zoom>("Zoom", ++controlId, " u");
+        sliderVar<radar_vars::Size>("Size", ++controlId, " px");
+        colorVar<radar_vars::EnemyColor>("Enemy Color", ++controlId);
+        colorVar<radar_vars::TeamColor>("Team Color", ++controlId);
+        toggleVar<radar_vars::ViewCones>("View Cones", ++controlId);
+    });
+    addCard("BOMB INFO", 4, [] {
+        toggleVar<bomb_info_vars::Enabled>("Bomb Info", ++controlId);
+        toggleVar<bomb_info_vars::InfoPanel>("Info Panel", ++controlId);
+        toggleVar<bomb_info_vars::SafeZone>("Safe Zone Ring", ++controlId);
+        sliderVar<bomb_info_vars::SafeZoneRadius>("Safe Zone Radius", ++controlId, " u");
+    });
+    addCard("GRENADES", 4, [] {
+        toggleVar<grenade_pred_vars::Enabled>("Grenade ESP", ++controlId);
+        toggleVar<grenade_pred_vars::FlashTimer>("Flash Timer", ++controlId);
+        toggleVar<grenade_pred_vars::InfernoBounds>("Inferno Bounds", ++controlId);
+        colorVar<grenade_pred_vars::InfernoColor>("Inferno Color", ++controlId);
+    });
+    addCard("SMART", 3, [] {
+        toggleVar<spectator_sync_vars::Enabled>("Smart ESP", ++controlId);
+        toggleVar<spectator_sync_vars::HideWhileSpectated>("Hide While Spectated", ++controlId);
+        toggleVar<spectator_sync_vars::ThreatHighlights>("Threat Highlights", ++controlId);
+    });
+    addCard("EVENT LOG", 5, [] {
+        toggleVar<event_log_vars::Enabled>("Event Log", ++controlId);
+        toggleVar<event_log_vars::LogHits>("Log Hits", ++controlId);
+        toggleVar<event_log_vars::LogBomb>("Log Bomb", ++controlId);
+        toggleVar<event_log_vars::LogRounds>("Log Rounds", ++controlId);
+        toggleVar<event_log_vars::LogConnects>("Log Connects", ++controlId);
     });
 }
 
@@ -8076,7 +8109,145 @@ void neverlose::renderGameOverlay() noexcept
         }
     }
 
-        // Custom crosshair (vesta pieces): percent-of-display rects, black outline
+    // Radar overlay (Features/Visuals/Radar): north-up, local player at the
+    // center. Window top-left, below the watermark. Colors read live from the
+    // config (the producer publishes geometry only).
+    if (snapshot.radar.dotCount > 0 || snapshot.radar.hasBomb) {
+        const float size = snapshot.radar.sizePx;
+        const ImVec2 center{size * 0.5f + s(170.0f), size * 0.5f + s(70.0f)};
+        const float zoom = ImMax(2.0f, snapshot.radar.zoom);
+        fg->AddRectFilled(ImVec2(center.x - size * 0.5f, center.y - size * 0.5f),
+                          ImVec2(center.x + size * 0.5f, center.y + size * 0.5f), C(12, 12, 14, 180), s(10));
+        fg->AddRect(ImVec2(center.x - size * 0.5f, center.y - size * 0.5f),
+                    ImVec2(center.x + size * 0.5f, center.y + size * 0.5f), C(38, 38, 42, 200), s(10), 0, 1.0f);
+        const ImU32 enemyColor = ui_config::get<radar_vars::EnemyColor>();
+        const auto enemyU32 = static_cast<std::uint32_t>(enemyColor);
+        const auto teamU32 = static_cast<std::uint32_t>(ui_config::get<radar_vars::TeamColor>());
+        if (snapshot.radar.hasBomb) {
+            const ImVec2 bomb{center.x + snapshot.radar.bombXOffsetUnits / zoom,
+                              center.y - snapshot.radar.bombYOffsetUnits / zoom};
+            fg->AddRect(ImVec2(bomb.x - s(2.5f), bomb.y - s(2.5f)), ImVec2(bomb.x + s(2.5f), bomb.y + s(2.5f)),
+                        C(ui_config::get<radar_vars::BombColor>() >> 24 & 0xFF, ui_config::get<radar_vars::BombColor>() >> 16 & 0xFF,
+                          ui_config::get<radar_vars::BombColor>() >> 8 & 0xFF, ui_config::get<radar_vars::BombColor>() & 0xFF));
+        }
+        for (int i = 0; i < snapshot.radar.dotCount; ++i) {
+            const auto& dot = snapshot.radar.dots[i];
+            const ImVec2 p{center.x + dot.xOffsetUnits / zoom, center.y - dot.yOffsetUnits / zoom};
+            const auto dotU32 = dot.enemy ? enemyU32 : teamU32;
+            const ImU32 color = C(dotU32 >> 24 & 0xFF, dotU32 >> 16 & 0xFF, dotU32 >> 8 & 0xFF, dotU32 & 0xFF);
+            if (snapshot.radar.viewCones) {
+                const float yawRad = dot.yaw * (3.14159265f / 180.0f);
+                constexpr float kConeLength = 10.0f;
+                constexpr float kConeSpread = 0.5f;
+                const float dx = ImCos(yawRad), dy = -ImSin(yawRad);
+                const ImVec2 left{p.x + (dx * ImCos(kConeSpread) - dy * ImSin(kConeSpread)) * kConeLength,
+                                  p.y + (dx * ImSin(kConeSpread) + dy * ImCos(kConeSpread)) * kConeLength};
+                const ImVec2 right{p.x + (dx * ImCos(-kConeSpread) - dy * ImSin(-kConeSpread)) * kConeLength,
+                                   p.y + (dx * ImSin(-kConeSpread) + dy * ImCos(-kConeSpread)) * kConeLength};
+                fg->AddTriangleFilled(p, left, right, (color & 0x00FFFFFFu) | (60u << IM_COL32_A_SHIFT));
+            }
+            fg->AddCircleFilled(p, 3.0f, color, 10);
+        }
+        // Local player at the center, always.
+        fg->AddCircleFilled(center, 3.0f, C(230, 232, 238, 235), 10);
+    }
+
+    // Bomb info panel + safe-zone ring (Features/Visuals/BombInfo).
+    if (snapshot.bombInfo.planted && ui_config::get<bomb_info_vars::Enabled>()) {
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        const auto& bombInfo = snapshot.bombInfo;
+        // Safe-zone ring: survive radius around the bomb, world-projected.
+        if (ui_config::get<bomb_info_vars::SafeZone>() && bombInfo.surviveRadius > 0.0f && HookContext<GlobalContext>::isGlobalContextComplete()) {
+            HookContext<GlobalContext> hookContext;
+            auto&& converter = hookContext.template make<WorldToClipSpaceConverter>();
+            const auto clip = converter.toClipSpace(cs2::Vector{bombInfo.x, bombInfo.y, bombInfo.z});
+            if (clip.w > 0.001f) {
+                const float inverseW = 1.0f / clip.w;
+                const ImVec2 center{(clip.x * inverseW + 1.0f) * 0.5f * display.x,
+                                    (1.0f - clip.y * inverseW) * 0.5f * display.y};
+                fg->AddCircle(center, bombInfo.surviveRadius / 4.0f, C(255, 130, 130, 90), 48, 2.0f);
+            }
+        }
+        if (ui_config::get<bomb_info_vars::InfoPanel>()) {
+            // Compact panel top-right (keybinds-list chrome).
+            const float panelW = s(130);
+            float panelH = s(14);
+            const ImVec2 p{display.x - panelW - s(60), s(70)};
+            fg->AddRectFilled(p, p + ImVec2(panelW, panelH), C(12, 12, 14, 200), s(8));
+            fg->AddRect(p, p + ImVec2(panelW, panelH), C(40, 40, 45, 220), s(8), 0, 1.0f);
+            if (ImFont* font = ImGui::GetIO().Fonts->Fonts[0]) {
+                char text[64];
+                const int seconds = bombInfo.timeLeft > 0.0f ? static_cast<int>(bombInfo.timeLeft + 0.5f) : -1;
+                std::snprintf(text, sizeof(text), "BOMB %s  %ds%s", bombInfo.site == 0 ? "A" : "B",
+                              bombInfo.site < 0 ? 0 : seconds, bombInfo.beingDefused ? " DEFUSING" : "");
+                fg->AddText(font, s(12), p + ImVec2(s(10), panelH * 0.5f - s(6)), C(226, 228, 235, 235), text);
+            }
+        }
+    }
+
+    // Grenade markers (Features/Visuals/GrenadePrediction): flash timer rings
+    // (text = seconds to blast), inferno bounds circles.
+    if ((snapshot.grenadeScene.flashCount > 0 || snapshot.grenadeScene.infernoCount > 0)
+        && ui_config::get<grenade_pred_vars::Enabled>() && HookContext<GlobalContext>::isGlobalContextComplete()) {
+        HookContext<GlobalContext> hookContext;
+        auto&& converter = hookContext.template make<WorldToClipSpaceConverter>();
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        const auto project = [&](const cs2::Vector& world, ImVec2& out) noexcept {
+            const auto clip = converter.toClipSpace(world);
+            if (!(clip.w > 0.001f))
+                return false;
+            const float inverseW = 1.0f / clip.w;
+            out = ImVec2{(clip.x * inverseW + 1.0f) * 0.5f * display.x, (1.0f - clip.y * inverseW) * 0.5f * display.y};
+            return true;
+        };
+        for (int i = 0; i < snapshot.grenadeScene.flashCount; ++i) {
+            const auto& flash = snapshot.grenadeScene.flashes[i];
+            ImVec2 p;
+            if (!project(cs2::Vector{flash.x, flash.y, flash.z}, p))
+                continue;
+            fg->AddCircle(p, s(9), C(255, 240, 130, 120), 24, 1.5f);
+            if (ImFont* font = ImGui::GetIO().Fonts->Fonts[0]) {
+                char text[16];
+                std::snprintf(text, sizeof(text), "%.1f", static_cast<double>(flash.timeLeft));
+                fg->AddText(font, s(11), p + ImVec2(s(12), -s(6)), C(255, 240, 130, 235), text);
+            }
+        }
+        for (int i = 0; i < snapshot.grenadeScene.infernoCount; ++i) {
+            const auto& inferno = snapshot.grenadeScene.infernos[i];
+            ImVec2 p;
+            if (!project(cs2::Vector{inferno.x, inferno.y, inferno.z}, p))
+                continue;
+            fg->AddCircleFilled(p, s(26), C(255, 120, 60, 60), 24);
+            fg->AddCircle(p, s(26), C(255, 120, 60, 140), 24, 1.5f);
+        }
+    }
+
+    // Native event log (Features/Visuals/EventLog): last 6 entries, fading by
+    // age (8s life), bottom-left above the combat stats box.
+    if (ui_config::get<event_log_vars::Enabled>()) {
+        const auto logSnapshot = event_log::snapshot();
+        ImFont* font = ImGui::GetIO().Fonts->Fonts[0];
+        if (logSnapshot.count > 0 && font) {
+            constexpr double kLife = 8.0;
+            constexpr int kShown = 6;
+            const int first = logSnapshot.count > kShown ? logSnapshot.count - kShown : 0;
+            float y = ImGui::GetIO().DisplaySize.y - s(280);
+            for (int i = logSnapshot.count - 1; i >= first; --i) {
+                const auto& entry = logSnapshot.entries[i];
+                const double age = logSnapshot.now - entry.timestamp;
+                if (age > kLife)
+                    continue;
+                const float alpha = static_cast<float>(1.0 - age / kLife);
+                const auto rgba = entry.rgba;
+                const ImU32 color = C((rgba >> 24 & 0xFF) * alpha, (rgba >> 16 & 0xFF) * alpha,
+                                      (rgba >> 8 & 0xFF) * alpha, (rgba & 0xFF) * alpha);
+                fg->AddText(font, s(11), ImVec2(s(14), y), color, entry.text);
+                y -= s(15);
+            }
+        }
+    }
+
+    // Custom crosshair (vesta pieces): percent-of-display rects, black outline
     // behind each when outlinePx > 0. The penetration resolution is baked into
     // the rgba by the producer (green = can wallbang, red = blocked).
     if (snapshot.crosshair.pieceCount > 0) {

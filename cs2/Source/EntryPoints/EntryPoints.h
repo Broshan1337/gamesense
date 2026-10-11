@@ -32,6 +32,11 @@
 #include <Features/Combat/DuckPeek.h>
 #include <Features/Visuals/Esp/Esp.h>
 #include <Features/Visuals/Crosshair/CrosshairEsp.h>
+#include <Features/Visuals/Radar/RadarEsp.h>
+#include <Features/Visuals/BombInfo/BombInfoEsp.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePredictionEsp.h>
+#include <Features/Visuals/SpectatorSync/SpectatorSync.h>
+#include <Features/Visuals/EventLog/EventLog.h>
 #include <Features/Combat/AntiAim/AntiAim.h>
 #include <Features/Combat/DoubleTap/DoubleTap.h>
 #include <Features/Combat/Resolver/Resolver.h>
@@ -495,6 +500,11 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     hookContext.template make<DuckPeek<HookContext<GlobalContext>>>().onUnload();
     hookContext.template make<Esp<HookContext<GlobalContext>>>().onUnload();
     hookContext.template make<CrosshairEsp<HookContext<GlobalContext>>>().onUnload();
+    hookContext.template make<RadarEsp<HookContext<GlobalContext>>>().onUnload();
+    hookContext.template make<BombInfoEsp<HookContext<GlobalContext>>>().onUnload();
+    hookContext.template make<GrenadePredictionEsp<HookContext<GlobalContext>>>().onUnload();
+    hookContext.template make<SpectatorSync<HookContext<GlobalContext>>>().onUnload();
+    event_log::onUnload();
     hookContext.template make<AntiAim<HookContext<GlobalContext>>>().onUnload();
     hookContext.template make<DoubleTapGate<HookContext<GlobalContext>>>().onUnload();
     hookContext.template make<AimbotFovCircle>().onUnload();
@@ -725,6 +735,7 @@ bool GameEventManagerHook_onFireEventClientSide(cs2::IGameEventManager2* thisptr
     hookContext.template make<CombatStats>().onFireEventClientSide(event);
     hookContext.template make<Killsay>().onFireEventClientSide(event);
     resolver::onFireEventClientSide(hookContext, event);
+    event_log::onFireEventClientSide(hookContext, event);
     
     
     
@@ -1043,8 +1054,13 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     SoundFeatures{hookContext.soundWatcherState(), hookContext.hooks().viewRenderHook, hookContext}.runOnViewMatrixUpdate();
     hookContext.template make<Hitmarker>().run();
     hookContext.template make<OffScreenArrows>().run();
-    hookContext.template make<Esp<HookContext<GlobalContext>>>().run();
+
+    hookContext.template make<SpectatorSync<HookContext<GlobalContext>>>().update();
     hookContext.template make<CrosshairEsp<HookContext<GlobalContext>>>().run();
+    hookContext.template make<Esp<HookContext<GlobalContext>>>().run();
+    hookContext.template make<RadarEsp<HookContext<GlobalContext>>>().run();
+    hookContext.template make<BombInfoEsp<HookContext<GlobalContext>>>().run();
+    hookContext.template make<GrenadePredictionEsp<HookContext<GlobalContext>>>().run();
     hookContext.template make<AntiAim<HookContext<GlobalContext>>>().onRenderUpdate();
     hookContext.template make<KillEffects>().run();
     hookContext.template make<PlayerList>().run();

@@ -253,6 +253,85 @@ inline void publishCrosshair(const Crosshair& newCrosshair) noexcept
     crosshairPublished = newCrosshair;
 }
 
+// Radar overlay (Features/Visuals/Radar): north-up, positions relative to
+// the local player in UNITS; the draw side scales by the window size / zoom.
+struct RadarDot {
+    float xOffsetUnits;
+    float yOffsetUnits;
+    bool enemy;
+    float yaw;           // view yaw for the cone
+};
+
+constexpr int kMaxRadarDots = 32;
+
+struct RadarScene {
+    RadarDot dots[kMaxRadarDots];
+    int dotCount = 0;
+    bool hasBomb = false;
+    float bombXOffsetUnits{};
+    float bombYOffsetUnits{};
+    float zoom = 12.0f;     // world units per radar-pixel band
+    float sizePx = 180.0f;
+    bool viewCones = true;
+};
+
+inline SpinLock radarLock;
+inline RadarScene radarScene{};
+
+inline void publishRadar(const RadarScene& newScene) noexcept
+{
+    const std::lock_guard radarGuard{radarLock};
+    radarScene = newScene;
+}
+
+// Bomb info (Features/Visuals/BombInfo): world position + countdown; the draw
+// side projects the world position and renders the panel + safe-zone ring.
+struct BombInfo {
+    bool planted = false;
+    bool ticking = false;
+    bool beingDefused = false;
+    bool canDefuse = false;
+    int site = -1;             // 0 = A, 1 = B
+    float timeLeft = -1.0f;
+    float defuseTimeLeft = -1.0f;
+    int localHealth = 100;
+    float surviveRadius = 0.0f;  // world units; 0 = no safe zone
+    float x{}, y{}, z{};
+};
+
+inline SpinLock bombInfoLock;
+inline BombInfo bombInfo{};
+
+inline void publishBombInfo(const BombInfo& newInfo) noexcept
+{
+    const std::lock_guard bombGuard{bombInfoLock};
+    bombInfo = newInfo;
+}
+
+// Grenade markers (Features/Visuals/GrenadePrediction).
+struct GrenadeMarker {
+    float x, y, z;
+    float timeLeft;   // flash: seconds to blast; inferno: unused
+};
+
+struct GrenadeScene {
+    GrenadeMarker flashes[16];
+    int flashCount = 0;
+    GrenadeMarker infernos[16];
+    int infernoCount = 0;
+};
+
+constexpr int kMaxGrenadeMarkers = 16;
+
+inline SpinLock grenadeLock;
+inline GrenadeScene grenadeScene{};
+
+inline void publishGrenades(const GrenadeScene& newScene) noexcept
+{
+    const std::lock_guard grenadeGuard{grenadeLock};
+    grenadeScene = newScene;
+}
+
 constexpr int kMaxEspRects = 32;
 constexpr int kMaxEspLines = 512;
 constexpr int kMaxEspCircles = 32;
@@ -296,6 +375,9 @@ struct Snapshot {
     int aaArcPointCount = 0;
     EspScene espScene;
     Crosshair crosshair{};
+    RadarScene radar{};
+    BombInfo bombInfo{};
+    GrenadeScene grenadeScene{};
 };
 
 [[nodiscard]] inline Snapshot snapshot() noexcept
@@ -341,6 +423,18 @@ struct Snapshot {
     {
         const std::lock_guard crosshairGuard{crosshairLock};
         s.crosshair = crosshairPublished;
+    }
+    {
+        const std::lock_guard radarGuard{radarLock};
+        s.radar = radarScene;
+    }
+    {
+        const std::lock_guard bombGuard{bombInfoLock};
+        s.bombInfo = bombInfo;
+    }
+    {
+        const std::lock_guard grenadeGuard{grenadeLock};
+        s.grenadeScene = grenadeScene;
     }
     return s;
 }

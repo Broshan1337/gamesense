@@ -37,6 +37,11 @@ public:
         scoreboardEquipmentObject(configConversion);
         espObject(configConversion);
         crosshairObject(configConversion);
+        radarObject(configConversion);
+        bombInfoObject(configConversion);
+        grenadeObject(configConversion);
+        spectatorSyncObject(configConversion);
+        eventLogObject(configConversion);
         return configConversion.endRoot();
     }
 
@@ -375,6 +380,70 @@ private:
         configConversion.uint(u8"PenetrationMinDamage", loadVariable<crosshair_vars::PenetrationMinDamage>(), saveVariable<crosshair_vars::PenetrationMinDamage>());
         configConversion.uint(u8"PenetrationColorYes", loadVariable<crosshair_vars::PenetrationColorYes>(), saveVariable<crosshair_vars::PenetrationColorYes>());
         configConversion.uint(u8"PenetrationColorNo", loadVariable<crosshair_vars::PenetrationColorNo>(), saveVariable<crosshair_vars::PenetrationColorNo>());
+        configConversion.endObject();
+    }
+
+    // Radar overlay (Features/Visuals/Radar).
+    void radarObject(auto&& configConversion)
+    {
+        configConversion.beginObject(u8"Radar");
+        configConversion.boolean(u8"Enabled", loadVariable<radar_vars::Enabled>(), saveVariable<radar_vars::Enabled>());
+        configConversion.uint(u8"Zoom", loadVariable<radar_vars::Zoom>(), saveVariable<radar_vars::Zoom>());
+        configConversion.uint(u8"Size", loadVariable<radar_vars::Size>(), saveVariable<radar_vars::Size>());
+        configConversion.uint(u8"EnemyColor", loadVariable<radar_vars::EnemyColor>(), saveVariable<radar_vars::EnemyColor>());
+        configConversion.uint(u8"TeamColor", loadVariable<radar_vars::TeamColor>(), saveVariable<radar_vars::TeamColor>());
+        configConversion.uint(u8"BombColor", loadVariable<radar_vars::BombColor>(), saveVariable<radar_vars::BombColor>());
+        configConversion.boolean(u8"ViewCones", loadVariable<radar_vars::ViewCones>(), saveVariable<radar_vars::ViewCones>());
+        configConversion.endObject();
+    }
+
+    // Bomb info panel + safe zone (Features/Visuals/BombInfo).
+    void bombInfoObject(auto&& configConversion)
+    {
+        configConversion.beginObject(u8"BombInfo");
+        configConversion.boolean(u8"Enabled", loadVariable<bomb_info_vars::Enabled>(), saveVariable<bomb_info_vars::Enabled>());
+        configConversion.boolean(u8"InfoPanel", loadVariable<bomb_info_vars::InfoPanel>(), saveVariable<bomb_info_vars::InfoPanel>());
+        configConversion.boolean(u8"SafeZone", loadVariable<bomb_info_vars::SafeZone>(), saveVariable<bomb_info_vars::SafeZone>());
+        configConversion.uint(u8"SafeZoneRadius", loadVariable<bomb_info_vars::SafeZoneRadius>(), saveVariable<bomb_info_vars::SafeZoneRadius>());
+        configConversion.uint(u8"SafeZoneColor", loadVariable<bomb_info_vars::SafeZoneColor>(), saveVariable<bomb_info_vars::SafeZoneColor>());
+        configConversion.uint(u8"SiteColorA", loadVariable<bomb_info_vars::SiteColorA>(), saveVariable<bomb_info_vars::SiteColorA>());
+        configConversion.endObject();
+    }
+
+    // Grenade prediction (Features/Visuals/GrenadePrediction).
+    void grenadeObject(auto&& configConversion)
+    {
+        configConversion.beginObject(u8"GrenadePrediction");
+        configConversion.boolean(u8"Enabled", loadVariable<grenade_pred_vars::Enabled>(), saveVariable<grenade_pred_vars::Enabled>());
+        configConversion.boolean(u8"Trajectory", loadVariable<grenade_pred_vars::Trajectory>(), saveVariable<grenade_pred_vars::Trajectory>());
+        configConversion.boolean(u8"FlashTimer", loadVariable<grenade_pred_vars::FlashTimer>(), saveVariable<grenade_pred_vars::FlashTimer>());
+        configConversion.boolean(u8"InfernoBounds", loadVariable<grenade_pred_vars::InfernoBounds>(), saveVariable<grenade_pred_vars::InfernoBounds>());
+        configConversion.uint(u8"TrajectoryColor", loadVariable<grenade_pred_vars::TrajectoryColor>(), saveVariable<grenade_pred_vars::TrajectoryColor>());
+        configConversion.uint(u8"FlashTimerColor", loadVariable<grenade_pred_vars::FlashTimerColor>(), saveVariable<grenade_pred_vars::FlashTimerColor>());
+        configConversion.uint(u8"InfernoColor", loadVariable<grenade_pred_vars::InfernoColor>(), saveVariable<grenade_pred_vars::InfernoColor>());
+        configConversion.endObject();
+    }
+
+    // Spectator sync + threat (Features/Visuals/SpectatorSync).
+    void spectatorSyncObject(auto&& configConversion)
+    {
+        configConversion.beginObject(u8"SpectatorSync");
+        configConversion.boolean(u8"Enabled", loadVariable<spectator_sync_vars::Enabled>(), saveVariable<spectator_sync_vars::Enabled>());
+        configConversion.boolean(u8"HideWhileSpectated", loadVariable<spectator_sync_vars::HideWhileSpectated>(), saveVariable<spectator_sync_vars::HideWhileSpectated>());
+        configConversion.boolean(u8"ThreatHighlights", loadVariable<spectator_sync_vars::ThreatHighlights>(), saveVariable<spectator_sync_vars::ThreatHighlights>());
+        configConversion.endObject();
+    }
+
+    // Native event log (Features/Visuals/EventLog).
+    void eventLogObject(auto&& configConversion)
+    {
+        configConversion.beginObject(u8"EventLog");
+        configConversion.boolean(u8"Enabled", loadVariable<event_log_vars::Enabled>(), saveVariable<event_log_vars::Enabled>());
+        configConversion.boolean(u8"LogHits", loadVariable<event_log_vars::LogHits>(), saveVariable<event_log_vars::LogHits>());
+        configConversion.boolean(u8"LogMisses", loadVariable<event_log_vars::LogMisses>(), saveVariable<event_log_vars::LogMisses>());
+        configConversion.boolean(u8"LogBomb", loadVariable<event_log_vars::LogBomb>(), saveVariable<event_log_vars::LogBomb>());
+        configConversion.boolean(u8"LogRounds", loadVariable<event_log_vars::LogRounds>(), saveVariable<event_log_vars::LogRounds>());
+        configConversion.boolean(u8"LogConnects", loadVariable<event_log_vars::LogConnects>(), saveVariable<event_log_vars::LogConnects>());
         configConversion.endObject();
     }
 

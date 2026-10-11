@@ -4,6 +4,11 @@
 #include <Features/Combat/Aimbot/RageGroupsConfigVariables.h>
 #include <Features/Visuals/Esp/EspConfigVariables.h>
 #include <Features/Visuals/Crosshair/CrosshairConfigVariables.h>
+#include <Features/Visuals/Radar/RadarConfigVariables.h>
+#include <Features/Visuals/BombInfo/BombInfoConfigVariables.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePredictionConfigVariables.h>
+#include <Features/Visuals/SpectatorSync/SpectatorSyncConfigVariables.h>
+#include <Features/Visuals/EventLog/EventLogConfigVariables.h>
 #include <Features/Combat/AntiAim/AntiAimConfigVariables.h>
 #include <Features/Combat/Resolver/ResolverConfigVariables.h>
 #include <Features/Combat/LegitAimbot/LegitAimbotConfigVariables.h>
@@ -678,5 +683,34 @@ using ConfigVariableTypes = TypeList<
     crosshair_vars::PenetrationEnabled,
     crosshair_vars::PenetrationMinDamage,
     crosshair_vars::PenetrationColorYes,
-    crosshair_vars::PenetrationColorNo
+    crosshair_vars::PenetrationColorNo,
+    radar_vars::Enabled,
+    radar_vars::Zoom,
+    radar_vars::Size,
+    radar_vars::EnemyColor,
+    radar_vars::TeamColor,
+    radar_vars::BombColor,
+    radar_vars::ViewCones,
+    bomb_info_vars::Enabled,
+    bomb_info_vars::InfoPanel,
+    bomb_info_vars::SafeZone,
+    bomb_info_vars::SafeZoneRadius,
+    bomb_info_vars::SafeZoneColor,
+    bomb_info_vars::SiteColorA,
+    grenade_pred_vars::Enabled,
+    grenade_pred_vars::Trajectory,
+    grenade_pred_vars::FlashTimer,
+    grenade_pred_vars::InfernoBounds,
+    grenade_pred_vars::TrajectoryColor,
+    grenade_pred_vars::FlashTimerColor,
+    grenade_pred_vars::InfernoColor,
+    spectator_sync_vars::Enabled,
+    spectator_sync_vars::HideWhileSpectated,
+    spectator_sync_vars::ThreatHighlights,
+    event_log_vars::Enabled,
+    event_log_vars::LogHits,
+    event_log_vars::LogMisses,
+    event_log_vars::LogBomb,
+    event_log_vars::LogRounds,
+    event_log_vars::LogConnects
 >;
