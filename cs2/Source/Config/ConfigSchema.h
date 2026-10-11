@@ -36,6 +36,7 @@ public:
         glitchGeneratorObject(configConversion);
         scoreboardEquipmentObject(configConversion);
         espObject(configConversion);
+        crosshairObject(configConversion);
         return configConversion.endRoot();
     }
 
@@ -353,6 +354,27 @@ private:
         configConversion.boolean(u8"ResetOnRound", loadVariable<resolver_vars::ResetOnRound>(), saveVariable<resolver_vars::ResetOnRound>());
         configConversion.endObject();
 
+        configConversion.endObject();
+    }
+
+    // Custom crosshair (Features/Visuals/Crosshair). Top-level "Crosshair"
+    // object, appended LAST in performConversion; keys in fixed order.
+    void crosshairObject(auto&& configConversion)
+    {
+        configConversion.beginObject(u8"Crosshair");
+        configConversion.boolean(u8"Enabled", loadVariable<crosshair_vars::Enabled>(), saveVariable<crosshair_vars::Enabled>());
+        configConversion.boolean(u8"Dot", loadVariable<crosshair_vars::Dot>(), saveVariable<crosshair_vars::Dot>());
+        configConversion.boolean(u8"Lines", loadVariable<crosshair_vars::Lines>(), saveVariable<crosshair_vars::Lines>());
+        configConversion.uint(u8"Length", loadVariable<crosshair_vars::Length>(), saveVariable<crosshair_vars::Length>());
+        configConversion.uint(u8"Thickness", loadVariable<crosshair_vars::Thickness>(), saveVariable<crosshair_vars::Thickness>());
+        configConversion.uint(u8"Gap", loadVariable<crosshair_vars::Gap>(), saveVariable<crosshair_vars::Gap>());
+        configConversion.uint(u8"Color", loadVariable<crosshair_vars::Color>(), saveVariable<crosshair_vars::Color>());
+        configConversion.boolean(u8"Outline", loadVariable<crosshair_vars::Outline>(), saveVariable<crosshair_vars::Outline>());
+        configConversion.boolean(u8"TStyle", loadVariable<crosshair_vars::TStyle>(), saveVariable<crosshair_vars::TStyle>());
+        configConversion.boolean(u8"PenetrationEnabled", loadVariable<crosshair_vars::PenetrationEnabled>(), saveVariable<crosshair_vars::PenetrationEnabled>());
+        configConversion.uint(u8"PenetrationMinDamage", loadVariable<crosshair_vars::PenetrationMinDamage>(), saveVariable<crosshair_vars::PenetrationMinDamage>());
+        configConversion.uint(u8"PenetrationColorYes", loadVariable<crosshair_vars::PenetrationColorYes>(), saveVariable<crosshair_vars::PenetrationColorYes>());
+        configConversion.uint(u8"PenetrationColorNo", loadVariable<crosshair_vars::PenetrationColorNo>(), saveVariable<crosshair_vars::PenetrationColorNo>());
         configConversion.endObject();
     }
 

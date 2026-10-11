@@ -3,6 +3,7 @@
 #include <Features/Combat/Aimbot/AimbotConfigVariables.h>
 #include <Features/Combat/Aimbot/RageGroupsConfigVariables.h>
 #include <Features/Visuals/Esp/EspConfigVariables.h>
+#include <Features/Visuals/Crosshair/CrosshairConfigVariables.h>
 #include <Features/Combat/AntiAim/AntiAimConfigVariables.h>
 #include <Features/Combat/Resolver/ResolverConfigVariables.h>
 #include <Features/Combat/LegitAimbot/LegitAimbotConfigVariables.h>
@@ -664,5 +665,18 @@ using ConfigVariableTypes = TypeList<
     esp_vars::NameSize,
     esp_vars::HealthBarWidth,
     esp_vars::EchoSize,
-    BulletTracersColor
+    BulletTracersColor,
+    crosshair_vars::Enabled,
+    crosshair_vars::Dot,
+    crosshair_vars::Lines,
+    crosshair_vars::Length,
+    crosshair_vars::Thickness,
+    crosshair_vars::Gap,
+    crosshair_vars::Color,
+    crosshair_vars::Outline,
+    crosshair_vars::TStyle,
+    crosshair_vars::PenetrationEnabled,
+    crosshair_vars::PenetrationMinDamage,
+    crosshair_vars::PenetrationColorYes,
+    crosshair_vars::PenetrationColorNo
 >;

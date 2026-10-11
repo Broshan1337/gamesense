@@ -3496,6 +3496,23 @@ void pageEsp() noexcept
         toggleVar<FlagBomb>("Bomb", ++controlId);
         toggleVar<FlagKit>("Kit", ++controlId);
     });
+    addCard("CROSSHAIR", 9, [] {
+        toggleVar<crosshair_vars::Enabled>("Custom Crosshair", ++controlId);
+        toggleVar<crosshair_vars::Dot>("Dot", ++controlId);
+        toggleVar<crosshair_vars::Lines>("Lines", ++controlId);
+        sliderVar<crosshair_vars::Length>("Length", ++controlId, " px");
+        sliderVar<crosshair_vars::Thickness>("Thickness", ++controlId, " px");
+        sliderVar<crosshair_vars::Gap>("Gap", ++controlId, " px");
+        colorVar<crosshair_vars::Color>("Color", ++controlId);
+        toggleVar<crosshair_vars::Outline>("Outline", ++controlId);
+        toggleVar<crosshair_vars::TStyle>("T Style", ++controlId);
+    });
+    addCard("PENETRATION", 4, [] {
+        toggleVar<crosshair_vars::PenetrationEnabled>("Penetration Crosshair", ++controlId);
+        sliderVar<crosshair_vars::PenetrationMinDamage>("Min Damage", ++controlId, " hp");
+        colorVar<crosshair_vars::PenetrationColorYes>("Can Penetrate", ++controlId);
+        colorVar<crosshair_vars::PenetrationColorNo>("Blocked", ++controlId);
+    });
 }
 
 void pagePlayerInfo() noexcept
@@ -8059,7 +8076,27 @@ void neverlose::renderGameOverlay() noexcept
         }
     }
 
-        // Core ESP suite (Features/Visuals/Esp): the producer publishes percent-of-display
+        // Custom crosshair (vesta pieces): percent-of-display rects, black outline
+    // behind each when outlinePx > 0. The penetration resolution is baked into
+    // the rgba by the producer (green = can wallbang, red = blocked).
+    if (snapshot.crosshair.pieceCount > 0) {
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        const auto unpack = [](std::uint32_t rgba) noexcept {
+            return C(rgba >> 24 & 0xFF, rgba >> 16 & 0xFF, rgba >> 8 & 0xFF, rgba & 0xFF);
+        };
+        for (int i = 0; i < snapshot.crosshair.pieceCount; ++i) {
+            const auto& piece = snapshot.crosshair.pieces[i];
+            const ImVec2 p{piece.xPercent * 0.01f * display.x, piece.yPercent * 0.01f * display.y};
+            const ImVec2 size{piece.wPercent * 0.01f * display.x, piece.hPercent * 0.01f * display.y};
+            if (snapshot.crosshair.outlinePx > 0.0f) {
+                const float o = snapshot.crosshair.outlinePx;
+                fg->AddRectFilled(p - ImVec2(o, o), p + size + ImVec2(o, o), C(0, 0, 0, 170));
+            }
+            fg->AddRectFilled(p, p + size, unpack(snapshot.crosshair.rgba));
+        }
+    }
+
+    // Core ESP suite (Features/Visuals/Esp): the producer publishes percent-of-display
     // primitives; convert with the current display size. Health fill rises from the
     // bar bottom, the white damage echo rides on top (alpha pre-faded by the producer).
     if (snapshot.espScene.rectCount > 0 || snapshot.espScene.lineCount > 0

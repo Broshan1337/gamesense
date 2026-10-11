@@ -227,6 +227,32 @@ struct EspBar {
     std::uint32_t backupRgba;
 };
 
+// Custom crosshair (vesta crosshair.cpp pieces): filled rects in
+// percent-of-display coordinates, reference-1920 px inputs scaled by the
+// producer. Penetration resolution bakes into rgba (producer side).
+struct CrosshairPiece {
+    float xPercent, yPercent, wPercent, hPercent;
+};
+
+struct Crosshair {
+    CrosshairPiece pieces[5];
+    int pieceCount{};
+    std::uint32_t rgba;
+    float thicknessPx;   // unused by the draw side (pieces carry their sizes)
+    float outlinePx;    // >0 = draw a black outline rect around each piece
+};
+
+constexpr int kMaxCrosshairPieces = 5;
+
+inline SpinLock crosshairLock;
+inline Crosshair crosshairPublished{};
+
+inline void publishCrosshair(const Crosshair& newCrosshair) noexcept
+{
+    const std::lock_guard crosshairGuard{crosshairLock};
+    crosshairPublished = newCrosshair;
+}
+
 constexpr int kMaxEspRects = 32;
 constexpr int kMaxEspLines = 512;
 constexpr int kMaxEspCircles = 32;
@@ -269,6 +295,7 @@ struct Snapshot {
     AaArcPoint aaArcPoints[kMaxAaArcPoints];
     int aaArcPointCount = 0;
     EspScene espScene;
+    Crosshair crosshair{};
 };
 
 [[nodiscard]] inline Snapshot snapshot() noexcept
@@ -310,6 +337,10 @@ struct Snapshot {
     {
         const std::lock_guard espGuard{espLock};
         s.espScene = espScene;
+    }
+    {
+        const std::lock_guard crosshairGuard{crosshairLock};
+        s.crosshair = crosshairPublished;
     }
     return s;
 }
