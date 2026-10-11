@@ -843,9 +843,14 @@ void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCm
     
     
     hookContext.template make<TestStrafer>().onCreateMove(cmd);
-    
-    
-    
+
+    // Grenade ESP produces on the GAME thread: the trajectory reads view
+    // angles + velocity + runs traces, all of which tear mid-tick if read on
+    // the render thread (the first cut's glitchy random-angle lines).
+    hookContext.template make<GrenadePredictionEsp<HookContext<GlobalContext>>>().run();
+
+
+
     hookContext.template make<Aimbot>().onCreateMove(cmd);
     const bool rageShotStaged = hookContext.template make<Aimbot>().shotStaged();
     hookContext.template make<DuckPeek<HookContext<GlobalContext>>>().onCreateMove(rageShotStaged);
@@ -1060,7 +1065,6 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     hookContext.template make<Esp<HookContext<GlobalContext>>>().run();
     hookContext.template make<RadarEsp<HookContext<GlobalContext>>>().run();
     hookContext.template make<BombInfoEsp<HookContext<GlobalContext>>>().run();
-    hookContext.template make<GrenadePredictionEsp<HookContext<GlobalContext>>>().run();
     hookContext.template make<AntiAim<HookContext<GlobalContext>>>().onRenderUpdate();
     hookContext.template make<KillEffects>().run();
     hookContext.template make<PlayerList>().run();

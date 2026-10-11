@@ -91,6 +91,8 @@ public:
         // weapons (knife/grenade/C4) resolve invalid and the ragebot stands down.
         activeGroup = rage_groups::active(hookContext, localPawn.getActiveWeapon());
         if (!activeGroup.valid || !activeGroup.enabled) {
+            VerifyConsole::write(4.0f, "rage", "group=%s enabled=%d (stand down)",
+                activeGroup.valid ? "ok" : "none", activeGroup.enabled ? 1 : 0);
             lastTargetHandleValue = 0;
             shotWait.reset();
             return;
@@ -145,6 +147,7 @@ public:
             },
             preferredTarget, static_cast<target_selection::Mode>(static_cast<std::uint8_t>(GET_CONFIG_VAR(aimbot_vars::TargetSelection))));
         if (!aim.hasValue()) {
+            VerifyConsole::write(4.0f, "rage", "no target (visibility/damage gates rejected all)");
             lastTargetHandleValue = 0;
             shotWait.reset();
             return;
@@ -221,8 +224,11 @@ public:
         forceShotThisTick = forceShotEnabled && shouldForceShoot(localPawn, eye.value(), chosen);
         if (!forceShotEnabled)
             shotWait.reset();
-        if (!userFiring && !forceShotThisTick)
+        if (!userFiring && !forceShotThisTick) {
+            VerifyConsole::write(4.0f, "rage", "no fire: userFiring=%d forceShot=%d",
+                userFiring ? 1 : 0, forceShotThisTick ? 1 : 0);
             return;
+        }
 
         float punchPitch = 0.0f, punchYaw = 0.0f;
         if (GET_CONFIG_VAR(aimbot_vars::RecoilCompensation)) {
@@ -414,7 +420,13 @@ private:
         const bool accuracyReady = shotWait.ready(lastTargetHandleValue, tick.valueOr(-1), eligible, maxAccuracy,
                               chancePassed, wait,
                               static_cast<int>(GET_CONFIG_VAR(aimbot_vars::ForceShotWaitTicks)));
-        return accuracyReady && localPawn.getActiveWeapon().isReadyToFire(tick.valueOr(-1)) == true;
+        const auto readyToFire = localPawn.getActiveWeapon().isReadyToFire(tick.valueOr(-1));
+        if (!(accuracyReady && readyToFire == true)) {
+            VerifyConsole::write(4.0f, "rage", "force gate: eligible=%d chance=%d maxAcc=%d waitReady=%d ready=%d/none ammo=%d",
+                eligible ? 1 : 0, chancePassed ? 1 : 0, maxAccuracy ? 1 : 0, accuracyReady ? 1 : 0,
+                readyToFire.hasValue() ? (readyToFire.value() ? 1 : 0) : -1, ammo.valueOr(-1));
+        }
+        return accuracyReady && readyToFire == true;
     }
 
     [[nodiscard]] bool passesHitchance(auto&& localPawn, const cs2::Vector& eye, const typename AimTarget<HookContext>::Target& target, int thresholdPercent) const noexcept
@@ -908,11 +920,14 @@ private:
         if (const auto weaponMax = pawn.getActiveWeapon().maxSpeed(); weaponMax.hasValue())
             inputs.weaponMaxSpeed = weaponMax.value();
         auto_stop::apply(userCmd, velocity, viewYaw, inputs);
-        SubtickMoves<HookContext>::stripAnalog(userCmd.baseMessage());
-        SubtickMoves<HookContext>::releaseButton(userCmd.baseMessage(), auto_stop::forward);
-        SubtickMoves<HookContext>::releaseButton(userCmd.baseMessage(), auto_stop::back);
-        SubtickMoves<HookContext>::releaseButton(userCmd.baseMessage(), auto_stop::left);
-        SubtickMoves<HookContext>::releaseButton(userCmd.baseMessage(), auto_stop::right);
+        // Issue #4 round 4 (2026-10-13): NO subtick stream surgery here.
+        // releaseButton() sets currentSize = 0 - it clears the WHOLE timeline
+        // including the real W/A/S/D samples - and stripAnalog() strips the
+        // live analog scalars. Either one strands keys held across a jump
+        // (the reporter's repro: Auto Stop ON -> jump -> tap W -> W stuck,
+        // same class as the Slow Walk saga). auto_stop::apply writes command
+        // scalars + button banks only, which is the entire counter-wish stop;
+        // the stream belongs to the player's real input.
     }
 
     static constexpr int kHitchanceSamples = 256;

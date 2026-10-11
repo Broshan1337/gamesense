@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <utility>
 #include <cstdint>
@@ -198,11 +199,18 @@ public:
     }
 
 private:
+    // Per-pawn bar state: damage echo bookkeeping + smoothed fill (the bars
+    // animate toward their target with an exponential ease instead of
+    // teleporting - the 2026-10-13 "smoother bars" request).
     struct BackupHealth {
         std::uint32_t handle{};
         int lastHealth{100};
         int backupHealth{100};
         std::int64_t lastChangeMs{};
+        bool seen{};
+        float smoothedHealthFill{1.0f};
+        float smoothedArmorFill{1.0f};
+        std::int64_t lastDrawMs{};
     };
     static constexpr int kBackupHealthSlots = 64;
     inline static BackupHealth backupHealth[kBackupHealthSlots]{};
@@ -453,25 +461,93 @@ private:
                                                                     static_cast<std::uint32_t>(GET_CONFIG_VAR(esp_vars::SnaplineColor)), 1.0f};
 
         // ---- Bars ----
-        // Small constant-px-width bars tucked against the box sides (the old
-        // percent-of-display widths rendered ~13px-wide bars far off the box).
+        // Constant-px-width bars with a real gap from the box: the bar x is the
+        // box edge MINUS (gap + barWidth) converted to percent-of-display-width
+        // (the old bx - 0.12% left the 3px bar overlapping the box edge).
+        // Fills ease toward their target (exp smooth, ~12/s) so drops animate.
+        auto& slot = backupSlot(hookContext.template make<BaseEntity>(pawn.baseEntity()).handle().value);
+        const float dt = [&]() noexcept {
+            const float raw = slot.seen ? static_cast<float>(nowMs - slot.lastDrawMs) * 0.001f : 1.0f;
+            return raw < 0.0f ? 0.0f : (raw > 0.2f ? 0.2f : raw);
+        }();
+        slot.lastDrawMs = nowMs;
+        const float ease = 1.0f - std::exp(-12.0f * dt);
+        const auto healthFillTarget = static_cast<float>(healthValue < 0 ? 0 : (healthValue > 100 ? 100 : healthValue)) / 100.0f;
+        slot.smoothedHealthFill += (healthFillTarget - slot.smoothedHealthFill) * ease;
+        if (!slot.seen) {
+            slot.smoothedHealthFill = healthFillTarget;
+            slot.seen = true;
+        }
+
         const float barWidth = static_cast<float>(GET_CONFIG_VAR(esp_vars::HealthBarWidth));
-        if (GET_CONFIG_VAR(esp_vars::HealthBarEnabled) && scene.barCount < overlay_layer::kMaxEspBars) {
-            const float fill = static_cast<float>(healthValue < 0 ? 0 : (healthValue > 100 ? 100 : healthValue)) / 100.0f;
-            scene.bars[scene.barCount++] = overlay_layer::EspBar{bx - 0.12f, by, barWidth, bh,
-                                                                 fill, backupFill,
+        // percent-of-width of one px at a 1920 reference (display-relative boxes
+        // scale with the same percent math, so px->% needs the live width).
+        const float pxPercent = displayWidthPercent();  // % of display width per px
+        const float healthBarX = bx - (barWidth + 3.0f) * pxPercent;
+        if (GET_CONFIG_VAR(esp_vars::HealthBarEnabled) && scene.barCount < overlay_layer::kMaxEspBars)
+            scene.bars[scene.barCount++] = overlay_layer::EspBar{healthBarX, by, barWidth, bh,
+                                                                 slot.smoothedHealthFill, backupFill,
                                                                  static_cast<std::uint32_t>(GET_CONFIG_VAR(esp_vars::HealthColor)),
                                                                  backupRgba};
-        }
         if (GET_CONFIG_VAR(esp_vars::ArmorBarEnabled)) {
-            const auto armor = pawnValue<std::uint8_t>(pawn.baseEntity(), "C_CSPlayerPawn", "m_ArmorValue");
-            if (armor.hasValue() && armor.value() > 0 && scene.barCount < overlay_layer::kMaxEspBars) {
-                const float fill = static_cast<float>(armor.value()) / 100.0f;
-                scene.bars[scene.barCount++] = overlay_layer::EspBar{right + 0.12f, by, barWidth - 1.0f, bh,
-                                                                     fill, 0.0f,
+            const auto armor = pawnValue<std::int32_t>(pawn.baseEntity(), "C_CSPlayerPawn", "m_ArmorValue");
+            const float armorTarget = armor.hasValue() ? static_cast<float>(armor.value()) / 100.0f : 0.0f;
+            slot.smoothedArmorFill += (armorTarget - slot.smoothedArmorFill) * ease;
+            if (armorTarget > 0.0f && scene.barCount < overlay_layer::kMaxEspBars) {
+                const float armorBarX = right + 3.0f * pxPercent;
+                scene.bars[scene.barCount++] = overlay_layer::EspBar{armorBarX, by, barWidth - 1.0f, bh,
+                                                                     slot.smoothedArmorFill, 0.0f,
                                                                      static_cast<std::uint32_t>(GET_CONFIG_VAR(esp_vars::ArmorColor)),
                                                                      0};
+                if (scene.textCount < overlay_layer::kMaxEspTexts) {
+                    char text[16]{};
+                    const int value = armor.hasValue() ? armor.value() : 0;
+                    int len = 0;
+                    if (value >= 100)
+                        text[len++] = static_cast<char>('0' + (value / 100) % 10);
+                    if (value >= 10)
+                        text[len++] = static_cast<char>('0' + (value / 10) % 10);
+                    text[len++] = static_cast<char>('0' + value % 10);
+                    text[len] = '\0';
+                    // Armor value rides the FILL TOP (follows the bar color
+                    // height) and is tinted like the bar - 2026-10-13 request.
+                    const auto armorColor = GET_CONFIG_VAR(esp_vars::ArmorColor);
+                    scene.texts[scene.textCount++] = overlay_layer::EspText{
+                        armorBarX + (barWidth + 2.5f) * pxPercent,
+                        by + bh * (1.0f - slot.smoothedArmorFill),
+                        false,
+                        static_cast<std::uint32_t>(color::Rgba{
+                            static_cast<std::uint8_t>(std::min(255, armorColor.r() + 55)),
+                            static_cast<std::uint8_t>(std::min(255, armorColor.g() + 55)),
+                            static_cast<std::uint8_t>(std::min(255, armorColor.b() + 55)), 235}),
+                        11.0f, {}};
+                    copyText(scene.texts[scene.textCount - 1].text, text);
+                }
             }
+        }
+        if (GET_CONFIG_VAR(esp_vars::HealthBarEnabled) && scene.textCount < overlay_layer::kMaxEspTexts) {
+            // HP value rides the FILL TOP (follows the bar color height) and
+            // is tinted like the bar - 2026-10-13 request.
+            char text[16]{};
+            const int value = healthValue < 0 ? 0 : healthValue;
+            int len = 0;
+            if (value >= 100)
+                text[len++] = static_cast<char>('0' + (value / 100) % 10);
+            if (value >= 10)
+                text[len++] = static_cast<char>('0' + (value / 10) % 10);
+            text[len++] = static_cast<char>('0' + value % 10);
+            text[len] = '\0';
+            const auto healthColor = GET_CONFIG_VAR(esp_vars::HealthColor);
+            scene.texts[scene.textCount++] = overlay_layer::EspText{
+                healthBarX - 3.5f * pxPercent,
+                by + bh * (1.0f - slot.smoothedHealthFill),
+                true,
+                static_cast<std::uint32_t>(color::Rgba{
+                    static_cast<std::uint8_t>(std::min(255, healthColor.r() + 55)),
+                    static_cast<std::uint8_t>(std::min(255, healthColor.g() + 55)),
+                    static_cast<std::uint8_t>(std::min(255, healthColor.b() + 55)), 235}),
+                11.0f, {}};
+            copyText(scene.texts[scene.textCount - 1].text, text);
         }
 
         // ---- Damage echo number (the visible half of the damage echo) ----
@@ -567,7 +643,57 @@ private:
                 if (kit.valueOr(false))
                     pushFlag("KIT", 0x9BC9E8FF);
             }
+            if (GET_CONFIG_VAR(esp_vars::FlagMoney)) {
+                if (const auto money = controllerMoney(pawn); money.hasValue()) {
+                    char text[16]{"$0000"};
+                    int value = money.value();
+                    if (value > 9999)
+                        value = 9999;
+                    if (value < 0)
+                        value = 0;
+                    text[1] = static_cast<char>('0' + (value / 1000) % 10);
+                    text[2] = static_cast<char>('0' + (value / 100) % 10);
+                    text[3] = static_cast<char>('0' + (value / 10) % 10);
+                    text[4] = static_cast<char>('0' + value % 10);
+                    pushFlag(text, 0x9BD3A0FF);
+                }
+            }
         }
+    }
+
+    // Money = CCSPlayerController m_pInGameMoneyServices -> m_iAccount
+    // (PlayerList's proven chain), read through the pawn's controller handle.
+    [[nodiscard]] Optional<int> controllerMoney(auto&& pawn) const noexcept
+    {
+        const auto controllerHandle = pawnValue<std::uint32_t>(pawn.baseEntity(), "C_CSPlayerPawn", "m_hController");
+        if (!controllerHandle.hasValue())
+            return {};
+        auto* const controller = static_cast<cs2::C_BaseEntity*>(hookContext.template make<EntitySystem>()
+            .getEntityFromHandle(cs2::CEntityHandle{controllerHandle.value()}));
+        if (!controller)
+            return {};
+        auto&& schema = hookContext.schemaSystem();
+        const auto servicesOffset = schema.getFieldOffset("CCSPlayerController", "m_pInGameMoneyServices");
+        const auto accountOffset = schema.getFieldOffset("CCSPlayerController_InGameMoneyServices", "m_iAccount");
+        if (!servicesOffset.has_value() || *servicesOffset <= 0 || !accountOffset.has_value() || *accountOffset <= 0)
+            return {};
+        std::byte* services{};
+        std::memcpy(&services, reinterpret_cast<const std::byte*>(controller) + *servicesOffset, sizeof(services));
+        if (!services)
+            return {};
+        int value{};
+        std::memcpy(&value, services + *accountOffset, sizeof(value));
+        return value;
+    }
+
+    // Percent-of-display-width per world px at the current display size (the
+    // bar-gap math converts px offsets into the box's percent space).
+    [[nodiscard]] float displayWidthPercent() const noexcept
+    {
+        // 100 percent over the live display width in px (ImGui-side knowledge
+        // the producer must not take); the bar math only needs the RATIO, so
+        // 100 / 1920 as a reference is fine when the real size is unknown.
+        return 100.0f / 1920.0f;
     }
 
     // m_iszPlayerName is an INLINE char array on the controller (PlayerList's

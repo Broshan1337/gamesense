@@ -3447,10 +3447,12 @@ void pageLegit() noexcept
 void pageEsp() noexcept
 {
     using namespace esp_vars;
-    addCard("ESP", 3, [] {
+    addCard("ESP", 4, [] {
         toggleVar<Enabled>("ESP", ++controlId);
         toggleVar<TeammatesEnabled>("Show Teammates", ++controlId);
         sliderVar<MaxDistance>("Max Distance", ++controlId, " u");
+        static constexpr const char* const kEspFonts[]{"Inter Medium", "Inter SemiBold"};
+        selectVar<Font>("Font", kEspFonts, 2, ++controlId);
     });
     addCard("BOX", 6, [] {
         toggleVar<BoxEnabled>("Box", ++controlId);
@@ -3488,32 +3490,8 @@ void pageEsp() noexcept
         sliderVar<NameSize>("Name Size", ++controlId, " pt");
         toggleVar<DistanceEnabled>("Distance", ++controlId);
     });
-    addCard("FLAGS", 7, [] {
-        toggleVar<FlagsEnabled>("Info Flags", ++controlId);
-        toggleVar<FlagFlashed>("Flashed", ++controlId);
-        toggleVar<FlagScoped>("Scoped", ++controlId);
-        toggleVar<FlagReloading>("Reloading", ++controlId);
-        toggleVar<FlagDefusing>("Defusing", ++controlId);
-        toggleVar<FlagBomb>("Bomb", ++controlId);
-        toggleVar<FlagKit>("Kit", ++controlId);
-    });
-    addCard("CROSSHAIR", 9, [] {
-        toggleVar<crosshair_vars::Enabled>("Custom Crosshair", ++controlId);
-        toggleVar<crosshair_vars::Dot>("Dot", ++controlId);
-        toggleVar<crosshair_vars::Lines>("Lines", ++controlId);
-        sliderVar<crosshair_vars::Length>("Length", ++controlId, " px");
-        sliderVar<crosshair_vars::Thickness>("Thickness", ++controlId, " px");
-        sliderVar<crosshair_vars::Gap>("Gap", ++controlId, " px");
-        colorVar<crosshair_vars::Color>("Color", ++controlId);
-        toggleVar<crosshair_vars::Outline>("Outline", ++controlId);
-        toggleVar<crosshair_vars::TStyle>("T Style", ++controlId);
-    });
-    addCard("PENETRATION", 4, [] {
-        toggleVar<crosshair_vars::PenetrationEnabled>("Penetration Crosshair", ++controlId);
-        sliderVar<crosshair_vars::PenetrationMinDamage>("Min Damage", ++controlId, " hp");
-        colorVar<crosshair_vars::PenetrationColorYes>("Can Penetrate", ++controlId);
-        colorVar<crosshair_vars::PenetrationColorNo>("Blocked", ++controlId);
-    });
+    // FLAGS + CROSSHAIR cards live on Player Info / HUD (2026-10-13): flags are
+    // player info, the crosshair is a HUD element.
     addCard("RADAR", 6, [] {
         toggleVar<radar_vars::Enabled>("Radar", ++controlId);
         sliderVar<radar_vars::Zoom>("Zoom", ++controlId, " u");
@@ -3570,11 +3548,18 @@ void pagePlayerInfo() noexcept
         toggleVar<BombCarrierIconEnabled>("Bomb Carrier Icon", ++controlId);
         toggleVar<BombPlantIconEnabled>("Bomb Planting Icon", ++controlId);
     });
-    addCard("STATE ICONS", 4, [] {
-        toggleVar<BombDefuseIconEnabled>("Defuse Icon", ++controlId);
-        toggleVar<HostagePickupIconEnabled>("Picking Up Hostage Icon", ++controlId);
-        toggleVar<HostageRescueIconEnabled>("Rescuing Hostage Icon", ++controlId);
-        toggleVar<BlindedIconEnabled>("Blinded By Flashbang Icon", ++controlId);
+    // Our ESP flags (drawn next to the ESP box) replaced the old in-world state
+    // icons (2026-10-13); the weapon icon + ammo panels stay. The old icon keys
+    // stay registered (configs keep loading).
+    addCard("FLAGS", 8, [] {
+        toggleVar<esp_vars::FlagsEnabled>("Info Flags", ++controlId);
+        toggleVar<esp_vars::FlagFlashed>("Flashed", ++controlId);
+        toggleVar<esp_vars::FlagScoped>("Scoped", ++controlId);
+        toggleVar<esp_vars::FlagReloading>("Reloading", ++controlId);
+        toggleVar<esp_vars::FlagDefusing>("Defusing", ++controlId);
+        toggleVar<esp_vars::FlagBomb>("Bomb", ++controlId);
+        toggleVar<esp_vars::FlagKit>("Kit", ++controlId);
+        toggleVar<esp_vars::FlagMoney>("Money", ++controlId);
     });
 }
 
@@ -3818,6 +3803,23 @@ void pageEffects() noexcept
 
 void pageHud() noexcept
 {
+    addCard("CROSSHAIR", 9, [] {
+        toggleVar<crosshair_vars::Enabled>("Custom Crosshair", ++controlId);
+        toggleVar<crosshair_vars::Dot>("Dot", ++controlId);
+        toggleVar<crosshair_vars::Lines>("Lines", ++controlId);
+        sliderVar<crosshair_vars::Length>("Length", ++controlId, " px");
+        sliderVar<crosshair_vars::Thickness>("Thickness", ++controlId, " px");
+        sliderVar<crosshair_vars::Gap>("Gap", ++controlId, " px");
+        colorVar<crosshair_vars::Color>("Color", ++controlId);
+        toggleVar<crosshair_vars::Outline>("Outline", ++controlId);
+        toggleVar<crosshair_vars::TStyle>("T Style", ++controlId);
+    });
+    addCard("PENETRATION", 4, [] {
+        toggleVar<crosshair_vars::PenetrationEnabled>("Penetration Crosshair", ++controlId);
+        sliderVar<crosshair_vars::PenetrationMinDamage>("Min Damage", ++controlId, " hp");
+        colorVar<crosshair_vars::PenetrationColorYes>("Can Penetrate", ++controlId);
+        colorVar<crosshair_vars::PenetrationColorNo>("Blocked", ++controlId);
+    });
     addCard("BOMB", 3, [] {
         toggleVar<BombTimerEnabled>("Bomb Explosion Countdown And Site", ++controlId);
         toggleVar<DefusingAlertEnabled>("Bomb Defuse Countdown", ++controlId);
@@ -8109,6 +8111,12 @@ void neverlose::renderGameOverlay() noexcept
         }
     }
 
+    // ESP font selector: 0 = Inter Medium (the menu body font, what the Player
+    // Info ammo panel uses), 1 = Inter SemiBold. Every ESP-family text draw
+    // goes through this so the suite stays consistent (2026-10-13 request).
+    const int espFontIndex = static_cast<int>(ui_config::get<esp_vars::Font>());
+    ImFont* const espFont = (ImGui::GetIO().Fonts->Fonts.Size > espFontIndex) ? ImGui::GetIO().Fonts->Fonts[espFontIndex] : nullptr;
+
     // Radar overlay (Features/Visuals/Radar): north-up, local player at the
     // center. Window top-left, below the watermark. Colors read live from the
     // config (the producer publishes geometry only).
@@ -8130,9 +8138,14 @@ void neverlose::renderGameOverlay() noexcept
                         C(ui_config::get<radar_vars::BombColor>() >> 24 & 0xFF, ui_config::get<radar_vars::BombColor>() >> 16 & 0xFF,
                           ui_config::get<radar_vars::BombColor>() >> 8 & 0xFF, ui_config::get<radar_vars::BombColor>() & 0xFF));
         }
+        // Dots clamp INSIDE the window (2026-10-13 report: enemies out of the
+        // window); the view cone follows the clamped dot.
+        const ImVec2 windowMin{center.x - size * 0.5f + s(6), center.y - size * 0.5f + s(6)};
+        const ImVec2 windowMax{center.x + size * 0.5f - s(6), center.y + size * 0.5f - s(6)};
         for (int i = 0; i < snapshot.radar.dotCount; ++i) {
             const auto& dot = snapshot.radar.dots[i];
-            const ImVec2 p{center.x + dot.xOffsetUnits / zoom, center.y - dot.yOffsetUnits / zoom};
+            const ImVec2 raw{center.x + dot.xOffsetUnits / zoom, center.y - dot.yOffsetUnits / zoom};
+            const ImVec2 p{ImClamp(raw.x, windowMin.x, windowMax.x), ImClamp(raw.y, windowMin.y, windowMax.y)};
             const auto dotU32 = dot.enemy ? enemyU32 : teamU32;
             const ImU32 color = C(dotU32 >> 24 & 0xFF, dotU32 >> 16 & 0xFF, dotU32 >> 8 & 0xFF, dotU32 & 0xFF);
             if (snapshot.radar.viewCones) {
@@ -8186,8 +8199,10 @@ void neverlose::renderGameOverlay() noexcept
     }
 
     // Grenade markers (Features/Visuals/GrenadePrediction): flash timer rings
-    // (text = seconds to blast), inferno bounds circles.
-    if ((snapshot.grenadeScene.flashCount > 0 || snapshot.grenadeScene.infernoCount > 0)
+    // (text = seconds to blast), inferno bounds circles, and the held-grenade
+    // trajectory + landing preview (world-space points, projected here).
+    if ((snapshot.grenadeScene.flashCount > 0 || snapshot.grenadeScene.infernoCount > 0
+         || snapshot.grenadeScene.trajectoryCount > 0)
         && ui_config::get<grenade_pred_vars::Enabled>() && HookContext<GlobalContext>::isGlobalContextComplete()) {
         HookContext<GlobalContext> hookContext;
         auto&& converter = hookContext.template make<WorldToClipSpaceConverter>();
@@ -8206,10 +8221,41 @@ void neverlose::renderGameOverlay() noexcept
             if (!project(cs2::Vector{flash.x, flash.y, flash.z}, p))
                 continue;
             fg->AddCircle(p, s(9), C(255, 240, 130, 120), 24, 1.5f);
-            if (ImFont* font = ImGui::GetIO().Fonts->Fonts[0]) {
+            ImFont* flashFont = espFont;
+            if (!flashFont)
+                flashFont = ImGui::GetIO().Fonts->Fonts[0];
+            if (flashFont) {
                 char text[16];
                 std::snprintf(text, sizeof(text), "%.1f", static_cast<double>(flash.timeLeft));
-                fg->AddText(font, s(11), p + ImVec2(s(12), -s(6)), C(255, 240, 130, 235), text);
+                fg->AddText(flashFont, s(11), p + ImVec2(s(12), -s(6)), C(255, 240, 130, 235), text);
+            }
+        }
+        // Held-grenade trajectory: projected polyline through the sampled
+        // points, landing spot as a filled circle.
+        if (ui_config::get<grenade_pred_vars::Trajectory>()) {
+            const auto trajectoryColor = static_cast<std::uint32_t>(ui_config::get<grenade_pred_vars::TrajectoryColor>());
+            const ImU32 trajectoryU32 = C(trajectoryColor >> 24 & 0xFF, trajectoryColor >> 16 & 0xFF,
+                                          trajectoryColor >> 8 & 0xFF, trajectoryColor & 0xFF);
+            ImVec2 previous;
+            bool havePrevious = false;
+            for (int i = 0; i < snapshot.grenadeScene.trajectoryCount; ++i) {
+                const auto& point = snapshot.grenadeScene.trajectory[i];
+                ImVec2 p;
+                if (!project(point, p)) {
+                    havePrevious = false;
+                    continue;
+                }
+                if (havePrevious)
+                    fg->AddLine(previous, p, trajectoryU32, 1.6f);
+                previous = p;
+                havePrevious = true;
+            }
+            if (snapshot.grenadeScene.hasLanding) {
+                ImVec2 landing;
+                if (project(snapshot.grenadeScene.landing, landing)) {
+                    fg->AddCircleFilled(landing, s(7), (trajectoryU32 & 0x00FFFFFFu) | (110u << IM_COL32_A_SHIFT), 20);
+                    fg->AddCircle(landing, s(8), trajectoryU32, 20, 1.4f);
+                }
             }
         }
         for (int i = 0; i < snapshot.grenadeScene.infernoCount; ++i) {
@@ -8264,6 +8310,14 @@ void neverlose::renderGameOverlay() noexcept
                 fg->AddRectFilled(p - ImVec2(o, o), p + size + ImVec2(o, o), C(0, 0, 0, 170));
             }
             fg->AddRectFilled(p, p + size, unpack(snapshot.crosshair.rgba));
+        }
+        // Penetration damage text: what we'd deal shooting through the wall.
+        if (snapshot.crosshair.hasDamageText && snapshot.crosshair.damageText[0]
+            && ImGui::GetIO().Fonts->Fonts[0]) {
+            ImFont* font = ImGui::GetIO().Fonts->Fonts[0];
+            const ImVec2 textPos{display.x * 0.5f + s(18), display.y * 0.5f + s(6)};
+            fg->AddText(font, s(11), textPos + ImVec2(1, 1), C(0, 0, 0, 180), snapshot.crosshair.damageText);
+            fg->AddText(font, s(11), textPos, unpack(snapshot.crosshair.rgba), snapshot.crosshair.damageText);
         }
     }
 
@@ -8331,7 +8385,10 @@ void neverlose::renderGameOverlay() noexcept
             fg->AddCircle(p, circle.radiusPx, unpack(circle.rgba), 24, circle.thickness);
         }
         if (scene.textCount > 0) {
-            if (ImFont* font = ImGui::GetIO().Fonts->Fonts[0]) {
+            ImFont* font = espFont;
+            if (!font)
+                font = ImGui::GetIO().Fonts->Fonts[0];
+            if (font) {
                 constexpr float kEspTextSize = 13.0f;
                 for (int i = 0; i < scene.textCount; ++i) {
                     const auto& text = scene.texts[i];

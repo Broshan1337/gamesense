@@ -670,6 +670,8 @@ using ConfigVariableTypes = TypeList<
     esp_vars::NameSize,
     esp_vars::HealthBarWidth,
     esp_vars::EchoSize,
+    esp_vars::FlagMoney,
+    esp_vars::Font,
     BulletTracersColor,
     crosshair_vars::Enabled,
     crosshair_vars::Dot,

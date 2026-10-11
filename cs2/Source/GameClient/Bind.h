@@ -75,13 +75,45 @@ private:
         return cachedScancodeName;
     }
 
+    [[nodiscard]] static sdl3::SDL_GetKeyFromScancode* resolveKeyFromScancode() noexcept
+    {
+        if (!cachedKeyFromScancode) {
+            const DynamicLibrary sdl{cs2::SDL_DLL};
+            cachedKeyFromScancode = sdl.getFunctionAddress("SDL_GetKeyFromScancode").as<sdl3::SDL_GetKeyFromScancode*>();
+        }
+        return cachedKeyFromScancode;
+    }
+
+    [[nodiscard]] static sdl3::SDL_GetKeyName* resolveGetKeyName() noexcept
+    {
+        if (!cachedGetKeyName) {
+            const DynamicLibrary sdl{cs2::SDL_DLL};
+            cachedGetKeyName = sdl.getFunctionAddress("SDL_GetKeyName").as<sdl3::SDL_GetKeyName*>();
+        }
+        return cachedGetKeyName;
+    }
+
     [[nodiscard]] static const char* scancodeName(int scancode) noexcept
     {
-        if (const auto fn = resolveScancodeName())
-            return fn(scancode);
+        // Layout-translated first (SDL_GetKeyFromScancode -> SDL_GetKeyName):
+        // an AZERTY user's physical QWERTY-A key shows as its AZERTY label.
+        // Falls back to the physical name, then "KEY" (issue #4: bind hints
+        // showed QWERTY letters on AZERTY keyboards).
+        if (const auto keyFromScancode = resolveKeyFromScancode()) {
+            if (const auto keyName = resolveGetKeyName()) {
+                if (const char* name = keyName(keyFromScancode(scancode)); name && name[0])
+                    return name;
+            }
+        }
+        if (const auto fn = resolveScancodeName()) {
+            if (const char* name = fn(scancode); name && name[0])
+                return name;
+        }
         return "KEY";
     }
 
-    
+
     inline static sdl3::SDL_GetScancodeName* cachedScancodeName{nullptr};
+    inline static sdl3::SDL_GetKeyFromScancode* cachedKeyFromScancode{nullptr};
+    inline static sdl3::SDL_GetKeyName* cachedGetKeyName{nullptr};
 };

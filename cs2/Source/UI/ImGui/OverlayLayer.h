@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <mutex>
 
+#include <CS2/Classes/Vector.h>
+
 #include <Utils/SpinLock.h>
 
 
@@ -240,6 +242,8 @@ struct Crosshair {
     std::uint32_t rgba;
     float thicknessPx;   // unused by the draw side (pieces carry their sizes)
     float outlinePx;    // >0 = draw a black outline rect around each piece
+    char damageText[16];  // penetration crosshair: wallbang damage ("37 dmg")
+    bool hasDamageText{};
 };
 
 constexpr int kMaxCrosshairPieces = 5;
@@ -319,6 +323,12 @@ struct GrenadeScene {
     int flashCount = 0;
     GrenadeMarker infernos[16];
     int infernoCount = 0;
+    // Held-grenade trajectory preview (world-space points + landing; the draw
+    // side projects). Producer: Features/Visuals/GrenadePrediction.
+    cs2::Vector trajectory[64];
+    int trajectoryCount = 0;
+    bool hasLanding = false;
+    cs2::Vector landing{};
 };
 
 constexpr int kMaxGrenadeMarkers = 16;

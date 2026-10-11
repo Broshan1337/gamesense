@@ -488,6 +488,8 @@ private:
         configConversion.uint(u8"NameSize", loadVariable<esp_vars::NameSize>(), saveVariable<esp_vars::NameSize>());
         configConversion.uint(u8"HealthBarWidth", loadVariable<esp_vars::HealthBarWidth>(), saveVariable<esp_vars::HealthBarWidth>());
         configConversion.uint(u8"EchoSize", loadVariable<esp_vars::EchoSize>(), saveVariable<esp_vars::EchoSize>());
+        configConversion.boolean(u8"FlagMoney", loadVariable<esp_vars::FlagMoney>(), saveVariable<esp_vars::FlagMoney>());
+        configConversion.uint(u8"Font", loadVariable<esp_vars::Font>(), saveVariable<esp_vars::Font>());
         configConversion.endObject();
     }
 

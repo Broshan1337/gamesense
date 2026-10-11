@@ -17,6 +17,7 @@
 #include <GameClient/UserCmd.h>
 #include <HookContext/HookContextMacros.h>
 #include <UI/ImGui/OverlayLayer.h>
+#include <Utils/VerifyConsole.h>
 #include <Utils/ColorUtils.h>
 #include <Utils/Optional.h>
 #include <Utils/Trig.h>
@@ -59,12 +60,21 @@ public:
         const auto eye = pawn.eyePosition();
         const auto view = pawnValue<cs2::Vector>(pawn.baseEntity(), "C_CSPlayerPawn", "m_angEyeAngles");
 
+        char damageText[16]{};
+        bool hasDamageText = false;
         if (GET_CONFIG_VAR(crosshair_vars::PenetrationEnabled) && eye.hasValue() && view.hasValue()) {
-            if (const auto resolved = penetrationColor(pawn, eye.value(), view.value()); resolved.hasValue())
+            if (const auto resolved = penetrationColor(pawn, eye.value(), view.value(), damageText); resolved.hasValue()) {
                 color = resolved.value();
+                hasDamageText = damageText[0] != '\0';
+            }
         }
 
-        publish(eye, view, color);
+        // Temporary breadcrumb (~ console): the in-game "crosshair renders
+        // nothing" report needs the gate state from a live round.
+        VerifyConsole::write(3.0f, "cross", "pieces published, pen=%d dmgText=%d",
+            GET_CONFIG_VAR(crosshair_vars::PenetrationEnabled) ? 1 : 0, hasDamageText ? 1 : 0);
+
+        publish(eye, view, color, damageText, hasDamageText);
     }
 
     void onUnload() const noexcept
@@ -75,7 +85,8 @@ public:
 
 private:
     [[nodiscard]] Optional<std::uint32_t> penetrationColor(auto&& pawn, const cs2::Vector& eye,
-                                                            const cs2::Vector& view) const noexcept
+                                                            const cs2::Vector& view,
+                                                            char (&damageText)[16]) const noexcept
     {
         auto&& weapon = pawn.getActiveWeapon();
         const auto base = weapon.baseDamage();
@@ -100,21 +111,45 @@ private:
         if (!trace.didHit)
             return yes;  // clear line of sight - a normal shot lands
 
-        // Wall in the way: full bullet simulation through it.
+        // Wall in the way: full bullet simulation through it. The text shows
+        // the damage we'd do shooting through it (the request: "what the
+        // highest damage would be").
         const penetration::Bullet bullet{base.value(), power.value(), rangeModifier.value(), maxRange.value()};
         const penetration::Limits limits{};
         penetration::TraceBudget budget{};
         const auto impact = Autowall::evaluate(eye, end, pawn.baseEntity(), trace.hitEntity,
                                                bullet, limits, budget, hookContext);
-        if (!impact.hasValue())
+        if (!impact.hasValue()) {
+            copyText(damageText, "0 dmg");
             return no;
+        }
+        const int damage = static_cast<int>(impact.value().damage + 0.5f);
+        damageText[0] = static_cast<char>('0' + (damage / 100) % 10);
+        int len = damage >= 100 ? 1 : 0;
+        if (damage >= 10)
+            damageText[len++] = static_cast<char>('0' + (damage / 10) % 10);
+        damageText[len++] = static_cast<char>('0' + damage % 10);
+        damageText[len++] = ' ';
+        damageText[len++] = 'd';
+        damageText[len++] = 'm';
+        damageText[len++] = 'g';
+        damageText[len] = '\0';
         return impact.value().damage >= static_cast<float>(GET_CONFIG_VAR(crosshair_vars::PenetrationMinDamage)) ? yes : no;
+    }
+
+    static void copyText(char (&destination)[16], const char* source) noexcept
+    {
+        int i = 0;
+        for (; i < 15 && source[i]; ++i)
+            destination[i] = source[i];
+        destination[i] = '\0';
     }
 
     // The pieces are display-independent (gap/length/thickness in px), so the
     // producer computes them once against a virtual 1920-wide display; the
     // draw side scales by display.width / 1920.
-    void publish(const Optional<cs2::Vector>& eye, const Optional<cs2::Vector>& view, std::uint32_t color) const noexcept
+    void publish(const Optional<cs2::Vector>& eye, const Optional<cs2::Vector>& view, std::uint32_t color,
+                  const char (&damageText)[16], bool hasDamageText) const noexcept
     {
         constexpr float kReferenceWidth = 1920.0f;
         const float scale = kReferenceWidth / 1920.0f;
@@ -126,6 +161,9 @@ private:
         crosshair.rgba = color;
         crosshair.thicknessPx = thickness;
         crosshair.outlinePx = GET_CONFIG_VAR(crosshair_vars::Outline) ? thickness + 2.0f : 0.0f;
+        crosshair.hasDamageText = hasDamageText;
+        for (int i = 0; i < 16; ++i)
+            crosshair.damageText[i] = damageText[i];
 
         const auto push = [&](float xPercent, float yPercent, float wPercent, float hPercent) {
             if (crosshair.pieceCount >= overlay_layer::kMaxCrosshairPieces)

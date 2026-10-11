@@ -9,6 +9,7 @@
 #include <CS2/Classes/Vector.h>
 #include <Features/Game/AirStrafe.h>
 #include <Features/Game/JumpTiming.h>
+#include <Utils/VerifyConsole.h>
 #include <Features/Game/BunnyhopConfigVariables.h>
 #include <Features/Game/Movement.h>
 #include <Features/Game/StrafeCommand.h>
@@ -55,10 +56,15 @@ public:
     void onCreateMove(cs2::CUserCmd* cmd) const noexcept
     {
         clearPending();
-        if (Movement<HookContext>::jumpBugActive)
+        if (Movement<HookContext>::jumpBugActive) {
+            VerifyConsole::write(4.0f, "bhop", "gate jumpBugActive");
             return reset();
+        }
 
         const bool jumpHeld = KeyboardState::isKeyDown(sdl3::scancode::kSpace);
+        // Issue #4 round 4: [bhop] breadcrumbs at every gate so the next
+        // in-game run names the failing one ("only some ticks" needs data).
+        VerifyConsole::write(4.0f, "bhop", "cm held=%d", jumpHeld ? 1 : 0);
         const bool strafeEnabled = GET_CONFIG_VAR(AutoStrafeEnabled) || GET_CONFIG_VAR(TestStraferEnabled);
         const bool bhopEnabled = GET_CONFIG_VAR(BunnyhopEnabled) && jumpHeld;
         if (!strafeEnabled && !bhopEnabled)
@@ -100,8 +106,17 @@ public:
         if (!bhopEnabled)
             return;
         const auto autoBhop = hookContext.template make<CvarSystem>().readBoolConVar("sv_autobunnyhopping");
-        if (autoBhop.has_value() && autoBhop.value())
+        if (autoBhop.has_value() && autoBhop.value()) {
+            VerifyConsole::write(4.0f, "bhop", "gate sv_autobunnyhopping=1 (server-side hop)");
             return;
+        }
+
+        // Velocity gate: ladder/noclip movetypes stand down (m_nActualMoveType:
+        // ladder=9, noclip=7 - the CS2 MoveType_t from the dumper).
+        if (const auto moveType = pawnMoveType(); moveType == 9 || moveType == 7) {
+            VerifyConsole::write(4.0f, "bhop", "gate movetype=%d", moveType);
+            return reset();
+        }
 
         wantsJump = onGround.value();
         if (!onGround.value()) {
@@ -110,19 +125,20 @@ public:
                 hasPendingLanding = true;
             }
         }
-        const auto tick = hookContext.localPlayerController().tickBase();
-        const float dt = hookContext.globalVars().tickInterval().valueOr(1.0f / 64);
-        if (!tick.hasValue() || tick.value() <= 0 || !std::isfinite(dt) || dt <= 0) return;
-        pendingJumpTime = tick.value() * double(dt) + (hasPendingLanding ? pendingLandingWhen * dt : 0);
-        const float penalty = hookContext.template make<CvarSystem>().readFloatConVar("sv_jump_spam_penalty_time").value_or(1.0f / 64);
-        const bool allowed = jumpTiming.mayPress(pendingJumpTime, penalty);
-        hasPendingLanding = hasPendingLanding && allowed;
-        // A predicted landing THIS tick is a jump too: pressing at the landing
-        // subtick (not the next ground tick at when=1.0) is what keeps the hop
-        // frictionless - the 2026-10-10 verdict had every landing eat 1+ ground
-        // ticks of friction (deltas of -20..-95 units per hop) because the
-        // staged landing press was dropped and the jump only fired a tick late.
-        wantsJump = (wantsJump || hasPendingLanding) && allowed;
+        // Velocity bhop port (issue #4 round 4, 2026-10-13): the landing press
+        // is the whole feature. The old sv_jump_spam_penalty_time gate could
+        // NEVER pass on consecutive ticks - mayPress demands
+        // now - lastPress > penalty + 1/4096, but one tick apart is
+        // dt*(1 + dLanding) ~= 0.0156 which is always < 0.01587 - so hops only
+        // fired on the random ticks where the new pendingJumpTime landed in the
+        // past (the mayPress `now < lastPress` branch): "only triggers on some
+        // ticks, misses most". Gate deleted; velocity has no penalty gate.
+        // A predicted landing THIS tick stages the press at the landing
+        // subtick (not the next ground tick at when=1.0) - that is what keeps
+        // the hop frictionless (2026-10-10 verdict).
+        wantsJump = onGround.value() || hasPendingLanding;
+        VerifyConsole::write(4.0f, "bhop", "ground=%d landing=%d -> wantsJump=%d",
+            onGround.value() ? 1 : 0, hasPendingLanding ? 1 : 0, wantsJump ? 1 : 0);
         hasPendingTap = wantsJump;
         hasPendingJump = true;
         hasPendingInput = true;
@@ -134,12 +150,16 @@ public:
     
     void onWriteMoveCrc(cs2::CUserCmd* cmd) const noexcept
     {
-        if (!hasPendingInput)
+        if (!hasPendingInput) {
+            VerifyConsole::write(4.0f, "bhop", "crc: no pending input");
             return;
+        }
         const UserCmd userCmd{cmd};
         if (!cmd || cmd != pendingCommand || userCmd.baseMessage() != pendingBase
             || StrafeCommand::commandNumber(cmd) != pendingSequence
             || Movement<HookContext>::jumpBugActive) {
+            VerifyConsole::write(4.0f, "bhop", "crc: sequence mismatch (cmd=%p pending=%p)",
+                static_cast<const void*>(cmd), static_cast<const void*>(pendingCommand));
             clearPending();
             return;
         }
@@ -169,7 +189,6 @@ public:
                 clearPending();
                 return;
             }
-            jumpTiming.pressed(pendingJumpTime);
             if (Moves::count(userCmd.baseMessage()) + 2
                 > cs2::CUserCmd::BaseMessage::SubtickMoves::kMaxSteps)
                 return clearPending();
@@ -443,6 +462,19 @@ private:
 
     
     static constexpr float kStandingHeight = 72.0f;
+
+    [[nodiscard]] int pawnMoveType() const noexcept
+    {
+        auto&& localPawn = hookContext.localPlayerController().pawn().template as<PlayerPawn>();
+        if (!localPawn)
+            return -1;
+        const auto offset = hookContext.schemaSystem().getFieldOffset("C_BaseEntity", "m_nActualMoveType");
+        if (!offset.has_value() || *offset <= 0)
+            return -1;
+        std::uint8_t moveType{};
+        std::memcpy(&moveType, reinterpret_cast<const std::byte*>(static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity())) + *offset, sizeof(moveType));
+        return moveType;
+    }
 
     [[nodiscard]] Optional<bool> isWalking() const noexcept
     {

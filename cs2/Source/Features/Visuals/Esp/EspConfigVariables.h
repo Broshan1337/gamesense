@@ -67,4 +67,7 @@ CONFIG_VARIABLE_RANGE(NameSize, kNameSize);
 CONFIG_VARIABLE_RANGE(HealthBarWidth, kHealthBarWidth);
 inline constexpr auto kEchoSize = RangeConstrainedVariableParams<std::uint8_t>{.min = 8, .max = 28, .def = 13};
 CONFIG_VARIABLE_RANGE(EchoSize, kEchoSize);
+CONFIG_VARIABLE(FlagMoney, bool, true);
+inline constexpr auto kFont = RangeConstrainedVariableParams<std::uint8_t>{.min = 0, .max = 1, .def = 0};
+CONFIG_VARIABLE_RANGE(Font, kFont);
 }
