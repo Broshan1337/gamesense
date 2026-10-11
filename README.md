@@ -93,3 +93,5 @@ Notes:
 
 [Osiris](https://github.com/danielkrupinski/Osiris) by Daniel Krupiński — the starting point
 (MIT, license file kept).
+
+[FrameworkCS2](https://github.com/Sumandora/FrameworkCS2) by [Sumandora](https://github.com/Sumandora/) - many features ported/pasted from here
