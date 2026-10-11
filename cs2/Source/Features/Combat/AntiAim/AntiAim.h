@@ -99,16 +99,10 @@ public:
         else if (yawSide == 1)
             indicatorYaw += 90.0f;
 
-        // FVA disabled: the AA has no camera-safe delivery channel. Never fall
-        // back to base-viewangle writes (that is the camera-drag bug); warn once
-        // instead - a healthy session is silent, so this is a config anomaly.
-        if (!GET_CONFIG_VAR(FvaEnabled)) {
-            if (!warnedFvaDisabled) {
-                warnedFvaDisabled = true;
-                gui_log::write("[aa] anti aim needs Fake View Angles (Misc > FVA) enabled; angles not sent");
-            }
-            return;
-        }
+        // 2026-10-13 (owner request): NO FvaEnabled requirement anymore. The
+        // AA arms the FVA channel unconditionally; FvaEmulator consumes armed
+        // targets even with its own feature toggle off (see FvaEmulator's
+        // gate). Base-viewangle writes stay banished (camera drag).
 
         // Fire ticks: the aimbot's own FVA target (the silent shot redirect)
         // wins - arming ours would clobber it. That IS hide-shots behavior; with
@@ -428,7 +422,6 @@ private:
 
     inline static bool aaActive{false};
     inline static bool indicatorPublished{false};
-    inline static bool warnedFvaDisabled{false};
     inline static float stagedPitch{0.0f};
     inline static float stagedYaw{0.0f};
     inline static float indicatorYaw{0.0f};

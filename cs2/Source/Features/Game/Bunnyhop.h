@@ -155,11 +155,15 @@ public:
             return;
         }
         const UserCmd userCmd{cmd};
-        if (!cmd || cmd != pendingCommand || userCmd.baseMessage() != pendingBase
-            || StrafeCommand::commandNumber(cmd) != pendingSequence
-            || Movement<HookContext>::jumpBugActive) {
-            VerifyConsole::write(4.0f, "bhop", "crc: sequence mismatch (cmd=%p pending=%p)",
-                static_cast<const void*>(cmd), static_cast<const void*>(pendingCommand));
+        // Issue #4 (2026-10-13, user breadcrumb): NO cross-hook cmd identity -
+        // CreateMove stages on its cmd (ring entry), WriteMoveCrc runs on a
+        // DIFFERENT cmd (the send-built one, 0x98 = one array slot away); the
+        // old pointer/base/sequence check discarded every staged jump ("fires
+        // 1-2 hops then stops" - only the coincidental same-pointer ticks
+        // fired). The tick boundary is already guaranteed by clearPending()
+        // at the top of onCreateMove; this writes ONLY the cmd handed here.
+        if (!cmd || Movement<HookContext>::jumpBugActive) {
+            VerifyConsole::write(4.0f, "bhop", "crc: gate (no cmd / jumpbug)");
             clearPending();
             return;
         }
@@ -206,6 +210,11 @@ public:
                 } else {
                     Moves::stripButtons(userCmd.baseMessage(), cs2::CCSGOInput::Buttons::kJump);
                 }
+                // The pair was appended AFTER the game's real samples while
+                // pressWhen is a LANDING fraction (< 1.0): the engine walks
+                // the step array sequentially, so an out-of-order append is a
+                // replay glitch (the sortByWhen rule - stuck keys class).
+                Moves::sortByWhen(userCmd.baseMessage());
             }
         }
 

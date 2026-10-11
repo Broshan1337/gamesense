@@ -166,7 +166,12 @@ public:
     
     void onCreateMove(cs2::CUserCmd* cmd) noexcept
     {
-        if (!GET_CONFIG_VAR(FvaEnabled))
+        // 2026-10-13: armed targets (the anti-aim arms with alwaysPublish)
+        // are consumed EVEN WITH the FVA feature toggle off - the AA must not
+        // require the user to enable FVA. Everything else (reference chain,
+        // zero-origin spoof, fire-only gating) stays behind FvaEnabled.
+        if (!GET_CONFIG_VAR(FvaEnabled)
+            && !fva_target::armed.load(std::memory_order_acquire))
             return;
 
         
@@ -236,7 +241,7 @@ public:
         float fromPitch = referencePitch, fromYaw = referenceYaw;
         float toPitch = currentPitch, toYaw = currentYaw;
 
-        const bool zeroOrigin = GET_CONFIG_VAR(FvaZeroOriginSpoof);
+        const bool zeroOrigin = GET_CONFIG_VAR(FvaEnabled) && GET_CONFIG_VAR(FvaZeroOriginSpoof);
         const bool targetArmedNow = fva_target::armed.load(std::memory_order_acquire);
         if (zeroOrigin) {
             
@@ -296,9 +301,10 @@ private:
     
     void publishStaged(cs2::CUserCmd* cmd) noexcept
     {
-        if (!GET_CONFIG_VAR(FvaEnabled))
-            return;
-
+        // No FvaEnabled gate: chains are staged ONLY when the emulator ran
+        // (FvaEnabled or an armed AA target), so stagedCount > 0 here always
+        // means "deliver" - including the AA's alwaysPublish chains with the
+        // FVA toggle off (2026-10-13).
         if (stagedCount == 0)
             return;
 
