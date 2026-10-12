@@ -3283,7 +3283,9 @@ void pageRageAccuracy() noexcept
         rageGroupRow<RageGroupMinDamageOverrideValueRow>(++controlId);
         toggleVar<WallCheck>("Shoot Visible", ++controlId);
         toggleVar<DuckPeek>("Duck Peek", ++controlId);
-        toggleVar<Autowall>(bullet_simulation::binding() ? "Shoot Walls (Engine)" : "Shoot Walls (Unavailable)", ++controlId);
+        // The label names the model answering the ragebot (Autowall::evaluateAimPoint):
+        // the game's own simulation, or the trace estimate on an unrecognised client build.
+        toggleVar<Autowall>(bullet_simulation::binding() ? "Shoot Walls (Engine)" : "Shoot Walls (Fallback: estimate)", ++controlId);
     });
     addCard("EXTRAS", 2, [] {
         toggleVar<Extrapolate>("Lead Targets", ++controlId);
