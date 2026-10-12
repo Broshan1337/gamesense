@@ -58,13 +58,13 @@ private:
         if (!gate)
             return;
 
-        static constexpr std::uint8_t kForceJump[]{0x90, 0xE9};
+        static constexpr std::uint8_t kForceJump[]{0xEB};
         if (!patch.apply(const_cast<void*>(gate), kForceJump))
             return; 
     }
 
     
-    inline static BytePatch<2> patch{};
+    inline static BytePatch<1> patch{};
 
     HookContext& hookContext;
 };
