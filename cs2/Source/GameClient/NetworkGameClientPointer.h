@@ -7,7 +7,7 @@
 #include <Platform/DynamicLibrary.h>
 
 // Resolves the live CNetworkGameClient (the game's net session) via the engine2 global that
-// cs2-dumper records as dwNetworkGameClient (libengine2.so + 0xA2E380 on build 14181 - a raw
+// cs2-dumper records as dwNetworkGameClient (libengine2.so + 0xA477C0 on build 14189 - a raw
 // RVA, so every use validates the object before anything is called through it: the object's
 // own vtable must sit inside libengine2's vmt range and the tick field must read as a plausible
 // tick count). The ServerLagger is the first consumer.
@@ -92,9 +92,10 @@ private:
         return client;
     }
 
-    // libengine2.so build 14181 (2026-09-10 update, cs2-dumper output). RE-DERIVE on any CS2
-    // update: valid() fails closed on drift instead of calling through garbage.
-    static constexpr std::uintptr_t kNetworkGameClientRva = 0xA2E380;
+    // libengine2.so dwNetworkGameClient, cs2-dumper build 14189 (2026-10-06 dump), live-verified on
+    // 11106093 (2026-10-12: global -> object with vtable in .data.rel.ro range, tick@+0x3A8 plausible).
+    // RE-DERIVE on any CS2 update: valid() fails closed on drift instead of calling through garbage.
+    static constexpr std::uintptr_t kNetworkGameClientRva = 0xA477C0;
 
     void* pointer{nullptr};
 };
