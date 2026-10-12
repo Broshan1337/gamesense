@@ -63,30 +63,6 @@ public:
         });
     }
 
-    
-    
-    
-    
-    
-    
-    void forceMove(float forwardMove, float leftMove) const noexcept
-    {
-        if (!input)
-            return;
-
-        const auto buttons = buttonsFor(forwardMove, leftMove);
-
-        writeFloat(input, cs2::CCSGOInput::kForwardMoveOffset, forwardMove);
-        writeFloat(input, cs2::CCSGOInput::kLeftMoveOffset, leftMove);
-        replaceMoveButtons(input, cs2::CCSGOInput::kButtonStateOffset, buttons);
-
-        forEachQueuedSample([&](std::byte* sample) {
-            writeFloat(sample, cs2::CCSGOInput::InputSampleQueue::kForwardMoveOffset, forwardMove);
-            writeFloat(sample, cs2::CCSGOInput::InputSampleQueue::kLeftMoveOffset, leftMove);
-            replaceMoveButtons(sample, cs2::CCSGOInput::InputSampleQueue::kButtonStateOffset, buttons);
-        });
-    }
-
 private:
     [[nodiscard]] static bool isPlausibleCount(int count) noexcept
     {
@@ -141,16 +117,6 @@ private:
         std::memcpy(object + offset, &current, sizeof(current));
     }
 
-    static void replaceMoveButtons(std::byte* object, int offset, std::uint64_t buttons) noexcept
-    {
-        using Buttons = cs2::CCSGOInput::Buttons;
-        constexpr auto moveMask = Buttons::kForward | Buttons::kBack | Buttons::kMoveLeft | Buttons::kMoveRight;
-        std::uint64_t current{};
-        std::memcpy(&current, object + offset, sizeof(current));
-        current = (current & ~moveMask) | buttons;
-        std::memcpy(object + offset, &current, sizeof(current));
-    }
-
     static void writeFloatIfZero(std::byte* object, int offset, float value) noexcept
     {
         float current{};
@@ -158,11 +124,6 @@ private:
         if (current != 0.0f)
             return;
 
-        std::memcpy(object + offset, &value, sizeof(value));
-    }
-
-    static void writeFloat(std::byte* object, int offset, float value) noexcept
-    {
         std::memcpy(object + offset, &value, sizeof(value));
     }
 

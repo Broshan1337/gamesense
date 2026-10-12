@@ -18,6 +18,7 @@
 #include <HookContext/HookContextMacros.h>
 #include <Utils/Optional.h>
 #include <Utils/Trig.h>
+#include <Utils/VerifyConsole.h>
 
 
 
@@ -69,20 +70,28 @@ public:
         if (GET_CONFIG_VAR(movement_vars::SlowWalk)) {
             const auto flags = entityFlags(localPawn);
             const auto moveType = moveTypeOf(localPawn);
+            const auto velocity = localVelocity(localPawn);
+            const auto accelerate = conVarFloat<cs2::sv_accelerate>();
+            const auto tickInterval = hookContext.globalVars().tickInterval();
             if (flags.hasValue() && (flags.value() & kOnGroundFlag)
-                && moveType.hasValue() && moveType.value() == kMoveTypeWalk) {
-                const auto forward = userCmd.forwardMove();
-                const auto left = userCmd.leftMove();
-                if (forward.hasValue() && left.hasValue()) {
-                    const float moveLength = trig::squareRoot(forward.value() * forward.value() + left.value() * left.value());
-                    if (moveLength > 0.001f) {
-                        const float targetRatio = static_cast<float>(GET_CONFIG_VAR(movement_vars::SlowWalkSpeed)) / 100.0f;
-                        const float scaled = std::min(moveLength, targetRatio);
-                        pendingForward = (forward.value() / moveLength) * scaled;
-                        pendingLeft = (left.value() / moveLength) * scaled;
-                        pendingSlowWalk = true;
-                    }
-                }
+                && moveType.hasValue() && moveType.value() == kMoveTypeWalk
+                && velocity.hasValue() && accelerate.hasValue() && tickInterval.hasValue()) {
+                float weaponMaxSpeed = 250.0f;
+                if (const auto maxSpeed = localPawn.getActiveWeapon().maxSpeed(); maxSpeed.hasValue() && maxSpeed.value() > 0.0f)
+                    weaponMaxSpeed = maxSpeed.value();
+
+                // The game drops a move scalar below ~0.5 per axis (single key dead
+                // under 50%, diagonals dead under ~71%), so the speed cannot be
+                // scaled. Bang-bang instead: the player's own full input passes
+                // untouched while one more tick of acceleration still fits under
+                // the target, otherwise the tick coasts on friction.
+                // Known ceiling: speed saws up to ~28 u/s under the target; subtick
+                // analog steps if it must hold the target tighter.
+                const float speed2d = trig::squareRoot(velocity.value().x * velocity.value().x + velocity.value().y * velocity.value().y);
+                const float target = static_cast<float>(GET_CONFIG_VAR(movement_vars::SlowWalkSpeed)) / 100.0f * weaponMaxSpeed;
+                const float gain = accelerate.value() * std::max(250.0f, weaponMaxSpeed) * tickInterval.value();
+                pendingSlowWalk = speed2d > 1.0f && speed2d + gain > target;
+                VerifyConsole::write(1.0f, "slow", "v=%.0f target=%.0f gain=%.1f coast=%d", speed2d, target, gain, pendingSlowWalk ? 1 : 0);
             }
         }
 
@@ -290,16 +299,6 @@ public:
             || pendingClearMoveButtons || pendingViewAngles;
     }
 
-    void onBuildUserCmd(cs2::CCSGOInput* input, int slot) const noexcept
-    {
-        if (slot != 0 || !hasPendingInput || !pendingForceMove)
-            return;
-
-        const CSGOInputMovement movement{input};
-        if (movement)
-            movement.forceMove(pendingForward, pendingLeft);
-    }
-
     void onWriteMoveCrc(cs2::CUserCmd* cmd) const noexcept
     {
         if (!cmd || !hasPendingInput)
@@ -307,12 +306,15 @@ public:
 
         const UserCmd userCmd{cmd};
 
-        // Slow Walk rides the command scalars only. forceMove stomps CSGOInput's
-        // persistent movement state and the game's real queued W/A/S/D samples,
-        // stranding keys as held after a jump (issue #4).
-        if (pendingSlowWalk) {
+        // Every forced move (Slow Walk coast, Edge Stop, Fast Ladder) rides the
+        // command scalars only. Writing CSGOInput's persistent movement state stomped the
+        // game's real queued W/A/S/D samples, stranding keys as held (issue #4).
+        if (pendingForceMove) {
             userCmd.setForwardMove(pendingForward);
             userCmd.setLeftMove(pendingLeft);
+        } else if (pendingSlowWalk) {
+            userCmd.setForwardMove(0.0f);
+            userCmd.setLeftMove(0.0f);
         }
 
         if (pendingEdgeJump)
