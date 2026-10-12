@@ -99,9 +99,12 @@ private:
         // an AZERTY user's physical QWERTY-A key shows as its AZERTY label.
         // Falls back to the physical name, then "KEY" (issue #4: bind hints
         // showed QWERTY letters on AZERTY keyboards).
+        // The call used to pass the scancode only, leaving SDL3's modstate and
+        // key_event arguments as whatever sat in the registers: the label was
+        // layout-correct only by luck. No modifiers, key-event keycode.
         if (const auto keyFromScancode = resolveKeyFromScancode()) {
             if (const auto keyName = resolveGetKeyName()) {
-                if (const char* name = keyName(keyFromScancode(scancode)); name && name[0])
+                if (const char* name = keyName(static_cast<int>(keyFromScancode(scancode, 0, true))); name && name[0])
                     return name;
             }
         }

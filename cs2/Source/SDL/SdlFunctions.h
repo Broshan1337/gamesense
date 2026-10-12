@@ -23,7 +23,11 @@ using SDL_GetMouseState = std::uint32_t(float* x, float* y);
 using SDL_GetScancodeName = const char*(int scancode);
 // Layout-translated key name (AZERTY etc.): SDL3 maps the scancode through the
 // OS keyboard layout, unlike SDL_GetScancodeName which is physical/QWERTY.
-using SDL_GetKeyFromScancode = int(int scancode);
+// SDL3 signature: (SDL_Scancode, SDL_Keymod modstate, bool key_event). With
+// key_event = true the result is the keycode a key event would carry (letters
+// unshifted, AZERTY digit row reported as 1..0); with false, modstate (Shift,
+// AltGr, Caps Lock) is applied and the result is the character produced.
+using SDL_GetKeyFromScancode = std::uint32_t(int scancode, std::uint16_t modstate, bool keyEvent);
 using SDL_GetKeyName = const char*(int key);
 
 
