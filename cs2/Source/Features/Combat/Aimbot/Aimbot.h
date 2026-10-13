@@ -819,11 +819,13 @@ private:
         const bool wallCheck = GET_CONFIG_VAR(aimbot_vars::WallCheck);
         const bool autowall = GET_CONFIG_VAR(aimbot_vars::Autowall);
         // Native bullet simulation supplies the actual struck hitgroup even
-        // for a clear shot: a ray to the head can strike an arm first.
+        // for a clear shot: a ray to the head can strike an arm first. On a
+        // client build it does not know, the trace estimate answers instead
+        // and reports the aimed hitgroup (see Autowall::evaluateAimPoint).
         if (autowall) {
-            const auto impact = Autowall::evaluate(eye, target.aimPoint, localPawn.baseEntity(), target.entity,
+            const auto impact = Autowall::evaluateAimPoint(eye, target.aimPoint, localPawn.baseEntity(), target.entity,
                 {base.value(), weapon.penetrationPower().valueOr(0.0f), range.value(), maxRange.value()}, {},
-                wallTraceBudget, hookContext);
+                wallTraceBudget, target.hitgroup, hookContext);
             if (!impact.hasValue()) return kUnknownDamage;
             damage = impact.value().damage;
             actualHitgroup = impact.value().hitgroup;
