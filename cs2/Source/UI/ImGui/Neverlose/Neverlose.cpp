@@ -320,7 +320,8 @@ enum class Page
     Inventory,
     Radio,
     Scripts,
-    Misc
+    Misc,
+    Unsafe
 };
 
 
@@ -524,6 +525,8 @@ int legitSubTab = 0;
 constexpr const char* const kLegitSubTabs[] = {"Aimbot", "Triggerbot"};
 int miscSubTab = 0;
 constexpr const char* const kMiscSubTabs[] = {"General", "Chat", "Other"};
+int unsafeSubTab = 0;
+constexpr const char* const kUnsafeSubTabs[] = {"Network", "Seeds", "View Angles"};
 
 
 
@@ -563,7 +566,7 @@ int searchSelected = 0;
 
 constexpr const char* kPageNames[] = {
     "Rage", "Legit", "Movement", "Esp", "Player Info", "Glow",
-    "Viewmodel", "Effects", "Hud", "Sound", "Inventory", "Radio", "Scripts", "Misc"
+    "Viewmodel", "Effects", "Hud", "Sound", "Inventory", "Radio", "Scripts", "Misc", "Unsafe"
 };
 
 
@@ -2956,13 +2959,13 @@ int controlId = 0;
 
 
 constexpr int kCardSlotsPerPage = 48;
-// kMaxCardPages follows the Page enum (Page::Misc is the last page). The
+// kMaxCardPages follows the Page enum (Page::Unsafe is the last page). The
 // 2026-10-11 Esp page insertion moved Misc to index 13 past this fixed 13
 // and the Misc cards indexed OOB -> garbage column plans (cards rendered
 // overlapping) + OOB height writes. The static_assert below pins the enum
 // to the array so any future page insertion breaks the BUILD instead.
-constexpr int kMaxCardPages = static_cast<int>(Page::Misc) + 1;
-static_assert(static_cast<int>(Page::Misc) + 1 == 14, "kMaxCardPages/Page enum drifted - update the card plan arrays");
+constexpr int kMaxCardPages = static_cast<int>(Page::Unsafe) + 1;
+static_assert(static_cast<int>(Page::Unsafe) + 1 == 15, "kMaxCardPages/Page enum drifted - update the card plan arrays");
 float cardHeights[kMaxCardPages * kCardSlotsPerPage] = {};
 int cardCountLast[kMaxCardPages] = {};
 int cardColumnPlan[kMaxCardPages * kCardSlotsPerPage] = {};
@@ -3266,10 +3269,7 @@ void pageRageAimbot() noexcept
 void pageRageAccuracy() noexcept
 {
     using namespace aimbot_vars;
-    addCard("ACCURACY", 4, [] {
-        toggleVar<SpreadCompensation>("Exact Spread (Unavailable)", ++controlId);
-        toggleVar<SpreadGate>("Hold Fire Until Exact", ++controlId);
-        toggleVar<SeedFallback>("Lucky Seeds (Unavailable)", ++controlId);
+    addCard("ACCURACY", 1, [] {
         toggleVar<RecoilCompensation>("Compensate Recoil", ++controlId);
     });
     addCard("AUTO SHOOT", 11, [] {
@@ -3409,11 +3409,10 @@ void pageLegitTriggerbot() noexcept
         sliderVar<triggerbot_vars::Hitchance>("Minimum Hitchance", ++controlId, "%");
         toggleVar<triggerbot_vars::MaxAccuracyOnly>("Shoot At Max Accuracy", ++controlId);
     });
-    addCard("TRIGGERBOT VISIBILITY", 4, [] {
+    addCard("TRIGGERBOT VISIBILITY", 7, [] {
         toggleVar<triggerbot_vars::WallCheck>("Shoot Visible", ++controlId);
         toggleVar<triggerbot_vars::Autowall>(bullet_simulation::binding() ? "Shoot Walls (Engine)" : "Shoot Walls (Unavailable)", ++controlId);
         sliderVar<triggerbot_vars::AutowallMaxThickness>("Max Total Wall Thickness", ++controlId, " u");
-        toggleVar<triggerbot_vars::SeededFire>("Seeded Fire", ++controlId);
         toggleVar<triggerbot_vars::ThroughWalls>("Shoot Through Walls", ++controlId);
         sliderVar<triggerbot_vars::MinDamage>("Minimum Damage", ++controlId, " hp");
         toggleVar<triggerbot_vars::Backtrack>("Shoot Backtrack", ++controlId);
@@ -4055,6 +4054,16 @@ void pageMovement() noexcept
     addCard("GRENADES", 1, [] {
         toggleVar<supertoss_vars::Enabled>("Super Toss", ++controlId);
     });
+}
+
+// ---- UNSAFE page ---------------------------------------------------------------------
+// Everything that abuses the net channel / seeds / packet-level state lives here
+// (the friend-approved consolidation): net lag, floods, server lagger, spread-seed
+// prediction and the FVA/net-spoof experiments. Widgets are the shared system,
+// just relocated - configs and gameplay code are untouched.
+
+void pageUnsafeNetwork() noexcept
+{
     addCard("NET LAG", 8, [] {
         toggleVar<net_lag_vars::Enabled>("Net Lag Master", ++controlId);
         toggleVar<net_lag_vars::FakelagAlways>("Fakelag Always", ++controlId);
@@ -4103,7 +4112,7 @@ void pageMovement() noexcept
         toggleVar<server_lagger_vars::AutoStop>("Auto Stop", ++controlId);
         toggleVar<server_lagger_vars::SlowRamp>("Slow Ramp", ++controlId);
         sliderVar<server_lagger_vars::RampInterval>("Ramp Step", ++controlId, "s");
-        keybindVar<server_lagger_vars::LaggerKey>("Lagger Key", ++controlId);
+        keybindVar<server_lagger_vars::LaggerKey>("Lager Key", ++controlId);
         toggleVar<server_lagger_vars::NumPackets>("Decode Storm", ++controlId);
         toggleVar<server_lagger_vars::PulseMode>("Pulse Mode", ++controlId);
         sliderVar<server_lagger_vars::PulseOn>("Pulse On", ++controlId, " ticks");
@@ -4114,6 +4123,59 @@ void pageMovement() noexcept
         toggleVar<server_lagger_vars::MeterEnabled>("Lag-O-Meter", ++controlId);
         laggerProbeRow("NetChan", "PROBE NETCHAN", ++controlId);
     });
+}
+
+void pageUnsafeSeeds() noexcept
+{
+    using namespace aimbot_vars;
+    addCard("SPREAD & SEEDS", 4, [] {
+        toggleVar<SpreadCompensation>("Exact Spread (Unavailable)", ++controlId);
+        toggleVar<SpreadGate>("Hold Fire Until Exact", ++controlId);
+        toggleVar<SeedFallback>("Lucky Seeds (Unavailable)", ++controlId);
+        toggleVar<triggerbot_vars::SeededFire>("Seeded Fire (Triggerbot)", ++controlId);
+    });
+}
+
+void pageUnsafeViewAngles() noexcept
+{
+    addCard("VIEW ANGLES", 7, [] {
+        toggleVar<FvaEnabled>("FVA Rotation Chains", ++controlId);
+        sliderVar<fva_vars::Substeps>("Chain Steps", ++controlId);
+        toggleVar<FvaReseedChains>("Reseed Chains After Publish", ++controlId);
+        toggleVar<FvaChainOnFireOnly>("Publish Only While Firing", ++controlId);
+        toggleVar<FvaZeroOriginSpoof>("Zero Origin Experiment", ++controlId);
+        toggleVar<FvaSilentShots>("Silent Shots Experiment", ++controlId);
+        toggleVar<ValveDsSpoofEnabled>("Spoof Valve DS Flag", ++controlId);
+    });
+}
+
+void pageUnsafe() noexcept
+{
+    if (!searchIndexing) {
+        pageSubTabPills(ImGui::GetWindowDrawList(), unsafeSubTab, kUnsafeSubTabs, 3, 9750);
+        searchGlowSubTab = unsafeSubTab;
+        controlId += unsafeSubTab * 500;
+        if (unsafeSubTab == 0)
+            pageUnsafeNetwork();
+        else if (unsafeSubTab == 1)
+            pageUnsafeSeeds();
+        else
+            pageUnsafeViewAngles();
+        return;
+    }
+
+    for (int t = 0; t < 3; ++t) {
+        pageSubTabPills(ImGui::GetWindowDrawList(), unsafeSubTab, kUnsafeSubTabs, 3, 9750);
+        searchGlowSubTab = t;
+        controlId += t * 500;
+        if (t == 0)
+            pageUnsafeNetwork();
+        else if (t == 1)
+            pageUnsafeSeeds();
+        else
+            pageUnsafeViewAngles();
+        columnYs[0] = columnYs[1] = 0;
+    }
 }
 
 
@@ -4771,15 +4833,6 @@ void pageMiscChat() noexcept
 
 void pageMiscOther() noexcept
 {
-    addCard("VIEW ANGLES", 7, [] {
-        toggleVar<FvaEnabled>("FVA Rotation Chains", ++controlId);
-        sliderVar<fva_vars::Substeps>("Chain Steps", ++controlId);
-        toggleVar<FvaReseedChains>("Reseed Chains After Publish", ++controlId);
-        toggleVar<FvaChainOnFireOnly>("Publish Only While Firing", ++controlId);
-        toggleVar<FvaZeroOriginSpoof>("Zero Origin Experiment", ++controlId);
-        toggleVar<FvaSilentShots>("Silent Shots Experiment", ++controlId);
-        toggleVar<ValveDsSpoofEnabled>("Spoof Valve DS Flag", ++controlId);
-    });
     addCard("PANIC", 1, [] {
         keybindVar<panic_vars::Bind>("Combat Panic", ++controlId);
     });
@@ -6225,7 +6278,7 @@ bool changePage(Page next) noexcept;
 
 void indexNextSearchPage() noexcept
 {
-    if (searchIndexBuilt || searchIndexPageCursor > static_cast<int>(Page::Misc))
+    if (searchIndexBuilt || searchIndexPageCursor > static_cast<int>(Page::Unsafe))
         return;
 
     ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x + 100.0f, ImGui::GetIO().DisplaySize.y + 100.0f), ImGuiCond_Always);
@@ -6263,6 +6316,7 @@ void indexNextSearchPage() noexcept
         case Page::Radio: pageRadio(); break;
         case Page::Scripts: pageScripts(); break;
         case Page::Misc: pageMisc(); break;
+        case Page::Unsafe: pageUnsafe(); break;
         }
         renderScriptCardsForPage(static_cast<Page>(searchIndexPageCursor)); 
         searchIndexing = false;
@@ -6270,7 +6324,7 @@ void indexNextSearchPage() noexcept
         shellBase = savedShellBase;
         scrollOffset = savedScroll;
         ++searchIndexPageCursor;
-        if (searchIndexPageCursor > static_cast<int>(Page::Misc))
+        if (searchIndexPageCursor > static_cast<int>(Page::Unsafe))
             searchIndexBuilt = true;
     }
     ImGui::End();
@@ -6363,6 +6417,8 @@ void searchOverlay(ImDrawList* d, ImVec2 b) noexcept
             legitSubTab = entry.subTab;
         else if (entry.page == Page::Misc)
             miscSubTab = entry.subTab;
+        else if (entry.page == Page::Unsafe)
+            unsafeSubTab = entry.subTab;
         else if (entry.page == Page::Scripts) {
             scriptsSubTab = entry.subTab;
             state.scriptsExpanded = true;
@@ -6680,7 +6736,11 @@ void sidebar(ImDrawList* d, ImVec2 base) noexcept
         }
     }
 
-    nav("\xEF\x80\x93", "Misc", Page::Misc);           
+    nav("\xEF\x80\x93", "Misc", Page::Misc);
+    y_nav += 2.0f;
+
+    eyebrow("UNSAFE");
+    nav("\xEF\x81\xB1", "Unsafe", Page::Unsafe);
     d->PopClipRect();
 
     
@@ -7489,6 +7549,7 @@ void neverlose::render() noexcept
         case Page::Radio: pageRadio(); break;
         case Page::Scripts: pageScripts(); break;
         case Page::Misc: pageMisc(); break;
+        case Page::Unsafe: pageUnsafe(); break;
         }
         renderScriptCardsForPage(state.page); 
 
