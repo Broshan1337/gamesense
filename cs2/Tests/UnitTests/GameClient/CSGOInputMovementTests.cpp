@@ -27,7 +27,7 @@ using Queue = Input::InputSampleQueue;
 
 }
 
-TEST(CSGOInputMovementTest, ForcedMovementReplacesOpposingButtonsInEverySample)
+TEST(CSGOInputMovementTest, SetMoveOrsDirectionalButtonsIntoEverySample)
 {
     alignas(8) std::array<std::byte, 3000> input{};
     alignas(8) std::array<std::byte, Queue::kSampleStride * 2> samples{};
@@ -39,8 +39,9 @@ TEST(CSGOInputMovementTest, ForcedMovementReplacesOpposingButtonsInEverySample)
         write(samples.data() + i * Queue::kSampleStride, Queue::kButtonStateOffset, held);
 
     const CSGOInputMovement movement{reinterpret_cast<Input*>(input.data())};
-    movement.forceMove(0.6f, 0.8f);
-    constexpr auto expected = Buttons::kAttack | Buttons::kJump | Buttons::kForward | Buttons::kMoveLeft;
+    movement.setMove(0.6f, 0.8f);
+    constexpr auto expected = Buttons::kAttack | Buttons::kJump | Buttons::kBack
+        | Buttons::kMoveRight | Buttons::kForward | Buttons::kMoveLeft;
     EXPECT_EQ(read<std::uint64_t>(input.data(), Input::kButtonStateOffset), expected);
     EXPECT_FLOAT_EQ(read<float>(input.data(), Input::kForwardMoveOffset), 0.6f);
     EXPECT_FLOAT_EQ(read<float>(input.data(), Input::kLeftMoveOffset), 0.8f);
@@ -50,20 +51,30 @@ TEST(CSGOInputMovementTest, ForcedMovementReplacesOpposingButtonsInEverySample)
         EXPECT_FLOAT_EQ(read<float>(sample, Queue::kForwardMoveOffset), 0.6f);
         EXPECT_FLOAT_EQ(read<float>(sample, Queue::kLeftMoveOffset), 0.8f);
     }
+}
 
-    movement.forceMove(0.0f, 0.0f);
-    EXPECT_EQ(read<std::uint64_t>(input.data(), Input::kButtonStateOffset), Buttons::kAttack | Buttons::kJump);
-    for (int i = 0; i < 2; ++i)
-        EXPECT_EQ(read<std::uint64_t>(samples.data() + i * Queue::kSampleStride, Queue::kButtonStateOffset), Buttons::kAttack | Buttons::kJump);
+TEST(CSGOInputMovementTest, SetMoveNeverOverwritesNonZeroScalars)
+{
+    alignas(8) std::array<std::byte, 3000> input{};
+    write(input.data(), Input::kForwardMoveOffset, -1.0f);
+    write(input.data(), Queue::kCountOffset, 0);
+
+    const CSGOInputMovement movement{reinterpret_cast<Input*>(input.data())};
+    movement.setMove(0.6f, 0.8f);
+    EXPECT_FLOAT_EQ(read<float>(input.data(), Input::kForwardMoveOffset), -1.0f);
+    EXPECT_FLOAT_EQ(read<float>(input.data(), Input::kLeftMoveOffset), 0.8f);
 }
 
 TEST(CSGOInputMovementTest, InvalidQueueCountsDoNotAccessTheBuffer)
 {
     alignas(8) std::array<std::byte, 3000> input{};
+    alignas(8) std::array<std::byte, Queue::kSampleStride * 2> samples{};
+    write(input.data(), Queue::kBufferOffset, samples.data());
     const CSGOInputMovement movement{reinterpret_cast<Input*>(input.data())};
     for (int count : {-1, 0, Queue::kMaxPlausibleCount + 1}) {
         write(input.data(), Queue::kCountOffset, count);
-        movement.forceMove(-1.0f, 0.0f);
+        movement.setMove(-1.0f, 0.0f);
         EXPECT_FLOAT_EQ(read<float>(input.data(), Input::kForwardMoveOffset), -1.0f);
+        EXPECT_FLOAT_EQ(read<float>(samples.data(), Queue::kForwardMoveOffset), 0.0f);
     }
 }
