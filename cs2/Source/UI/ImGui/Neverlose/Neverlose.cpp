@@ -1,6 +1,7 @@
 #include "Neverlose.h"
 
 #include <cctype>
+#include <ctime>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -36,6 +37,8 @@
 #include <Utils/ColorUtils.h>
 #include <Utils/NsStr.h>
 #include <Utils/StatusReport.h>
+#include <Utils/Trig.h>
+#include <Features/Game/TeamDamageTracker.h>
 #include <GameClient/Tracing/BulletSimulation.h>
 
 #include <Hooks/Graphics/VulkanHook.h>
@@ -3833,15 +3836,13 @@ void pageHud() noexcept
     addCard("KILLFEED", 1, [] {
         toggleVar<KillfeedPreserverEnabled>("Preserve Killfeed", ++controlId);
     });
-    addCard("WATERMARK", 8, [] {
+    addCard("WATERMARK", 6, [] {
         toggleVar<watermark_vars::Enabled>("Watermark", ++controlId);
         toggleVar<watermark_vars::ShowFps>("Show FPS", ++controlId);
         toggleVar<watermark_vars::ShowSpeed>("Show Speed", ++controlId);
         toggleVar<watermark_vars::ShowPing>("Show Ping", ++controlId);
         toggleVar<watermark_vars::ShowTeamDamage>("Show Team Damage", ++controlId);
         toggleVar<watermark_vars::ShowClock>("Show Clock", ++controlId);
-        sliderVar<watermark_vars::OffsetX>("X Offset", ++controlId);
-        sliderVar<watermark_vars::OffsetY>("Y Offset", ++controlId);
     });
     addCard("KEYBIND LIST", 1, [] {
         toggleVar<binds_list_vars::Enabled>("Keybind List", ++controlId);
@@ -7877,6 +7878,7 @@ void drawPlayerListWindow() noexcept;
     float drawCombatCountersWindow() noexcept; 
     float drawHitFeedWindow() noexcept; 
     float drawStatusChipsWindow() noexcept; 
+    float drawWatermarkWindow() noexcept; 
 void drawLiveBadge() noexcept;
 void drawNowPlayingWindow(float combatListHeight) noexcept; 
 
@@ -7994,8 +7996,6 @@ void registerFeatureBinds() noexcept
     feature_binds::registerNumber<WorldColorsFogDensity>("Fog Density");
     feature_binds::registerNumber<WorldColorsFogDistance>("Fog Distance");
     feature_binds::registerNumber<WorldColorsBloomStrength>("Bloom Strength");
-    feature_binds::registerNumber<watermark_vars::OffsetX>("X Offset");
-    feature_binds::registerNumber<watermark_vars::OffsetY>("Y Offset");
     feature_binds::registerNumber<PlayerListOffsetX>("X Offset");
     feature_binds::registerNumber<PlayerListOffsetY>("Y Offset");
     feature_binds::registerNumber<combat_stats_vars::CountersOffsetX>("X Offset");
@@ -8724,6 +8724,7 @@ void neverlose::renderGameOverlay() noexcept
     drawStatusChipsWindow();
     drawNowPlayingWindow(combatListHeight);
     drawHitFeedWindow();
+    drawWatermarkWindow();
     drawLiveBadge();
 
     
@@ -9312,7 +9313,7 @@ struct HudWindowDragState {
 
 
 
-template <typename OffsetXVar, typename OffsetYVar, bool kFromBottom>
+template <typename OffsetXVar, typename OffsetYVar, bool kFromBottom, bool kInvertX = false>
 static void dragHudWindow(HudWindowDragState& st, float offX, float offY, ImDrawList* d, const ImVec2& winPos, float winWidth, float winHeight) noexcept
 {
     if (!GUI::isMenuOpen()) {
@@ -9334,7 +9335,9 @@ static void dragHudWindow(HudWindowDragState& st, float offX, float offY, ImDraw
             const float dy = ImGui::GetIO().MousePos.y - st.dragStartMouse.y;
             using RangeX = typename OffsetXVar::ValueType;
             using RangeY = typename OffsetYVar::ValueType;
-            const float newOffX = ImClamp(st.startOffX + dx, static_cast<float>(RangeX::kMin), static_cast<float>(RangeX::kMax));
+            // kInvertX: RIGHT-anchored windows (pos = displayWidth - w - offX)
+            // move opposite the mouse X - dragging right must DECREASE offX.
+            const float newOffX = ImClamp(st.startOffX + (kInvertX ? -dx : dx), static_cast<float>(RangeX::kMin), static_cast<float>(RangeX::kMax));
             const float newOffY = ImClamp(kFromBottom ? st.startOffY - dy : st.startOffY + dy, static_cast<float>(RangeY::kMin), static_cast<float>(RangeY::kMax));
             static_cast<void>(ui_config::set<OffsetXVar>(RangeX{static_cast<typename RangeX::ValueType>(newOffX)}));
             static_cast<void>(ui_config::set<OffsetYVar>(RangeY{static_cast<typename RangeY::ValueType>(newOffY)}));
@@ -9655,6 +9658,129 @@ float drawStatusChipsWindow() noexcept
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(3);
     return listHeight;
+}
+
+// Watermark, ImGui-native (2026-10-13): replaces the retired Panorama panel
+// version, whose lazily-created panels froze on screen when the master toggle
+// went off (run() only early-returned - "turning it off doesn't disappear").
+// Draws from scratch every frame, so every toggle applies the very next frame,
+// and picks up the menu theme (g_accent, shared fonts, same chrome as the
+// other HUD boxes). Anchored top-right; drag with the menu open.
+float drawWatermarkWindow() noexcept
+{
+    if (!ui_config::get<watermark_vars::Enabled>())
+        return 0.0f;
+
+    // FPS: 0.5 s measurement window + 0.35 EMA smoothing, same as before.
+    static double fpsWindowStart = 0.0;
+    static int fpsFrames = 0;
+    static int fpsDisplay = 0;
+    const double now = ImGui::GetTime();
+    if (fpsWindowStart <= 0.0)
+        fpsWindowStart = now;
+    if (++fpsFrames > 0 && now - fpsWindowStart >= 0.5) {
+        const int measured = static_cast<int>(static_cast<double>(fpsFrames) / (now - fpsWindowStart) + 0.5);
+        fpsFrames = 0;
+        fpsWindowStart = now;
+        fpsDisplay = fpsDisplay <= 0 ? measured : static_cast<int>(fpsDisplay + (measured - fpsDisplay) * 0.35f);
+    }
+
+    float speed = -1.0f;
+    int ping = -1;
+    int teamDamage = 0;
+    static_cast<void>(ui_config::withContext([&](auto&& hookContext) {
+        if (auto&& localPawn = hookContext.activeLocalPlayerPawn()) {
+            auto* const entity = static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity());
+            if (const auto offset = hookContext.schemaSystem().getFieldOffset("C_BaseEntity", "m_vecAbsVelocity");
+                entity && offset.has_value() && *offset > 0) {
+                cs2::Vector velocity{};
+                std::memcpy(&velocity, reinterpret_cast<const std::byte*>(entity) + *offset, sizeof(velocity));
+                speed = trig::squareRoot(velocity.x * velocity.x + velocity.y * velocity.y);
+            }
+        }
+        if (const auto p = hookContext.localPlayerController().ping(); p.hasValue())
+            ping = p.value();
+        const auto entityIndex = hookContext.localPlayerController().baseEntity().handle().index().value;
+        if (entityIndex > 0 && entityIndex <= 64)
+            teamDamage = hookContext.template make<TeamDamageTracker>().totalTeamDamageForSlot(static_cast<std::int64_t>(entityIndex) - 1);
+    }));
+
+    char segments[5][16];
+    int segmentCount = 0;
+    if (ui_config::get<watermark_vars::ShowFps>() && fpsDisplay > 0)
+        std::snprintf(segments[segmentCount++], sizeof(segments[0]), "%d fps", fpsDisplay);
+    if (ui_config::get<watermark_vars::ShowSpeed>() && speed >= 0.0f)
+        std::snprintf(segments[segmentCount++], sizeof(segments[0]), "%d u/s", static_cast<int>(speed + 0.5f));
+    if (ui_config::get<watermark_vars::ShowPing>() && ping >= 0)
+        std::snprintf(segments[segmentCount++], sizeof(segments[0]), "%d ms", ping);
+    if (ui_config::get<watermark_vars::ShowTeamDamage>() && teamDamage > 0)
+        std::snprintf(segments[segmentCount++], sizeof(segments[0]), "%d td", teamDamage);
+    if (ui_config::get<watermark_vars::ShowClock>()) {
+        const std::time_t nowTime = std::time(nullptr);
+        std::tm localTime{};
+        if (localtime_r(&nowTime, &localTime))
+            std::snprintf(segments[segmentCount++], sizeof(segments[0]), "%02d:%02d",
+                localTime.tm_hour, localTime.tm_min);
+    }
+
+    constexpr const char* kBrand = "NEVERSNOOZE";
+    constexpr float kBrandGap = 10.0f;
+    constexpr float kSegmentGap = 8.0f;
+    constexpr float kDotPad = 9.0f;  // dot + breathing room left of the brand
+    const float brandWidth = ImGui::GetFont()->CalcTextSizeA(kTextSmall, FLT_MAX, 0.0f, kBrand).x;
+    float segmentWidths[5];
+    float segmentsWidth = 0.0f;
+    for (int i = 0; i < segmentCount; ++i) {
+        segmentWidths[i] = ImGui::GetFont()->CalcTextSizeA(kTextSmall, FLT_MAX, 0.0f, segments[i]).x;
+        segmentsWidth += segmentWidths[i] + s(kSegmentGap);
+    }
+    // Right padding: the dot's slot is paid on the left, so give the right the
+    // same s(kDotPad) instead of the bare padX - text was ending tight on the
+    // border (each segment already carries a trailing gap, which covers it).
+    const float padX = s(12.0f);
+    const float winHeight = s(30.0f);
+    const float winWidth = padX + s(kDotPad) + brandWidth + s(kBrandGap) + segmentsWidth + padX;
+    const float offX = static_cast<float>(ui_config::get<watermark_vars::OffsetX>());
+    const float offY = static_cast<float>(ui_config::get<watermark_vars::OffsetY>());
+    const float displayWidth = ImGui::GetIO().DisplaySize.x;
+    ImGui::SetNextWindowPos(ImVec2(displayWidth - winWidth - s(12.0f) - offX, s(12.0f) + offY), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(winWidth, winHeight), ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, s(10.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, kSidebarBg);
+    ImGui::PushStyleColor(ImGuiCol_Border, C(52, 52, 58, 220));
+
+    if (ImGui::Begin("Watermark", nullptr, GUI::isMenuOpen() ? kHudBoxMenuOpenFlags : kHudBoxMenuClosedFlags)) {
+        ImDrawList* d = ImGui::GetWindowDrawList();
+        const ImVec2 winPos = ImGui::GetWindowPos();
+
+        d->AddRectFilledMultiColor(winPos + ImVec2(s(14), s(1)), winPos + ImVec2(winWidth - s(14), s(26)), C(255, 255, 255, 18), C(255, 255, 255, 18), 0, 0);
+        d->AddLine(winPos + ImVec2(s(12), s(0.75f)), winPos + ImVec2(winWidth - s(12), s(0.75f)), C(255, 255, 255, 22), 1.0f);
+
+        float x = winPos.x + padX;
+        // Same pulsing accent dot as the other HUD boxes' headers, left of the
+        // brand name.
+        pulsingDot(d, ImVec2(x + s(3.0f), winPos.y + winHeight * 0.5f), s(2.2f), g_accent);
+        x += s(kDotPad);
+        textY(d, x, winPos.y, winHeight, g_accent, kBrand, kTextSmall, strongFont());
+        x += brandWidth + s(kBrandGap);
+        if (segmentCount > 0) {
+            d->AddLine(ImVec2(x, winPos.y + s(9.0f)), ImVec2(x, winPos.y + winHeight - s(9.0f)), kHairline, 1.0f);
+            x += s(kSegmentGap);
+        }
+        for (int i = 0; i < segmentCount; ++i) {
+            textY(d, x, winPos.y, winHeight, kTextBodyCol, segments[i], kTextSmall, nullptr);
+            x += segmentWidths[i] + s(kSegmentGap);
+        }
+
+        static HudWindowDragState dragState;
+        dragHudWindow<watermark_vars::OffsetX, watermark_vars::OffsetY, false, true>(dragState, offX, offY, d, winPos, winWidth, winHeight);
+    }
+    ImGui::End();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
+    return winHeight;
 }
 
 

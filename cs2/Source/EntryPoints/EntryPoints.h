@@ -98,7 +98,6 @@
 #include <Features/Sound/HitSound.h>
 #include <Features/Sound/SpawnProtectionSound.h>
 #include <Features/Sound/WelcomeSound.h>
-#include <Features/Hud/Watermark/Watermark.h>
 #include <Features/Hud/CombatStats/CombatStats.h>
 #include <Features/Hud/SpectatorList/SpectatorList.h>
 #include <Features/Visuals/Hitmarker/Hitmarker.h>
@@ -454,7 +453,6 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     hookContext.template make<OutlineGlow>().onUnload();
     hookContext.template make<BombStatusPanel>().onUnload();
     hookContext.template make<InWorldPanels>().onUnload();
-    hookContext.template make<Watermark>().onUnload();
     hookContext.template make<Blockbot>().onUnload();
     hookContext.template make<Bunnyhop>().onUnload();
     hookContext.template make<AnimationMods>().onUnload();
@@ -1096,7 +1094,6 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     hookContext.make<KillfeedPreserver>().run();
     hookContext.make<BombStatusPanelManager>().run();
     hookContext.make<InWorldPanels>().hideUnusedPanels();
-    hookContext.template make<Watermark>().run();
     hookContext.template make<CombatStats>().run();
     hookContext.template make<HudThemeColor>().run();
     hookContext.template make<SpectatorList>().run();
