@@ -98,6 +98,14 @@ public:
                 || std::abs(userCmd.forwardMove().valueOr(0.0f)) > 0.001f
                 || std::abs(userCmd.leftMove().valueOr(0.0f)) > 0.001f)
             && !userCmd.isButtonDown(0x10000)) {
+            // steer() flips the side on every call, but CreateMove runs every
+            // frame and only the last frame of a command is sent: every frame of
+            // one command starts from the side the previous command ended on.
+            if (const int sequence = StrafeCommand::commandNumber(cmd); sequence != strafeSequence) {
+                strafeSequence = sequence;
+                strafeSideBase = strafeSide;
+            }
+            strafeSide = strafeSideBase;
             if (const auto move = directionalStrafe(userCmd); move.hasValue()) {
                 hasPendingInput = pendingStrafe.stage(cmd, {move.value().forward, move.value().left});
             }
@@ -125,17 +133,11 @@ public:
                 hasPendingLanding = true;
             }
         }
-        // Velocity bhop port (issue #4 round 4, 2026-10-13): the landing press
-        // is the whole feature. The old sv_jump_spam_penalty_time gate could
-        // NEVER pass on consecutive ticks - mayPress demands
-        // now - lastPress > penalty + 1/4096, but one tick apart is
-        // dt*(1 + dLanding) ~= 0.0156 which is always < 0.01587 - so hops only
-        // fired on the random ticks where the new pendingJumpTime landed in the
-        // past (the mayPress `now < lastPress` branch): "only triggers on some
-        // ticks, misses most". Gate deleted; velocity has no penalty gate.
-        // A predicted landing THIS tick stages the press at the landing
-        // subtick (not the next ground tick at when=1.0) - that is what keeps
-        // the hop frictionless (2026-10-10 verdict).
+        // This is only the per-FRAME candidate (CreateMove runs every frame on the
+        // in-progress command). The decision that is actually sent is latched
+        // once per command in onWriteMoveCrc.
+        // A predicted landing stages the press at the landing subtick (not the
+        // next ground tick at when=1.0) - that keeps the hop frictionless.
         wantsJump = onGround.value() || hasPendingLanding;
         VerifyConsole::write(4.0f, "bhop", "ground=%d landing=%d -> wantsJump=%d",
             onGround.value() ? 1 : 0, hasPendingLanding ? 1 : 0, wantsJump ? 1 : 0);
@@ -150,6 +152,17 @@ public:
     
     void onWriteMoveCrc(cs2::CUserCmd* cmd) const noexcept
     {
+        // The game rebuilds the command from the player's real input every
+        // frame, so this is the true movement intent - captured here, before
+        // the strafe commit below overwrites the scalars and the move buttons.
+        if (const UserCmd real{cmd}; real) {
+            using Buttons = cs2::CCSGOInput::Buttons;
+            playerMove = {real.forwardMove().valueOr(0.0f), real.leftMove().valueOr(0.0f)};
+            if (std::abs(playerMove.forward) < 0.001f && std::abs(playerMove.left) < 0.001f)
+                playerMove = {
+                    float(real.isButtonDown(Buttons::kForward)) - float(real.isButtonDown(Buttons::kBack)),
+                    float(real.isButtonDown(Buttons::kMoveLeft)) - float(real.isButtonDown(Buttons::kMoveRight))};
+        }
         if (!hasPendingInput) {
             VerifyConsole::write(4.0f, "bhop", "crc: no pending input");
             return;
@@ -179,41 +192,58 @@ public:
         
         if (hasPendingJump && GET_CONFIG_VAR(BunnyhopEnabled)) {
             using Moves = SubtickMoves<HookContext>;
-            // The reference bhop write path (somecs2baseforlinux, in-game verified):
-            // airborne ticks carry the intent in the BUTTON BANKS ONLY - never a
-            // subtick stream sample. A stream press without its release in the
-            // same command is carried across the tick boundary by the replay
-            // (issue #4: keys stuck until pressed again). Ground ticks tap the
-            // stream with press+release at the SAME when (appended in order, so
-            // no re-sort needed) and hold the bank bit. The game's own real
-            // jump samples are NEVER stripped - they are the ground truth.
+            // CreateMove and WriteMoveCrc run every FRAME on the in-progress
+            // command (~4 frames per tick at 250 fps), and the game rebuilds
+            // that command from its own input each frame: only the LAST
+            // frame's write is sent. A decision that changes between the
+            // frames of one command (the old per-frame press, then release)
+            // only went out when the press happened to sit on the last frame:
+            // "holding space jumps rarely" (per-frame file trace, 2026-10-12:
+            // every hop that fired had its press on the command's final frame).
+            // So the jump is latched once per command and re-applied
+            // identically on every frame of it.
+            //  - spacing: a press is at least two commands after the previous
+            //    one, which also clears sv_jump_spam_penalty_time (one tick).
+            //  - a landing press (when < 1.0) only latches on the command's
+            //    first frame: its fraction was measured on the previous frame,
+            //    so it can only be late (already on ground), never early.
+            //  - a ground press (when = 1.0) may latch on any frame.
+            //  - once latched for a command, a jump is never taken back.
+            // Airborne commands carry the release in the button banks only;
+            // the game's own real jump samples are never stripped.
+            const int sequence = StrafeCommand::commandNumber(cmd);
+            const bool firstFrame = sequence != latchedSequence;
+            if (firstFrame) {
+                latchedSequence = sequence;
+                latchedJump = false;
+            }
+            const bool spaced = sequence < lastPressSequence || sequence - lastPressSequence >= 2;
+            if (!latchedJump && wantsJump && spaced && (firstFrame || !hasPendingLanding)) {
+                latchedJump = true;
+                latchedWhen = hasPendingLanding ? pendingLandingWhen : 1.0f;
+                lastPressSequence = sequence;
+            }
             userCmd.replaceButtons(cs2::CCSGOInput::Buttons::kJump,
-                wantsJump ? cs2::CCSGOInput::Buttons::kJump : 0);
-            if (!wantsJump) {
+                latchedJump ? cs2::CCSGOInput::Buttons::kJump : 0);
+            if (!latchedJump) {
                 clearPending();
                 return;
             }
             if (Moves::count(userCmd.baseMessage()) + 2
                 > cs2::CUserCmd::BaseMessage::SubtickMoves::kMaxSteps)
                 return clearPending();
-            // Airborne landing press: when = the predicted landing subtick
-            // (fraction of this tick), so the jump lands in the SAME tick the
-            // pawn touches ground and friction never gets a ground tick to
-            // eat. Ground ticks keep the legacy press+release at when=1.0.
-            const float pressWhen = hasPendingLanding ? pendingLandingWhen : 1.0f;
             auto&& moves = hookContext.template make<SubtickMoves>();
-            auto* const press = moves.add(userCmd.baseMessage(), pressWhen);
+            auto* const press = moves.add(userCmd.baseMessage(), latchedWhen);
             if (press) {
                 Moves::setButton(press, cs2::CCSGOInput::Buttons::kJump, true);
-                if (auto* release = moves.add(userCmd.baseMessage(), pressWhen)) {
+                if (auto* release = moves.add(userCmd.baseMessage(), latchedWhen)) {
                     Moves::setButton(release, cs2::CCSGOInput::Buttons::kJump, false);
                 } else {
                     Moves::stripButtons(userCmd.baseMessage(), cs2::CCSGOInput::Buttons::kJump);
                 }
-                // The pair was appended AFTER the game's real samples while
-                // pressWhen is a LANDING fraction (< 1.0): the engine walks
-                // the step array sequentially, so an out-of-order append is a
-                // replay glitch (the sortByWhen rule - stuck keys class).
+                // The pair is appended after the game's real samples while a
+                // landing when is < 1.0: the engine walks the step array
+                // sequentially, so it must be re-sorted (stuck keys class).
                 Moves::sortByWhen(userCmd.baseMessage());
             }
         }
@@ -403,14 +433,12 @@ private:
         if (!parameters.valid())
             return {};
 
-        using Buttons = cs2::CCSGOInput::Buttons;
-        // Analog intent supports custom binds and controllers; buttons cover
-        // early commands whose analog fields have not been populated yet.
-        air_strafe::Move desired{userCmd.forwardMove().valueOr(0.0f), userCmd.leftMove().valueOr(0.0f)};
-        if (std::abs(desired.forward) < 0.001f && std::abs(desired.left) < 0.001f)
-            desired = {
-                float(userCmd.isButtonDown(Buttons::kForward)) - float(userCmd.isButtonDown(Buttons::kBack)),
-                float(userCmd.isButtonDown(Buttons::kMoveLeft)) - float(userCmd.isButtonDown(Buttons::kMoveRight))};
+        // CreateMove runs after WriteMoveCrc on the same command, so the command's
+        // own scalars and buttons already hold the previous strafe commit here.
+        // Steering toward them made the strafer chase its own output (constant
+        // left/right flicker once the strafe actually committed, e.g. on
+        // sv_autobunnyhopping servers). Use the intent captured at WriteMoveCrc.
+        const air_strafe::Move desired = playerMove;
         const int mouseDx = userCmd.mouseDx().valueOr(0);
         const bool legit = static_cast<std::uint8_t>(GET_CONFIG_VAR(AutoStrafeMode)) == 0;
         if (legit && std::abs(mouseDx) < static_cast<int>(GET_CONFIG_VAR(LegitStrafeMouseThreshold))) return {};
@@ -459,9 +487,9 @@ private:
     
     
     inline static bool strafeSide{false};
-
-    
-    
+    inline static bool strafeSideBase{false};
+    inline static int strafeSequence{-1};
+    inline static air_strafe::Move playerMove{};
     static constexpr std::uint8_t kMoveTypeWalk = 2;
 
     
@@ -520,6 +548,10 @@ private:
     static constexpr std::uint32_t kOnGroundFlag = 0x1;
 
     
+    inline static int latchedSequence{-1};
+    inline static bool latchedJump{false};
+    inline static float latchedWhen{1.0f};
+    inline static int lastPressSequence{-1000};
     inline static jump_timing::State jumpTiming;
     inline static double pendingJumpTime{};
     inline static bool hasPendingInput{false};
