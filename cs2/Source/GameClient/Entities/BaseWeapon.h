@@ -630,6 +630,26 @@ public:
         return value;
     }
 
+    // One value of a per-firing-mode VData field (CFiringModeFloat: two floats, [0] primary and
+    // [1] secondary - the scoped mode on sniper rifles), e.g. m_flInaccuracyStand.
+    [[nodiscard]] Optional<float> vDataFloatAt(const char* fieldName, int mode) const noexcept
+    {
+        const auto vData = baseEntity().vData().valueOr(nullptr);
+        if (!vData || mode < 0 || mode > 1)
+            return {};
+        const auto offset = hookContext.schemaSystem().getFieldOffset("CCSWeaponBaseVData", fieldName);
+        if (!offset.has_value() || *offset <= 0)
+            return {};
+        float value{};
+        std::memcpy(&value, reinterpret_cast<const std::byte*>(vData) + *offset
+            + static_cast<std::ptrdiff_t>(mode) * static_cast<std::ptrdiff_t>(sizeof(float)), sizeof(value));
+        return value;
+    }
+
+    // Settled means within 10% of the weapon's inaccuracy floor (the penalty decays toward it
+    // exponentially and never quite reaches it).
+    static constexpr float kSettledInaccuracyTolerance = 1.10f;
+
     // Base run speed for this weapon (CCSWeaponBaseVData::m_flMaxSpeed). The ground max-accuracy gate is
     // speed <= maxSpeed * 0.34.
     [[nodiscard]] Optional<float> maxSpeed() const noexcept
@@ -740,16 +760,20 @@ public:
                 if (!isScoped)
                     return false;
 
-                // floorf on a non-negative value is a plain truncation - no libm needed here.
-                if (isDucking) {
-                    const float rounded = static_cast<float>(static_cast<int>(inaccuracy * 300.0f)) / 300.0f;
-                    return rounded < inaccuracy;
-                }
-                if (speed2d <= 0.1f) {
-                    const float rounded = static_cast<float>(static_cast<int>(inaccuracy * 170.0f)) / 170.0f;
-                    return rounded < inaccuracy;
-                }
-                return false;
+                if (!isDucking && speed2d > 0.1f)
+                    return false;
+                // The old floor-rounding test (floor(x*170)/170 < x) is true for
+                // nearly every value, so a scoped, still sniper always counted
+                // as "max accuracy" - also during the scope-in recovery, where
+                // an in-game trace measured 2-4x the settled inaccuracy while
+                // this returned true (shots at "100%" hitchance missing still
+                // targets right after scoping). Compare against the weapon's
+                // real floor instead: the scoped stand/crouch inaccuracy from
+                // its VData. Unknown floor -> cannot confirm max accuracy.
+                const auto floor = vDataFloatAt(isDucking ? "m_flInaccuracyCrouch" : "m_flInaccuracyStand", 1);
+                if (!floor.hasValue() || !(floor.value() > 0.0f))
+                    return false;
+                return inaccuracy <= floor.value() * kSettledInaccuracyTolerance;
             }
 
             const auto weaponMaxSpeed = maxSpeed();
