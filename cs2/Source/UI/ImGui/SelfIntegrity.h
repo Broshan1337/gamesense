@@ -32,9 +32,13 @@ struct TextRange {
     std::size_t size{0};
 };
 
-[[nodiscard]] inline NS_OBF_FLATTEN std::uint64_t fnv1a(const std::byte* data, std::size_t size) noexcept
+// Seed overload: FNV-1a is a chained hash, so a pass can resume exactly -
+// fnv1a(b, seed=fnv1a(a)) == fnv1a(a ++ b). The render-thread tick feeds the
+// module .text scan in chunks through this (full-pass stalls hitched frames).
+[[nodiscard]] inline NS_OBF_FLATTEN std::uint64_t fnv1a(const std::byte* data, std::size_t size,
+    std::uint64_t seed = 0xcbf29ce484222325ULL) noexcept
 {
-    std::uint64_t hash = 0xcbf29ce484222325ULL;
+    std::uint64_t hash = seed;
     for (std::size_t i = 0; i < size; ++i) {
         hash ^= static_cast<std::uint64_t>(std::to_integer<std::uint8_t>(data[i]));
         hash *= 0x100000001b3ULL;
@@ -108,10 +112,21 @@ struct TextRange {
 
 inline NS_OBF_FLATTEN void tick() noexcept
 {
+    // Chunked .text scan (2026-10-13 perf fix): the full fnv1a pass over the
+    // module .text stalled the render thread ~5 ms once per tick (measured as
+    // the "[perf] slow menu frame" lines at exactly this tick's 15 s cadence in
+    // the friend's gui.log). The scan now feeds kScanChunk bytes per tick and
+    // compares on wrap, so no single frame pays the whole pass. Tamper drift is
+    // still caught, one full pass later (~ceil(size/chunk) ticks).
+    constexpr std::size_t kScanChunk = 512 * 1024;
+
     static std::uint64_t baselineHash{0};
     static std::uint64_t lastTickNs{0};
     static bool textAnomalyLogged{false};
     static bool tracerAnomalyLogged{false};
+    static const std::byte* scanCursor = nullptr;
+    static std::size_t scanRemaining = 0;
+    static std::uint64_t scanHash = 0xcbf29ce484222325ULL;
 
     timespec ts{};
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -124,10 +139,36 @@ inline NS_OBF_FLATTEN void tick() noexcept
     const TextRange range = ownTextRange(reinterpret_cast<const void*>(&self_integrity::tick));
     if (range.start == 0)
         return;
-    const std::uint64_t hash = fnv1a(reinterpret_cast<const std::byte*>(range.start), range.size);
 
+    // Fresh pass on the first tick, or if the module moved (relocation) - a
+    // cursor outside the range would hash foreign memory.
+    const auto* rangeStart = reinterpret_cast<const std::byte*>(range.start);
+    if (!scanCursor || scanCursor < rangeStart || scanCursor > rangeStart + range.size) {
+        scanCursor = rangeStart;
+        scanRemaining = range.size;
+        scanHash = 0xcbf29ce484222325ULL;
+    }
+
+    const std::size_t n = scanRemaining < kScanChunk ? scanRemaining : kScanChunk;
+    scanHash = fnv1a(scanCursor, n, scanHash);
+    scanCursor += n;
+    scanRemaining -= n;
+
+    const int tracerPid = readTracerPid();
+    if (tracerPid > 0 && !tracerAnomalyLogged) {
+        tracerAnomalyLogged = true;
+        gui_log::write("[tamper] a tracer is attached (pid %d)", tracerPid);
+    }
+
+    if (scanRemaining != 0)
+        return;
+    scanCursor = nullptr;
+
+    const std::uint64_t hash = scanHash;
     if (baselineHash == 0) {
         baselineHash = hash;
+        // Same forensic file as before: pid + range + baseline hash for
+        // offline correlation of a dumped module.
         
         
         
@@ -156,12 +197,6 @@ inline NS_OBF_FLATTEN void tick() noexcept
         gui_log::write("[tamper] own .text checksum drift (baseline %llx, now %llx, range %lx+%zx)",
             static_cast<unsigned long long>(baselineHash), static_cast<unsigned long long>(hash),
             static_cast<unsigned long>(range.start), range.size);
-    }
-
-    const int tracerPid = readTracerPid();
-    if (tracerPid > 0 && !tracerAnomalyLogged) {
-        tracerAnomalyLogged = true;
-        gui_log::write("[tamper] a tracer is attached (pid %d)", tracerPid);
     }
 }
 

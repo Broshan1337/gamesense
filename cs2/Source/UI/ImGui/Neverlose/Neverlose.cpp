@@ -55,6 +55,7 @@
 #include <Features/Combat/SniperRifles/NoScopeInaccuracyVis/NoScopeInaccuracyVisConfigVariables.h>
 #include <Features/Combat/SpreadCircleVis/SpreadCircleVisConfigVariables.h>
 #include <Features/Combat/Triggerbot/TriggerbotConfigVariables.h>
+#include <Features/Combat/Triggerbot/TriggerbotState.h>
 #include <Features/Game/BlockbotConfigVariables.h>
 #include <Features/Game/BunnyhopConfigVariables.h>
 #include <Features/Game/ChatTools.h>
@@ -3397,9 +3398,12 @@ void pageLegitAim() noexcept
 
 void pageLegitTriggerbot() noexcept
 {
-    addCard("TRIGGERBOT", 10, [] {
+    addCard("TRIGGERBOT", 11, [] {
         toggleVar<triggerbot_vars::Enabled>("Triggerbot", ++controlId);
-        keybindVar<triggerbot_vars::HoldKey>("Hold Key", ++controlId);
+        // Activation mode: Hold (active while down) or Toggle (press latches).
+        static constexpr const char* const kActivationModes[]{"Hold", "Toggle"};
+        selectVar<triggerbot_vars::KeyMode>("Activation", kActivationModes, 2, ++controlId);
+        keybindVar<triggerbot_vars::HoldKey>("Trigger Key", ++controlId);
         sliderVar<triggerbot_vars::DelayMilliseconds>("Min Reaction Delay", ++controlId, " ms");
         sliderVar<triggerbot_vars::DelayMillisecondsMax>("Max Reaction Delay", ++controlId, " ms");
         cardDivider("ACCURACY");
@@ -4882,6 +4886,45 @@ void pageMisc() noexcept
 
 int inventoryCategory = 0;
 
+// CT/T pick shared by the Inventory page's per-team cards (KNIVES, AGENT): the
+// pill row selects which team's config the model rows below read/write.
+int inventoryTeam = 0;
+
+// One row of two CT/T pills inside a card (the shared per-team selector).
+// Card-relative geometry like cardDivider(): draws at the current card row,
+// advances it; no search entry (navigational row).
+void teamPillsRow() noexcept
+{
+    static constexpr const char* const kTeamNames[]{"CT", "T"};
+    ImDrawList* d = ImGui::GetWindowDrawList();
+    const float pillHeight = s(24.0f);
+    const float pillWidth = s(64.0f);
+    const float gap = s(8.0f);
+    const float x = card.origin.x + s(13.0f);
+    const float y = card.origin.y + card.row * kRowHeight + (kRowHeight - pillHeight) * 0.5f;
+    if (card.row > 0.5f)
+        d->AddLine(ImVec2(card.origin.x + s(12), card.origin.y + card.row * kRowHeight), ImVec2(card.origin.x + card.width - s(12), card.origin.y + card.row * kRowHeight), kHairline);
+    for (int i = 0; i < 2; ++i) {
+        const ImVec2 p(x + i * (pillWidth + gap), y);
+        ImGui::PushID(9910 + i);
+        const bool clicked = hit("##team_pill", p, ImVec2(pillWidth, pillHeight));
+        const bool active = inventoryTeam == i;
+        const float r = motion(animKey(0x2a5cu, 9910 + i), active ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+        ImGui::PopID();
+        if (clicked && !active) {
+            inventoryTeam = i;
+            state.popup.open = false;
+            state.colorPickerOpen = false;
+            state.multiSelectOpen = false;
+            styleSelect.open = false;
+        }
+        d->AddRectFilled(p, p + ImVec2(pillWidth, pillHeight), mix(C(0, 0, 0, 0), kRowHover, r), pillHeight * 0.5f);
+        d->AddRect(p, p + ImVec2(pillWidth, pillHeight), mix(kHairlineSoft, g_accent, r), pillHeight * 0.5f);
+        textYCentered(d, p.x, pillWidth, p.y, pillHeight, mix(C(145, 149, 159), C(226, 228, 235), r), kTeamNames[i], kTextControl, nullptr);
+    }
+    card.row += 1.0f;
+}
+
 constexpr const char* const kKnifeModels[] = {"None", "Bayonet", "Bowie Knife", "Butterfly Knife", "Classic Knife", "Falchion Knife", "Flip Knife", "Gut Knife", "Huntsman Knife", "Karambit", "Kukri Knife", "M9 Bayonet", "Navaja Knife", "Nomad Knife", "Paracord Knife", "Shadow Daggers", "Skeleton Knife", "Stiletto Knife", "Survival Knife", "Talon Knife", "Ursus Knife"};
 
 void inventoryPills(ImDrawList* d) noexcept
@@ -4951,19 +4994,23 @@ void pageInventoryCategory(int category) noexcept
     using namespace skin_changer_vars;
     switch (category) {
     case 0: {
-        
-        
-        
-        
-        
-        const auto knifeModel = static_cast<KnifeModelSelection>(ui_config::get<KnifeModel>());
+        // Per-team knife model rows: the pill team selects which side's
+        // KnifeModelCT/TT the row edits; the shared finish/wear/seed/StatTrak
+        // rows apply to whichever knife the side holds.
+        const auto knifeModel = inventoryTeam == 0
+            ? static_cast<KnifeModelSelection>(ui_config::get<KnifeModelCT>())
+            : static_cast<KnifeModelSelection>(ui_config::get<KnifeModelTT>());
         static std::uint16_t knifeFinishDefIndex = 0;
         knifeFinishDefIndex = SkinChangerData::resolveKnifeModel(knifeModel).has_value()
             ? static_cast<std::uint16_t>(*SkinChangerData::resolveKnifeModel(knifeModel))
             : std::uint16_t{0};
-        addCard("KNIVES", 6, [] {
+        addCard("KNIVES", 7, [] {
+            teamPillsRow();
             stageRowIcon(knifeFinishDefIndex);
-            selectVar<KnifeModel>("Knife Model", kKnifeModels, 21, ++controlId);
+            if (inventoryTeam == 0)
+                selectVar<KnifeModelCT>("Knife Model", kKnifeModels, 21, ++controlId);
+            else
+                selectVar<KnifeModelTT>("Knife Model", kKnifeModels, 21, ++controlId);
             stageRowIcon(knifeFinishDefIndex);
             paintKitRow<KnifeSkin>("Knife Finish", knifeFinishDefIndex, ++controlId);
             wearRow<KnifeSkinWear>("Wear", ++controlId);
@@ -5040,8 +5087,15 @@ void pageInventoryCategory(int category) noexcept
 void pageInventoryAgent() noexcept
 {
     using namespace agent_changer_vars;
-    addCard("AGENT", 1, [] {
-        itemDefRow<AgentDef>("Agent Model", cs2::kAgentItems, static_cast<int>(sizeof(cs2::kAgentItems) / sizeof(cs2::kAgentItems[0])), ++controlId);
+    // Per-team agent rows: CT pills show the 67 CT agents (kAgentItemsCT),
+    // T pills the 74 T agents (kAgentItemsTT); the pawn's team at runtime picks
+    // which config AgentChanger applies.
+    addCard("AGENT", 2, [] {
+        teamPillsRow();
+        if (inventoryTeam == 0)
+            itemDefRow<AgentDefCT>("Agent Model", cs2::kAgentItemsCT, static_cast<int>(sizeof(cs2::kAgentItemsCT) / sizeof(cs2::kAgentItemsCT[0])), ++controlId);
+        else
+            itemDefRow<AgentDefTT>("Agent Model", cs2::kAgentItemsTT, static_cast<int>(sizeof(cs2::kAgentItemsTT) / sizeof(cs2::kAgentItemsTT[0])), ++controlId);
     });
 }
 
@@ -8781,16 +8835,17 @@ float drawBindsListWindow(float extraYOffset) noexcept
     if (!ui_config::get<binds_list_vars::Enabled>())
         return 0.0f;
 
-    struct BindRowEntry { const char* label; int key; };
+    struct BindRowEntry { const char* label; int key; bool latch; };
     const BindRowEntry entries[] = {
-        {"Legit Aim", static_cast<int>(static_cast<legit_aimbot_vars::AimKey::ValueType::ValueType>(ui_config::get<legit_aimbot_vars::AimKey>()))},
-        {"Triggerbot", static_cast<int>(static_cast<triggerbot_vars::HoldKey::ValueType::ValueType>(ui_config::get<triggerbot_vars::HoldKey>()))},
-        {"Combat Panic", static_cast<int>(static_cast<panic_vars::Bind::ValueType::ValueType>(ui_config::get<panic_vars::Bind>()))},
-        {"Net Lag Choke", static_cast<int>(static_cast<net_lag_vars::ChokeKeyBind::ValueType::ValueType>(ui_config::get<net_lag_vars::ChokeKeyBind>()))},
-        {"Net Lag Flood", static_cast<int>(static_cast<net_lag_vars::FloodKeyBind::ValueType::ValueType>(ui_config::get<net_lag_vars::FloodKeyBind>()))},
-        {"Fake Intel", static_cast<int>(static_cast<chat_vars::IntelBind::ValueType::ValueType>(ui_config::get<chat_vars::IntelBind>()))},
-        {"Fake Kick", static_cast<int>(static_cast<chat_vars::KickKey::ValueType::ValueType>(ui_config::get<chat_vars::KickKey>()))},
-        {"Last Tick Defuse", static_cast<int>(static_cast<last_tick_vars::DefuseKey::ValueType::ValueType>(ui_config::get<last_tick_vars::DefuseKey>()))},
+        {"Legit Aim", static_cast<int>(static_cast<legit_aimbot_vars::AimKey::ValueType::ValueType>(ui_config::get<legit_aimbot_vars::AimKey>())), false},
+        // Toggle mode highlights while latched (triggerbot_state), not while the key is physically down.
+        {"Triggerbot", static_cast<int>(static_cast<triggerbot_vars::HoldKey::ValueType::ValueType>(ui_config::get<triggerbot_vars::HoldKey>())), true},
+        {"Combat Panic", static_cast<int>(static_cast<panic_vars::Bind::ValueType::ValueType>(ui_config::get<panic_vars::Bind>())), false},
+        {"Net Lag Choke", static_cast<int>(static_cast<net_lag_vars::ChokeKeyBind::ValueType::ValueType>(ui_config::get<net_lag_vars::ChokeKeyBind>())), false},
+        {"Net Lag Flood", static_cast<int>(static_cast<net_lag_vars::FloodKeyBind::ValueType::ValueType>(ui_config::get<net_lag_vars::FloodKeyBind>())), false},
+        {"Fake Intel", static_cast<int>(static_cast<chat_vars::IntelBind::ValueType::ValueType>(ui_config::get<chat_vars::IntelBind>())), false},
+        {"Fake Kick", static_cast<int>(static_cast<chat_vars::KickKey::ValueType::ValueType>(ui_config::get<chat_vars::KickKey>())), false},
+        {"Last Tick Defuse", static_cast<int>(static_cast<last_tick_vars::DefuseKey::ValueType::ValueType>(ui_config::get<last_tick_vars::DefuseKey>())), false},
     };
 
     
@@ -8802,7 +8857,7 @@ float drawBindsListWindow(float extraYOffset) noexcept
     for (std::size_t i = 0; i < feature_binds::entryCount && rowCount < static_cast<int>(sizeof(rows) / sizeof(rows[0])); ++i) {
         const auto& entry = feature_binds::entries[i];
         if (entry.key != Bind::kOff && entry.label)
-            rows[rowCount++] = {entry.label, entry.key};
+            rows[rowCount++] = {entry.label, entry.key, false};
     }
 
     constexpr ImGuiWindowFlags menuClosedFlags = ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove
@@ -8881,12 +8936,13 @@ float drawBindsListWindow(float extraYOffset) noexcept
         d->AddLine(winPos + ImVec2(s(12), headerHeight - s(2)), winPos + ImVec2(winWidth - s(12), headerHeight - s(2)), kHairline, 1.0f);
 
         float y = winPos.y + headerHeight;
-        const auto drawBindRow = [&](const char* label, int key) {
+        const auto drawBindRow = [&](const char* label, int key, bool latch) {
             d->AddLine(ImVec2(winPos.x + s(12), y), ImVec2(winPos.x + winWidth - s(12), y), kHairline, 1.0f);
 
             textY(d, winPos.x + s(14), y, rowHeight, kTextBodyCol, label, kTextControl, nullptr);
 
-            const bool held = key != Bind::kOff && Bind::isDown(key);
+            const bool toggleMode = latch && static_cast<int>(static_cast<triggerbot_vars::KeyMode::ValueType::ValueType>(ui_config::get<triggerbot_vars::KeyMode>())) != 0;
+            const bool held = toggleMode ? triggerbot_state::latched : key != Bind::kOff && Bind::isDown(key);
             const float pillWidth = s(76.0f);
             const float pillHeight = s(21.0f);
             const ImVec2 pill(winPos.x + winWidth - s(13) - pillWidth, y + (rowHeight - pillHeight) * 0.5f);
@@ -8904,7 +8960,7 @@ float drawBindsListWindow(float extraYOffset) noexcept
         };
 
         for (int i = 0; i < rowCount; ++i)
-            drawBindRow(rows[i].label, rows[i].key);
+            drawBindRow(rows[i].label, rows[i].key, rows[i].latch);
         d->PopClipRect();
     }
     ImGui::End();
@@ -9539,7 +9595,7 @@ float drawStatusChipsWindow() noexcept
         const char* text;
     } chips[]{
         {ui_config::get<legit_aimbot_vars::Enabled>(), Bind::isDown(static_cast<int>(static_cast<legit_aimbot_vars::AimKey::ValueType::ValueType>(ui_config::get<legit_aimbot_vars::AimKey>()))), "AIM"},
-        {ui_config::get<triggerbot_vars::Enabled>(), Bind::isDown(static_cast<int>(static_cast<triggerbot_vars::HoldKey::ValueType::ValueType>(ui_config::get<triggerbot_vars::HoldKey>()))), "TRIG"},
+        {ui_config::get<triggerbot_vars::Enabled>(), static_cast<int>(static_cast<triggerbot_vars::KeyMode::ValueType::ValueType>(ui_config::get<triggerbot_vars::KeyMode>())) != 0 ? triggerbot_state::latched : Bind::isDown(static_cast<int>(static_cast<triggerbot_vars::HoldKey::ValueType::ValueType>(ui_config::get<triggerbot_vars::HoldKey>()))), "TRIG"},
         {ui_config::get<BlockbotEnabled>(), KeyboardState::isKeyDown(sdl3::scancode::kE), "BLOCK"},
     };
 

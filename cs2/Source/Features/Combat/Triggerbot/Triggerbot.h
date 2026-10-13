@@ -16,6 +16,7 @@
 #include <Features/Combat/Rcs/RcsConfigVariables.h>
 #include <Features/Combat/SubtickShotWriter.h>
 #include <Features/Combat/Triggerbot/TriggerbotConfigVariables.h>
+#include <Features/Combat/Triggerbot/TriggerbotState.h>
 #include <GameClient/Bind.h>
 #include <GameClient/Entities/BaseEntity.h>
 #include <GameClient/Entities/PlayerPawn.h>
@@ -71,6 +72,7 @@ public:
         armed = false;
         armedTarget = nullptr;
         fireAtTime = 0.0f;
+        triggerbot_state::latched = false;
     }
 
     
@@ -79,7 +81,25 @@ public:
     
     void onWriteMoveCrc(cs2::CUserCmd* cmd) const noexcept
     {
-        if (!GET_CONFIG_VAR(triggerbot_vars::Enabled) || !Bind::isDown(GET_CONFIG_VAR(triggerbot_vars::HoldKey))) {
+        // Activation: Hold = active while the key is down; Toggle = a press
+        // flips the latch (PanicKey's rising-edge shape). The latch update runs
+        // every user command BEFORE any early-out so the edge detector never
+        // misses a release, and can't be re-flipped by a mid-press panic: an
+        // unbound key or the master toggle off drops the latch.
+        const bool enabled = GET_CONFIG_VAR(triggerbot_vars::Enabled);
+        const bool toggleMode = GET_CONFIG_VAR(triggerbot_vars::KeyMode) != 0;
+        const bool keyDown = Bind::isDown(GET_CONFIG_VAR(triggerbot_vars::HoldKey));
+        if (toggleMode) {
+            if (GET_CONFIG_VAR(triggerbot_vars::HoldKey) == Bind::kOff || !enabled)
+                triggerbot_state::latched = false;
+            else if (keyDown && !triggerbot_state::lastKeyWasDown)
+                triggerbot_state::latched = !triggerbot_state::latched;
+        } else {
+            triggerbot_state::latched = false;
+        }
+        triggerbot_state::lastKeyWasDown = keyDown;
+
+        if (!enabled || !(toggleMode ? triggerbot_state::latched : keyDown)) {
             disarm();
             return;
         }

@@ -60,6 +60,11 @@ constexpr auto kBacktrackTicks = RangeConstrainedVariableParams<std::uint8_t>{.m
 
 
 
-constexpr auto kHoldKey = RangeConstrainedVariableParams<std::uint8_t>{.min = 0, .max = static_cast<std::uint8_t>(Bind::kLast), .def = Bind::kMouse5};
+// Default = middle click, per the activation rework: the key is rebindable,
+// Activation decides between Hold (default) and Toggle.
+constexpr auto kHoldKey = RangeConstrainedVariableParams<std::uint8_t>{.min = 0, .max = static_cast<std::uint8_t>(Bind::kLast), .def = Bind::kMouse3};
+
+// 0 = Hold (active while the key is down), 1 = Toggle (press latches on/off).
+constexpr auto kKeyMode = RangeConstrainedVariableParams<std::uint8_t>{.min = 0, .max = 1, .def = 0};
 
 }

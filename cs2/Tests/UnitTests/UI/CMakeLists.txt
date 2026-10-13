@@ -3,6 +3,7 @@ target_sources(UnitTests PRIVATE
   FeatureBindTests.cpp
   MenuInputTests.cpp
   ViewmodelRotationTests.cpp
+  SelfIntegrityTests.cpp
 )
 
 target_link_libraries(UnitTests sdl3_headers)

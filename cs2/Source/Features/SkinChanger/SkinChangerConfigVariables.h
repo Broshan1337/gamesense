@@ -91,7 +91,10 @@ enum class KnifeModelSelection : std::uint8_t {
 namespace skin_changer_vars
 {
 
-CONFIG_VARIABLE(KnifeModel, KnifeModelSelection, KnifeModelSelection::None);
+// Per-team knife model (CT / T). Same enum for both: the game swaps the knife
+// entity on team switch, we re-apply whichever pick matches the local pawn's team.
+CONFIG_VARIABLE(KnifeModelCT, KnifeModelSelection, KnifeModelSelection::None);
+CONFIG_VARIABLE(KnifeModelTT, KnifeModelSelection, KnifeModelSelection::None);
 
 
 

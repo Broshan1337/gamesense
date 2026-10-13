@@ -107,7 +107,10 @@ private:
         configConversion.uint(u8"KeyDefIndex", [](std::uint64_t) {}, [] { return 0; });
         
         
-        configConversion.uint(u8"AgentDef", loadVariable<agent_changer_vars::AgentDef>(), saveVariable<agent_changer_vars::AgentDef>());
+        // Per-team agent picks. Key "AgentDef" (CT) is the pre-split name, so
+        // configs saved before the CT/TT split load their agent as the CT one.
+        configConversion.uint(u8"AgentDef", loadVariable<agent_changer_vars::AgentDefCT>(), saveVariable<agent_changer_vars::AgentDefCT>());
+        configConversion.uint(u8"AgentDefT", loadVariable<agent_changer_vars::AgentDefTT>(), saveVariable<agent_changer_vars::AgentDefTT>());
         configConversion.endObject();
     }
 
@@ -203,6 +206,7 @@ private:
         configConversion.uint(u8"AutowallMaxThickness", loadVariable<triggerbot_vars::AutowallMaxThickness>(), saveVariable<triggerbot_vars::AutowallMaxThickness>());
         configConversion.boolean(u8"SpreadCompensation", loadVariable<triggerbot_vars::SpreadCompensation>(), saveVariable<triggerbot_vars::SpreadCompensation>());
         configConversion.uint(u8"HoldKey", loadVariable<triggerbot_vars::HoldKey>(), saveVariable<triggerbot_vars::HoldKey>());
+        configConversion.uint(u8"KeyMode", loadVariable<triggerbot_vars::KeyMode>(), saveVariable<triggerbot_vars::KeyMode>());
         configConversion.boolean(u8"SeededFire", loadVariable<triggerbot_vars::SeededFire>(), saveVariable<triggerbot_vars::SeededFire>());
         configConversion.boolean(u8"ThroughWalls", loadVariable<triggerbot_vars::ThroughWalls>(), saveVariable<triggerbot_vars::ThroughWalls>());
         configConversion.uint(u8"MinDamage", loadVariable<triggerbot_vars::MinDamage>(), saveVariable<triggerbot_vars::MinDamage>());
@@ -520,7 +524,10 @@ private:
     void skinChangerObject(auto&& configConversion)
     {
         configConversion.beginObject(u8"SkinChanger");
-        configConversion.uint(u8"KnifeModel", loadVariable<skin_changer_vars::KnifeModel>(), saveVariable<skin_changer_vars::KnifeModel>());
+        // Key "KnifeModel" (CT) is the pre-split name: old configs load their
+        // knife pick as the CT one.
+        configConversion.uint(u8"KnifeModel", loadVariable<skin_changer_vars::KnifeModelCT>(), saveVariable<skin_changer_vars::KnifeModelCT>());
+        configConversion.uint(u8"KnifeModelT", loadVariable<skin_changer_vars::KnifeModelTT>(), saveVariable<skin_changer_vars::KnifeModelTT>());
         configConversion.uint(u8"KnifeSkin", loadVariable<skin_changer_vars::KnifeSkin>(), saveVariable<skin_changer_vars::KnifeSkin>());
 #define NS_SKIN_CHANGER_F(base) configConversion.uint(u8"" #base, loadVariable<skin_changer_vars::base>(), saveVariable<skin_changer_vars::base>());
         NS_SKIN_CHANGER_GUNS(NS_SKIN_CHANGER_F)

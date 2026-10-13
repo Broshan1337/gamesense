@@ -5,6 +5,7 @@
 #include <CS2/Econ/ItemDefinitionIndex.h>
 #include <CS2/Econ/PaintKitDatabase.h>
 #include <Features/SkinChanger/SkinChangerConfigVariables.h>
+#include <GameClient/Entities/TeamNumber.h>
 #include <HookContext/HookContextMacros.h>
 
 
@@ -135,7 +136,14 @@ public:
 
     [[nodiscard]] static std::optional<cs2::ItemDefinitionIndex> configuredKnifeModel(auto& hookContext) noexcept
     {
-        return resolveKnifeModel(GET_CONFIG_VAR(skin_changer_vars::KnifeModel));
+        // Per-team picks: the local controller's team decides which knife config
+        // applies (CT = KnifeModelCT, T = KnifeModelTT). Anything else (no
+        // controller / spectator) falls back to the CT pick, which is also the
+        // legacy pre-split config key.
+        const auto team = hookContext.localPlayerController().teamNumber();
+        if (team == TeamNumber::TT)
+            return resolveKnifeModel(GET_CONFIG_VAR(skin_changer_vars::KnifeModelTT));
+        return resolveKnifeModel(GET_CONFIG_VAR(skin_changer_vars::KnifeModelCT));
     }
 
     

@@ -10,6 +10,9 @@ CONFIG_VARIABLE(Enabled, bool, false);
 
 CONFIG_VARIABLE_RANGE(HoldKey, triggerbot_params::kHoldKey);
 
+// Activation mode for HoldKey: 0 = Hold, 1 = Toggle (press flips the latch).
+CONFIG_VARIABLE_RANGE(KeyMode, triggerbot_params::kKeyMode);
+
 
 CONFIG_VARIABLE_RANGE(DelayMilliseconds, triggerbot_params::kDelayMilliseconds);
 CONFIG_VARIABLE_RANGE(DelayMillisecondsMax, triggerbot_params::kDelayMillisecondsMax);

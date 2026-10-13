@@ -174,6 +174,7 @@ using ConfigVariableTypes = TypeList<
     no_scope_inaccuracy_vis_vars::Enabled,
     triggerbot_vars::Enabled,
     triggerbot_vars::HoldKey,
+    triggerbot_vars::KeyMode,
     triggerbot_vars::DelayMilliseconds,
     triggerbot_vars::DelayMillisecondsMax,
     triggerbot_vars::AccuracyCheck,
@@ -264,7 +265,8 @@ using ConfigVariableTypes = TypeList<
     rcs_vars::Enabled,
     rcs_vars::Strength,
     BombPlantAlertEnabled,
-    skin_changer_vars::KnifeModel,
+    skin_changer_vars::KnifeModelCT,
+    skin_changer_vars::KnifeModelTT,
     skin_changer_vars::KnifeSkin,
     skin_changer_vars::KnifeSkinWear,
     skin_changer_vars::KnifeSkinSeed,
@@ -332,7 +334,8 @@ using ConfigVariableTypes = TypeList<
     MenuStyleRainbow,
     discord_rpc_vars::Enabled,
     hud_theme_vars::Enabled,
-    agent_changer_vars::AgentDef,
+    agent_changer_vars::AgentDefCT,
+    agent_changer_vars::AgentDefTT,
 #define NS_MODEL_GLOW_COLOR(F) F(Flashbang) F(HEGrenade) F(SmokeGrenade) F(Molotov) F(DroppedBomb) F(TickingBomb) F(DefuseKit)
 #define NS_OUTLINE_GLOW_COLOR(F) NS_MODEL_GLOW_COLOR(F) F(Hostage)
 #define NS_GLOW_COLOR_VARS(sys, M) M(sys, Flashbang) M(sys, HEGrenade) M(sys, SmokeGrenade) M(sys, Molotov) M(sys, DroppedBomb) M(sys, TickingBomb) M(sys, DefuseKit)

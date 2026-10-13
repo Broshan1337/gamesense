@@ -143,10 +143,16 @@ private:
             return;
         auto* const modelState = sceneNode + offsets.modelState;
 
-        const auto def = GET_CONFIG_VAR(agent_changer_vars::AgentDef);
+        // Per-team picks: team 3 = CT applies AgentDefCT, team 2 = T applies
+        // AgentDefTT, each resolved against that side's agent list.
+        const bool ct = team == 3;
+        const auto def = ct ? GET_CONFIG_VAR(agent_changer_vars::AgentDefCT) : GET_CONFIG_VAR(agent_changer_vars::AgentDefTT);
+        const auto* const agentList = ct ? cs2::kAgentItemsCT : cs2::kAgentItemsTT;
+        const auto agentCount = ct ? static_cast<int>(sizeof(cs2::kAgentItemsCT) / sizeof(cs2::kAgentItemsCT[0]))
+                                   : static_cast<int>(sizeof(cs2::kAgentItemsTT) / sizeof(cs2::kAgentItemsTT[0]));
         const cs2::ItemDefEntry* agent = nullptr;
         if (def)
-            agent = cs2::itemDefById(cs2::kAgentItems, static_cast<int>(sizeof(cs2::kAgentItems) / sizeof(cs2::kAgentItems[0])), def);
+            agent = cs2::itemDefById(agentList, agentCount, def);
 
         const auto handle = agent_changer::readAt<std::uint64_t>(modelState, kModelHandleOffset);
 
