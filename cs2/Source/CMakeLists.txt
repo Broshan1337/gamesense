@@ -257,10 +257,11 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU
       target_compile_options(Neversnooze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-gnu-unique>)
     endif()
     # clang's default expression/template depth limits (256/1024/900) are far below GCC's:
-    # the pattern TypeList instantiates 463-argument fold expressions. Harmless for stock
-    # clang, required for the Arkari OLLVM build.
+    # the pattern TypeList instantiates ~1030-argument fold expressions (2026-10-13 per-team
+    # knife/agent vars pushed it past 1024 = the old cap, fatal in <tuple>). Harmless for
+    # stock clang, required for the Arkari OLLVM build.
     if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-      target_compile_options(Neversnooze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fconstexpr-depth=4096 -fbracket-depth=1024 -ftemplate-depth=2048>)
+      target_compile_options(Neversnooze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fconstexpr-depth=4096 -fbracket-depth=4096 -ftemplate-depth=4096>)
     endif()
     # GCC default -ftemplate-depth=900 (GCC >= 14) no longer covers the TypeList tuple:
     # std::tuple instantiates recursively, one level per entry - the per-weapon rage

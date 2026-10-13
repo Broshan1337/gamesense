@@ -44,7 +44,7 @@ if(NEVERSNOOZE_OBFUSCATE)
   add_compile_options("-mllvm" "-arkari-cfg=${NEVERSNOOZE_ARKARI_CFG}")
   # the pattern TypeList instantiates 463-argument fold expressions - clang's default
   # expression nesting limit (256) is far below GCC's; lift it (numbers are generous caps)
-  add_compile_options("-fconstexpr-depth=4096" "-fbracket-depth=1024" "-ftemplate-depth=2048")
+  add_compile_options("-fconstexpr-depth=4096" "-fbracket-depth=4096" "-ftemplate-depth=4096")
 endif()
 
 add_subdirectory(Source)
