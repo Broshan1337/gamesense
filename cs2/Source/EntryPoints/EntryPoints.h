@@ -930,7 +930,6 @@ std::uint64_t CSGOInputHook_onBuildUserCmd(cs2::CCSGOInput* thisptr, int slot, i
     HookContext<GlobalContext> hookContext;
     if (!shuttingDown && !hookContext.template make<PanicKey>().isActive()) {
         hookContext.template make<Blockbot>().onBuildUserCmd(thisptr, slot);
-        hookContext.template make<Movement>().onBuildUserCmd(thisptr, slot);
     }
     CrashLogger::trace(0x373);
     return hookContext.hooks().csgoInputHook.getOriginalBuildUserCmd()(thisptr, slot, frameNumber);
