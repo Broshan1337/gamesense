@@ -185,6 +185,7 @@ struct Functions {
     bool (*getWindowSize)(SDL_Window*, int*, int*) = nullptr;
     bool (*getWindowSizeInPixels)(SDL_Window*, int*, int*) = nullptr;
     SDL_WindowFlags (*getWindowFlags)(SDL_Window*) = nullptr;
+    SDL_Keycode (*getKeyFromScancode)(SDL_Scancode, SDL_Keymod, bool) = nullptr;
     char* (*getClipboardText)() = nullptr;
     bool (*setClipboardText)(const char*) = nullptr;
     void (*free)(void*) = nullptr;
@@ -228,6 +229,7 @@ inline bool videoDriverResolved = false;
     functions.getWindowSize = sdl.getFunctionAddress("SDL_GetWindowSize").as<decltype(functions.getWindowSize)>();
     functions.getWindowSizeInPixels = sdl.getFunctionAddress("SDL_GetWindowSizeInPixels").as<decltype(functions.getWindowSizeInPixels)>();
     functions.getWindowFlags = sdl.getFunctionAddress("SDL_GetWindowFlags").as<decltype(functions.getWindowFlags)>();
+    functions.getKeyFromScancode = sdl.getFunctionAddress("SDL_GetKeyFromScancode").as<decltype(functions.getKeyFromScancode)>();
     functions.getClipboardText = sdl.getFunctionAddress("SDL_GetClipboardText").as<decltype(functions.getClipboardText)>();
     functions.setClipboardText = sdl.getFunctionAddress("SDL_SetClipboardText").as<decltype(functions.setClipboardText)>();
     functions.free = sdl.getFunctionAddress("SDL_free").as<decltype(functions.free)>();
@@ -298,6 +300,33 @@ inline bool mouseButtonDown[6] = {};
     }
 }
 
+// Unicode character a key produces under the OS keyboard layout (AZERTY,
+// QWERTZ, ...) with the held modifiers applied (Shift, AltGr, Caps Lock).
+// SDL text input is not running while the game has focus, so there are no
+// TEXT_INPUT events to use; the keymap is queried per key press instead.
+// Known ceiling: dead-key composition (^ then e) is not available this way.
+// Falls back to the US table when SDL does not export the lookup.
+[[nodiscard]] inline unsigned int layoutChar(SDL_Scancode scancode, SDL_Keymod mod) noexcept
+{
+    // The keypad is layout-independent, and it is how AZERTY users type digits.
+    if (scancode >= SDL_SCANCODE_KP_1 && scancode <= SDL_SCANCODE_KP_0 && (mod & SDL_KMOD_NUM))
+        return static_cast<unsigned int>("1234567890"[scancode - SDL_SCANCODE_KP_1]);
+    switch (scancode) {
+    case SDL_SCANCODE_KP_PERIOD: return (mod & SDL_KMOD_NUM) ? '.' : 0u;
+    case SDL_SCANCODE_KP_DIVIDE: return '/';
+    case SDL_SCANCODE_KP_MULTIPLY: return '*';
+    case SDL_SCANCODE_KP_MINUS: return '-';
+    case SDL_SCANCODE_KP_PLUS: return '+';
+    default: break;
+    }
+    if (!functions.getKeyFromScancode)
+        return static_cast<unsigned char>(scancodeToChar(scancode, (mod & SDL_KMOD_SHIFT) != 0));
+    const SDL_Keycode key = functions.getKeyFromScancode(scancode, mod, false);
+    if (key < 0x20 || key == 0x7F || (key & (SDLK_SCANCODE_MASK | SDLK_EXTENDED_MASK)) != 0)
+        return 0;
+    return key;
+}
+
 inline void processEvent(const SDL_Event* event) noexcept
 {
     ImGuiIO& io = ImGui::GetIO();
@@ -350,10 +379,8 @@ inline void processEvent(const SDL_Event* event) noexcept
         
         
         if (event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat && io.WantTextInput) {
-            if (const char c = scancodeToChar(event->key.scancode, (event->key.mod & SDL_KMOD_SHIFT) != 0)) {
-                const char text[2] = { c, 0 };
-                io.AddInputCharactersUTF8(text);
-            }
+            if (const unsigned int c = layoutChar(event->key.scancode, static_cast<SDL_Keymod>(event->key.mod)))
+                io.AddInputCharacter(c);
         }
         return;
     }
