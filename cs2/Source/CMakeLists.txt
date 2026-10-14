@@ -260,8 +260,13 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU
     # the pattern TypeList instantiates ~1030-argument fold expressions (2026-10-13 per-team
     # knife/agent vars pushed it past 1024 = the old cap, fatal in <tuple>). Harmless for
     # stock clang, required for the Arkari OLLVM build.
+    # -fno-threadsafe-statics: clang emits __cxa_guard_acquire/release for the dynamically
+    # initialized inline globals (espScene, hud_root_walk::table), which the -nostdlib ship
+    # link CANNOT resolve ("undefined reference to __cxa_guard_acquire", the ship chain
+    # broken since the ESP suite landed 2026-10). Killing the guards fixes the link; the
+    # module is single-threaded at init (dlopen on the game thread) so no guard is needed.
     if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-      target_compile_options(Neversnooze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fconstexpr-depth=4096 -fbracket-depth=4096 -ftemplate-depth=4096>)
+      target_compile_options(Neversnooze PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fconstexpr-depth=4096 -fbracket-depth=4096 -ftemplate-depth=4096 -fno-threadsafe-statics>)
     endif()
     # GCC default -ftemplate-depth=900 (GCC >= 14) no longer covers the TypeList tuple:
     # std::tuple instantiates recursively, one level per entry - the per-weapon rage

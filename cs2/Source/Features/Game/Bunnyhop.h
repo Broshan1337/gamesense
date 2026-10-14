@@ -9,7 +9,6 @@
 #include <CS2/Classes/Vector.h>
 #include <Features/Game/AirStrafe.h>
 #include <Features/Game/JumpTiming.h>
-#include <Utils/VerifyConsole.h>
 #include <Features/Game/BunnyhopConfigVariables.h>
 #include <Features/Game/Movement.h>
 #include <Features/Game/StrafeCommand.h>
@@ -56,15 +55,10 @@ public:
     void onCreateMove(cs2::CUserCmd* cmd) const noexcept
     {
         clearPending();
-        if (Movement<HookContext>::jumpBugActive) {
-            VerifyConsole::write(4.0f, "bhop", "gate jumpBugActive");
+        if (Movement<HookContext>::jumpBugActive)
             return reset();
-        }
 
         const bool jumpHeld = KeyboardState::isKeyDown(sdl3::scancode::kSpace);
-        // Issue #4 round 4: [bhop] breadcrumbs at every gate so the next
-        // in-game run names the failing one ("only some ticks" needs data).
-        VerifyConsole::write(4.0f, "bhop", "cm held=%d", jumpHeld ? 1 : 0);
         // Auto-strafe rides the bhop feature (2026-10-13 friend report "auto
         // strafe works even when the feature is off"): Bunnyhop off = the whole
         // automation card's air-control off, Auto Strafe no longer self-runs.
@@ -118,15 +112,12 @@ public:
         if (!bhopEnabled)
             return;
         const auto autoBhop = hookContext.template make<CvarSystem>().readBoolConVar("sv_autobunnyhopping");
-        if (autoBhop.has_value() && autoBhop.value()) {
-            VerifyConsole::write(4.0f, "bhop", "gate sv_autobunnyhopping=1 (server-side hop)");
+        if (autoBhop.has_value() && autoBhop.value())
             return;
-        }
 
         // Velocity gate: ladder/noclip movetypes stand down (m_nActualMoveType:
         // ladder=9, noclip=7 - the CS2 MoveType_t from the dumper).
         if (const auto moveType = pawnMoveType(); moveType == 9 || moveType == 7) {
-            VerifyConsole::write(4.0f, "bhop", "gate movetype=%d", moveType);
             return reset();
         }
 
@@ -143,8 +134,6 @@ public:
         // A predicted landing stages the press at the landing subtick (not the
         // next ground tick at when=1.0) - that keeps the hop frictionless.
         wantsJump = onGround.value() || hasPendingLanding;
-        VerifyConsole::write(4.0f, "bhop", "ground=%d landing=%d -> wantsJump=%d",
-            onGround.value() ? 1 : 0, hasPendingLanding ? 1 : 0, wantsJump ? 1 : 0);
         hasPendingTap = wantsJump;
         hasPendingJump = true;
         hasPendingInput = true;
@@ -168,8 +157,7 @@ public:
                     float(real.isButtonDown(Buttons::kMoveLeft)) - float(real.isButtonDown(Buttons::kMoveRight))};
         }
         if (!hasPendingInput) {
-            VerifyConsole::write(4.0f, "bhop", "crc: no pending input");
-            return;
+                return;
         }
         const UserCmd userCmd{cmd};
         // Issue #4 (2026-10-13, user breadcrumb): NO cross-hook cmd identity -
@@ -180,7 +168,6 @@ public:
         // fired). The tick boundary is already guaranteed by clearPending()
         // at the top of onCreateMove; this writes ONLY the cmd handed here.
         if (!cmd || Movement<HookContext>::jumpBugActive) {
-            VerifyConsole::write(4.0f, "bhop", "crc: gate (no cmd / jumpbug)");
             clearPending();
             return;
         }

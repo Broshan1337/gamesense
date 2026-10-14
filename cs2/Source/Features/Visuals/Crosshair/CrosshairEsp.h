@@ -69,11 +69,6 @@ public:
             }
         }
 
-        // Temporary breadcrumb (~ console): the in-game "crosshair renders
-        // nothing" report needs the gate state from a live round.
-        VerifyConsole::write(3.0f, "cross", "pieces published, pen=%d dmgText=%d",
-            GET_CONFIG_VAR(crosshair_vars::PenetrationEnabled) ? 1 : 0, hasDamageText ? 1 : 0);
-
         publish(eye, view, color, damageText, hasDamageText);
     }
 

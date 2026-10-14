@@ -18,7 +18,6 @@
 #include <HookContext/HookContextMacros.h>
 #include <Utils/Optional.h>
 #include <Utils/Trig.h>
-#include <Utils/VerifyConsole.h>
 
 
 
@@ -91,7 +90,6 @@ public:
                 const float target = static_cast<float>(GET_CONFIG_VAR(movement_vars::SlowWalkSpeed)) / 100.0f * weaponMaxSpeed;
                 const float gain = accelerate.value() * std::max(250.0f, weaponMaxSpeed) * tickInterval.value();
                 pendingSlowWalk = speed2d > 1.0f && speed2d + gain > target;
-                VerifyConsole::write(1.0f, "slow", "v=%.0f target=%.0f gain=%.1f coast=%d", speed2d, target, gain, pendingSlowWalk ? 1 : 0);
             }
         }
 

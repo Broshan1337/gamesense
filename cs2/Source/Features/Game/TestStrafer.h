@@ -8,7 +8,6 @@
 #include <GameClient/Entities/PlayerPawn.h>
 #include <GameClient/UserCmd.h>
 #include <HookContext/HookContextMacros.h>
-#include <Utils/VerifyConsole.h>
 
 // The legacy TestStrafer setting now enables the normal solver with diagnostics.
 // A second movement writer used to add synthetic camera yaw subticks and compete
@@ -38,15 +37,12 @@ public:
             return;
         if (onGround.value()) {
             if (airborne)
-                VerifyConsole::write(0.5f, "[strafehop]", "peak=%.1f delta=%+.1f", peak, peak - lastPeak);
-            if (airborne)
                 lastPeak = peak;
             peak = 0.0f;
             airborne = false;
         } else {
             airborne = true;
             peak = std::max(peak, speed);
-            VerifyConsole::write(1.0f, "[strafe]", "speed=%.1f peak=%.1f", speed, peak);
         }
     }
 
