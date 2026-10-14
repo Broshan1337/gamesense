@@ -159,6 +159,8 @@ public:
             const float aimTime = static_cast<float>(GET_CONFIG_VAR(triggerbot_vars::AimTimeMs)) / 1000.0f;
             const float delay = delaySeconds();
             fireAtTime = now.value() + humanizeDelay(aimTime + delay);
+            VerifyConsole::write(4.0f, "trig", "armed (aim %.0f ms + humanized delay)",
+                aimTime * 1000.0f);
             return;
         }
 
@@ -225,6 +227,7 @@ public:
         if (!hookContext.template make<AttackCommand>().press(cmd))
             return;
         firedAtTarget = true;
+        VerifyConsole::write(4.0f, "trig", "FIRE");
         // Refire pause (friend request "delay for pistols like Dual Berettas"):
         // space subsequent shots at the same target; the first shot above ran
         // after AimTime + reaction delay, this only paces the follow-ups.
