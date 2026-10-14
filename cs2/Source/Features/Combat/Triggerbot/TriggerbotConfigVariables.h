@@ -25,7 +25,27 @@ CONFIG_VARIABLE_RANGE(AccuracyRadius, triggerbot_params::kAccuracyRadius);
 
 
 
-CONFIG_VARIABLE(HeadOnly, bool, false);
+// Bone selection (friend request): which hitgroups may trigger the shot.
+// All three default ON = the old any-hitbox behavior; only head = old HeadOnly.
+CONFIG_VARIABLE(HitHead, bool, true);
+CONFIG_VARIABLE(HitChest, bool, true);
+CONFIG_VARIABLE(HitStomach, bool, true);
+
+// Rapid refire (friend request "automatic pistols"): after the first gated
+// shot at a target, subsequent shots at the SAME target skip the accuracy/
+// reaction gates and click as fast as the weapon fires - semi-auto pistols
+// keep hopping while the crosshair is held on.
+CONFIG_VARIABLE(AutoRefire, bool, false);
+
+CONFIG_VARIABLE_RANGE(AimTimeMs, triggerbot_params::kAimTimeMs);
+
+// Pause between shots at the same target while Rapid Refire clicks
+// (friend request: "delay for pistols like Dual Berettas").
+CONFIG_VARIABLE_RANGE(RefireDelayMs, triggerbot_params::kRefireDelayMs);
+
+// Delay humanizer (friend request): multiplies every rolled delay (reaction +
+// refire) by a random 0.75..1.25, so the clicks don't land on a metronome.
+CONFIG_VARIABLE(HumanizeDelays, bool, true);
 
 
 

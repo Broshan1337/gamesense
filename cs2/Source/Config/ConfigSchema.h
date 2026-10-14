@@ -198,7 +198,15 @@ private:
         configConversion.uint(u8"DelayMillisecondsMax", loadVariable<triggerbot_vars::DelayMillisecondsMax>(), saveVariable<triggerbot_vars::DelayMillisecondsMax>());
         configConversion.boolean(u8"AccuracyCheck", loadVariable<triggerbot_vars::AccuracyCheck>(), saveVariable<triggerbot_vars::AccuracyCheck>());
         configConversion.uint(u8"AccuracyRadius", loadVariable<triggerbot_vars::AccuracyRadius>(), saveVariable<triggerbot_vars::AccuracyRadius>());
-        configConversion.boolean(u8"HeadOnly", loadVariable<triggerbot_vars::HeadOnly>(), saveVariable<triggerbot_vars::HeadOnly>());
+        // Bone selection replaces the old HeadOnly boolean (old configs keep
+        // loading; their HeadOnly=true maps to Head alone via defaults).
+        configConversion.boolean(u8"HitHead", loadVariable<triggerbot_vars::HitHead>(), saveVariable<triggerbot_vars::HitHead>());
+        configConversion.boolean(u8"HitChest", loadVariable<triggerbot_vars::HitChest>(), saveVariable<triggerbot_vars::HitChest>());
+        configConversion.boolean(u8"HitStomach", loadVariable<triggerbot_vars::HitStomach>(), saveVariable<triggerbot_vars::HitStomach>());
+        configConversion.uint(u8"AimTimeMs", loadVariable<triggerbot_vars::AimTimeMs>(), saveVariable<triggerbot_vars::AimTimeMs>());
+        configConversion.boolean(u8"AutoRefire", loadVariable<triggerbot_vars::AutoRefire>(), saveVariable<triggerbot_vars::AutoRefire>());
+        configConversion.uint(u8"RefireDelayMs", loadVariable<triggerbot_vars::RefireDelayMs>(), saveVariable<triggerbot_vars::RefireDelayMs>());
+        configConversion.boolean(u8"HumanizeDelays", loadVariable<triggerbot_vars::HumanizeDelays>(), saveVariable<triggerbot_vars::HumanizeDelays>());
         configConversion.uint(u8"Hitchance", loadVariable<triggerbot_vars::Hitchance>(), saveVariable<triggerbot_vars::Hitchance>());
         configConversion.boolean(u8"MaxAccuracyOnly", loadVariable<triggerbot_vars::MaxAccuracyOnly>(), saveVariable<triggerbot_vars::MaxAccuracyOnly>());
         configConversion.boolean(u8"WallCheck", loadVariable<triggerbot_vars::WallCheck>(), saveVariable<triggerbot_vars::WallCheck>());
@@ -261,6 +269,8 @@ private:
         configConversion.boolean(u8"DynamicPointscale", [](bool) {}, [] { return true; });
         configConversion.boolean(u8"WallCheck", loadVariable<aimbot_vars::WallCheck>(), saveVariable<aimbot_vars::WallCheck>());
         configConversion.boolean(u8"Autowall", loadVariable<aimbot_vars::Autowall>(), saveVariable<aimbot_vars::Autowall>());
+        configConversion.boolean(u8"IgnoreSmoke", loadVariable<aimbot_vars::IgnoreSmoke>(), saveVariable<aimbot_vars::IgnoreSmoke>());
+        configConversion.boolean(u8"IgnoreFlash", loadVariable<aimbot_vars::IgnoreFlash>(), saveVariable<aimbot_vars::IgnoreFlash>());
         configConversion.boolean(u8"AutoStop", loadVariable<aimbot_vars::AutoStop>(), saveVariable<aimbot_vars::AutoStop>());
         configConversion.boolean(u8"SpreadGate", loadVariable<aimbot_vars::SpreadGate>(), saveVariable<aimbot_vars::SpreadGate>());
         configConversion.boolean(u8"SeedFallback", loadVariable<aimbot_vars::SeedFallback>(), saveVariable<aimbot_vars::SeedFallback>());
@@ -313,6 +323,7 @@ private:
         configConversion.beginObject(u8"Rcs");
         configConversion.boolean(u8"Enabled", loadVariable<rcs_vars::Enabled>(), saveVariable<rcs_vars::Enabled>());
         configConversion.uint(u8"Strength", loadVariable<rcs_vars::Strength>(), saveVariable<rcs_vars::Strength>());
+        configConversion.uint(u8"YawStrength", loadVariable<rcs_vars::YawStrength>(), saveVariable<rcs_vars::YawStrength>());
         configConversion.endObject();
 
         

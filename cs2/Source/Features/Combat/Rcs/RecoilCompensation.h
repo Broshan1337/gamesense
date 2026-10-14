@@ -10,46 +10,27 @@
 
 namespace recoil_compensation
 {
-struct Kick { float pitch{}, yaw{}; };
-
-class CommandState {
-public:
-    void reset() noexcept { *this = {}; }
-    [[nodiscard]] bool active() const noexcept { return haveCommand; }
-    [[nodiscard]] Kick correction(int sequence, float pitchKick, float yawKick) noexcept
-    {
-        if (!haveCommand || sequence < lastSequence)
-            reset();
-        if (!haveCommand || sequence != lastSequence) {
-            previous = current;
-            lastSequence = sequence;
-            haveCommand = true;
-        }
-        // A repeated CreateMove rebuilds this command's base angles. Reuse its
-        // previous-command baseline instead of consuming the correction twice.
-        current = {pitchKick, yawKick};
-        return {current.pitch - previous.pitch, current.yaw - previous.yaw};
-    }
-private:
-    bool haveCommand{};
-    int lastSequence{};
-    Kick previous{}, current{};
-};
-
-inline void apply(cs2::CUserCmd* cmd, float pitchKick, float yawKick) noexcept
+// RCS (2026-10-13 rewrite, friend report "screen moves down, bullets not in one
+// point"): shots are reconstructed from the input-history ENTRY angles (the
+// FVA/silent-aim channel - SubtickShotWriter::writeShotIntoEntry is the idiom),
+// so the compensation goes THERE, subtracting the FULL current aim punch from
+// every entry's angles. The camera never comes into it.
+//
+// The old version wrote the cmd BASE angles (which pin the camera - the
+// 2026-10-10 anti-aim lesson: base writes are the camera) with the per-command
+// punch DELTA, which sank the visible view by the accumulated punch ("moves
+// the screen down") and left the shots one punch-step off the crosshair; its
+// entry writes reused the same delta, so the reconstructed shot landed at
+// view + punch[N-1] - a scattered arc, not one point.
+//
+// Entry angles are absolute real-view samples rebuilt from the mouse every
+// frame, so a per-frame FULL punch subtraction is idempotent (no accumulation):
+// reconstructed eye = view - punch, server shot = (view - punch) + punch =
+// view - every bullet lands at the crosshair, camera stays at the real view.
+inline void apply(cs2::CUserCmd* cmd, float punchPitch, float punchYaw) noexcept
 {
-    const UserCmd userCmd{cmd};
-    const auto pitch = userCmd.viewPitch();
-    const auto yaw = userCmd.viewYaw();
-    if (!pitch.hasValue() || !yaw.hasValue() || !__builtin_isfinite(pitch.value())
-        || !__builtin_isfinite(yaw.value()) || !__builtin_isfinite(pitchKick) || !__builtin_isfinite(yawKick))
+    if (!__builtin_isfinite(punchPitch) || !__builtin_isfinite(punchYaw))
         return;
-
-    movement_fix::setViewAngles(userCmd, std::clamp(pitch.value() - pitchKick, -89.0f, 89.0f),
-                               trig::normalizeDegrees(yaw.value() - yawKick));
-
-    // Firing consumes input_history, not just the base command's angles. Preserve each
-    // sample's mouse movement while applying the same correction to its shot angle.
     const InputHistory history{cmd};
     if (!history.looksValid())
         return;
@@ -65,8 +46,8 @@ inline void apply(cs2::CUserCmd* cmd, float pitchKick, float yawKick) noexcept
         std::memcpy(&sampleYaw, angles + Angles::kYawOffset, sizeof(sampleYaw));
         if (!__builtin_isfinite(samplePitch) || !__builtin_isfinite(sampleYaw))
             continue;
-        samplePitch = std::clamp(samplePitch - pitchKick, -89.0f, 89.0f);
-        sampleYaw = trig::normalizeDegrees(sampleYaw - yawKick);
+        samplePitch = std::clamp(samplePitch - punchPitch, -89.0f, 89.0f);
+        sampleYaw = trig::normalizeDegrees(sampleYaw - punchYaw);
         std::memcpy(angles + Angles::kPitchOffset, &samplePitch, sizeof(samplePitch));
         std::memcpy(angles + Angles::kYawOffset, &sampleYaw, sizeof(sampleYaw));
         std::uint32_t bits{};

@@ -65,7 +65,11 @@ public:
         // Issue #4 round 4: [bhop] breadcrumbs at every gate so the next
         // in-game run names the failing one ("only some ticks" needs data).
         VerifyConsole::write(4.0f, "bhop", "cm held=%d", jumpHeld ? 1 : 0);
-        const bool strafeEnabled = GET_CONFIG_VAR(AutoStrafeEnabled) || GET_CONFIG_VAR(TestStraferEnabled);
+        // Auto-strafe rides the bhop feature (2026-10-13 friend report "auto
+        // strafe works even when the feature is off"): Bunnyhop off = the whole
+        // automation card's air-control off, Auto Strafe no longer self-runs.
+        const bool strafeEnabled = GET_CONFIG_VAR(BunnyhopEnabled) && jumpHeld
+            && (GET_CONFIG_VAR(AutoStrafeEnabled) || GET_CONFIG_VAR(TestStraferEnabled));
         const bool bhopEnabled = GET_CONFIG_VAR(BunnyhopEnabled) && jumpHeld;
         if (!strafeEnabled && !bhopEnabled)
             return reset();

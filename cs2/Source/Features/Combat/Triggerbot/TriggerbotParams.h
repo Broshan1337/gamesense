@@ -57,8 +57,14 @@ constexpr auto kMinDamage = RangeConstrainedVariableParams<std::uint8_t>{.min = 
 
 constexpr auto kBacktrackTicks = RangeConstrainedVariableParams<std::uint8_t>{.min = 1, .max = 16, .def = 8};
 
+// How long the crosshair must STAY on a target before the reaction delay even
+// begins (friend request): arm-timer + AimMs, then the shot delay rolls.
+constexpr auto kAimTimeMs = RangeConstrainedVariableParams<std::uint16_t>{.min = 0, .max = 1000, .def = 60};
 
-
+// Pause between SHOTS at the same target (friend request "add a delay for
+// pistols like Dual Berettas"): Rapid Refire keeps clicking while held on
+// target, this spaces the clicks out. First shot is unaffected.
+constexpr auto kRefireDelayMs = RangeConstrainedVariableParams<std::uint8_t>{.min = 0, .max = 250, .def = 0};
 
 // Default = middle click, per the activation rework: the key is rebindable,
 // Activation decides between Hold (default) and Toggle.

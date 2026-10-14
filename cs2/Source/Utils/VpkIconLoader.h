@@ -183,6 +183,23 @@ inline void loadVpkDir() noexcept
 
 inline int iconSlotCursor = 0;
 
+// Amortized icon loading (2026-10-13 FPS report): a card/category switch stages up
+// to ~30 new icons and the old code loaded them ALL in the switch frame on the
+// render thread (open + pread + nsvgParse + rasterize each) - a visible FPS drop
+// on every switch, in-menu and in-match. At most one NEW icon loads per 16 ms
+// window; icons pop in over the following frames, which the async texture-upload
+// path already handles (descriptor arrives via query() on a later frame).
+// ponytail: the one-time ~70MB dir-tree read (loadVpkDir) still lands on a single
+// frame - the first inventory icon of a session stalls once; upgrade path is a
+// loader worker thread if that first-switch stall ever matters.
+[[nodiscard]] inline std::int64_t nowMs() noexcept
+{
+    timespec ts{};
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return static_cast<std::int64_t>(ts.tv_sec) * 1000 + ts.tv_nsec / 1'000'000;
+}
+inline std::int64_t lastLoadMs = -16'000;
+
 } // namespace detail
 
 // Rasterize one equipment icon by name into a Vulkan texture slot; returns the descriptor
@@ -217,6 +234,13 @@ inline static Slot slots[VulkanHook::lua_texture::kMaxIconSlots];
         return nullptr;
 
     if (!slot->requested.load(std::memory_order_acquire)) {
+        // Budget: skip claiming this frame if a load already ran inside the
+        // 16 ms window - the name is still unclaimed, so the next frame
+        // resolves it again and takes its turn.
+        const std::int64_t now = detail::nowMs();
+        if (now - detail::lastLoadMs < 16)
+            return nullptr;
+        detail::lastLoadMs = now;
         // Claim the slot, load + rasterize once (async upload completes over the next
         // frames - the descriptor arrives via query() below).
         std::snprintf(slot->name, sizeof(slot->name), "%s", name);

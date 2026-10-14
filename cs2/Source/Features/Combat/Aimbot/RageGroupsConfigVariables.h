@@ -66,8 +66,10 @@ using Enabled = GroupBoolVariable<Group, EnabledField, true>;
 template <typename Group>
 using OverrideEnabled = GroupBoolVariable<Group, OverrideEnabledField, false>;
 
+// Multipoint defaults ON (2026-10-13 friend report "scout has no multipoint at
+// all"): off-by-default left every group locked to the single hitbox center.
 template <typename Group>
-using Multipoint = GroupBoolVariable<Group, MultipointField, false>;
+using Multipoint = GroupBoolVariable<Group, MultipointField, true>;
 
 template <typename Group>
 using PointScale = GroupRangeVariable<Group, PointScaleField, std::uint8_t, 0, 100, 85>;

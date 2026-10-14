@@ -20,7 +20,8 @@ public:
 
     void onCreateMove(cs2::CUserCmd* cmd) const noexcept
     {
-        if (!GET_CONFIG_VAR(TestStraferEnabled) || !UserCmd{cmd})
+        // Rides the bhop feature (2026-10-13): Bunnyhop off = diagnostics off too.
+        if (!GET_CONFIG_VAR(TestStraferEnabled) || !GET_CONFIG_VAR(BunnyhopEnabled) || !UserCmd{cmd})
             return onUnload();
         auto&& pawn = hookContext.localPlayerController().pawn().template as<PlayerPawn>();
         if (!pawn || pawn.health().valueOr(0) <= 0)

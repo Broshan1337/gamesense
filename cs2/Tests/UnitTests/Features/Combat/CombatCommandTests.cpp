@@ -39,16 +39,6 @@ struct CommandFixture {
 };
 }
 
-TEST(RecoilCompensationTest, CompensatesEveryFreshCommandEvenWhenPunchIsConstant)
-{
-    for (int i = 0; i < 3; ++i) {
-        CommandFixture command;
-        recoil_compensation::apply(command.handle(), 4.0f, -3.0f);
-        EXPECT_FLOAT_EQ(UserCmd{command.handle()}.viewPitch().value(), 16.0f);
-        EXPECT_FLOAT_EQ(UserCmd{command.handle()}.viewYaw().value(), -178.0f);
-    }
-}
-
 TEST(RecoilCompensationTest, CorrectsShotHistoryAndPreservesMouseMotion)
 {
     CommandFixture command;
@@ -61,21 +51,15 @@ TEST(RecoilCompensationTest, CorrectsShotHistoryAndPreservesMouseMotion)
     EXPECT_EQ(CommandFixture::read<std::uint32_t>(command.entries[1], 16) & 1, 1u);
 }
 
-TEST(RecoilCompensationTest, RejectsNonFinitePunchAndClampsPitch)
+TEST(RecoilCompensationTest, RejectsNonFinitePunchAndClampsEntryPitch)
 {
     CommandFixture command;
+    command.history();
     recoil_compensation::apply(command.handle(), std::numeric_limits<float>::quiet_NaN(), 0);
+    EXPECT_FLOAT_EQ(CommandFixture::read<float>(command.samples[0], 24), 20.0f);
     EXPECT_FLOAT_EQ(UserCmd{command.handle()}.viewPitch().value(), 20.0f);
     recoil_compensation::apply(command.handle(), 200, 0);
-    EXPECT_FLOAT_EQ(UserCmd{command.handle()}.viewPitch().value(), -89.0f);
-}
-
-TEST(RecoilCompensationTest, MalformedHistoryDoesNotPreventBaseCorrection)
-{
-    CommandFixture command;
-    CommandFixture::write(command.cmd, cs2::CUserCmd::InputHistory::kCurrentSizeOffset, 1000);
-    recoil_compensation::apply(command.handle(), 4, 0);
-    EXPECT_FLOAT_EQ(UserCmd{command.handle()}.viewPitch().value(), 16.0f);
+    EXPECT_FLOAT_EQ(CommandFixture::read<float>(command.samples[0], 24), -89.0f);
 }
 
 TEST(AttackCommandTest, EveryRequestedCommandWritesAllFiringBanks)
@@ -103,36 +87,44 @@ TEST(AttackCommandTest, WritesNativeBanksBeforeButtonProtobufIsAllocated)
     EXPECT_EQ(CommandFixture::read<std::uint64_t>(command.cmd, 104) & 1, 1u);
 }
 
-TEST(RecoilCommandStateTest, ConstantKickDoesNotAccumulateAcrossCommands)
+TEST(RecoilApplyTest, FullPunchSubtractedFromEveryEntry)
 {
-    recoil_compensation::CommandState state;
+    // The 2026-10-13 rewrite: the compensation rides the input-history ENTRY
+    // angles (the shot reconstruction surface), subtracting the FULL current
+    // punch - not the cmd BASE angles (the camera) and not a per-command delta.
     CommandFixture command;
-    UserCmd{command.handle()}.setViewAngles(3.0f, 0.0f);
-    for (int sequence = 1; sequence <= 100; ++sequence) {
-        const auto delta = state.correction(sequence, -2.0f, 0.5f);
-        recoil_compensation::apply(command.handle(), delta.pitch, delta.yaw);
+    command.history();
+    recoil_compensation::apply(command.handle(), -2.0f, 1.0f);
+    EXPECT_FLOAT_EQ(CommandFixture::read<float>(command.samples[0], 24), 22.0f);
+    EXPECT_FLOAT_EQ(CommandFixture::read<float>(command.samples[0], 28), 178.0f);
+    EXPECT_FLOAT_EQ(CommandFixture::read<float>(command.samples[1], 24), 23.0f);
+    EXPECT_FLOAT_EQ(CommandFixture::read<float>(command.samples[1], 28), 179.0f);
+}
+
+TEST(RecoilApplyTest, CameraBaseAnglesUntouched)
+{
+    // The friend report "it moves the screen down": the camera IS the cmd base
+    // angles - compensation must never touch them.
+    CommandFixture command;
+    command.history();
+    recoil_compensation::apply(command.handle(), -2.0f, 1.0f);
+    EXPECT_FLOAT_EQ(UserCmd{command.handle()}.viewPitch().value(), 20.0f);
+    EXPECT_FLOAT_EQ(UserCmd{command.handle()}.viewYaw().value(), 179.0f);
+}
+
+TEST(RecoilApplyTest, PerFrameRebuildKeepsConstantKickFromAccumulating)
+{
+    // The game rebuilds the command (base + entries) from the player's real
+    // input every frame, and CreateMove runs every frame on the in-progress
+    // command - so apply() always sees FRESH entry angles. Model the rebuild
+    // between applies: a constant punch must not accumulate across frames
+    // (the old delta math was the accumulating kind).
+    CommandFixture command;
+    for (int frame = 0; frame < 5; ++frame) {
+        command.history();
+        recoil_compensation::apply(command.handle(), -2.0f, 1.0f);
     }
-    EXPECT_FLOAT_EQ(UserCmd{command.handle()}.viewPitch().value(), 5.0f);
-    EXPECT_NEAR(UserCmd{command.handle()}.viewYaw().value(), -0.5f, 0.00001f);
-}
-
-TEST(RecoilCommandStateTest, RebuiltCommandUsesTheSamePreviousCommandBaseline)
-{
-    recoil_compensation::CommandState state;
-    EXPECT_FLOAT_EQ(state.correction(10, -2, 1).pitch, -2);
-    EXPECT_FLOAT_EQ(state.correction(10, -2, 1).pitch, -2);
-    EXPECT_FLOAT_EQ(state.correction(11, -3, 1).pitch, -1);
-    EXPECT_FLOAT_EQ(state.correction(11, -4, 1).pitch, -2);
-    EXPECT_FLOAT_EQ(state.correction(12, -4, 1).pitch, 0);
-}
-
-TEST(RecoilCommandStateTest, RecoveryUnwindsCorrectionAndResetStartsANewPawn)
-{
-    recoil_compensation::CommandState state;
-    EXPECT_FLOAT_EQ(state.correction(1, -2, 0).pitch, -2);
-    EXPECT_FLOAT_EQ(state.correction(2, 0, 0).pitch, 2);
-    state.reset();
-    EXPECT_FALSE(state.active());
-    EXPECT_FLOAT_EQ(state.correction(100, -1, 0).pitch, -1);
-    EXPECT_FLOAT_EQ(state.correction(1, -1, 0).pitch, -1);
+    EXPECT_FLOAT_EQ(CommandFixture::read<float>(command.samples[0], 24), 22.0f);
+    EXPECT_FLOAT_EQ(CommandFixture::read<float>(command.samples[0], 28), 178.0f);
+    EXPECT_FLOAT_EQ(CommandFixture::read<float>(command.samples[1], 24), 23.0f);
 }

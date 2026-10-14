@@ -101,24 +101,25 @@ public:
             if (moveType.hasValue() && moveType.value() == kMoveTypeLadder) {
                 const auto forward = userCmd.forwardMove();
                 const auto left = userCmd.leftMove();
-                const auto viewYaw = userCmd.viewYaw();
-                const auto viewPitch = userCmd.viewPitch();
+                // Engine view angles (the CAMERA, read straight off CCSGOInput at
+                // kViewAnglesOffset), NOT the cmd's angles: the cmd viewangles are
+                // user-controllable state, and reading them here after we overwrite
+                // them fed our own writes back into the goingUp/yaw math every tick -
+                // a self-feedback loop that spun the camera +/-90 deg/tick and pinned
+                // pitch 89 (the "view spins/glitches on ladder" report), while the
+                // resulting scrambled move direction never ladder-accelerated at all.
+                const auto engineAngles = engineViewAngles();
                 if (forward.hasValue() && left.hasValue() && (forward.value() != 0.0f || left.value() != 0.0f)
-                    && viewYaw.hasValue() && viewPitch.hasValue()) {
+                    && engineAngles.hasValue()) {
 
-                    
-                    
-                    bool goingUp = false;
-                    if (forward.value() > 0.01f || forward.value() < -0.01f)
-                        goingUp = forward.value() > 0.0f;
-                    else
-                        goingUp = viewPitch.value() < 0.0f;
+                    const bool goingUp = forward.value() > 0.01f || forward.value() < -0.01f
+                        ? forward.value() > 0.0f
+                        : engineAngles.value().x < 0.0f;
 
-                    
-                    
-                    
-                    
-                    float modifiedYaw = viewYaw.value() + (goingUp ? -90.0f : 90.0f);
+                    // Velocity's shape: pitch 89 + yaw offset 90 deg from the camera,
+                    // forced back + side move - the ladder climbs on the SIDE scalars
+                    // (pitch-89 trick), this is not our invention.
+                    float modifiedYaw = engineAngles.value().y + (goingUp ? -90.0f : 90.0f);
                     while (modifiedYaw > 180.0f)
                         modifiedYaw -= 360.0f;
                     while (modifiedYaw < -180.0f)
@@ -244,9 +245,13 @@ public:
                                     }
 
                                     if (pushBack) {
-                                        pendingForward = std::clamp(trig::cosine(pushbackRotation) * 0.3f, -1.0f, 1.0f);
-                                        pendingLeft = std::clamp(trig::sine(pushbackRotation) * -0.3f, -1.0f, 1.0f);
-                                        
+                                        // 2026-10-13 friend report "edgestop broken": the old
+                                        // 0.3 magnitude sat INSIDE the game's ~0.5/axis move-scalar
+                                        // dead zone (the SlowWalk saga) - the counter-move produced
+                                        // no wish direction at all, so the player coasted over the
+                                        // edge. 0.55 clears the dead zone (still a gentle push).
+                                        pendingForward = std::clamp(trig::cosine(pushbackRotation) * 0.55f, -1.0f, 1.0f);
+                                        pendingLeft = std::clamp(trig::sine(pushbackRotation) * -0.55f, -1.0f, 1.0f);
                                         pendingBackButton = pendingForward < 0.0f;
                                         pendingForwardButton = pendingForward > 0.0f;
                                         pendingLeftButton = pendingLeft > 0.0f;
@@ -257,6 +262,14 @@ public:
                                             return;
                                     }
                                 }
+
+                                // Stationary at the edge (friend report "can't walk
+                                // afterwards"): the old path emitted a unit-magnitude
+                                // move derived from atan2(0,0)=0 and cleared the real
+                                // buttons - a phantom forced walk. Nearly stopped means
+                                // nothing left to brake: emit nothing, keys stay real.
+                                if (speed2d <= 5.0f)
+                                    return;
 
                                 pendingForceMove = true;
                                 pendingClearMoveButtons = true;
@@ -370,12 +383,21 @@ public:
     void onUnload() const noexcept
     {
         reset();
+        inputObject = nullptr;
     }
 
-    
-    
-    
+    // Capture the engine CCSGOInput object from the hook thisptr (every
+    // CreateMove / WriteMoveCrc frame) - engineViewAngles() reads the camera
+    // state off it.
+    void captureInput(cs2::CCSGOInput* input) const noexcept
+    {
+        inputObject = input;
+    }
+
+
+
     inline static bool jumpBugActive{false};
+    inline static cs2::CCSGOInput* inputObject{nullptr};
 
 private:
     void reset() const noexcept
@@ -589,6 +611,21 @@ private:
         std::uint8_t moveType{};
         std::memcpy(&moveType, reinterpret_cast<const std::byte*>(static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity())) + *offset, sizeof(moveType));
         return moveType;
+    }
+
+    // The ENGINE's view angles (the camera), captured from the CCSGOInput object
+    // on every CreateMove. Unlike the cmd's viewangles these are never written by
+    // us, so nothing can feed our own output back into feature math.
+    [[nodiscard]] Optional<cs2::Vector> engineViewAngles() const noexcept
+    {
+        if (!inputObject)
+            return {};
+        cs2::Vector angles{};
+        std::memcpy(&angles, reinterpret_cast<const std::byte*>(inputObject)
+            + cs2::CCSGOInput::kViewAnglesOffset, sizeof(angles));
+        if (!__builtin_isfinite(angles.x) || !__builtin_isfinite(angles.y) || !__builtin_isfinite(angles.z))
+            return {};
+        return angles;
     }
 
     template <typename ConVarType>

@@ -30,6 +30,11 @@ CONFIG_VARIABLE_RANGE(BacktrackTicks, aimbot_params::kBacktrackTicks);
 CONFIG_VARIABLE(WallCheck, bool, true);
 CONFIG_VARIABLE(Autowall, bool, false);
 
+// Stand down while smoked/flashed (friend request 2026-10-13): don't shoot
+// through a smoke volume or while blind - the target is invisible to you.
+CONFIG_VARIABLE(IgnoreSmoke, bool, true);
+CONFIG_VARIABLE(IgnoreFlash, bool, true);
+
 CONFIG_VARIABLE(SpreadCircleFov, bool, false);
 
 CONFIG_VARIABLE(AutoStop, bool, false);

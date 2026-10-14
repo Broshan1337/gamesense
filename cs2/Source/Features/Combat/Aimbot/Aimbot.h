@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -8,6 +9,7 @@
 #include <CS2/Classes/CUserCmd.h>
 #include <CS2/Classes/Entities/C_BaseEntity.h>
 #include <CS2/Classes/Entities/C_CSPlayerPawn.h>
+#include <CS2/Classes/Entities/GrenadeProjectiles.h>
 #include <CS2/Classes/Vector.h>
 #include <Features/Combat/AimTarget.h>
 #include <Features/Combat/AutoStop.h>
@@ -112,6 +114,15 @@ public:
             return;
         }
 
+        // Don't shoot while flashed (friend request 2026-10-13): the target is
+        // invisible to the player; stand the ragebot down until vision clears.
+        if (GET_CONFIG_VAR(aimbot_vars::IgnoreFlash) && localPawn.getRemainingFlashBangTime() > 0.15f) {
+            VerifyConsole::write(4.0f, "rage", "gate flashed (%.1f s left)", localPawn.getRemainingFlashBangTime());
+            lastTargetHandleValue = 0;
+            shotWait.reset();
+            return;
+        }
+
         auto aimTarget = hookContext.template make<AimTarget>();
         const auto eye = aimTarget.eyePosition(localPawn);
         const auto currentPitch = userCmd.viewPitch();
@@ -138,6 +149,10 @@ public:
         Optional<typename AimTarget<HookContext>::Target> refinedCandidate;
         const auto aim = aimTarget.acquire(eye.value(), currentPitch.value(), currentYaw.value(), maxFov,
             hitboxFlags(), [&](const auto& candidate) {
+                // Don't shoot into smoke (friend request 2026-10-13): reject
+                // candidates whose sight line crosses an active smoke volume.
+                if (GET_CONFIG_VAR(aimbot_vars::IgnoreSmoke) && linePassesThroughSmoke(eye.value(), candidate.aimPoint))
+                    return false;
                 if (passesVisibility(localPawn, eye.value(), candidate)) return true;
                 if (!activeGroup.multipoint || !candidate.shape.valid) return false;
                 const auto point = refineMultipoint(localPawn, eye.value(), candidate);
@@ -397,6 +412,51 @@ public:
     [[nodiscard]] bool duckPeekEval(auto&& localPawn) const noexcept
     {
         return GET_CONFIG_VAR(aimbot_vars::DuckPeek) && localPawn.isOnGround() == true;
+    }
+
+    // Geometric smoke test (friend request 2026-10-13): does the sight line
+    // from->to cross an active (popped) smoke volume? Smoke spheres are the
+    // standard approximation - CS2's own GetSmokeDensityInLine is the exact
+    // route but needs a fresh pattern (not forged yet).
+    // ponytail: sphere radius 144 approximates the volume; a glancing line
+    // through the volume's edge corner can pass a real smoke and miss the
+    // sphere (or vice versa) - upgrade path is forging the engine call.
+    [[nodiscard]] bool linePassesThroughSmoke(const cs2::Vector& from, const cs2::Vector& to) const noexcept
+    {
+        constexpr float kSmokeRadius = 144.0f;
+        const cs2::Vector segment{to.x - from.x, to.y - from.y, to.z - from.z};
+        const float segmentLengthSq = segment.x * segment.x + segment.y * segment.y + segment.z * segment.z;
+        if (segmentLengthSq <= 0.0f)
+            return false;
+
+        bool through = false;
+        hookContext.template make<EntitySystem>().forEachNetworkableEntityIdentity([&](const auto& identity) {
+            if (through)
+                return;
+            auto&& baseEntity = hookContext.template make<BaseEntity>(static_cast<cs2::C_BaseEntity*>(identity.entity));
+            if (!baseEntity.classify().template is<cs2::C_SmokeGrenadeProjectile>())
+                return;
+            const auto didOffset = hookContext.schemaSystem().getFieldOffset("C_SmokeGrenadeProjectile", "m_bDidSmokeEffect");
+            if (!didOffset.has_value() || *didOffset <= 0)
+                return;
+            bool didSmoke = false;
+            std::memcpy(&didSmoke, reinterpret_cast<const std::byte*>(identity.entity) + *didOffset, sizeof(didSmoke));
+            if (!didSmoke)
+                return;
+            const auto origin = baseEntity.absOrigin();
+            if (!origin.hasValue())
+                return;
+            // Closest point on the from->to segment to the smoke center.
+            const cs2::Vector delta{origin.value().x - from.x, origin.value().y - from.y, origin.value().z - from.z};
+            const float t = std::clamp((delta.x * segment.x + delta.y * segment.y + delta.z * segment.z) / segmentLengthSq, 0.0f, 1.0f);
+            const cs2::Vector closest{from.x + segment.x * t, from.y + segment.y * t, from.z + segment.z * t};
+            const float dx = origin.value().x - closest.x;
+            const float dy = origin.value().y - closest.y;
+            const float dz = origin.value().z - closest.z;
+            if (dx * dx + dy * dy + dz * dz <= kSmokeRadius * kSmokeRadius)
+                through = true;
+        });
+        return through;
     }
 
 private:

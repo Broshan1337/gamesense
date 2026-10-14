@@ -769,8 +769,6 @@ bool GameEventManagerHook_onFireEventClientSide(cs2::IGameEventManager2* thisptr
 
 void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCmd* cmd) noexcept
 {
-    
-    
     {
         static std::uint32_t createMoveCalls = 0;
         static std::int64_t lastLogNs = 0;
@@ -783,10 +781,10 @@ void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCm
             gui_log::write("[chaindiag] createmove alive, calls=%u slot=%d", createMoveCalls, slot);
         }
     }
-    
-    
-    
-    
+
+
+
+
     CrashLogger::trace(0x370);
     const bool shuttingDown = HookQuiesce::isShuttingDown();
     if (shuttingDown && !HookContext<GlobalContext>::isGlobalContextComplete())
@@ -794,6 +792,9 @@ void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCm
 
     HookQuiesce::InFlight flight;
     HookContext<GlobalContext> hookContext;
+    // The engine input object feeds Movement::engineViewAngles() (camera state,
+    // FastLadder math) - captured from the hook thisptr every frame.
+    hookContext.template make<Movement>().captureInput(thisptr);
     hookContext.hooks().csgoInputHook.getOriginalCreateMove()(thisptr, slot, cmd);
     if (shuttingDown)
         return;
@@ -948,6 +949,7 @@ std::uint64_t CSGOInputHook_onWriteMoveCrc(cs2::CCSGOInput* thisptr, cs2::CUserC
 
     HookQuiesce::InFlight flight;
     HookContext<GlobalContext> hookContext;
+    hookContext.template make<Movement>().captureInput(thisptr);
     if (!shuttingDown && !hookContext.template make<PanicKey>().isActive()) {
     hookContext.template make<Blockbot>().onWriteMoveCrc(cmd);
     

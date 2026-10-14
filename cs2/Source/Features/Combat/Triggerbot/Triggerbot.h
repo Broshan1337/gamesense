@@ -100,6 +100,13 @@ public:
         triggerbot_state::lastKeyWasDown = keyDown;
 
         if (!enabled || !(toggleMode ? triggerbot_state::latched : keyDown)) {
+            // Breadcrumb (friend report "toggle ON on target, nothing happens"):
+            // HOLD mode fires only while the key is DOWN (default middle click),
+            // TOGGLE latches on press. This line names which one blocked.
+            if (enabled)
+                VerifyConsole::write(4.0f, "trig", "gate activation: mode=%s keyDown=%d latched=%d",
+                    toggleMode ? "toggle" : "hold", keyDown ? 1 : 0,
+                    triggerbot_state::latched ? 1 : 0);
             disarm();
             return;
         }
@@ -131,6 +138,10 @@ public:
         } else {
             const auto scanned = scanTarget(cmd);
             if (!scanned.hasValue()) {
+                // Breadcrumb: name the crosshair index so "on target but no
+                // fire" reports show whether the game trace even sees it.
+                VerifyConsole::write(4.0f, "trig", "no target: crosshair idx=%d (scans off)",
+                    crosshairEntityIndex(hookContext.activeLocalPlayerPawn()).valueOr(-99));
                 disarm();
                 return;
             }
@@ -142,50 +153,84 @@ public:
         if (!armed || armedTarget != rawTarget) {
             armed = true;
             armedTarget = rawTarget;
+            firedAtTarget = false;
+            // Aim time (friend request): the crosshair must HOLD on this target
+            // for AimTimeMs before the reaction delay even begins to roll.
+            const float aimTime = static_cast<float>(GET_CONFIG_VAR(triggerbot_vars::AimTimeMs)) / 1000.0f;
             const float delay = delaySeconds();
-            fireAtTime = now.value() + delay;
+            fireAtTime = now.value() + humanizeDelay(aimTime + delay);
             return;
         }
 
         if (now.value() < fireAtTime)
             return;
 
-        
-        
-        
-        
-        if (!wouldShotLand(target))
-            return;
-        if (!passesMaxAccuracyGate())
-            return;
+        // Rapid refire (friend request "automatic pistols"): the FIRST shot at a
+        // target runs the full gates; shots after it just click - semi-autos keep
+        // firing at weapon speed while held on target, no per-shot inaccuracy
+        // stall (the "slow / sometimes not shooting" report).
+        if (!GET_CONFIG_VAR(triggerbot_vars::AutoRefire) || !firedAtTarget) {
+            if (!wouldShotLand(target)) {
+                VerifyConsole::write(4.0f, "trig", "gate wouldShotLand");
+                return;
+            }
+            if (!passesMaxAccuracyGate()) {
+                VerifyConsole::write(4.0f, "trig", "gate maxAccuracy");
+                return;
+            }
+        }
         if (selection.fromBacktrack) {
             // A backtrack ghost: the direct trace already failed by construction, so the
             // visibility/hitchance/seeded gates on the LIVE pose are the wrong question -
-            // the record's own hitgroup carries the head-only decision and the arm/delay
+            // the record's own hitgroup carries the bone decision and the arm/delay
             // logic above already re-armed per target.
-            if (GET_CONFIG_VAR(triggerbot_vars::HeadOnly) && selection.hitgroup != 1)
+            if (!hitgroupSelected(selection.hitgroup)) {
+                VerifyConsole::write(4.0f, "trig", "gate backtrack hitgroup=%d", selection.hitgroup);
                 return;
+            }
         } else if (selection.throughWall) {
             // A through-wall target: the scan already damage-checked the bone point; this
             // re-checks the actual fire direction (the crosshair) penetrates for enough
             // damage - the shot the spread-compensated writer will actually send.
-            if (!passesVisibility(target, cmd))
+            if (!passesVisibility(target, cmd)) {
+                VerifyConsole::write(4.0f, "trig", "gate throughwall visibility");
                 return;
-            if (GET_CONFIG_VAR(triggerbot_vars::HeadOnly) && selection.hitgroup != 1)
+            }
+            if (!hitgroupSelected(selection.hitgroup)) {
+                VerifyConsole::write(4.0f, "trig", "gate throughwall hitgroup=%d", selection.hitgroup);
                 return;
+            }
         } else {
-            if (!passesVisibility(target, cmd))
+            if (!passesVisibility(target, cmd)) {
+                VerifyConsole::write(4.0f, "trig", "gate visibility (wall=%d autowall=%d)",
+                    GET_CONFIG_VAR(triggerbot_vars::WallCheck) ? 1 : 0,
+                    GET_CONFIG_VAR(triggerbot_vars::Autowall) ? 1 : 0);
                 return;
-            if (!passesAimGates(target, cmd))
+            }
+            if (!passesAimGates(target, cmd)) {
+                VerifyConsole::write(4.0f, "trig", "gate aim (bones h=%d c=%d s=%d hc=%d)",
+                    GET_CONFIG_VAR(triggerbot_vars::HitHead) ? 1 : 0,
+                    GET_CONFIG_VAR(triggerbot_vars::HitChest) ? 1 : 0,
+                    GET_CONFIG_VAR(triggerbot_vars::HitStomach) ? 1 : 0,
+                    static_cast<int>(GET_CONFIG_VAR(triggerbot_vars::Hitchance)));
                 return;
-            if (!passesSeededFire(target, cmd))
+            }
+            if (!passesSeededFire(target, cmd)) {
+                VerifyConsole::write(4.0f, "trig", "gate seeded");
                 return;
+            }
         }
 
-        
-        
+        // The shot goes out.
         if (!hookContext.template make<AttackCommand>().press(cmd))
             return;
+        firedAtTarget = true;
+        // Refire pause (friend request "delay for pistols like Dual Berettas"):
+        // space subsequent shots at the same target; the first shot above ran
+        // after AimTime + reaction delay, this only paces the follow-ups.
+        const float refireDelay = static_cast<float>(GET_CONFIG_VAR(triggerbot_vars::RefireDelayMs)) / 1000.0f;
+        if (refireDelay > 0.0f)
+            fireAtTime = now.value() + humanizeDelay(refireDelay);
 
         
         
@@ -285,7 +330,6 @@ private:
 
         const int thickness = GET_CONFIG_VAR(triggerbot_vars::Autowall) ? static_cast<int>(GET_CONFIG_VAR(triggerbot_vars::AutowallMaxThickness)) : 8;
         const float minDamage = static_cast<float>(GET_CONFIG_VAR(triggerbot_vars::MinDamage));
-        const bool headOnly = GET_CONFIG_VAR(triggerbot_vars::HeadOnly);
 
         void* const skip = static_cast<cs2::C_BaseEntity*>(localPawn.baseEntity());
         Optional<ScanTarget> best;
@@ -311,7 +355,7 @@ private:
                 const auto bone = node.bonePosition(kBones[b]);
                 if (!bone.hasValue())
                     continue;
-                if (headOnly && kHitgroups[b] != 1)
+                if (!hitgroupSelected(kHitgroups[b]))
                     continue;
                 const auto angles = shot_geometry::anglesTo(eye.value(), bone.value());
                 const float dPitch = angles.pitch - pitch.value();
@@ -353,9 +397,13 @@ private:
         if (!eye.hasValue() || !pitch.hasValue() || !yaw.hasValue())
             return {};
 
-        const bool headOnly = GET_CONFIG_VAR(triggerbot_vars::HeadOnly);
         const int maxTicks = static_cast<int>(GET_CONFIG_VAR(triggerbot_vars::BacktrackTicks));
         const cs2::Vector direction = shot_geometry::angleVectors(pitch.value(), yaw.value()).forward;
+
+        // Per-bone selection forwarded to the record scan (head/chest/stomach).
+        const bool wantHead = GET_CONFIG_VAR(triggerbot_vars::HitHead);
+        const bool wantChest = GET_CONFIG_VAR(triggerbot_vars::HitChest);
+        const bool wantStomach = GET_CONFIG_VAR(triggerbot_vars::HitStomach);
 
         auto&& lagcomp = hookContext.template make<Lagcomp>();
         Optional<ScanTarget> best;
@@ -374,10 +422,10 @@ private:
             // the crosshair ray actually crosses counts (the reference's ray-vs-capsule,
             // approximated at bone-sphere granularity with the record's own hitgroup).
             const auto record = lagcomp.bestRecord(static_cast<cs2::C_BaseEntity*>(enemy.baseEntity()), eye.value(), pitch.value(), yaw.value(),
-                                                   !headOnly, !headOnly, !headOnly, false, false, maxTicks);
+                                                   wantHead, wantChest, wantStomach, false, false, maxTicks);
             if (!record.hasValue())
                 return;
-            if (headOnly && record.value().hitgroup != 1)
+            if (!hitgroupSelected(record.value().hitgroup))
                 return;
             const auto radius = record.value().hitgroup == 1 ? kHeadRadius : kBodyRadius;
             if (!shot_geometry::rayReachesSphere(eye.value(), direction, record.value().aimPoint, radius))
@@ -484,17 +532,15 @@ private:
     
     [[nodiscard]] bool passesAimGates(auto&& target, cs2::CUserCmd* cmd) const noexcept
     {
-        const bool headOnly = GET_CONFIG_VAR(triggerbot_vars::HeadOnly);
+        const bool wantHead = GET_CONFIG_VAR(triggerbot_vars::HitHead);
+        const bool wantChest = GET_CONFIG_VAR(triggerbot_vars::HitChest);
+        const bool wantStomach = GET_CONFIG_VAR(triggerbot_vars::HitStomach);
+        const bool bodyAllowed = wantChest || wantStomach;
         int hitchanceThreshold = GET_CONFIG_VAR(triggerbot_vars::Hitchance);
 
-        
-        
-        
-        
-        
-        
-
-        if (!headOnly && hitchanceThreshold == 0)
+        // Body shots allowed and no hitchance gate: any on-target crosshair
+        // fires (the arm/delay machinery above already ran) - the old default.
+        if (bodyAllowed && hitchanceThreshold == 0)
             return true;
 
         auto&& localPawn = hookContext.activeLocalPlayerPawn();
@@ -505,10 +551,12 @@ private:
         if (!eye.hasValue() || !pitch.hasValue() || !yaw.hasValue())
             return true;
 
-        if (headOnly && !onHead(target, eye.value(), pitch.value(), yaw.value()))
+        // Head-priority path (only head selected, or a hitchance gate is set):
+        // the crosshair ray must reach one of the SELECTED bones.
+        if (!onSelectedBones(target, eye.value(), pitch.value(), yaw.value(), wantHead, wantChest, wantStomach))
             return false;
 
-        if (hitchanceThreshold > 0 && !passesHitchance(target, localPawn, eye.value(), pitch.value(), yaw.value(), headOnly, hitchanceThreshold))
+        if (hitchanceThreshold > 0 && !passesHitchance(target, localPawn, eye.value(), pitch.value(), yaw.value(), wantHead, hitchanceThreshold))
             return false;
 
         return true;
@@ -644,7 +692,7 @@ private:
         const auto impact = Autowall::evaluate(eye.value(), end, skip, targetEntity,
             {damage.value(), weapon.penetrationPower().valueOr(0.0f), rangeModifier.value(), maxRange.value()},
             limits, budget, hookContext);
-        if (!impact.hasValue() || (GET_CONFIG_VAR(triggerbot_vars::HeadOnly) && impact.value().hitgroup != 1)) return false;
+        if (!impact.hasValue() || !hitgroupSelected(impact.value().hitgroup)) return false;
         const auto armorRatio = weapon.armorRatio();
         const auto headMultiplier = weapon.headshotMultiplier();
         if (!armorRatio.hasValue() || !headMultiplier.hasValue()) return false;
@@ -656,32 +704,66 @@ private:
     }
 
 
-    [[nodiscard]] bool onHead(auto&& target, const cs2::Vector& eye, float pitch, float yaw) const noexcept
+    // Bone selection (friend request): the crosshair ray must reach one of the
+    // SELECTED bones' spheres (head/chest/stomach) - not just any hitbox on the
+    // enemy, which is what made the triggerbot feel "not shooting at the head".
+    [[nodiscard]] bool onSelectedBones(auto&& target, const cs2::Vector& eye, float pitch, float yaw,
+        bool wantHead, bool wantChest, bool wantStomach) const noexcept
     {
-        const auto head = target.baseEntity().gameSceneNode().bonePosition(kHeadBone);
-        if (!head.hasValue())
-            return false;
-
+        static constexpr int kBones[]{kHeadBone, kChestBone, kStomachBone};
+        static constexpr float kRadii[]{kHeadRadius, kBodyRadius, kBodyRadius};
+        const bool want[3] = {wantHead, wantChest, wantStomach};
         const auto forward = shot_geometry::angleVectors(pitch, yaw).forward;
-        return shot_geometry::rayReachesSphere(eye, forward, head.value(), kHeadRadius);
+        auto&& node = target.baseEntity().gameSceneNode();
+        for (int i = 0; i < 3; ++i) {
+            if (!want[i])
+                continue;
+            const auto bone = node.bonePosition(kBones[i]);
+            if (!bone.hasValue())
+                continue;
+            if (i == 0) {
+                // HEAD MULTIPOINT (friend report "head has no multipoint, only
+                // one point on the head fires"): a single sphere at the bone
+                // center is a ~12-unit window; the hitbox is bigger. Test a
+                // small cloud of spheres around the bone center so the crosshair
+                // anywhere on the head satisfies the gate.
+                static constexpr float kSpread = 3.0f;
+                static constexpr cs2::Vector kHeadOffsets[]{
+                    {0.0f, 0.0f, 0.0f}, {kSpread, 0.0f, 0.0f}, {-kSpread, 0.0f, 0.0f},
+                    {0.0f, kSpread, 0.0f}, {0.0f, -kSpread, 0.0f},
+                    {0.0f, 0.0f, kSpread}, {0.0f, 0.0f, -kSpread}};
+                for (const auto& offset : kHeadOffsets) {
+                    const cs2::Vector center{bone.value().x + offset.x, bone.value().y + offset.y, bone.value().z + offset.z};
+                    if (shot_geometry::rayReachesSphere(eye, forward, center, kHeadRadius))
+                        return true;
+                }
+            } else if (shot_geometry::rayReachesSphere(eye, forward, bone.value(), kRadii[i])) {
+                return true;
+            }
+        }
+        return false;
     }
 
     
     
     
     
-    [[nodiscard]] bool passesHitchance(auto&& target, auto&& localPawn, const cs2::Vector& eye, float pitch, float yaw, bool headOnly, int thresholdPercent) const noexcept
+    // Hitchance is evaluated against the highest-priority SELECTED bone (head
+    // if selected, else chest, else stomach) - matches which shot we'd send.
+    [[nodiscard]] bool passesHitchance(auto&& target, auto&& localPawn, const cs2::Vector& eye, float pitch, float yaw, bool wantHead, int thresholdPercent) const noexcept
     {
         auto solver = hookContext.template make<SpreadSolver>();
         const auto params = solver.weaponParams(localPawn.getActiveWeapon());
         if (!params.hasValue())
             return false;
 
+        const int primaryBone = wantHead ? kHeadBone : (GET_CONFIG_VAR(triggerbot_vars::HitChest) ? kChestBone : kStomachBone);
+        const float primaryRadius = wantHead ? kHeadRadius : kBodyRadius;
         auto&& node = target.baseEntity().gameSceneNode();
-        const auto bone = headOnly ? node.bonePosition(kHeadBone) : node.bonePosition(kChestBone);
+        const auto bone = node.bonePosition(primaryBone);
         if (!bone.hasValue())
             return false;
-        const auto radius = headOnly ? kHeadRadius : kBodyRadius;
+        const auto radius = primaryRadius;
 
         const auto basis = shot_geometry::angleVectors(pitch, yaw);
 
@@ -730,6 +812,18 @@ private:
         const auto span = static_cast<std::uint32_t>(hi - lo) + 1u; 
         const auto chosen = static_cast<std::uint8_t>(lo + static_cast<std::uint8_t>(nextRandom() % span));
         return static_cast<float>(chosen) / 1000.0f;
+    }
+
+    // Delay humanizer (friend request): every rolled delay (reaction, refire
+    // pause, aim time) gets a random 0.75..1.25 multiplier so the click rhythm
+    // isn't a metronome. Off = the configured delays verbatim.
+    [[nodiscard]] float humanizeDelay(float seconds) const noexcept
+    {
+        if (!GET_CONFIG_VAR(triggerbot_vars::HumanizeDelays) || seconds <= 0.0f)
+            return seconds;
+        constexpr std::uint32_t kJitterSteps = 51; // 0.75 .. 1.25 inclusive
+        const float jitter = 0.75f + static_cast<float>(nextRandom() % kJitterSteps) / 100.0f;
+        return seconds * jitter;
     }
 
     
@@ -783,6 +877,18 @@ private:
     
     static constexpr float kSeededFireRadius = 6.0f;
 
+    // Bone-selection gate: 1=head, 2=chest, 3=stomach (arms/legs etc. from a
+    // trace are not selectable -> false, matching the selectable set).
+    [[nodiscard]] bool hitgroupSelected(int hitgroup) const noexcept
+    {
+        switch (hitgroup) {
+        case 1: return GET_CONFIG_VAR(triggerbot_vars::HitHead);
+        case 2: return GET_CONFIG_VAR(triggerbot_vars::HitChest);
+        case 3: return GET_CONFIG_VAR(triggerbot_vars::HitStomach);
+        default: return false;
+        }
+    }
+
     
     
     static void disarm() noexcept
@@ -790,6 +896,7 @@ private:
         armed = false;
         armedTarget = nullptr;
         fireAtTime = 0.0f;
+        firedAtTarget = false;
     }
 
     
@@ -800,6 +907,9 @@ private:
     inline static bool armed{false};
     inline static cs2::C_BaseEntity* armedTarget{nullptr};
     inline static float fireAtTime{0.0f};
+    // Set after a shot goes out at the armed target: AutoRefire's subsequent
+    // shots skip the accuracy gates (see the fire block).
+    inline static bool firedAtTarget{false};
 
     
     

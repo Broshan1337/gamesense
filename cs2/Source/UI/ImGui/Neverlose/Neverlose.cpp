@@ -3238,7 +3238,7 @@ void rageEnabledRow(int id) noexcept
 void pageRageAimbot() noexcept
 {
     using namespace aimbot_vars;
-    addCard("AIMBOT", 9, [] {
+    addCard("AIMBOT", 11, [] {
         select("Weapon Config", &rageMenuGroup, kRageMenuEntries, kRageMenuEntryCount, ++controlId, &rageMenuGroupApply);
         toggleVar<Enabled>("Silent Aim", ++controlId);
         rageEnabledRow(++controlId);
@@ -3249,6 +3249,9 @@ void pageRageAimbot() noexcept
         rageGroupRow<RageGroupDoubletapRow>(++controlId);
         toggleVar<Backtrack>("Backtrack", ++controlId);
         toggleVar<AutoStop>("Auto Stop", ++controlId);
+        // Don't shoot into smoke / while flashed (friend request 2026-10-13).
+        toggleVar<IgnoreSmoke>("Don't Shoot Into Smoke", ++controlId);
+        toggleVar<IgnoreFlash>("Don't Shoot While Flashed", ++controlId);
         toggleVar<DebugMultipoints>("Debug Multipoints", ++controlId);
     });
     addCard("TIMING", 3, [] {
@@ -3390,9 +3393,12 @@ void pageLegitAim() noexcept
         static constexpr const char* const kHitboxNames[]{ "Head", "Chest", "Stomach", "Arms", "Legs" };
         multiSelectVar<HitHead, HitChest, HitStomach, HitArms, HitLegs>("Hitboxes", ++controlId, kHitboxNames);
     });
-    addCard("RECOIL & SCOPES", 5, [] {
+    addCard("RECOIL & SCOPES", 6, [] {
         toggleVar<rcs_vars::Enabled>("Control Recoil", ++controlId);
-        sliderVar<rcs_vars::Strength>("Strength", ++controlId, "%");
+        sliderVar<rcs_vars::Strength>("Pitch Strength", ++controlId, "%");
+        // Separate horizontal strength: full X+Y returns the crosshair to the
+        // aim point, partial yaw drifts it sideways (friend report).
+        sliderVar<rcs_vars::YawStrength>("Yaw Strength", ++controlId, "%");
         toggleVar<no_scope_inaccuracy_vis_vars::Enabled>("No-scope Inaccuracy Vis", ++controlId);
         toggleVar<spread_circle_vars::Enabled>("Draw Weapon Spread", ++controlId);
         spreadCircleColorVar("Circle Color", ++controlId);
@@ -3401,7 +3407,7 @@ void pageLegitAim() noexcept
 
 void pageLegitTriggerbot() noexcept
 {
-    addCard("TRIGGERBOT", 11, [] {
+    addCard("TRIGGERBOT", 15, [] {
         toggleVar<triggerbot_vars::Enabled>("Triggerbot", ++controlId);
         // Activation mode: Hold (active while down) or Toggle (press latches).
         static constexpr const char* const kActivationModes[]{"Hold", "Toggle"};
@@ -3409,12 +3415,26 @@ void pageLegitTriggerbot() noexcept
         keybindVar<triggerbot_vars::HoldKey>("Trigger Key", ++controlId);
         sliderVar<triggerbot_vars::DelayMilliseconds>("Min Reaction Delay", ++controlId, " ms");
         sliderVar<triggerbot_vars::DelayMillisecondsMax>("Max Reaction Delay", ++controlId, " ms");
+        // Crosshair must HOLD on a target this long before the reaction
+        // delay begins (friend request).
+        sliderVar<triggerbot_vars::AimTimeMs>("Aim Time", ++controlId, " ms");
         cardDivider("ACCURACY");
         toggleVar<triggerbot_vars::AccuracyCheck>("Shoot When Accurate", ++controlId);
         sliderVar<triggerbot_vars::AccuracyRadius>("Max Bullet Deviation", ++controlId, " u");
-        toggleVar<triggerbot_vars::HeadOnly>("Shoot At The Head", ++controlId);
+        // Bone selection replaces "Shoot At The Head" (friend request):
+        // which hitgroups may trigger the shot.
+        static constexpr const char* const kTriggerBones[]{"Head", "Chest", "Stomach"};
+        multiSelectVar<triggerbot_vars::HitHead, triggerbot_vars::HitChest, triggerbot_vars::HitStomach>("Hitboxes", ++controlId, kTriggerBones);
         sliderVar<triggerbot_vars::Hitchance>("Minimum Hitchance", ++controlId, "%");
         toggleVar<triggerbot_vars::MaxAccuracyOnly>("Shoot At Max Accuracy", ++controlId);
+        // Semi-auto refire: after the first gated shot, keep clicking at weapon
+        // speed while held on the target ("automatic pistols").
+        toggleVar<triggerbot_vars::AutoRefire>("Rapid Refire (Pistols)", ++controlId);
+        // Pause between shots at the same target while refiring.
+        sliderVar<triggerbot_vars::RefireDelayMs>("Refire Delay", ++controlId, " ms");
+        // Random 0.75..1.25 multiplier on every rolled delay (reaction, refire,
+        // aim time) so the click rhythm isn't a metronome (friend request).
+        toggleVar<triggerbot_vars::HumanizeDelays>("Humanize Delays", ++controlId);
     });
     addCard("TRIGGERBOT VISIBILITY", 7, [] {
         toggleVar<triggerbot_vars::WallCheck>("Shoot Visible", ++controlId);
@@ -4894,7 +4914,10 @@ int inventoryTeam = 0;
 // One row of two CT/T pills inside a card (the shared per-team selector).
 // Card-relative geometry like cardDivider(): draws at the current card row,
 // advances it; no search entry (navigational row).
-void teamPillsRow() noexcept
+// idBase MUST differ per call site (KNIVES vs AGENT card): both cards render
+// in the same ImGui window and identical IDs = the "2 visible items with
+// conflicting ID" assert (the friend's report).
+void teamPillsRow(int idBase) noexcept
 {
     static constexpr const char* const kTeamNames[]{"CT", "T"};
     ImDrawList* d = ImGui::GetWindowDrawList();
@@ -4907,10 +4930,10 @@ void teamPillsRow() noexcept
         d->AddLine(ImVec2(card.origin.x + s(12), card.origin.y + card.row * kRowHeight), ImVec2(card.origin.x + card.width - s(12), card.origin.y + card.row * kRowHeight), kHairline);
     for (int i = 0; i < 2; ++i) {
         const ImVec2 p(x + i * (pillWidth + gap), y);
-        ImGui::PushID(9910 + i);
+        ImGui::PushID(idBase + i);
         const bool clicked = hit("##team_pill", p, ImVec2(pillWidth, pillHeight));
         const bool active = inventoryTeam == i;
-        const float r = motion(animKey(0x2a5cu, 9910 + i), active ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
+        const float r = motion(animKey(0x2a5cu, idBase + i), active ? 1.0f : ImGui::IsItemHovered() ? 0.48f : 0.0f);
         ImGui::PopID();
         if (clicked && !active) {
             inventoryTeam = i;
@@ -5006,7 +5029,7 @@ void pageInventoryCategory(int category) noexcept
             ? static_cast<std::uint16_t>(*SkinChangerData::resolveKnifeModel(knifeModel))
             : std::uint16_t{0};
         addCard("KNIVES", 7, [] {
-            teamPillsRow();
+            teamPillsRow(9910);
             stageRowIcon(knifeFinishDefIndex);
             if (inventoryTeam == 0)
                 selectVar<KnifeModelCT>("Knife Model", kKnifeModels, 21, ++controlId);
@@ -5092,7 +5115,7 @@ void pageInventoryAgent() noexcept
     // T pills the 74 T agents (kAgentItemsTT); the pawn's team at runtime picks
     // which config AgentChanger applies.
     addCard("AGENT", 2, [] {
-        teamPillsRow();
+        teamPillsRow(9912);
         if (inventoryTeam == 0)
             itemDefRow<AgentDefCT>("Agent Model", cs2::kAgentItemsCT, static_cast<int>(sizeof(cs2::kAgentItemsCT) / sizeof(cs2::kAgentItemsCT[0])), ++controlId);
         else
@@ -8104,7 +8127,6 @@ void registerFeatureBinds() noexcept
     feature_binds::registerToggle<legit_aimbot_vars::SpreadCircleFov>("Legit Spread Circle FOV");
     feature_binds::registerToggle<triggerbot_vars::Enabled>("Triggerbot");
     feature_binds::registerToggle<triggerbot_vars::AccuracyCheck>("Shoot When Accurate");
-    feature_binds::registerToggle<triggerbot_vars::HeadOnly>("Shoot At The Head");
     feature_binds::registerToggle<triggerbot_vars::MaxAccuracyOnly>("Shoot At Max Accuracy");
     feature_binds::registerToggle<triggerbot_vars::WallCheck>("Triggerbot Shoot Visible");
     feature_binds::registerToggle<triggerbot_vars::Autowall>("Triggerbot Shoot Walls");
