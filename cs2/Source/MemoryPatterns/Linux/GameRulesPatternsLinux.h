@@ -9,7 +9,10 @@ struct GameRulesPatterns {
         return clientPatterns
             .template addPattern<GameRulesPointer, CodePattern{"FF 53 ? 48 83 3D ? ? ? ? 00 74"}.add(6).abs(5)>()
             .template addPattern<RoundStartTimeOffset, CodePattern{"44 8B 67 ? 44 89 E0 F7 D0"}.add(3).add(3).read8()>()
-            .template addPattern<OffsetToRoundRestartTime, CodePattern{"F3 0F 10 50 ? 0F 2F C8"}.add(4).add(4).read8()>()
+            // 2026-10-15 update: the byte sequence gained an identical twin in an
+            // unrelated function; the true site continues with movzx r14d,[rax+Y]
+            // right after the comiss - anchored on that (exactly-once all builds).
+            .template addPattern<OffsetToRoundRestartTime, CodePattern{"F3 0F 10 50 ? 0F 2F C8 44 0F B6 70 ?"}.add(4).add(4).read8()>()
             .template addPattern<OffsetToRoundLength, CodePattern{"0F 2A 43 ? 48 8B 5D"}.add(3).add(3).read8()>()
             .template addPattern<OffsetToRoundWinStatus, CodePattern{"B8 ? ? ? ? 00 0F 85 ? ? ? ? BA"}.add(1).read()>();
     }

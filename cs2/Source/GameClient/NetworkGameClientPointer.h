@@ -51,6 +51,14 @@ private:
     {
         if (!client)
             return false;
+        // Non-canonical pointer guard (2026-10-15 crash): a stale RVA reads some
+        // unrelated .data qword, and on this update it was NON-CANONICAL
+        // (0xc00001000000002a) - dereferencing it for the vtable check was a #GP
+        // (si_code 0x80) before any sanity could run. Reject non-canonical values
+        // FIRST so drift stays fail-closed instead of crashing the guard.
+        const auto address = reinterpret_cast<std::uintptr_t>(client);
+        if (address >= 0x0000800000000000ULL && address < 0xffff800000000000ULL)
+            return false;
         void* vtable = nullptr;
         std::memcpy(&vtable, client, sizeof(vtable));
         if (!engineVmtContains(std::uintptr_t(vtable)))
@@ -92,10 +100,11 @@ private:
         return client;
     }
 
-    // libengine2.so dwNetworkGameClient, cs2-dumper build 14189 (2026-10-06 dump), live-verified on
-    // 11106093 (2026-10-12: global -> object with vtable in .data.rel.ro range, tick@+0x3A8 plausible).
-    // RE-DERIVE on any CS2 update: valid() fails closed on drift instead of calling through garbage.
-    static constexpr std::uintptr_t kNetworkGameClientRva = 0xA477C0;
+    // libengine2.so dwNetworkGameClient, cs2-dumper build 14191 (2026-10-15 dump; was 0xA477C0
+    // on 14189, the 10-15 update moved it +0x200 and the stale RVA read a non-canonical qword
+    // whose validate() dereference #GP'd). RE-DERIVE on any CS2 update: valid() fails closed
+    // on drift instead of calling through garbage.
+    static constexpr std::uintptr_t kNetworkGameClientRva = 0xA479C0;
 
     void* pointer{nullptr};
 };
