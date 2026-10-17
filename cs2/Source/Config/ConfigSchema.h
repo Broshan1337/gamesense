@@ -935,6 +935,7 @@ private:
 
         configConversion.beginObject(u8"SuperToss");
         configConversion.boolean(u8"Enabled", loadVariable<supertoss_vars::Enabled>(), saveVariable<supertoss_vars::Enabled>());
+        configConversion.boolean(u8"GrenadeAimEnabled", loadVariable<grenade_aim_vars::Enabled>(), saveVariable<grenade_aim_vars::Enabled>());
         configConversion.endObject();
 
         configConversion.beginObject(u8"AutoPeek");

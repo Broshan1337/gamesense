@@ -72,6 +72,7 @@
 #include <Features/Game/UserInfoFlood.h>
 #include <Features/Game/ServerLagger.h>
 #include <Features/Game/SuperToss.h>
+#include <Features/Game/GrenadeAim.h>
 #include <Features/Game/NameAnimator.h>
 #include <Features/Game/NetLag.h>
 #include <GameClient/ConVars/CvarSystem.h>
@@ -111,6 +112,7 @@
 #include <Features/Visuals/WorldColors/WorldColors.h>
 #include <Features/Lua/LuaManager.h>
 #include <Features/Lua/LuaConfigBridge.h>
+#include <Features/Game/GrenadeThrows.h>
 #include <Hooks/SceneRenderHooks.h>
 #include <Hooks/TeamSelectEventGuard.h>
 #include <Hooks/ChamsHook.h>
@@ -750,8 +752,10 @@ bool GameEventManagerHook_onFireEventClientSide(cs2::IGameEventManager2* thisptr
     
     
     if (game_events::is(event, "game_newmap")) {
-        if (const char* mapName = game_events::stringForKey(event, "mapname"); mapName && mapName[0] != '\0')
+        if (const char* mapName = game_events::stringForKey(event, "mapname"); mapName && mapName[0] != '\0') {
             lua::setCurrentMapName(mapName);
+            grenade_throws::setCurrentMap(mapName);
+        }
     }
     lua::EventArg luaArgs[16];
     const int luaArgCount = buildLuaEventArgs(luaArgs, eventName, event);
@@ -827,6 +831,7 @@ void CSGOInputHook_onCreateMove(cs2::CCSGOInput* thisptr, int slot, cs2::CUserCm
     
     
     hookContext.template make<SuperToss>().onCreateMove(cmd);
+    hookContext.template make<GrenadeAim>().onCreateMove(cmd);
     
     
     
@@ -955,6 +960,7 @@ std::uint64_t CSGOInputHook_onWriteMoveCrc(cs2::CCSGOInput* thisptr, cs2::CUserC
     
     
     hookContext.template make<SuperToss>().onWriteMoveCrc(cmd);
+    hookContext.template make<GrenadeAim>().onWriteMoveCrc(cmd);
     hookContext.template make<LastTickDefuse>().onWriteMoveCrc(cmd);
     
     

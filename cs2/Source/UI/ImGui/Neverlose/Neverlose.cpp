@@ -24,6 +24,7 @@
 #include <Features/Hud/SpectatorList/SpectatorSnapshot.h>
 #include <Features/Lua/LuaManager.h>
 #include <Features/Game/MovementConfigVariables.h>
+#include <Features/Game/Movement.h>
 #include <Features/Game/NetLagConfigVariables.h>
 #include <Features/Game/AutoPeekConfigVariables.h>
 #include <Features/Misc/DiscordRpc.h>
@@ -79,6 +80,7 @@
 #include <Features/Game/ServerLagger.h>
 #include <Features/Game/ServerLaggerConfigVariables.h>
 #include <Features/Game/UserInfoFlood.h>
+#include <Features/Game/GrenadeThrows.h>
 #include <Features/Game/UserInfoFloodConfigVariables.h>
 #include <Features/Game/ValveDsSpoofConfigVariables.h>
 #include <Features/Game/VoteRevealerConfigVariables.h>
@@ -3473,6 +3475,34 @@ void pageLegit() noexcept
     }
 }
 
+void savedThrowRecordRow(const char* label, const char* buttonText, int id) noexcept
+{
+    if (actionRow(label, buttonText, id)) {
+        static_cast<void>(ui_config::withContext([](auto&& hookContext) {
+            auto&& localPawn = hookContext.activeLocalPlayerPawn();
+            if (!localPawn)
+                return;
+            // Engine view angles (the CAMERA) straight off the CCSGOInput
+            // object the input hook captured - same source Movement's
+            // FastLadder uses, never cmd state.
+            auto&& movement = hookContext.template make<Movement>();
+            const auto angles = movement.engineViewAngles();
+            const auto position = localPawn.baseEntity().absOrigin();
+            const auto defIndex = localPawn.getActiveWeapon().itemDefinitionIndex();
+            if (position.hasValue() && angles.hasValue() && defIndex.hasValue())
+                grenade_throws::recordCurrent(position.value(), angles.value().x, angles.value().y, defIndex.value());
+        }));
+    }
+}
+
+void savedThrowClearRow(const char* label, const char* buttonText, int id) noexcept
+{
+    if (actionRow(label, buttonText, id)) {
+        grenade_throws::throwCount = 0;
+        grenade_throws::save();
+    }
+}
+
 void pageEsp() noexcept
 {
     using namespace esp_vars;
@@ -3540,6 +3570,13 @@ void pageEsp() noexcept
         toggleVar<grenade_pred_vars::FlashTimer>("Flash Timer", ++controlId);
         toggleVar<grenade_pred_vars::InfernoBounds>("Inferno Bounds", ++controlId);
         colorVar<grenade_pred_vars::InfernoColor>("Inferno Color", ++controlId);
+    });
+    addCard("SAVED THROWS", 3, [] {
+        // Deadlocked-style saved grenade throws: aim at the recorded angles
+        // of the closest same-grenade throw on this map while the pin is out.
+        toggleVar<grenade_aim_vars::Enabled>("Aim At Saved Throw", ++controlId);
+        savedThrowRecordRow("Record Current Throw", "RECORD", ++controlId);
+        savedThrowClearRow("Delete Saved Throws", "DELETE", ++controlId);
     });
     addCard("SMART", 3, [] {
         toggleVar<spectator_sync_vars::Enabled>("Smart ESP", ++controlId);

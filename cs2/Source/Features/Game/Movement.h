@@ -612,8 +612,11 @@ private:
     }
 
     // The ENGINE's view angles (the camera), captured from the CCSGOInput object
+public:
+    // Engine view angles (the CAMERA), captured from the CCSGOInput object
     // on every CreateMove. Unlike the cmd's viewangles these are never written by
-    // us, so nothing can feed our own output back into feature math.
+    // us, so nothing can feed our own output back into feature math. Public:
+    // the saved-throw recorder reads the camera too.
     [[nodiscard]] Optional<cs2::Vector> engineViewAngles() const noexcept
     {
         if (!inputObject)
