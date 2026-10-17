@@ -12,11 +12,13 @@
 #include <CS2/Constants/DllNames.h>
 #include <Features/Combat/AttackCommand.h>
 #include <Features/Combat/Autowall/Autowall.h>
+#include <Features/Combat/HitboxGeometry.h>
 #include <Features/Combat/ShotGeometry.h>
 #include <Features/Combat/Rcs/RcsConfigVariables.h>
 #include <Features/Combat/SubtickShotWriter.h>
 #include <Features/Combat/Triggerbot/TriggerbotConfigVariables.h>
 #include <Features/Combat/Triggerbot/TriggerbotState.h>
+#include <GameClient/Hitboxes.h>
 #include <GameClient/Bind.h>
 #include <GameClient/Entities/BaseEntity.h>
 #include <GameClient/Entities/PlayerPawn.h>
@@ -354,13 +356,35 @@ private:
             static constexpr int kBones[]{kHeadBone, kChestBone, kStomachBone};
             static constexpr int kHitgroups[]{1, 2, 3};
             auto&& node = enemy.baseEntity().gameSceneNode();
-            for (int b = 0; b < 3; ++b) {
-                const auto bone = node.bonePosition(kBones[b]);
-                if (!bone.hasValue())
+
+            // The real hitbox chain: scan the game's own hitbox set (true
+            // centers, true hitgroups) instead of guessed bone points - the
+            // same data the aimbot uses. Falls back to the old bone loop when
+            // the chain is stale so the scan degrades, not disappears.
+            const auto hitboxSet = Hitboxes::query(node.raw());
+            const int scanCount = hitboxSet.count > 0 ? hitboxSet.count : 3;
+            for (int b = 0; b < scanCount; ++b) {
+                cs2::Vector point{};
+                int hitgroup = 0;
+                if (hitboxSet.count > 0) {
+                    const auto& entry = hitboxSet.entries[b];
+                    hitgroup = Hitboxes::hitgroupFromHitbox(entry.index);
+                    const auto shape = worldHitboxShape(node, entry);
+                    if (!shape.hasValue())
+                        continue;
+                    point = shape.value().center();
+                } else {
+                    point = node.bonePosition(kBones[b]).valueOr(cs2::Vector{});
+                    hitgroup = kHitgroups[b];
+                    if (point.x == 0.0f && point.y == 0.0f && point.z == 0.0f)
+                        continue;
+                }
+                if (!hitgroupWanted(hitgroup,
+                        GET_CONFIG_VAR(triggerbot_vars::HitHead),
+                        GET_CONFIG_VAR(triggerbot_vars::HitChest),
+                        GET_CONFIG_VAR(triggerbot_vars::HitStomach)))
                     continue;
-                if (!hitgroupSelected(kHitgroups[b]))
-                    continue;
-                const auto angles = shot_geometry::anglesTo(eye.value(), bone.value());
+                const auto angles = shot_geometry::anglesTo(eye.value(), point);
                 const float dPitch = angles.pitch - pitch.value();
                 const float dYaw = trig::normalizeDegrees(angles.yaw - yaw.value());
                 const float fov = trig::squareRoot(dPitch * dPitch + dYaw * dYaw);
@@ -370,7 +394,7 @@ private:
                 penetration::TraceBudget budget;
                 const penetration::Limits limits{90.0f, float(thickness), 4};
                 void* const targetEntity = static_cast<cs2::C_BaseEntity*>(enemy.baseEntity());
-                const auto impact = Autowall::evaluate(eye.value(), bone.value(), skip, targetEntity,
+                const auto impact = Autowall::evaluate(eye.value(), point, skip, targetEntity,
                     {damage.value(), weapon.penetrationPower().valueOr(0.0f), rangeModifier.value(), maxRange.value()},
                     limits, budget, hookContext);
                 if (!impact.hasValue())
@@ -381,7 +405,7 @@ private:
                     continue;
 
                 bestFov = fov;
-                best = ScanTarget{enemy.rawPawn(), bone.value(), kHitgroups[b], true, false};
+                best = ScanTarget{enemy.rawPawn(), point, hitgroup, true, false};
             }
         });
         return best;
@@ -707,44 +731,73 @@ private:
     }
 
 
-    // Bone selection (friend request): the crosshair ray must reach one of the
-    // SELECTED bones' spheres (head/chest/stomach) - not just any hitbox on the
-    // enemy, which is what made the triggerbot feel "not shooting at the head".
+    // Bone selection (friend request), on the REAL hitbox chain (2026-10-15
+    // "hitbox system" audit): the game's own hitbox set with true capsules -
+    // the same data the aimbot's multipoint uses, so Aim and Triggerbot agree.
+    // The old hardcoded path gated on bone 6, which the live-verified chain
+    // showed to be the NECK (the head hitbox remaps to bone 7) - the "only
+    // shoots if crosshair is on one point of the head" report.
     [[nodiscard]] bool onSelectedBones(auto&& target, const cs2::Vector& eye, float pitch, float yaw,
         bool wantHead, bool wantChest, bool wantStomach) const noexcept
     {
+        const auto forward = shot_geometry::angleVectors(pitch, yaw).forward;
+        auto&& node = target.baseEntity().gameSceneNode();
+
+        const auto set = Hitboxes::query(node.raw());
+        if (set.count > 0) {
+            for (int i = 0; i < set.count; ++i) {
+                const auto& entry = set.entries[i];
+                if (!hitgroupWanted(Hitboxes::hitgroupFromHitbox(entry.index), wantHead, wantChest, wantStomach))
+                    continue;
+                const auto shape = worldHitboxShape(node, entry);
+                if (shape.hasValue() && shape.value().intersects(eye, forward))
+                    return true;
+            }
+            return false;
+        }
+
+        // Chain dead (update drift class): telemetry + the old sphere
+        // approximation so the trigger degrades instead of vanishing.
+        VerifyConsole::write(4.0f, "trig", "hitbox chain dead (count=0), sphere fallback");
         static constexpr int kBones[]{kHeadBone, kChestBone, kStomachBone};
         static constexpr float kRadii[]{kHeadRadius, kBodyRadius, kBodyRadius};
         const bool want[3] = {wantHead, wantChest, wantStomach};
-        const auto forward = shot_geometry::angleVectors(pitch, yaw).forward;
-        auto&& node = target.baseEntity().gameSceneNode();
         for (int i = 0; i < 3; ++i) {
             if (!want[i])
                 continue;
             const auto bone = node.bonePosition(kBones[i]);
             if (!bone.hasValue())
                 continue;
-            if (i == 0) {
-                // HEAD MULTIPOINT (friend report "head has no multipoint, only
-                // one point on the head fires"): a single sphere at the bone
-                // center is a ~12-unit window; the hitbox is bigger. Test a
-                // small cloud of spheres around the bone center so the crosshair
-                // anywhere on the head satisfies the gate.
-                static constexpr float kSpread = 3.0f;
-                static constexpr cs2::Vector kHeadOffsets[]{
-                    {0.0f, 0.0f, 0.0f}, {kSpread, 0.0f, 0.0f}, {-kSpread, 0.0f, 0.0f},
-                    {0.0f, kSpread, 0.0f}, {0.0f, -kSpread, 0.0f},
-                    {0.0f, 0.0f, kSpread}, {0.0f, 0.0f, -kSpread}};
-                for (const auto& offset : kHeadOffsets) {
-                    const cs2::Vector center{bone.value().x + offset.x, bone.value().y + offset.y, bone.value().z + offset.z};
-                    if (shot_geometry::rayReachesSphere(eye, forward, center, kHeadRadius))
-                        return true;
-                }
-            } else if (shot_geometry::rayReachesSphere(eye, forward, bone.value(), kRadii[i])) {
+            if (shot_geometry::rayReachesSphere(eye, forward, bone.value(), kRadii[i]))
                 return true;
-            }
         }
         return false;
+    }
+
+    // World-space shape of one real hitbox entry: the bone transform (the
+    // game's live interpolated skeleton cache) + the hitbox's own extents.
+    [[nodiscard]] Optional<hitbox_geometry::Shape> worldHitboxShape(auto&& node, const Hitboxes::Entry& entry) const noexcept
+    {
+        const auto transform = node.boneTransform(entry.bone);
+        if (!transform.hasValue())
+            return {};
+        const auto shape = hitbox_geometry::from(entry,
+            transform.value().position, transform.value().rotation, transform.value().scale);
+        if (!shape.valid)
+            return {};
+        return shape;
+    }
+
+    // The real hitgroup mapping: 1 head, 2 chest, 3 stomach; arms/legs/gear
+    // (4-8) are not selectable in the triggerbot's Hitboxes menu.
+    [[nodiscard]] static bool hitgroupWanted(int hitgroup, bool wantHead, bool wantChest, bool wantStomach) noexcept
+    {
+        switch (hitgroup) {
+        case 1: return wantHead;
+        case 2: return wantChest;
+        case 3: return wantStomach;
+        default: return false;
+        }
     }
 
     
@@ -760,13 +813,35 @@ private:
         if (!params.hasValue())
             return false;
 
-        const int primaryBone = wantHead ? kHeadBone : (GET_CONFIG_VAR(triggerbot_vars::HitChest) ? kChestBone : kStomachBone);
-        const float primaryRadius = wantHead ? kHeadRadius : kBodyRadius;
         auto&& node = target.baseEntity().gameSceneNode();
-        const auto bone = node.bonePosition(primaryBone);
-        if (!bone.hasValue())
-            return false;
-        const auto radius = primaryRadius;
+        cs2::Vector aimPoint{};
+        float radius = kBodyRadius;
+        bool resolved = false;
+
+        // Primary target = the first REAL hitbox of the priority group (head if
+        // selected, else chest, else stomach) - true center and true radius.
+        const int primaryGroup = wantHead ? 1 : (GET_CONFIG_VAR(triggerbot_vars::HitChest) ? 2 : 3);
+        const auto hitboxSet = Hitboxes::query(node.raw());
+        for (int i = 0; i < hitboxSet.count; ++i) {
+            if (Hitboxes::hitgroupFromHitbox(hitboxSet.entries[i].index) != primaryGroup)
+                continue;
+            const auto shape = worldHitboxShape(node, hitboxSet.entries[i]);
+            if (shape.hasValue()) {
+                aimPoint = shape.value().center();
+                radius = shape.value().radius;
+                resolved = true;
+                break;
+            }
+        }
+        if (!resolved) {
+            // Chain stale: the old bone-point + guessed-radius approximation.
+            const int primaryBone = wantHead ? kHeadBone : (GET_CONFIG_VAR(triggerbot_vars::HitChest) ? kChestBone : kStomachBone);
+            const auto bone = node.bonePosition(primaryBone);
+            if (!bone.hasValue())
+                return false;
+            aimPoint = bone.value();
+            radius = wantHead ? kHeadRadius : kBodyRadius;
+        }
 
         const auto basis = shot_geometry::angleVectors(pitch, yaw);
 
@@ -779,7 +854,7 @@ private:
                 basis.forward.y + basis.left.y * spread.value().x + basis.up.y * spread.value().y,
                 basis.forward.z + basis.left.z * spread.value().x + basis.up.z * spread.value().y,
             });
-            if (shot_geometry::rayReachesSphere(eye, direction, bone.value(), radius))
+            if (shot_geometry::rayReachesSphere(eye, direction, aimPoint, radius))
                 ++hits;
         }
 
