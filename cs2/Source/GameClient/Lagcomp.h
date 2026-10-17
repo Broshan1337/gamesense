@@ -228,8 +228,13 @@ private:
     }
 
 public:
-    
-    
+
+    // Record-pose bone-cache swap (2026-10-15 audit, intentionally unwired):
+    // apply() temporarily swaps the LIVE skeleton cache for a record's bones so
+    // visibility traces answer "can I see the target AT THE RECORD TIME" instead
+    // of against the live pose (the aimbot's over-rejection of valid backtrack
+    // shots). Zero callers today: wiring it per evaluation mutates live game
+    // state on the hot path and needs an in-game perf/safety round first.
     bool apply(const Record& record) const noexcept
     {
         if (!record.valid || applied.record != nullptr)
@@ -306,10 +311,18 @@ public:
     
     [[nodiscard]] Optional<Result> bestRecord(cs2::C_BaseEntity* entity, const cs2::Vector& eye, float pitch, float yaw, bool head, bool chest, bool stomach, bool arms, bool legs, int maxTicks) const noexcept
     {
-        constexpr int kBones = 5;
-        constexpr int kBoneIndices[kBones] = {6, 4, 2, 9, 25};   
-        constexpr int kHitgroups[kBones] = {1, 2, 3, 4, 6};
-        const bool wants[kBones] = {head, chest, stomach, arms, legs};
+        // Real hitbox chain (2026-10-15 audit): score every wanted hitbox of
+        // every record against the game's own hitbox set - the model extents
+        // are static, the record's full bone snapshot provides the pose. The
+        // old hardcoded bone map {6,4,2,9,25} had an unconditional break, so
+        // backtrack degenerated to ONE point (the first wanted bone) and the
+        // guessed indices were never verified against the game.
+        auto&& node = hookContext.template make<BaseEntity>(entity).gameSceneNode();
+        if (!node)
+            return {};
+        const auto hitboxSet = Hitboxes::query(node.raw());
+        if (hitboxSet.count == 0)
+            return {};
 
         const Record* records[kMaxRecords];
         const int count = validRecords(entity, maxTicks, records, kMaxRecords);
@@ -318,19 +331,26 @@ public:
         float bestFov = 1e9f;
         for (int r = 0; r < count; ++r) {
             const auto& record = *records[r];
-            for (int b = 0; b < kBones; ++b) {
-                if (!wants[b] || kBoneIndices[b] >= record.boneCount)
+            for (int i = 0; i < hitboxSet.count; ++i) {
+                const auto& entry = hitboxSet.entries[i];
+                const int hitgroup = Hitboxes::hitgroupFromHitbox(entry.index);
+                if (!Hitboxes::hitgroupWantedBySelection(hitgroup, head, chest, stomach, arms, legs))
                     continue;
-                const auto& position = bonePosition(record, kBoneIndices[b]);
-                const auto angles = shot_geometry::anglesTo(eye, position);
+                if (entry.bone < 0 || entry.bone >= record.boneCount)
+                    continue;
+                const auto& bone = record.bones[entry.bone];
+                const auto shape = hitbox_geometry::from(entry, bone.position, bone.rotation, bone.scale);
+                if (!shape.valid)
+                    continue;
+                const auto center = shape.center();
+                const auto angles = shot_geometry::anglesTo(eye, center);
                 const float dPitch = angles.pitch - pitch;
                 const float dYaw = trig::normalizeDegrees(angles.yaw - yaw);
                 const float fov = trig::squareRoot(dPitch * dPitch + dYaw * dYaw);
                 if (fov < bestFov) {
                     bestFov = fov;
-                    best = Result{position, kHitgroups[b], record.simulationTime};
+                    best = Result{center, hitgroup, record.simulationTime, shape};
                 }
-                break; 
             }
         }
         return best;
@@ -451,10 +471,14 @@ public:
     
     [[nodiscard]] Optional<Result> extrapolatedResult(cs2::C_BaseEntity* entity, const cs2::Vector& eye, float pitch, float yaw, bool head, bool chest, bool stomach, bool arms, bool legs, int maxTicks) const noexcept
     {
-        constexpr int kBones = 5;
-        constexpr int kBoneIndices[kBones] = {6, 4, 2, 9, 25};   
-        constexpr int kHitgroups[kBones] = {1, 2, 3, 4, 6};
-        const bool wants[kBones] = {head, chest, stomach, arms, legs};
+        // Same real-hitbox scoring as bestRecord, against the extrapolated
+        // (lead-target) skeleton instead of a stored record.
+        auto&& node = hookContext.template make<BaseEntity>(entity).gameSceneNode();
+        if (!node)
+            return {};
+        const auto hitboxSet = Hitboxes::query(node.raw());
+        if (hitboxSet.count == 0)
+            return {};
 
         const auto extrapolated = extrapolate(entity, maxTicks);
         if (!extrapolated.hasValue())
@@ -462,19 +486,26 @@ public:
 
         Optional<Result> best;
         float bestFov = 1e9f;
-        for (int b = 0; b < kBones; ++b) {
-            if (!wants[b] || kBoneIndices[b] >= extrapolated.value().boneCount)
+        for (int i = 0; i < hitboxSet.count; ++i) {
+            const auto& entry = hitboxSet.entries[i];
+            const int hitgroup = Hitboxes::hitgroupFromHitbox(entry.index);
+            if (!Hitboxes::hitgroupWantedBySelection(hitgroup, head, chest, stomach, arms, legs))
                 continue;
-            const auto& position = extrapolated.value().bones[kBoneIndices[b]].position;
-            const auto angles = shot_geometry::anglesTo(eye, position);
+            if (entry.bone < 0 || entry.bone >= extrapolated.value().boneCount)
+                continue;
+            const auto& bone = extrapolated.value().bones[entry.bone];
+            const auto shape = hitbox_geometry::from(entry, bone.position, bone.rotation, bone.scale);
+            if (!shape.valid)
+                continue;
+            const auto center = shape.center();
+            const auto angles = shot_geometry::anglesTo(eye, center);
             const float dPitch = angles.pitch - pitch;
             const float dYaw = trig::normalizeDegrees(angles.yaw - yaw);
             const float fov = trig::squareRoot(dPitch * dPitch + dYaw * dYaw);
             if (fov < bestFov) {
                 bestFov = fov;
-                best = Result{position, kHitgroups[b], extrapolated.value().simulationTime};
+                best = Result{center, hitgroup, extrapolated.value().simulationTime, shape};
             }
-            break;
         }
         return best;
     }

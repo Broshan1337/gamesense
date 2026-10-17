@@ -213,6 +213,23 @@ public:
         }
     }
 
+    // Hitgroup -> five-toggle selection (the ragebot/triggerbot set):
+    // 1 head, 2 chest, 3 stomach, 4|5 arms, 6|7 legs; 8 gear not selectable.
+    // Shared so Lagcomp records and the triggerbot gate agree by construction.
+    [[nodiscard]] static bool hitgroupWantedBySelection(int hitgroup, bool head, bool chest, bool stomach, bool arms, bool legs) noexcept
+    {
+        switch (hitgroup) {
+        case 1: return head;
+        case 2: return chest;
+        case 3: return stomach;
+        case 4:
+        case 5: return arms;
+        case 6:
+        case 7: return legs;
+        default: return false;
+        }
+    }
+
 private:
     template <typename T>
     [[nodiscard]] static T read(const void* base, std::uintptr_t offset) noexcept

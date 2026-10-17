@@ -188,7 +188,7 @@ public:
             // visibility/hitchance/seeded gates on the LIVE pose are the wrong question -
             // the record's own hitgroup carries the bone decision and the arm/delay
             // logic above already re-armed per target.
-            if (!hitgroupSelected(selection.hitgroup)) {
+            if (!hitgroupWanted(selection.hitgroup, wantedHitboxes())) {
                 VerifyConsole::write(4.0f, "trig", "gate backtrack hitgroup=%d", selection.hitgroup);
                 return;
             }
@@ -200,7 +200,7 @@ public:
                 VerifyConsole::write(4.0f, "trig", "gate throughwall visibility");
                 return;
             }
-            if (!hitgroupSelected(selection.hitgroup)) {
+            if (!hitgroupWanted(selection.hitgroup, wantedHitboxes())) {
                 VerifyConsole::write(4.0f, "trig", "gate throughwall hitgroup=%d", selection.hitgroup);
                 return;
             }
@@ -212,10 +212,12 @@ public:
                 return;
             }
             if (!passesAimGates(target, cmd)) {
-                VerifyConsole::write(4.0f, "trig", "gate aim (bones h=%d c=%d s=%d hc=%d)",
+                VerifyConsole::write(4.0f, "trig", "gate aim (hitboxes h=%d c=%d s=%d a=%d l=%d hc=%d)",
                     GET_CONFIG_VAR(triggerbot_vars::HitHead) ? 1 : 0,
                     GET_CONFIG_VAR(triggerbot_vars::HitChest) ? 1 : 0,
                     GET_CONFIG_VAR(triggerbot_vars::HitStomach) ? 1 : 0,
+                    GET_CONFIG_VAR(triggerbot_vars::HitArms) ? 1 : 0,
+                    GET_CONFIG_VAR(triggerbot_vars::HitLegs) ? 1 : 0,
                     static_cast<int>(GET_CONFIG_VAR(triggerbot_vars::Hitchance)));
                 return;
             }
@@ -289,6 +291,28 @@ private:
         bool throughWall{false};
         bool fromBacktrack{false};
     };
+
+    // The five triggerbot hitbox toggles (the ragebot's set).
+    struct HitboxWants {
+        bool head, chest, stomach, arms, legs;
+    };
+    [[nodiscard]] HitboxWants wantedHitboxes() const noexcept
+    {
+        return {GET_CONFIG_VAR(triggerbot_vars::HitHead) != false,
+            GET_CONFIG_VAR(triggerbot_vars::HitChest) != false,
+            GET_CONFIG_VAR(triggerbot_vars::HitStomach) != false,
+            GET_CONFIG_VAR(triggerbot_vars::HitArms) != false,
+            GET_CONFIG_VAR(triggerbot_vars::HitLegs) != false};
+    }
+
+    // The real hitgroup mapping (the shared Hitboxes helper - Lagcomp records
+    // and this gate agree by construction): 1 head, 2 chest, 3 stomach,
+    // 4|5 arms, 6|7 legs, 8 gear not selectable.
+    [[nodiscard]] static bool hitgroupWanted(int hitgroup, const HitboxWants& wants) noexcept
+    {
+        return Hitboxes::hitgroupWantedBySelection(hitgroup, wants.head, wants.chest, wants.stomach, wants.arms, wants.legs);
+    }
+
 
     // The reference legitbot's fallback selection, tried in its order: the through-wall scan
     // (crosshair on world geometry - fire at the closest-to-crosshair enemy hitbox that
@@ -379,10 +403,7 @@ private:
                     if (point.x == 0.0f && point.y == 0.0f && point.z == 0.0f)
                         continue;
                 }
-                if (!hitgroupWanted(hitgroup,
-                        GET_CONFIG_VAR(triggerbot_vars::HitHead),
-                        GET_CONFIG_VAR(triggerbot_vars::HitChest),
-                        GET_CONFIG_VAR(triggerbot_vars::HitStomach)))
+                if (!hitgroupWanted(hitgroup, wantedHitboxes()))
                     continue;
                 const auto angles = shot_geometry::anglesTo(eye.value(), point);
                 const float dPitch = angles.pitch - pitch.value();
@@ -428,9 +449,7 @@ private:
         const cs2::Vector direction = shot_geometry::angleVectors(pitch.value(), yaw.value()).forward;
 
         // Per-bone selection forwarded to the record scan (head/chest/stomach).
-        const bool wantHead = GET_CONFIG_VAR(triggerbot_vars::HitHead);
-        const bool wantChest = GET_CONFIG_VAR(triggerbot_vars::HitChest);
-        const bool wantStomach = GET_CONFIG_VAR(triggerbot_vars::HitStomach);
+        const HitboxWants wants = wantedHitboxes();
 
         auto&& lagcomp = hookContext.template make<Lagcomp>();
         Optional<ScanTarget> best;
@@ -445,17 +464,16 @@ private:
             if (!enemy || enemy.isControlledByLocalPlayer() || enemy.isEnemy() != true || enemy.isAlive() != true)
                 return;
 
-            // The closest past head/chest/stomach position this enemy occupied; only a hit
-            // the crosshair ray actually crosses counts (the reference's ray-vs-capsule,
-            // approximated at bone-sphere granularity with the record's own hitgroup).
+            // The record's REAL hitbox shape (model extents + the record's own
+            // bone snapshot): the crosshair ray must cross the true capsule,
+            // not an invented radius sphere (2026-10-15 audit item).
             const auto record = lagcomp.bestRecord(static_cast<cs2::C_BaseEntity*>(enemy.baseEntity()), eye.value(), pitch.value(), yaw.value(),
-                                                   wantHead, wantChest, wantStomach, false, false, maxTicks);
+                                                   wants.head, wants.chest, wants.stomach, wants.arms, wants.legs, maxTicks);
             if (!record.hasValue())
                 return;
-            if (!hitgroupSelected(record.value().hitgroup))
+            if (!hitgroupWanted(record.value().hitgroup, wants))
                 return;
-            const auto radius = record.value().hitgroup == 1 ? kHeadRadius : kBodyRadius;
-            if (!shot_geometry::rayReachesSphere(eye.value(), direction, record.value().aimPoint, radius))
+            if (!record.value().shape.valid || !record.value().shape.intersects(eye.value(), direction))
                 return;
             best = ScanTarget{enemy.rawPawn(), record.value().aimPoint, record.value().hitgroup, false, true};
         });
@@ -559,16 +577,8 @@ private:
     
     [[nodiscard]] bool passesAimGates(auto&& target, cs2::CUserCmd* cmd) const noexcept
     {
-        const bool wantHead = GET_CONFIG_VAR(triggerbot_vars::HitHead);
-        const bool wantChest = GET_CONFIG_VAR(triggerbot_vars::HitChest);
-        const bool wantStomach = GET_CONFIG_VAR(triggerbot_vars::HitStomach);
-        const bool bodyAllowed = wantChest || wantStomach;
+        const HitboxWants wants = wantedHitboxes();
         int hitchanceThreshold = GET_CONFIG_VAR(triggerbot_vars::Hitchance);
-
-        // Body shots allowed and no hitchance gate: any on-target crosshair
-        // fires (the arm/delay machinery above already ran) - the old default.
-        if (bodyAllowed && hitchanceThreshold == 0)
-            return true;
 
         auto&& localPawn = hookContext.activeLocalPlayerPawn();
         const auto eye = localPawn.eyePosition();
@@ -578,12 +588,15 @@ private:
         if (!eye.hasValue() || !pitch.hasValue() || !yaw.hasValue())
             return true;
 
-        // Head-priority path (only head selected, or a hitchance gate is set):
-        // the crosshair ray must reach one of the SELECTED bones.
-        if (!onSelectedBones(target, eye.value(), pitch.value(), yaw.value(), wantHead, wantChest, wantStomach))
+        // Every selected hitgroup gates EXPLICITLY through the real hitbox
+        // chain (2026-10-15 friend report: chest/stomach selected but only
+        // head shots fired - the old bodyAllowed shortcut skipped the
+        // per-hitbox test entirely). The crosshair ray must reach one of the
+        // SELECTED hitboxes, whatever the hitchance setting.
+        if (!onSelectedBones(target, eye.value(), pitch.value(), yaw.value(), wants))
             return false;
 
-        if (hitchanceThreshold > 0 && !passesHitchance(target, localPawn, eye.value(), pitch.value(), yaw.value(), wantHead, hitchanceThreshold))
+        if (hitchanceThreshold > 0 && !passesHitchance(target, localPawn, eye.value(), pitch.value(), yaw.value(), wants.head, hitchanceThreshold))
             return false;
 
         return true;
@@ -719,7 +732,7 @@ private:
         const auto impact = Autowall::evaluate(eye.value(), end, skip, targetEntity,
             {damage.value(), weapon.penetrationPower().valueOr(0.0f), rangeModifier.value(), maxRange.value()},
             limits, budget, hookContext);
-        if (!impact.hasValue() || !hitgroupSelected(impact.value().hitgroup)) return false;
+        if (!impact.hasValue() || !hitgroupWanted(impact.value().hitgroup, wantedHitboxes())) return false;
         const auto armorRatio = weapon.armorRatio();
         const auto headMultiplier = weapon.headshotMultiplier();
         if (!armorRatio.hasValue() || !headMultiplier.hasValue()) return false;
@@ -738,7 +751,7 @@ private:
     // showed to be the NECK (the head hitbox remaps to bone 7) - the "only
     // shoots if crosshair is on one point of the head" report.
     [[nodiscard]] bool onSelectedBones(auto&& target, const cs2::Vector& eye, float pitch, float yaw,
-        bool wantHead, bool wantChest, bool wantStomach) const noexcept
+        const HitboxWants& wants) const noexcept
     {
         const auto forward = shot_geometry::angleVectors(pitch, yaw).forward;
         auto&& node = target.baseEntity().gameSceneNode();
@@ -747,7 +760,7 @@ private:
         if (set.count > 0) {
             for (int i = 0; i < set.count; ++i) {
                 const auto& entry = set.entries[i];
-                if (!hitgroupWanted(Hitboxes::hitgroupFromHitbox(entry.index), wantHead, wantChest, wantStomach))
+                if (!hitgroupWanted(Hitboxes::hitgroupFromHitbox(entry.index), wants))
                     continue;
                 const auto shape = worldHitboxShape(node, entry);
                 if (shape.hasValue() && shape.value().intersects(eye, forward))
@@ -761,7 +774,7 @@ private:
         VerifyConsole::write(4.0f, "trig", "hitbox chain dead (count=0), sphere fallback");
         static constexpr int kBones[]{kHeadBone, kChestBone, kStomachBone};
         static constexpr float kRadii[]{kHeadRadius, kBodyRadius, kBodyRadius};
-        const bool want[3] = {wantHead, wantChest, wantStomach};
+        const bool want[3] = {wants.head, wants.chest, wants.stomach};
         for (int i = 0; i < 3; ++i) {
             if (!want[i])
                 continue;
@@ -786,18 +799,6 @@ private:
         if (!shape.valid)
             return {};
         return shape;
-    }
-
-    // The real hitgroup mapping: 1 head, 2 chest, 3 stomach; arms/legs/gear
-    // (4-8) are not selectable in the triggerbot's Hitboxes menu.
-    [[nodiscard]] static bool hitgroupWanted(int hitgroup, bool wantHead, bool wantChest, bool wantStomach) noexcept
-    {
-        switch (hitgroup) {
-        case 1: return wantHead;
-        case 2: return wantChest;
-        case 3: return wantStomach;
-        default: return false;
-        }
     }
 
     
@@ -954,18 +955,6 @@ private:
     
     
     static constexpr float kSeededFireRadius = 6.0f;
-
-    // Bone-selection gate: 1=head, 2=chest, 3=stomach (arms/legs etc. from a
-    // trace are not selectable -> false, matching the selectable set).
-    [[nodiscard]] bool hitgroupSelected(int hitgroup) const noexcept
-    {
-        switch (hitgroup) {
-        case 1: return GET_CONFIG_VAR(triggerbot_vars::HitHead);
-        case 2: return GET_CONFIG_VAR(triggerbot_vars::HitChest);
-        case 3: return GET_CONFIG_VAR(triggerbot_vars::HitStomach);
-        default: return false;
-        }
-    }
 
     
     

@@ -3421,10 +3421,11 @@ void pageLegitTriggerbot() noexcept
         cardDivider("ACCURACY");
         toggleVar<triggerbot_vars::AccuracyCheck>("Shoot When Accurate", ++controlId);
         sliderVar<triggerbot_vars::AccuracyRadius>("Max Bullet Deviation", ++controlId, " u");
-        // Bone selection replaces "Shoot At The Head" (friend request):
-        // which hitgroups may trigger the shot.
-        static constexpr const char* const kTriggerBones[]{"Head", "Chest", "Stomach"};
-        multiSelectVar<triggerbot_vars::HitHead, triggerbot_vars::HitChest, triggerbot_vars::HitStomach>("Hitboxes", ++controlId, kTriggerBones);
+        // Hitbox selection: the ragebot's five hitgroups, on the real hitbox
+        // chain (Head/Chest/Stomach/Arms/Legs - friend request 2026-10-15).
+        static constexpr const char* const kTriggerBones[]{"Head", "Chest", "Stomach", "Arms", "Legs"};
+        multiSelectVar<triggerbot_vars::HitHead, triggerbot_vars::HitChest, triggerbot_vars::HitStomach,
+                       triggerbot_vars::HitArms, triggerbot_vars::HitLegs>("Hitboxes", ++controlId, kTriggerBones);
         sliderVar<triggerbot_vars::Hitchance>("Minimum Hitchance", ++controlId, "%");
         toggleVar<triggerbot_vars::MaxAccuracyOnly>("Shoot At Max Accuracy", ++controlId);
         // Semi-auto refire: after the first gated shot, keep clicking at weapon

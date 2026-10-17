@@ -203,6 +203,8 @@ private:
         configConversion.boolean(u8"HitHead", loadVariable<triggerbot_vars::HitHead>(), saveVariable<triggerbot_vars::HitHead>());
         configConversion.boolean(u8"HitChest", loadVariable<triggerbot_vars::HitChest>(), saveVariable<triggerbot_vars::HitChest>());
         configConversion.boolean(u8"HitStomach", loadVariable<triggerbot_vars::HitStomach>(), saveVariable<triggerbot_vars::HitStomach>());
+        configConversion.boolean(u8"HitArms", loadVariable<triggerbot_vars::HitArms>(), saveVariable<triggerbot_vars::HitArms>());
+        configConversion.boolean(u8"HitLegs", loadVariable<triggerbot_vars::HitLegs>(), saveVariable<triggerbot_vars::HitLegs>());
         configConversion.uint(u8"AimTimeMs", loadVariable<triggerbot_vars::AimTimeMs>(), saveVariable<triggerbot_vars::AimTimeMs>());
         configConversion.boolean(u8"AutoRefire", loadVariable<triggerbot_vars::AutoRefire>(), saveVariable<triggerbot_vars::AutoRefire>());
         configConversion.uint(u8"RefireDelayMs", loadVariable<triggerbot_vars::RefireDelayMs>(), saveVariable<triggerbot_vars::RefireDelayMs>());

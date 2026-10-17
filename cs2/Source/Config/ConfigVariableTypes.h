@@ -182,6 +182,8 @@ using ConfigVariableTypes = TypeList<
     triggerbot_vars::HitHead,
     triggerbot_vars::HitChest,
     triggerbot_vars::HitStomach,
+    triggerbot_vars::HitArms,
+    triggerbot_vars::HitLegs,
     triggerbot_vars::AimTimeMs,
     triggerbot_vars::AutoRefire,
     triggerbot_vars::RefireDelayMs,

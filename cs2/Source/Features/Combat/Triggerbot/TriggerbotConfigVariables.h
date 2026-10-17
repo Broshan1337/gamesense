@@ -25,11 +25,14 @@ CONFIG_VARIABLE_RANGE(AccuracyRadius, triggerbot_params::kAccuracyRadius);
 
 
 
-// Bone selection (friend request): which hitgroups may trigger the shot.
-// All three default ON = the old any-hitbox behavior; only head = old HeadOnly.
+// Hitbox selection (friend request 2026-10-15): which hitgroups may trigger the
+// shot - the SAME five groups the ragebot exposes. All default ON = fire
+// wherever the crosshair lands on the enemy; head-only = old HeadOnly.
 CONFIG_VARIABLE(HitHead, bool, true);
 CONFIG_VARIABLE(HitChest, bool, true);
 CONFIG_VARIABLE(HitStomach, bool, true);
+CONFIG_VARIABLE(HitArms, bool, true);
+CONFIG_VARIABLE(HitLegs, bool, true);
 
 // Rapid refire (friend request "automatic pistols"): after the first gated
 // shot at a target, subsequent shots at the SAME target skip the accuracy/
