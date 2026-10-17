@@ -68,6 +68,7 @@ TEST(AttackCommandTest, EveryRequestedCommandWritesAllFiringBanks)
     AttackCommand<int> attack{context};
     for (int i = 0; i < 3; ++i) {
         CommandFixture command;
+        command.history();
         ASSERT_TRUE(attack.press(command.handle()));
         EXPECT_EQ(CommandFixture::read<std::uint64_t>(command.cmd, 96) & 1, 1u);
         EXPECT_EQ(CommandFixture::read<std::uint64_t>(command.cmd, 104) & 1, 1u);
@@ -81,10 +82,32 @@ TEST(AttackCommandTest, WritesNativeBanksBeforeButtonProtobufIsAllocated)
 {
     int context{};
     CommandFixture command;
+    command.history();
     CommandFixture::pointer(command.base, cs2::CUserCmd::BaseMessage::kButtonsPbOffset, nullptr);
     EXPECT_TRUE(AttackCommand<int>{context}.press(command.handle()));
     EXPECT_EQ(CommandFixture::read<std::uint64_t>(command.cmd, 96) & 1, 1u);
     EXPECT_EQ(CommandFixture::read<std::uint64_t>(command.cmd, 104) & 1, 1u);
+}
+
+TEST(AttackCommandTest, AttackWithoutHistoryIsRefusedNotSentMalformed)
+{
+    // 2026-10-15 contract (the "no attack information present in command /
+    // attack1_start_history_index: -1" server warnings): an attack press
+    // without a readable input history must be REFUSED - sending it would
+    // degrade server lag comp to the fallback path. Callers run per frame
+    // and fire a frame later with a complete attack record.
+    int context{};
+    CommandFixture command;
+    EXPECT_FALSE(AttackCommand<int>{context}.press(command.handle()));
+}
+
+TEST(AttackCommandTest, PressStampsAttackStartHistoryIndexSizeMinusOne)
+{
+    int context{};
+    CommandFixture command;
+    command.history();
+    ASSERT_TRUE(AttackCommand<int>{context}.press(command.handle()));
+    EXPECT_EQ(CommandFixture::read<int>(command.cmd, cs2::CUserCmd::kAttack1StartHistoryIndexOffset), 1);
 }
 
 TEST(RecoilApplyTest, FullPunchSubtractedFromEveryEntry)
