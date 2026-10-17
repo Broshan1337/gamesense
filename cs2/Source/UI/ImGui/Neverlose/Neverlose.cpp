@@ -105,6 +105,7 @@
 #include <Features/Visuals/GrenadeTimers/GrenadeTimersConfigVariables.h>
 #include <Features/Visuals/OffScreenArrows/OffScreenArrowsConfigVariables.h>
 #include <Features/Visuals/BulletTracers/BulletTracersConfigVariables.h>
+#include <Features/Visuals/BulletImpacts/BulletImpactsConfigVariables.h>
 #include <Features/Visuals/EventLog/EventLog.h>
 #include <Features/Visuals/KillEffects/KillEffectsConfigVariables.h>
 #include <Features/Visuals/Hitmarker/HitmarkerConfigVariables.h>
@@ -3859,6 +3860,12 @@ void pageEffects() noexcept
     addCard("BULLET TRACERS", 2, [] {
         toggleVar<BulletTracersEnabled>("Bullet Tracers", ++controlId);
         colorVar<BulletTracersColor>("Tracer Color", ++controlId);
+    });
+    addCard("BULLET IMPACTS", 3, [] {
+        // Client-side sv_showimpacts equivalent: bullet_impact markers.
+        toggleVar<bullet_impacts_vars::Enabled>("Bullet Impacts", ++controlId);
+        colorVar<bullet_impacts_vars::Color>("Impact Color", ++controlId);
+        sliderVar<bullet_impacts_vars::Lifetime>("Marker Lifetime", ++controlId, " *0.01s");
     });
     addCard("KILL EFFECTS", 3, [] {
         toggleVar<KillEffectsEnabled>("Lightning Strike", ++controlId);
@@ -8256,6 +8263,22 @@ void neverlose::renderGameOverlay() noexcept
 
     
     
+    // Bullet impact markers (BulletImpacts feature): fading world-anchored
+    // dots at the local player's bullet_impact points.
+    if (snapshot.impactMarkerCount > 0) {
+        const auto& io2 = ImGui::GetIO();
+        constexpr float kImpactRadius = 4.0f;
+        constexpr int kImpactSegments = 10;
+        for (int i = 0; i < snapshot.impactMarkerCount; ++i) {
+            const auto& marker = snapshot.impactMarkers[i];
+            const ImVec2 center{marker.xPercent * 0.01f * io2.DisplaySize.x,
+                                 marker.yPercent * 0.01f * io2.DisplaySize.y};
+            const ImU32 rgba = marker.rgba;
+            const ImU32 color = C(rgba >> 24 & 0xFF, rgba >> 16 & 0xFF, rgba >> 8 & 0xFF, rgba & 0xFF);
+            fg->AddCircleFilled(center, kImpactRadius, color, kImpactSegments);
+        }
+    }
+
     if (snapshot.timerCount > 0) {
         const auto& io = ImGui::GetIO();
         if (ImFont* font = io.Fonts->Fonts[0]) {

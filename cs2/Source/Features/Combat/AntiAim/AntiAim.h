@@ -10,6 +10,7 @@
 #include <Features/Combat/AntiAim/AntiAimConfigVariables.h>
 #include <Features/Combat/VisibilityCheck.h>
 #include <Features/Game/FvaEmulator.h>
+#include <Features/Combat/MovementFix.h>
 #include <GameClient/Entities/BaseEntity.h>
 #include <GameClient/Entities/PlayerPawn.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
@@ -29,16 +30,18 @@
 // at-targets/autoyaw/manual-side/avoid-backstab, and the +33 model-roll
 // compensation.
 //
-// ANGLE DELIVERY = THE FVA CHANNEL, never base-viewangle writes: writing the
-// command's base viewangles drags the first- AND third-person camera (the
-// user-confirmed bug - the same tradeoff the rage base-angle fallback has).
-// Instead the AA arms the FVA emulator's target angle (alwaysPublish), which
-// publishes synthetic input-history entries carrying the AA angles each tick -
-// the SERVER reconstructs our eye angles from those entries while the local
-// camera keeps the player's real view. Same mechanism as silent aim.
-// On ticks where the aimbot staged a shot, the SHOT's target wins (the AA stays
-// quiet - that is hide-shots; with HideShots on, raw attack-held ticks also
-// stay quiet).
+// ANGLE DELIVERY (2026-10-15, owner request "just do it in the feature
+// itself"): the AA writes its angles DIRECTLY on the command's base
+// viewangles - no FVA feature dependency. The input-history channel turned
+// out to only affect SHOT reconstruction: the server's animated model kept
+// the real angles ("the anti aim was not looking down at all"), so the FVA
+// delivery was invisible AA. Base writes are what the server (and everyone
+// spectating us) actually animates from. Tradeoff, accepted deliberately:
+// first-person camera follows the AA pitch when pitch AA is on - that is the
+// same view every CS:GO AA has; YAW-only AA does not touch the camera pitch.
+// On ticks where the aimbot staged a shot, the SHOT's target wins (the AA
+// stays quiet - that is hide-shots; with HideShots on, raw attack-held ticks
+// also stay quiet).
 template <typename HookContext>
 class AntiAim {
 public:
@@ -99,10 +102,9 @@ public:
         else if (yawSide == 1)
             indicatorYaw += 90.0f;
 
-        // 2026-10-13 (owner request): NO FvaEnabled requirement anymore. The
-        // AA arms the FVA channel unconditionally; FvaEmulator consumes armed
-        // targets even with its own feature toggle off (see FvaEmulator's
-        // gate). Base-viewangle writes stay banished (camera drag).
+        // Base-angle write in the feature itself (2026-10-15, owner request):
+        // the old FVA-channel arming is gone - the server's model animation
+        // never consumed the history entries, so the AA was invisible.
 
         // Fire ticks: the aimbot's own FVA target (the silent shot redirect)
         // wins - arming ours would clobber it. That IS hide-shots behavior; with
@@ -113,7 +115,7 @@ public:
             return;
 
         aaActive = true;
-        fva::setTargetAngle(stagedPitch, stagedYaw, true);
+        movement_fix::setViewAngles(userCmd, stagedPitch, stagedYaw);
     }
 
     // Feet arc publish (producer side): run from the render-start chain where the

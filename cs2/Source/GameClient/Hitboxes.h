@@ -214,12 +214,16 @@ public:
     }
 
     // Hitgroup -> five-toggle selection (the ragebot/triggerbot set):
-    // 1 head, 2 chest, 3 stomach, 4|5 arms, 6|7 legs; 8 gear not selectable.
-    // Shared so Lagcomp records and the triggerbot gate agree by construction.
+    // 1 head, 2 chest, 3 stomach, 4|5 arms, 6|7 legs. Group 8 is the NECK box
+    // on player models (2026-10-15 friend report "the neck is not being shot
+    // at all"): folded into HEAD - users expect a checked Head to fire with
+    // the crosshair on the neck. Shared so Lagcomp records and the triggerbot
+    // gate agree by construction.
     [[nodiscard]] static bool hitgroupWantedBySelection(int hitgroup, bool head, bool chest, bool stomach, bool arms, bool legs) noexcept
     {
         switch (hitgroup) {
-        case 1: return head;
+        case 1:
+        case 8: return head;
         case 2: return chest;
         case 3: return stomach;
         case 4:

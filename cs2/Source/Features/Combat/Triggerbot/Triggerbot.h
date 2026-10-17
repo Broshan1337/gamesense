@@ -106,9 +106,6 @@ public:
             // HOLD mode fires only while the key is DOWN (default middle click),
             // TOGGLE latches on press. This line names which one blocked.
             if (enabled)
-                VerifyConsole::write(4.0f, "trig", "gate activation: mode=%s keyDown=%d latched=%d",
-                    toggleMode ? "toggle" : "hold", keyDown ? 1 : 0,
-                    triggerbot_state::latched ? 1 : 0);
             disarm();
             return;
         }
@@ -142,8 +139,6 @@ public:
             if (!scanned.hasValue()) {
                 // Breadcrumb: name the crosshair index so "on target but no
                 // fire" reports show whether the game trace even sees it.
-                VerifyConsole::write(4.0f, "trig", "no target: crosshair idx=%d (scans off)",
-                    crosshairEntityIndex(hookContext.activeLocalPlayerPawn()).valueOr(-99));
                 disarm();
                 return;
             }
@@ -161,8 +156,6 @@ public:
             const float aimTime = static_cast<float>(GET_CONFIG_VAR(triggerbot_vars::AimTimeMs)) / 1000.0f;
             const float delay = delaySeconds();
             fireAtTime = now.value() + humanizeDelay(aimTime + delay);
-            VerifyConsole::write(4.0f, "trig", "armed (aim %.0f ms + humanized delay)",
-                aimTime * 1000.0f);
             return;
         }
 
@@ -175,11 +168,9 @@ public:
         // stall (the "slow / sometimes not shooting" report).
         if (!GET_CONFIG_VAR(triggerbot_vars::AutoRefire) || !firedAtTarget) {
             if (!wouldShotLand(target)) {
-                VerifyConsole::write(4.0f, "trig", "gate wouldShotLand");
                 return;
             }
             if (!passesMaxAccuracyGate()) {
-                VerifyConsole::write(4.0f, "trig", "gate maxAccuracy");
                 return;
             }
         }
@@ -189,7 +180,6 @@ public:
             // the record's own hitgroup carries the bone decision and the arm/delay
             // logic above already re-armed per target.
             if (!hitgroupWanted(selection.hitgroup, wantedHitboxes())) {
-                VerifyConsole::write(4.0f, "trig", "gate backtrack hitgroup=%d", selection.hitgroup);
                 return;
             }
         } else if (selection.throughWall) {
@@ -197,32 +187,19 @@ public:
             // re-checks the actual fire direction (the crosshair) penetrates for enough
             // damage - the shot the spread-compensated writer will actually send.
             if (!passesVisibility(target, cmd)) {
-                VerifyConsole::write(4.0f, "trig", "gate throughwall visibility");
                 return;
             }
             if (!hitgroupWanted(selection.hitgroup, wantedHitboxes())) {
-                VerifyConsole::write(4.0f, "trig", "gate throughwall hitgroup=%d", selection.hitgroup);
                 return;
             }
         } else {
             if (!passesVisibility(target, cmd)) {
-                VerifyConsole::write(4.0f, "trig", "gate visibility (wall=%d autowall=%d)",
-                    GET_CONFIG_VAR(triggerbot_vars::WallCheck) ? 1 : 0,
-                    GET_CONFIG_VAR(triggerbot_vars::Autowall) ? 1 : 0);
                 return;
             }
             if (!passesAimGates(target, cmd)) {
-                VerifyConsole::write(4.0f, "trig", "gate aim (hitboxes h=%d c=%d s=%d a=%d l=%d hc=%d)",
-                    GET_CONFIG_VAR(triggerbot_vars::HitHead) ? 1 : 0,
-                    GET_CONFIG_VAR(triggerbot_vars::HitChest) ? 1 : 0,
-                    GET_CONFIG_VAR(triggerbot_vars::HitStomach) ? 1 : 0,
-                    GET_CONFIG_VAR(triggerbot_vars::HitArms) ? 1 : 0,
-                    GET_CONFIG_VAR(triggerbot_vars::HitLegs) ? 1 : 0,
-                    static_cast<int>(GET_CONFIG_VAR(triggerbot_vars::Hitchance)));
                 return;
             }
             if (!passesSeededFire(target, cmd)) {
-                VerifyConsole::write(4.0f, "trig", "gate seeded");
                 return;
             }
         }
@@ -231,7 +208,6 @@ public:
         if (!hookContext.template make<AttackCommand>().press(cmd))
             return;
         firedAtTarget = true;
-        VerifyConsole::write(4.0f, "trig", "FIRE");
         // Refire pause (friend request "delay for pistols like Dual Berettas"):
         // space subsequent shots at the same target; the first shot above ran
         // after AimTime + reaction delay, this only paces the follow-ups.
@@ -304,6 +280,17 @@ private:
             GET_CONFIG_VAR(triggerbot_vars::HitArms) != false,
             GET_CONFIG_VAR(triggerbot_vars::HitLegs) != false};
     }
+
+    // The hitbox the crosshair ray actually lands on (deadlocked gates on the
+    // game's own crosshair trace alone; we resolve WHICH hitbox so the group
+    // selection and the hitchance sampler both run against what we'd hit).
+    struct MatchedHitbox {
+        hitbox_geometry::Shape shape;
+        int hitgroup;
+        bool fromFallback;
+        cs2::Vector fallbackAim{};
+        float fallbackRadius{0.0f};
+    };
 
     // The real hitgroup mapping (the shared Hitboxes helper - Lagcomp records
     // and this gate agree by construction): 1 head, 2 chest, 3 stomach,
@@ -588,16 +575,24 @@ private:
         if (!eye.hasValue() || !pitch.hasValue() || !yaw.hasValue())
             return true;
 
-        // Every selected hitgroup gates EXPLICITLY through the real hitbox
-        // chain (2026-10-15 friend report: chest/stomach selected but only
-        // head shots fired - the old bodyAllowed shortcut skipped the
-        // per-hitbox test entirely). The crosshair ray must reach one of the
-        // SELECTED hitboxes, whatever the hitchance setting.
-        if (!onSelectedBones(target, eye.value(), pitch.value(), yaw.value(), wants))
+        // Every selected hitgroup gates through the real hitbox chain, and
+        // the hitchance sampler runs against THE HITBOX UNDER THE CROSSHAIR.
+        // (2026-10-15 friend report "legs/arms never fire, stomach
+        // intermittent": the previous revision evaluated hitchance against
+        // the PRIMARY group's hitbox - the head whenever head was selected -
+        // so any body crosshair at hc>0 sampled vs the tiny head sphere and
+        // read 0%. Deadlocked's triggerbot has no hitchance at all; when set,
+        // it must measure what the crosshair actually points at.)
+        const auto matched = onSelectedBones(target, eye.value(), pitch.value(), yaw.value(), wants);
+        if (!matched.hasValue()) {
             return false;
+        }
 
-        if (hitchanceThreshold > 0 && !passesHitchance(target, localPawn, eye.value(), pitch.value(), yaw.value(), wants.head, hitchanceThreshold))
-            return false;
+        if (hitchanceThreshold > 0) {
+            if (!passesHitchanceOn(localPawn, eye.value(), matched.value(), hitchanceThreshold)) {
+                return false;
+            }
+        }
 
         return true;
     }
@@ -750,7 +745,7 @@ private:
     // The old hardcoded path gated on bone 6, which the live-verified chain
     // showed to be the NECK (the head hitbox remaps to bone 7) - the "only
     // shoots if crosshair is on one point of the head" report.
-    [[nodiscard]] bool onSelectedBones(auto&& target, const cs2::Vector& eye, float pitch, float yaw,
+    [[nodiscard]] Optional<MatchedHitbox> onSelectedBones(auto&& target, const cs2::Vector& eye, float pitch, float yaw,
         const HitboxWants& wants) const noexcept
     {
         const auto forward = shot_geometry::angleVectors(pitch, yaw).forward;
@@ -764,15 +759,15 @@ private:
                     continue;
                 const auto shape = worldHitboxShape(node, entry);
                 if (shape.hasValue() && shape.value().intersects(eye, forward))
-                    return true;
+                    return MatchedHitbox{shape.value(), Hitboxes::hitgroupFromHitbox(entry.index), false};
             }
-            return false;
+            return {};
         }
 
         // Chain dead (update drift class): telemetry + the old sphere
         // approximation so the trigger degrades instead of vanishing.
-        VerifyConsole::write(4.0f, "trig", "hitbox chain dead (count=0), sphere fallback");
         static constexpr int kBones[]{kHeadBone, kChestBone, kStomachBone};
+        static constexpr int kHitgroups[]{1, 2, 3};
         static constexpr float kRadii[]{kHeadRadius, kBodyRadius, kBodyRadius};
         const bool want[3] = {wants.head, wants.chest, wants.stomach};
         for (int i = 0; i < 3; ++i) {
@@ -782,9 +777,9 @@ private:
             if (!bone.hasValue())
                 continue;
             if (shot_geometry::rayReachesSphere(eye, forward, bone.value(), kRadii[i]))
-                return true;
+                return MatchedHitbox{hitbox_geometry::Shape{}, kHitgroups[i], true, bone.value(), kRadii[i]};
         }
-        return false;
+        return {};
     }
 
     // World-space shape of one real hitbox entry: the bone transform (the
@@ -807,44 +802,25 @@ private:
     
     // Hitchance is evaluated against the highest-priority SELECTED bone (head
     // if selected, else chest, else stomach) - matches which shot we'd send.
-    [[nodiscard]] bool passesHitchance(auto&& target, auto&& localPawn, const cs2::Vector& eye, float pitch, float yaw, bool wantHead, int thresholdPercent) const noexcept
+    // Hitchance sampled against the hitbox under the crosshair (the true
+    // capsule/box shape, not the primary group's): the spread cone must land
+    // threshold% of its samples inside what we are actually about to hit.
+    [[nodiscard]] bool passesHitchanceOn(auto&& localPawn, const cs2::Vector& eye,
+        const MatchedHitbox& matched, int thresholdPercent) const noexcept
     {
         auto solver = hookContext.template make<SpreadSolver>();
         const auto params = solver.weaponParams(localPawn.getActiveWeapon());
         if (!params.hasValue())
             return false;
 
-        auto&& node = target.baseEntity().gameSceneNode();
-        cs2::Vector aimPoint{};
-        float radius = kBodyRadius;
-        bool resolved = false;
+        const cs2::Vector aimPoint = matched.fromFallback ? matched.fallbackAim : matched.shape.center();
+        const float radius = matched.fromFallback ? matched.fallbackRadius : matched.shape.radius;
 
-        // Primary target = the first REAL hitbox of the priority group (head if
-        // selected, else chest, else stomach) - true center and true radius.
-        const int primaryGroup = wantHead ? 1 : (GET_CONFIG_VAR(triggerbot_vars::HitChest) ? 2 : 3);
-        const auto hitboxSet = Hitboxes::query(node.raw());
-        for (int i = 0; i < hitboxSet.count; ++i) {
-            if (Hitboxes::hitgroupFromHitbox(hitboxSet.entries[i].index) != primaryGroup)
-                continue;
-            const auto shape = worldHitboxShape(node, hitboxSet.entries[i]);
-            if (shape.hasValue()) {
-                aimPoint = shape.value().center();
-                radius = shape.value().radius;
-                resolved = true;
-                break;
-            }
-        }
-        if (!resolved) {
-            // Chain stale: the old bone-point + guessed-radius approximation.
-            const int primaryBone = wantHead ? kHeadBone : (GET_CONFIG_VAR(triggerbot_vars::HitChest) ? kChestBone : kStomachBone);
-            const auto bone = node.bonePosition(primaryBone);
-            if (!bone.hasValue())
-                return false;
-            aimPoint = bone.value();
-            radius = wantHead ? kHeadRadius : kBodyRadius;
-        }
-
-        const auto basis = shot_geometry::angleVectors(pitch, yaw);
+        // Sample the spread cone in a basis oriented at the aim point: the
+        // cone's spread offset is perpendicular noise around the aim
+        // direction (matching the shot writer's spread model).
+        const auto aimAngles = shot_geometry::anglesTo(eye, aimPoint);
+        const auto basis = shot_geometry::angleVectors(aimAngles.pitch, aimAngles.yaw);
 
         int hits = 0;
         for (int sample = 0; sample < kHitchanceSamples; ++sample) {

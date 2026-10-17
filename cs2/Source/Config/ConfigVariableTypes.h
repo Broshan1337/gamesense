@@ -52,6 +52,7 @@
 #include <Features/Misc/DiscordRpcConfigVariables.h>
 #include <Features/Game/AgentChangerConfigVariables.h>
 #include <Features/Game/GrenadeAimConfigVariables.h>
+#include <Features/Visuals/BulletImpacts/BulletImpactsConfigVariables.h>
 #include <Features/Game/VoteRevealerConfigVariables.h>
 #include <Features/Hud/BombPlantAlert/BombPlantAlertConfigVariables.h>
 #include <Features/Hud/BindsList/BindsListConfigVariables.h>
@@ -347,6 +348,9 @@ using ConfigVariableTypes = TypeList<
     discord_rpc_vars::Enabled,
     hud_theme_vars::Enabled,
     grenade_aim_vars::Enabled,
+    bullet_impacts_vars::Enabled,
+    bullet_impacts_vars::Lifetime,
+    bullet_impacts_vars::Color,
     agent_changer_vars::AgentDefCT,
     agent_changer_vars::AgentDefTT,
 #define NS_MODEL_GLOW_COLOR(F) F(Flashbang) F(HEGrenade) F(SmokeGrenade) F(Molotov) F(DroppedBomb) F(TickingBomb) F(DefuseKit)

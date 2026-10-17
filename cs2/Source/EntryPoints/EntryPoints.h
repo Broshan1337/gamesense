@@ -106,6 +106,7 @@
 #include <Features/Visuals/ScoreboardEquipment/ScoreboardEquipment.h>
 #include <Features/Visuals/OffScreenArrows/OffScreenArrows.h>
 #include <Features/Visuals/BulletTracers/BulletTracers.h>
+#include <Features/Visuals/BulletImpacts/BulletImpacts.h>
 #include <Features/Visuals/KillEffects/KillEffects.h>
 #include <Features/Visuals/Removals/Removals.h>
 #include <Features/Visuals/ThirdPerson/ForceThirdPerson.h>
@@ -504,6 +505,7 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     hookContext.template make<RadarEsp<HookContext<GlobalContext>>>().onUnload();
     hookContext.template make<BombInfoEsp<HookContext<GlobalContext>>>().onUnload();
     hookContext.template make<GrenadePredictionEsp<HookContext<GlobalContext>>>().onUnload();
+    hookContext.template make<BulletImpacts>().onUnload();
     hookContext.template make<SpectatorSync<HookContext<GlobalContext>>>().onUnload();
     event_log::onUnload();
     hookContext.template make<AntiAim<HookContext<GlobalContext>>>().onUnload();
@@ -726,6 +728,7 @@ bool GameEventManagerHook_onFireEventClientSide(cs2::IGameEventManager2* thisptr
     hookContext.template make<HitSound>().onFireEventClientSide(event);
     hookContext.template make<Hitmarker>().onFireEventClientSide(event);
     hookContext.template make<BulletTracers>().onFireEventClientSide(event);
+    hookContext.template make<BulletImpacts>().onFireEventClientSide(event);
     hookContext.template make<KillEffects>().onFireEventClientSide(event);
     hookContext.template make<WorldColors>().onFireEventClientSide(event);
     hookContext.template make<HitLog>().onFireEventClientSide(event);
@@ -1073,6 +1076,7 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     hookContext.template make<BombInfoEsp<HookContext<GlobalContext>>>().run();
     hookContext.template make<AntiAim<HookContext<GlobalContext>>>().onRenderUpdate();
     hookContext.template make<KillEffects>().run();
+    hookContext.template make<BulletImpacts>().run();
     hookContext.template make<PlayerList>().run();
     hookContext.template make<ScoreboardEquipment>().run();
     

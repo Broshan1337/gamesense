@@ -118,6 +118,35 @@ inline void publishBolts(const Bolt* newBolts, int count) noexcept
 }
 
 
+// Bullet impact markers (Features/Visuals/BulletImpacts): world-space impact
+// points re-projected each frame; a dedicated channel so the whole-scene Esp
+// publisher (last-writer-wins) never races it.
+struct ImpactMarker {
+    float xPercent;
+    float yPercent;
+    std::uint32_t rgba;
+};
+
+constexpr int kMaxImpactMarkers = 32;
+
+inline SpinLock impactMarkersLock;
+inline ImpactMarker impactMarkers[kMaxImpactMarkers];
+inline int impactMarkerCount = 0;
+
+inline void publishImpactMarkers(const ImpactMarker* newMarkers, int count) noexcept
+{
+    if (count < 0)
+        count = 0;
+    if (count > kMaxImpactMarkers)
+        count = kMaxImpactMarkers;
+    const std::lock_guard guard{impactMarkersLock};
+    if (newMarkers)
+        for (int i = 0; i < count; ++i)
+            impactMarkers[i] = newMarkers[i];
+    impactMarkerCount = count;
+}
+
+
 inline void publishHitmarker(const Hitmarker& newHitmarker) noexcept
 {
     const std::lock_guard guard{hitmarkerLock};
@@ -388,6 +417,8 @@ struct Snapshot {
     RadarScene radar{};
     BombInfo bombInfo{};
     GrenadeScene grenadeScene{};
+    ImpactMarker impactMarkers[kMaxImpactMarkers];
+    int impactMarkerCount = 0;
 };
 
 [[nodiscard]] inline Snapshot snapshot() noexcept
@@ -413,6 +444,18 @@ struct Snapshot {
         s.boltCount = boltCount;
         for (int i = 0; i < boltCount; ++i)
             s.bolts[i] = bolts[i];
+    }
+    {
+        const std::lock_guard impactMarkersGuard{impactMarkersLock};
+        s.impactMarkerCount = impactMarkerCount;
+        for (int i = 0; i < impactMarkerCount; ++i)
+            s.impactMarkers[i] = impactMarkers[i];
+    }
+    {
+        const std::lock_guard impactMarkersGuard{impactMarkersLock};
+        s.impactMarkerCount = impactMarkerCount;
+        for (int i = 0; i < impactMarkerCount; ++i)
+            s.impactMarkers[i] = impactMarkers[i];
     }
     {
         const std::lock_guard multiPointGuard{multiPointLock};

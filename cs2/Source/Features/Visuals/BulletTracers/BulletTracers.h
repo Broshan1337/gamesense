@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cctype>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 
 #include <CS2/Classes/CParticleSystemMgr.h>
@@ -16,6 +18,8 @@
 #include <Utils/ColorUtils.h>
 #include <Utils/NsPaths.h>
 #include <Utils/Trig.h>
+#include <cctype>
+#include <cstdio>
 #include <Utils/VerifyConsole.h>
 
 // In-game bullet tracers (velocity-cs2 impacts.cpp method): the local
@@ -121,23 +125,62 @@ private:
         if (!spawn)
             return;
 
-        // velocity's universal embedded tracer system (always shipped):
-        // CP0 = beam start, CP1 = impact, CP2 = color RGB floats.
-        constexpr const char* kTracerSystemPath = "particles/embedded/tracer.vpcf";
+        // The system path resolves from the WEAPON'S OWN VData tracer name
+        // (CCSWeaponBaseVData/m_szTracerParticle@+1568, schema-confirmed on
+        // 14191): "weapon_tracers_assrifle" -> the full VPK path
+        // "particles/weapons/cs_weapon_fx/weapon_tracers_assrifle.vpcf".
+        // FindParticleSystem resolves FULL PATHS ONLY, and the previously
+        // hardcoded "particles/embedded/tracer.vpcf" NEVER EXISTED in the
+        // game VPKs (verified offline against the pak01 dir tree: zero
+        // vpcf under any embedded/ folder - the 2026-10-15 friend report
+        // "no particle renders at all" was this dead path the whole time;
+        // the 2026-10-10 memory already called velocity's embedded paths
+        // STALE). CP0 = beam start, CP1 = impact, CP2 = color RGB floats.
+        char tracerSystemPath[160]{};
+        if (const char* fallback = "particles/weapons/cs_weapon_fx/weapon_tracers_assrifle.vpcf";
+                !resolveTracerSystemPath(tracerSystemPath, sizeof(tracerSystemPath)))
+            std::snprintf(tracerSystemPath, sizeof(tracerSystemPath), "%s", fallback);
 
         if (tracersDebugEnabled())
             VerifyConsole::write(3.0f, "tracer", "spawn path='%s' start=(%.0f %.0f %.0f) end=(%.0f %.0f %.0f)",
-                kTracerSystemPath, start.x, start.y, start.z, end.x, end.y, end.z);
+                tracerSystemPath, start.x, start.y, start.z, end.x, end.y, end.z);
 
         // The game's own fx callers pass owner=null, flags=0, attachment=-1,
         // rest=0 (constants read off the fx_tracer.cpp call site). CP2 =
         // the configured tracer color, velocity-style (RGB floats).
         const auto color = GET_CONFIG_VAR(BulletTracersColor);
-        spawn(kTracerSystemPath, nullptr, 0, -1, 0, 0,
+        spawn(tracerSystemPath, nullptr, 0, -1, 0, 0,
             cs2::ParticlePair{start.x, start.y}, start.z,
             cs2::ParticlePair{end.x, end.y}, end.z,
             cs2::ParticlePair{static_cast<float>(color.r()), static_cast<float>(color.g())},
             static_cast<float>(color.b()));
+    }
+
+    // "weapon_tracers_assrifle" (the weapon's own VData tracer system name)
+    // -> "particles/weapons/cs_weapon_fx/weapon_tracers_assrifle.vpcf".
+    [[nodiscard]] bool resolveTracerSystemPath(char* out, std::size_t capacity) const noexcept
+    {
+        if (!out || capacity < 32)
+            return false;
+        auto&& localPawn = hookContext.activeLocalPlayerPawn();
+        if (!localPawn)
+            return false;
+        auto* const vData = static_cast<cs2::CCSWeaponBaseVData*>(
+            localPawn.getActiveWeapon().baseEntity().vData().valueOr(nullptr));
+        if (!vData)
+            return false;
+        const auto offset = hookContext.schemaSystem().getFieldOffset("CCSWeaponBaseVData", "m_szTracerParticle");
+        if (!offset.has_value() || *offset <= 0)
+            return false;
+        const char* name = nullptr;
+        std::memcpy(&name, reinterpret_cast<const std::byte*>(vData) + *offset, sizeof(name));
+        if (!name || !name[0])
+            return false;
+        for (const char* c = name; *c; ++c)
+            if (!std::isalnum(static_cast<unsigned char>(*c)) && *c != '_' && *c != '-' && *c != ' ')
+                return false;
+        std::snprintf(out, capacity, "particles/weapons/cs_weapon_fx/%s.vpcf", name);
+        return true;
     }
 
     [[nodiscard]] static bool tracersDebugEnabled() noexcept

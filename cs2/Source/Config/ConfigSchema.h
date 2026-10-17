@@ -938,6 +938,12 @@ private:
         configConversion.boolean(u8"GrenadeAimEnabled", loadVariable<grenade_aim_vars::Enabled>(), saveVariable<grenade_aim_vars::Enabled>());
         configConversion.endObject();
 
+        configConversion.beginObject(u8"BulletImpacts");
+        configConversion.boolean(u8"Enabled", loadVariable<bullet_impacts_vars::Enabled>(), saveVariable<bullet_impacts_vars::Enabled>());
+        configConversion.uint(u8"Lifetime", loadVariable<bullet_impacts_vars::Lifetime>(), saveVariable<bullet_impacts_vars::Lifetime>());
+        configConversion.uint(u8"Color", loadVariable<bullet_impacts_vars::Color>(), saveVariable<bullet_impacts_vars::Color>());
+        configConversion.endObject();
+
         configConversion.beginObject(u8"AutoPeek");
         configConversion.boolean(u8"Enabled", loadVariable<autopeek_vars::Enabled>(), saveVariable<autopeek_vars::Enabled>());
         configConversion.endObject();

@@ -137,6 +137,13 @@ private:
         const int newSize = 1;
         std::memcpy(cmdBytes + cs2::CUserCmd::kInputHistorySizeOffset, &newSize, sizeof(newSize));
 
+        // Keep the attack-start indices in range after the truncation
+        // (2026-10-15: the "sv: ... no attack information present ...
+        // attack1_start_history_index: -1" server warnings - an index
+        // stamped for the pre-truncation size serializes as -1 once the
+        // array shrinks below it). The recycled entry IS entry 0.
+        std::memcpy(cmdBytes + cs2::CUserCmd::kAttack1StartHistoryIndexOffset, &newSize, sizeof(newSize));
+
         std::uint32_t hasBits{};
         std::memcpy(&hasBits, entry + kHasBitsOffset, sizeof(hasBits));
         hasBits |= kViewAnglesEntryHasBit;
