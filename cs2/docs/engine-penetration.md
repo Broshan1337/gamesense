@@ -5,7 +5,10 @@ builder, and penetration handler. The older neutral-material implementation is
 retained only for the existing Lua `penetratedDamage` API, whose arguments do
 not contain the weapon's full range metadata.
 
-Supported client ELF build ID: `ea57d8833ab297b622699925dbc83bf6aa1aa615`.
+Supported client ELF build IDs are the entries of `kProfiles` in
+`cs2/Source/GameClient/Tracing/BulletSimulation.h`: `ea57d8833ab297b622699925dbc83bf6aa1aa615`,
+`866bdc006498e2bd6c29f467f991d14ec969833a`, and
+`c6c5098eab52964d9d088279ca5cc991c76d1a7d`.
 An unsupported build or changed ABI anchors disables this path. The menu then
 shows **Shoot Walls (Unavailable)**. There is no automatic estimated fallback.
 

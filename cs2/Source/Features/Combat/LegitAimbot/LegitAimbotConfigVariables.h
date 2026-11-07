@@ -35,6 +35,9 @@ CONFIG_VARIABLE(FovCircleColor, color::Rgba, (color::Rgba{0, 255, 85, 255}));
 
 CONFIG_VARIABLE(SpreadCircleFov, bool, false);
 
+CONFIG_VARIABLE(Backtrack, bool, false);
+CONFIG_VARIABLE_RANGE(BacktrackTicks, legit_aimbot_params::kBacktrackTicks);
+
 
 
 CONFIG_VARIABLE(HitHead, bool, true);

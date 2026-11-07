@@ -71,6 +71,10 @@ public:
 
         auto&& localPawn = hookContext.activeLocalPlayerPawn();
         if (!localPawn) {
+            // also fires (throttled) at the menu - useful signal if the game ever
+            // clears the controller's pawn handle on death, which would silently
+            // park this feature in reset() forever.
+            VerifyConsole::write(30.0f, "spec", "spectate enemies: no local pawn");
             reset();
             return;
         }
@@ -113,14 +117,17 @@ public:
         });
 
         if (enemyCount == 0) {
+            VerifyConsole::write(30.0f, "spec", "spectate enemies: no alive enemy pawns found");
             reset();
             return;
         }
 
         void* services{};
         std::memcpy(&services, localEntity + *servicesOffset, sizeof(services));
-        if (!services)
-            return;   
+        if (!services) {
+            VerifyConsole::write(30.0f, "spec", "spectate enemies: observer services missing on corpse");
+            return;
+        }
 
         auto* const servicesBytes = reinterpret_cast<std::byte*>(services);
         std::uint32_t currentTarget{};
@@ -128,35 +135,50 @@ public:
 
         auto& state = spectate_enemies::cycleState;
 
-        
+        // Already riding our pick and the write sticks - nothing to do.
         if (currentTarget == state.ourHandle && state.enemyIndex >= 0 && state.enemyIndex < enemyCount
             && enemies[state.enemyIndex] == currentTarget)
             return;
 
-        if (currentTarget != state.lastForeignHandle) {
-            
-            
-            
+        // A target we did not choose means the spectate moved under us: the user
+        // pressed the spec keys, the picked enemy died, or a server snapshot /
+        // the game's own observer update reverted m_hObserverTarget (it is a
+        // networked field - anyone may rewrite it after our last CreateMove).
+        // Remember what we saw and step our index so manual cycling keeps working.
+        bool moved = false;
+        if (currentTarget != state.ourHandle && currentTarget != state.lastForeignHandle) {
             const int direction = directionOf(state.lastForeignHandle, currentTarget, teammates, teammateCount);
-            if (state.enemyIndex < 0)
+            if (state.enemyIndex < 0) {
                 state.enemyIndex = 0;
-            else
+                VerifyConsole::write(30.0f, "spec", "spectate enemies: takeover, %d alive enemies", enemyCount);
+            } else {
                 state.enemyIndex = (state.enemyIndex + direction + enemyCount) % enemyCount;
-            state.ourHandle = enemies[state.enemyIndex];
-            std::memcpy(servicesBytes + *targetOffset, &state.ourHandle, sizeof(state.ourHandle));
+                VerifyConsole::write(5.0f, "spec", "spectate enemies: riding enemy %d of %d alive (dir %d)",
+                    state.enemyIndex + 1, enemyCount, direction);
+            }
             state.lastForeignHandle = currentTarget;
-            VerifyConsole::write(5.0f, "spec", "spectate enemies: riding enemy %d of %d alive (dir %d)",
-                state.enemyIndex + 1, enemyCount, direction);
+            moved = true;
         } else if (state.enemyIndex < 0) {
-            
-            
             state.enemyIndex = 0;
-            state.ourHandle = enemies[0];
-            std::memcpy(servicesBytes + *targetOffset, &state.ourHandle, sizeof(state.ourHandle));
+            state.lastForeignHandle = currentTarget;
             VerifyConsole::write(30.0f, "spec", "spectate enemies: takeover, %d alive enemies", enemyCount);
+            moved = true;
         }
-        
-        
+        if (state.enemyIndex >= enemyCount)
+            state.enemyIndex = 0;
+
+        // (Re)assert the pick EVERY tick until it sticks. The old event-driven write
+        // fired exactly once per state change and then assumed success: the moment
+        // anything reverted the field, the observed target came back equal to
+        // lastForeignHandle, no branch matched again, and the feature stayed dead
+        // after a single clobber - that one-shot design was the bug. CreateMove runs
+        // after the frame's snapshot apply, so this write is what the camera reads
+        // on the following render.
+        if (!moved && currentTarget != state.ourHandle)
+            VerifyConsole::write(5.0f, "spec", "spectate enemies: target reverted (0x%x), re-asserting enemy %d",
+                currentTarget, state.enemyIndex + 1);
+        state.ourHandle = enemies[state.enemyIndex];
+        std::memcpy(servicesBytes + *targetOffset, &state.ourHandle, sizeof(state.ourHandle));
     }
 
 private:

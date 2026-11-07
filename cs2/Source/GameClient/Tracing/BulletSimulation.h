@@ -64,6 +64,16 @@ inline constexpr Profile kProfiles[]{
         0x156a8a0, 0x156aa45, 0x153f828,
         "55 48 8D 05 B0 7D 52 FF 48 89 E5 41 57 49 89 FF",
         0x4676280, 0x4910520, 0x43e17d8},
+    // c6c5098eab52964d9d088279ca5cc991c76d1a7d (2026-10-31 hotfix): same
+    // flow, every address re-read out of FireBullet; FireBullet's create and
+    // handle call displacements still carry the original encodings, and the
+    // manager object behind the slot is still a RELATIVE-relocated .bss
+    // address (reloc r_offset 0x4686720 -> addend 0x4920a20).
+    {{0xc6,0xc5,0x09,0x8e,0xab,0x52,0x96,0x4d,0x9d,0x08,0x82,0x79,0xca,0x5c,0xc9,0x91,0xc7,0x6d,0x1a,0x7d},
+        0x155da00, 0x1546280, 0x153ba60, 0x16f8380, 0x16f57c0, 0x16f5820,
+        0x1571360, 0x1571505, 0x15462e8,
+        "55 48 8D 05 48 44 52 FF 48 89 E5 41 57 49 89 FF",
+        0x4686720, 0x4920a20, 0x43f0f18},
 };
 
 inline const Binding& binding() noexcept

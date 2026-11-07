@@ -106,6 +106,7 @@
 #include <Features/Visuals/OffScreenArrows/OffScreenArrowsConfigVariables.h>
 #include <Features/Visuals/BulletTracers/BulletTracersConfigVariables.h>
 #include <Features/Visuals/BulletImpacts/BulletImpactsConfigVariables.h>
+#include <Features/Visuals/BacktrackVisual/BacktrackVisualConfigVariables.h>
 #include <Features/Visuals/EventLog/EventLog.h>
 #include <Features/Visuals/KillEffects/KillEffectsConfigVariables.h>
 #include <Features/Visuals/Hitmarker/HitmarkerConfigVariables.h>
@@ -122,6 +123,7 @@
 #include <Features/Hud/StatusPanel/StatusPanelConfigVariables.h>
 #include <Features/Visuals/Removals/RemovalsConfigVariables.h>
 #include <Features/Visuals/ThirdPerson/ThirdPersonConfigVariables.h>
+#include <Features/Misc/Freecam/FreecamConfigVariables.h>
 #include <Features/Visuals/ViewmodelMod/ViewmodelModConfigVariables.h>
 #include <Features/Visuals/WorldColors/WorldColorsConfigVariables.h>
 
@@ -3385,6 +3387,18 @@ void pageLegitAim() noexcept
         selectVar<TargetSelection>("Target Selection", modes, 3, ++controlId);
         toggleVar<TargetLock>("Lock Target", ++controlId);
     });
+    addCard("BACKTRACK", 7, [] {
+        toggleVar<Backtrack>("Backtrack", ++controlId);
+        sliderVar<BacktrackTicks>("Backtrack Ticks", ++controlId);
+        toggleVar<backtrack_visual_vars::Enabled>("Backtrack Visual", ++controlId);
+        // Age gradient (newest bright -> oldest dark) or one fixed color.
+        static constexpr const char* const kColorModes[]{"Age Gradient", "Fixed Color"};
+        selectVar<backtrack_visual_vars::ColorMode>("Marker Color", kColorModes, 2, ++controlId);
+        colorVar<backtrack_visual_vars::Color>("Fixed Color", ++controlId);
+        toggleVar<backtrack_visual_vars::HideInSmoke>("Hide In Smoke", ++controlId);
+        // x88-style persistence: how long expired ghosts linger before fading.
+        sliderVar<backtrack_visual_vars::LingerMs>("Ghost Linger", ++controlId, " ms");
+    });
     addCard("HITBOXES", 1, [] {
         static constexpr const char* const kHitboxNames[]{ "Head", "Chest", "Stomach", "Arms", "Legs" };
         multiSelectVar<HitHead, HitChest, HitStomach, HitArms, HitLegs>("Hitboxes", ++controlId, kHitboxNames);
@@ -3816,10 +3830,13 @@ void pageEffects() noexcept
         floatSliderVar<HitmarkerTimeout>("Fade Time (ms)", ++controlId);
         colorVar<HitmarkerColor>("Marker Color", ++controlId);
     });
-    addCard("CAMERA", 3, [] {
+    addCard("CAMERA", 6, [] {
         toggleVar<ForceThirdPersonEnabled>("Force Third Person", ++controlId);
         floatSliderVar<ForceThirdPersonDistance>("Distance", ++controlId);
         toggleVar<RemoveViewPunch>("Remove View Punch", ++controlId);
+        toggleVar<freecam_vars::Enabled>("Freecam", ++controlId);
+        keybindVar<freecam_vars::KeyBind>("Freecam Key", ++controlId);
+        floatSliderVar<freecam_vars::Speed>("Freecam Speed", ++controlId);
     });
     addCard("REMOVALS", 3, [] {
         toggleVar<RemoveLegs>("Remove First-Person Legs", ++controlId);
@@ -8040,6 +8057,7 @@ void registerFeatureBinds() noexcept
     feature_binds::registerNumber<legit_aimbot_vars::ReactionMs>("Aim Acquire Delay");
     feature_binds::registerNumber<legit_aimbot_vars::SwitchDelayMs>("Aim Switch Delay");
     feature_binds::registerNumber<legit_aimbot_vars::SnapFov>("Snap / Magnet Radius");
+    feature_binds::registerNumber<legit_aimbot_vars::BacktrackTicks>("Legit Backtrack Ticks");
     feature_binds::registerNumber<LegitStrafeStrength>("Legit Strafe Strength");
     feature_binds::registerNumber<LegitStrafeMouseThreshold>("Strafe Mouse Threshold");
     feature_binds::registerNumber<animation_mod_vars::RagdollScale>("Ragdoll Size");
@@ -8060,6 +8078,7 @@ void registerFeatureBinds() noexcept
     feature_binds::registerNumber<HitmarkerGap>("Gap");
     feature_binds::registerNumber<HitmarkerTimeout>("Fade Time (ms)");
     feature_binds::registerNumber<ForceThirdPersonDistance>("Distance");
+    feature_binds::registerNumber<freecam_vars::Speed>("Freecam Speed");
     feature_binds::registerNumber<WorldColorsSkyBrightness>("Sky Brightness");
     feature_binds::registerNumber<WorldColorsFogDensity>("Fog Density");
     feature_binds::registerNumber<WorldColorsFogDistance>("Fog Distance");
@@ -8167,6 +8186,9 @@ void registerFeatureBinds() noexcept
     feature_binds::registerToggle<legit_aimbot_vars::WallCheck>("Legit Aim Visible");
     feature_binds::registerToggle<legit_aimbot_vars::DrawFov>("Draw FOV Circle");
     feature_binds::registerToggle<legit_aimbot_vars::SpreadCircleFov>("Legit Spread Circle FOV");
+    feature_binds::registerToggle<legit_aimbot_vars::Backtrack>("Legit Backtrack");
+    feature_binds::registerToggle<backtrack_visual_vars::Enabled>("Backtrack Visual");
+    feature_binds::registerToggle<backtrack_visual_vars::HideInSmoke>("Backtrack Visual Hide In Smoke");
     feature_binds::registerToggle<triggerbot_vars::Enabled>("Triggerbot");
     feature_binds::registerToggle<triggerbot_vars::AccuracyCheck>("Shoot When Accurate");
     feature_binds::registerToggle<triggerbot_vars::MaxAccuracyOnly>("Shoot At Max Accuracy");
@@ -8184,6 +8206,7 @@ void registerFeatureBinds() noexcept
     feature_binds::registerToggle<viewmodel_mod_vars::ModifyFov>("Modify Viewmodel Fov");
     feature_binds::registerToggle<::HitmarkerEnabled>("Hit Marker");
     feature_binds::registerToggle<::ForceThirdPersonEnabled>("Force Third Person");
+    feature_binds::registerToggle<freecam_vars::Enabled>("Freecam");
     feature_binds::registerToggle<::RemoveViewPunch>("Remove View Punch");
     feature_binds::registerToggle<::RemoveLegs>("Remove First-Person Legs");
     feature_binds::registerToggle<::RemoveFlashOverlay>("Remove Flash Overlay");
@@ -8217,10 +8240,43 @@ void registerFeatureBinds() noexcept
     feature_binds::registerToggle<spectator_list_params::SpectatorListEnabled>("Spectator List");
 }
 
+// Freecam's dedicated key row: rising-edge toggle of Enabled, polled on the
+// render thread (Freecam has no CreateMove hook of its own). Runs right after
+// feature_binds::apply(), which owns any edge on a feature_binds key bound to
+// the same toggle - sharing one key between the two would otherwise flip
+// Enabled twice and cancel out. A key-capture gesture in the menu owns its
+// press too: while capture is active the edge is swallowed and wasDown stays
+// set, so binding the key does not fire it on the frame the capture
+// completes either (the newly bound key is physically down at that point).
+void pollFreecamKey() noexcept
+{
+    static bool wasDown = false;
+    const int key = static_cast<int>(static_cast<freecam_vars::KeyBind::ValueType::ValueType>(ui_config::get<freecam_vars::KeyBind>()));
+    if (key <= Bind::kOff || key > Bind::kLast) {
+        wasDown = false;
+        return;
+    }
+    if (state.capture != State::Capture::Inactive) {
+        wasDown = true;
+        return;
+    }
+    if (!Bind::isDown(key)) {
+        wasDown = false;
+        return;
+    }
+    if (wasDown)
+        return;
+    wasDown = true;
+    if (const auto* entry = feature_binds::entryFor<freecam_vars::Enabled>(); entry && entry->key == key)
+        return;
+    ui_config::set<freecam_vars::Enabled>(!ui_config::get<freecam_vars::Enabled>());
+}
+
 void neverlose::renderGameOverlay() noexcept
 {
     registerFeatureBinds();
     feature_binds::apply();
+    pollFreecamKey();
 
     refreshMenuTheme();
 
@@ -8288,6 +8344,37 @@ void neverlose::renderGameOverlay() noexcept
             const ImVec2 end{beam.endXPercent * 0.01f * display.x, beam.endYPercent * 0.01f * display.y};
             fg->AddLine(start, end, color, 1.6f);
             fg->AddCircleFilled(end, 2.5f, color, 8);
+        }
+    }
+
+    // Backtrack record visualization (BacktrackVisual feature): model-ghost
+    // silhouettes (fat translucent bone segments + head blob) at the enemies'
+    // lag-compensated positions - only for moving enemies, wall- and
+    // smoke-checked per record on the producer side. The age fade is baked
+    // into each primitive's rgba (newest fully lit, oldest dimmed), so the
+    // draw side just renders what it gets - lines and dots with the ESP
+    // skeleton's dark outline pass.
+    if (snapshot.backtrackScene.lineCount > 0 || snapshot.backtrackScene.dotCount > 0) {
+        const auto& backtrack = snapshot.backtrackScene;
+        const auto displaySize = ImGui::GetIO().DisplaySize;
+        const auto toScreen = [&displaySize](float xPercent, float yPercent) {
+            return ImVec2{xPercent * 0.01f * displaySize.x, yPercent * 0.01f * displaySize.y};
+        };
+        const auto unpack = [](std::uint32_t rgba) {
+            return C(rgba >> 24 & 0xFF, rgba >> 16 & 0xFF, rgba >> 8 & 0xFF, rgba & 0xFF);
+        };
+        for (int i = 0; i < backtrack.lineCount; ++i) {
+            const auto& line = backtrack.lines[i];
+            const ImVec2 a = toScreen(line.axPercent, line.ayPercent);
+            const ImVec2 b = toScreen(line.bxPercent, line.byPercent);
+            fg->AddLine(a, b, C(0, 0, 0, 110), line.thickness + 1.0f);
+            fg->AddLine(a, b, unpack(line.rgba), line.thickness);
+        }
+        for (int i = 0; i < backtrack.dotCount; ++i) {
+            const auto& dot = backtrack.dots[i];
+            const ImVec2 p = toScreen(dot.xPercent, dot.yPercent);
+            fg->AddCircleFilled(p, dot.radiusPx + 1.0f, C(0, 0, 0, 110), 10);
+            fg->AddCircleFilled(p, dot.radiusPx, unpack(dot.rgba), 10);
         }
     }
 
@@ -8937,6 +9024,7 @@ float drawBindsListWindow(float extraYOffset) noexcept
         {"Fake Intel", static_cast<int>(static_cast<chat_vars::IntelBind::ValueType::ValueType>(ui_config::get<chat_vars::IntelBind>())), false},
         {"Fake Kick", static_cast<int>(static_cast<chat_vars::KickKey::ValueType::ValueType>(ui_config::get<chat_vars::KickKey>())), false},
         {"Last Tick Defuse", static_cast<int>(static_cast<last_tick_vars::DefuseKey::ValueType::ValueType>(ui_config::get<last_tick_vars::DefuseKey>())), false},
+        {"Freecam", static_cast<int>(static_cast<freecam_vars::KeyBind::ValueType::ValueType>(ui_config::get<freecam_vars::KeyBind>())), false},
     };
 
     

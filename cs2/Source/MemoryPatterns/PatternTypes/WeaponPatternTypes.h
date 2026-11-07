@@ -116,6 +116,9 @@ struct PunchAccumulator {
     std::int32_t tick;
     float fraction;
 };
-// Linux SysV: RSI points to the query tick/fraction, EDX supplies the interpolation flag.
-using GetAimPunchFn = AimPunchAngles(void* aimPunchServices, const PunchAccumulator* sampleTime, bool allowExtrapolation);
+// Linux SysV: RSI points to the query tick/fraction (interpreted as a time in
+// ticks: tick + fraction, scaled by the tick interval), EDX is a x2 SCALE flag -
+// the helper doubles its result when set, and every in-game caller passes 1, so
+// callers must pass true to see the same punch the server applies to eye angles.
+using GetAimPunchFn = AimPunchAngles(void* aimPunchServices, const PunchAccumulator* sampleTime, bool scaleByTwo);
 STRONG_TYPE_ALIAS(PointerToGetAimPunchFunction, GetAimPunchFn*);

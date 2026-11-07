@@ -83,7 +83,7 @@ struct WeaponPatterns {
             
             
             
-            .template addPattern<PointerToRegenerateWeaponSkin, CodePattern{"55 48 89 E5 41 57 41 56 49 89 FE 41 55 41 54 49 89 F4 53 48 81 EC 88 02 00 00"}>()
+            .template addPattern<PointerToRegenerateWeaponSkin, CodePattern{"55 48 89 E5 41 57 41 56 49 89 FE 41 55 41 54 49 89 F4 53 48 81 EC ? ? ? ?"}>()
             
             
             

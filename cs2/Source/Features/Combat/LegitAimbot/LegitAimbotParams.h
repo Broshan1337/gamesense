@@ -20,4 +20,6 @@ constexpr auto kSmooth = RangeConstrainedVariableParams<std::uint8_t>{.min = 1, 
 
 constexpr auto kAimKey = RangeConstrainedVariableParams<std::uint8_t>{.min = 0, .max = static_cast<std::uint8_t>(Bind::kLast), .def = Bind::kMouse5};
 
+constexpr auto kBacktrackTicks = RangeConstrainedVariableParams<std::uint8_t>{.min = 1, .max = 16, .def = 8};
+
 }

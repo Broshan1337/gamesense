@@ -121,7 +121,15 @@ public:
             return {};
         PunchAccumulator sampleTime{tick.value(), 0.0f};
         // Query the read-only punch getter, never the recoil updater called by weapons.
-        const auto punch = getAimPunch(services, &sampleTime, false);
+        // The third argument is a x2 SCALE flag, not an extrapolation toggle: the
+        // shared punch helper ends in `cmp flag,0 / je / addps xmm0,xmm0`, and both
+        // in-game callers pass 1 - the server adds the scaled result straight onto
+        // the shot's eye angles (plain addps, no weapon_recoil_scale applied), and
+        // the client prediction does the same. Passing false read exactly HALF the
+        // punch the server applies, so every compensation path (rage, RCS, triggerbot,
+        // viewpunch removal) under-compensated by 2x; with true, strength 100 in
+        // RcsParams is an exact compensation as documented.
+        const auto punch = getAimPunch(services, &sampleTime, true);
         if (!__builtin_isfinite(punch.pitch) || !__builtin_isfinite(punch.yaw) || !__builtin_isfinite(punch.roll))
             return {};
         return cs2::Vector{punch.pitch, punch.yaw, punch.roll};

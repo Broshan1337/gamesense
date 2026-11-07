@@ -30,6 +30,7 @@
 #include <Features/Combat/Aimbot/Aimbot.h>
 #include <Features/Combat/DuckPeek.h>
 #include <Features/Visuals/Esp/Esp.h>
+#include <Features/Visuals/BacktrackVisual/BacktrackVisual.h>
 #include <Features/Visuals/Crosshair/CrosshairEsp.h>
 #include <Features/Visuals/Radar/RadarEsp.h>
 #include <Features/Visuals/BombInfo/BombInfoEsp.h>
@@ -56,6 +57,7 @@
 #include <Features/Radio/RadioManager.h>
 #include <Features/Radio/SoundBoard.h>
 #include <Features/Misc/DiscordRpc.h>
+#include <Features/Misc/Freecam/Freecam.h>
 #include <Features/Hud/HudThemeColor.h>
 #include <Features/SkinChanger/SkinChanger.h>
 #include <Features/Game/AgentChanger.h>
@@ -485,6 +487,7 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     
     hookContext.template make<Removals>().onUnload();
     hookContext.template make<ViewmodelMod>().onUnload();
+    hookContext.template make<Freecam>().onUnload();
     scene_render_hooks::uninstall();
     team_select_guard::uninstall();
     chams_hook::uninstall();
@@ -499,6 +502,7 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     hookContext.template make<Aimbot>().onUnload();
     hookContext.template make<DuckPeek<HookContext<GlobalContext>>>().onUnload();
     hookContext.template make<Esp<HookContext<GlobalContext>>>().onUnload();
+    hookContext.template make<BacktrackVisual<HookContext<GlobalContext>>>().onUnload();
     hookContext.template make<CrosshairEsp<HookContext<GlobalContext>>>().onUnload();
     hookContext.template make<RadarEsp<HookContext<GlobalContext>>>().onUnload();
     hookContext.template make<BombInfoEsp<HookContext<GlobalContext>>>().onUnload();
@@ -566,7 +570,7 @@ void Source2ClientHook_onFrameStageNotify(cs2::CSource2Client* thisptr, int fram
     
     
     
-    if (frameStage == 6 && (GET_CONFIG_VAR(aimbot_vars::Backtrack) || GET_CONFIG_VAR(aimbot_vars::Extrapolate) || GET_CONFIG_VAR(triggerbot_vars::Backtrack)))
+    if (frameStage == 6 && (GET_CONFIG_VAR(aimbot_vars::Backtrack) || GET_CONFIG_VAR(aimbot_vars::Extrapolate) || GET_CONFIG_VAR(triggerbot_vars::Backtrack) || GET_CONFIG_VAR(legit_aimbot_vars::Backtrack) || GET_CONFIG_VAR(backtrack_visual_vars::Enabled)))
         hookContext.template make<Lagcomp>().run();
 
     
@@ -965,6 +969,10 @@ std::uint64_t CSGOInputHook_onWriteMoveCrc(cs2::CCSGOInput* thisptr, cs2::CUserC
         hookContext.template make<FvaEmulator>().onWriteMoveCrcLate(cmd);
         // Commit movement against the final command view basis.
         hookContext.template make<Bunnyhop>().onWriteMoveCrc(cmd);
+        // Freecam: zero the command's movement so the body stays put while
+        // the camera flies (runs after Bunnyhop so its staged jumps don't
+        // move the player either).
+        hookContext.template make<Freecam>().onWriteMoveCrc(cmd);
 
         
         
@@ -1046,6 +1054,7 @@ void ViewRenderHook_onRenderStart(cs2::CViewRender* thisptr) noexcept
     hookContext.template make<SpectatorSync<HookContext<GlobalContext>>>().update();
     hookContext.template make<CrosshairEsp<HookContext<GlobalContext>>>().run();
     hookContext.template make<Esp<HookContext<GlobalContext>>>().run();
+    hookContext.template make<BacktrackVisual<HookContext<GlobalContext>>>().run();
     hookContext.template make<RadarEsp<HookContext<GlobalContext>>>().run();
     hookContext.template make<BombInfoEsp<HookContext<GlobalContext>>>().run();
     hookContext.template make<AntiAim<HookContext<GlobalContext>>>().onRenderUpdate();
@@ -1243,6 +1252,8 @@ void ClientModeHook_onOverrideView(cs2::ClientModeCSNormal* thisptr, ViewSetup* 
 
     hookContext.template make<ForceThirdPerson>().overrideView(viewSetup);
     hookContext.template make<Removals>().overrideView(viewSetup);
+    // Freecam last: it fully owns the camera position while engaged.
+    hookContext.template make<Freecam>().overrideView(viewSetup);
 }
 
 

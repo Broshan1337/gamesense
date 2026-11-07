@@ -50,6 +50,7 @@
 #include <Features/Game/TeamDamageConfigVariables.h>
 #include <Features/Hud/HudThemeColorConfigVariables.h>
 #include <Features/Misc/DiscordRpcConfigVariables.h>
+#include <Features/Misc/Freecam/FreecamConfigVariables.h>
 #include <Features/Game/AgentChangerConfigVariables.h>
 #include <Features/Game/GrenadeAimConfigVariables.h>
 #include <Features/Visuals/BulletImpacts/BulletImpactsConfigVariables.h>
@@ -80,6 +81,7 @@
 #include <Features/Visuals/WorldColors/WorldColorsConfigVariables.h>
 #include <UI/ImGui/Neverlose/MenuThemeConfigVariables.h>
 #include <Features/Visuals/AnimationMods/AnimationModsConfigVariables.h>
+#include <Features/Visuals/BacktrackVisual/BacktrackVisualConfigVariables.h>
 #include <Utils/TypeList.h>
 
 using ConfigVariableTypes = TypeList<
@@ -279,6 +281,8 @@ using ConfigVariableTypes = TypeList<
     legit_aimbot_vars::HitArms,
     legit_aimbot_vars::HitLegs,
     legit_aimbot_vars::SpreadCircleFov,
+    legit_aimbot_vars::Backtrack,
+    legit_aimbot_vars::BacktrackTicks,
     spread_circle_vars::Enabled,
     spread_circle_vars::SpreadCircleColor,
     rcs_vars::Enabled,
@@ -355,6 +359,9 @@ using ConfigVariableTypes = TypeList<
     radio_vars::MicBroadcast,
     MenuStyleRainbow,
     discord_rpc_vars::Enabled,
+    freecam_vars::Enabled,
+    freecam_vars::Speed,
+    freecam_vars::KeyBind,
     hud_theme_vars::Enabled,
     grenade_aim_vars::Enabled,
     bullet_impacts_vars::Enabled,
@@ -747,5 +754,10 @@ using ConfigVariableTypes = TypeList<
     event_log_vars::LogMisses,
     event_log_vars::LogBomb,
     event_log_vars::LogRounds,
-    event_log_vars::LogConnects
+    event_log_vars::LogConnects,
+    backtrack_visual_vars::Enabled,
+    backtrack_visual_vars::ColorMode,
+    backtrack_visual_vars::Color,
+    backtrack_visual_vars::HideInSmoke,
+    backtrack_visual_vars::LingerMs
 >;

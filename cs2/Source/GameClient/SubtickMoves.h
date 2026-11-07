@@ -284,6 +284,45 @@ public:
         }
     }
 
+    // Mask form of releaseButton: rewrite each matching sample's press as a
+    // release at the same instant instead of deleting anything. A release of a
+    // button the server never saw go down is a no-op, the timeline (sample
+    // count, times, view deltas, analog deltas) is untouched, and no key can
+    // be left stranded as held - the failure mode that forbids deleting real
+    // samples (StrafeCommand::commit). Analog deltas are deliberately left
+    // alone: they are live scalars carried across ticks, so dropping one
+    // strands the movement key (Aimbot::autoStop).
+    static void releaseButtons(std::byte* baseMessage, std::uint64_t mask) noexcept
+    {
+        if (!baseMessage || !mask)
+            return;
+        using Field = cs2::CUserCmd::BaseMessage::SubtickMoves;
+        auto* const field = baseMessage + Field::kFieldOffset;
+        int count{};
+        std::byte* rep{};
+        std::memcpy(&count, field + Field::kCurrentSizeOffset, sizeof(count));
+        std::memcpy(&rep, field + Field::kRepOffset, sizeof(rep));
+        if (!rep || count < 0 || count > Field::kMaxSteps)
+            return;
+        for (int i = 0; i < count; ++i) {
+            std::byte* step{};
+            std::memcpy(&step, rep + Field::kRepElementsOffset + i * sizeof(step), sizeof(step));
+            if (!step)
+                continue;
+            std::uint32_t bits{};
+            std::memcpy(&bits, step + cs2::CSubtickMoveStep::kHasBitsOffset, sizeof(bits));
+            if ((bits & cs2::CSubtickMoveStep::kButtonHasBit) == 0)
+                continue;
+            std::uint64_t button{};
+            std::memcpy(&button, step + cs2::CSubtickMoveStep::kButtonOffset, sizeof(button));
+            if ((button & mask) == 0)
+                continue;
+            const std::uint8_t released = 0;
+            std::memcpy(step + cs2::CSubtickMoveStep::kPressedOffset, &released, sizeof(released));
+            setHasBit(step, cs2::CSubtickMoveStep::kPressedHasBit);
+        }
+    }
+
     
     
     

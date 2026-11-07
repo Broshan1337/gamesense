@@ -208,7 +208,14 @@ public:
         
         
         
-        if (GET_CONFIG_VAR(triggerbot_vars::SpreadCompensation)) {
+        // A backtrack ghost needs its record's sim time stamped into the shot -
+        // without it the server resolves on the LIVE tick against the moved pose
+        // and the shot sails past (the ghost's crosshair ray missed by
+        // construction). Live shots keep the old writer behavior: touched only
+        // under spread compensation.
+        const float backtrackSimTime = selection.fromBacktrack ? selection.simulationTime : 0.0f;
+        const bool compensateSpread = GET_CONFIG_VAR(triggerbot_vars::SpreadCompensation);
+        if (backtrackSimTime > 0.0f || compensateSpread) {
             auto&& localPawn = hookContext.activeLocalPlayerPawn();
             const UserCmd firedCmd{cmd};
             const auto aimPitch = firedCmd.viewPitch();
@@ -227,8 +234,8 @@ public:
                 static_cast<void>(hookContext.template make<SubtickShotWriter>().run(cmd, localPawn,
                                                                                    aimPitch.value(), aimYaw.value(),
                                                                                    punchPitch, punchYaw,
-                                                                                   0.0f ,
-                                                                                   true));
+                                                                                   backtrackSimTime,
+                                                                                   compensateSpread));
             }
         }
     }
@@ -247,6 +254,9 @@ private:
         int hitgroup{0};
         bool throughWall{false};
         bool fromBacktrack{false};
+        // A backtrack ghost's record sim time - the shot must be stamped with it
+        // or the server resolves on the LIVE tick against the moved pose.
+        float simulationTime{};
     };
 
     // The five triggerbot hitbox toggles (the ragebot's set).
@@ -437,7 +447,7 @@ private:
                 return;
             if (!record.value().shape.valid || !record.value().shape.intersects(eye.value(), direction))
                 return;
-            best = ScanTarget{enemy.rawPawn(), record.value().aimPoint, record.value().hitgroup, false, true};
+            best = ScanTarget{enemy.rawPawn(), record.value().aimPoint, record.value().hitgroup, false, true, record.value().simulationTime};
         });
         return best;
     }
